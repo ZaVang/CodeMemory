@@ -3,7 +3,12 @@
     "allow": [
       "Bash(python bin/codememory.py *)",
       "Bash(pip install *)",
-      "Bash(rm -rf *)"
+      "Bash(rm -rf *)",
+      "Bash(python -m codememory.cli *)",
+      "Bash(codememory *)",
+      "Bash(PYTHONPATH=src python -m codememory.cli *)",
+      "Bash(PYTHONPATH=src python *)",
+      "Bash(mkdir -p *)"
     ]
   }
 }

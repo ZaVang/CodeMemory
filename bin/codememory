@@ -1,3 +1,4 @@
 #!/usr/bin/env bash
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-python "$SCRIPT_DIR/codememory.py" "$@"
+ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+PYTHONPATH="$ROOT_DIR/src:$PYTHONPATH" python -m codememory.cli "$@"

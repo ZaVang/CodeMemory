@@ -30,7 +30,6 @@ import json
 from pathlib import Path
 from typing import Any
 
-import frontmatter
 from jinja2 import Environment, StrictUndefined, TemplateError
 
 
@@ -174,8 +173,14 @@ class SkillLoader:
             raise SkillNotFoundError(skill_name, self._skills_dir)
 
         raw_text = skill_path.read_text(encoding="utf-8")
-        post = frontmatter.loads(raw_text)
-        body = post.content
+
+        # Parse YAML frontmatter manually (avoid external frontmatter dependency
+        # and its PyYAML==5.1 pin that conflicts with codememory's pyyaml>=6.0).
+        if raw_text.startswith('---'):
+            _, fm_text, body = raw_text.split('---', 2)
+            body = body.lstrip('\n')
+        else:
+            body = raw_text
 
         vars_: dict[str, Any] = dict(variables or {})
 

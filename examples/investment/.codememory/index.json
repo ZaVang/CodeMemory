@@ -1,0 +1,197 @@
+{
+  "version": 1,
+  "updated": "2026-04-24T18:31:36.595797",
+  "memories": {
+    "user/ideas/my-idea": {
+      "type": "atom",
+      "summary": "TODO: fill in summary",
+      "status": "active",
+      "tags": [
+        "untagged"
+      ],
+      "created": "2026-04-24",
+      "updated": "2026-04-24",
+      "version": 1,
+      "path": "user/ideas/my-idea.md"
+    },
+    "user/ideas/sprint1-eval-test": {
+      "type": "atom",
+      "summary": "TODO: fill in summary",
+      "status": "active",
+      "tags": [
+        "untagged"
+      ],
+      "created": "2026-04-24",
+      "updated": "2026-04-24",
+      "version": 1,
+      "path": "user/ideas/sprint1-eval-test.md"
+    },
+    "user/ideas/sprint1-test": {
+      "type": "atom",
+      "summary": "TODO: fill in summary",
+      "status": "active",
+      "tags": [
+        "untagged"
+      ],
+      "created": "2026-04-24",
+      "updated": "2026-04-24",
+      "version": 1,
+      "path": "user/ideas/sprint1-test.md"
+    },
+    "user/ideas/sprint2-test": {
+      "type": "atom",
+      "summary": "TODO: fill in summary",
+      "status": "active",
+      "tags": [
+        "untagged"
+      ],
+      "created": "2026-04-24",
+      "updated": "2026-04-24",
+      "version": 1,
+      "path": "user/ideas/sprint2-test.md"
+    },
+    "user/ideas/test": {
+      "type": "atom",
+      "summary": "TODO: fill in summary",
+      "status": "active",
+      "tags": [
+        "untagged"
+      ],
+      "created": "2026-04-24",
+      "updated": "2026-04-24",
+      "version": 1,
+      "path": "user/ideas/test.md"
+    },
+    "user/investment/context": {
+      "type": "composite",
+      "summary": "投资决策的完整上下文包，包含主线判断、风险偏好、历史决策和当前持仓",
+      "status": "active",
+      "tags": [
+        "investment",
+        "context"
+      ],
+      "created": "2026-04-24",
+      "updated": "2026-04-24",
+      "version": 1,
+      "path": "user/investment/context.md",
+      "imports": {
+        "required": [
+          "user/investment/semiconductor-thesis",
+          "user/investment/risk-tolerance",
+          "user/investment/february-buy",
+          "user/investment/current-holdings"
+        ]
+      }
+    },
+    "user/investment/current-holdings": {
+      "type": "composite",
+      "summary": "当前持仓概览：半导体ETF 40% + 现金 30%",
+      "status": "active",
+      "tags": [
+        "investment",
+        "portfolio"
+      ],
+      "created": "2026-04-20",
+      "updated": "2026-04-24",
+      "version": 1,
+      "path": "user/investment/current-holdings.md",
+      "imports": {
+        "required": [
+          "user/investment/position-semiconductor",
+          "user/investment/position-cash"
+        ]
+      }
+    },
+    "user/investment/february-buy": {
+      "type": "instance",
+      "summary": "2月重仓半导体ETF，基于AI存储爆发+国产替代判断，置信度0.8",
+      "status": "active",
+      "tags": [
+        "investment",
+        "decision"
+      ],
+      "created": "2026-02-15",
+      "updated": "2026-04-24",
+      "version": 2,
+      "path": "user/investment/february-buy.md",
+      "schema": "schemas/decision",
+      "imports": {
+        "required": [
+          {
+            "id": "user/investment/semiconductor-thesis"
+          },
+          {
+            "id": "user/investment/risk-tolerance",
+            "pin": "v1",
+            "reason": "决策基于当时的激进风险偏好（v1），不是后来调整后的中高偏好"
+          }
+        ]
+      }
+    },
+    "user/investment/position-cash": {
+      "type": "atom",
+      "summary": "现金仓位30%，预留用于加仓或应对极端行情",
+      "status": "active",
+      "tags": [
+        "investment",
+        "position"
+      ],
+      "created": "2026-02-15",
+      "updated": "2026-04-20",
+      "version": 1,
+      "path": "user/investment/position-cash.md"
+    },
+    "user/investment/position-semiconductor": {
+      "type": "atom",
+      "summary": "持有半导体ETF(512480)，仓位40%，成本价1.25元",
+      "status": "active",
+      "tags": [
+        "investment",
+        "position"
+      ],
+      "created": "2026-02-15",
+      "updated": "2026-04-20",
+      "version": 1,
+      "path": "user/investment/position-semiconductor.md"
+    },
+    "user/investment/risk-tolerance": {
+      "type": "atom",
+      "summary": "中高风险偏好，可承受30%回撤，投资周期6-12个月",
+      "status": "active",
+      "tags": [
+        "investment",
+        "preference"
+      ],
+      "created": "2026-01-15",
+      "updated": "2026-04-24",
+      "version": 2,
+      "path": "user/investment/risk-tolerance.md"
+    },
+    "user/investment/semiconductor-thesis": {
+      "type": "atom",
+      "summary": "AI存储+AI制造双核心驱动，2026最确定产业趋势",
+      "status": "active",
+      "tags": [
+        "investment",
+        "thesis"
+      ],
+      "created": "2026-02-10",
+      "updated": "2026-04-24",
+      "version": 1,
+      "path": "user/investment/semiconductor-thesis.md"
+    },
+    "schemas/decision": {
+      "type": "schema",
+      "summary": "决策类记忆的结构模板，包含 what/why/when/confidence/outcome",
+      "status": "active",
+      "tags": [
+        "meta",
+        "template"
+      ],
+      "created": "2026-04-24",
+      "updated": "2026-04-24",
+      "version": 1,
+      "path": "schemas/decision.md"
+    }
+  }
+}
