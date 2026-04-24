@@ -1,0 +1,1 @@
+"""harnesslib.tools — 通用Tool基类。"""
