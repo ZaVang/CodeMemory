@@ -6,23 +6,28 @@
 
 ```
 CodeMemory/
+├── src/
+│   ├── harnesslib/              # 通用 Agent 编排（跨项目复用）
+│   ├── llm_gateway/             # 多 provider LLM 接入（跨项目复用）
+│   └── codememory/              # 记忆管理（本项目核心，Phase 2A 从 bin/ 提取）
+│       ├── __init__.py          # Public API
+│       ├── core.py              # frontmatter 解析, body hash
+│       ├── index.py             # Index 加载/保存/reindex
+│       ├── resolve.py           # DAG + 拓扑排序 + token 裁剪
+│       ├── validate.py          # 循环检测 + 断链 + schema 合规
+│       ├── create.py            # 记忆模板生成
+│       ├── search.py            # 检索
+│       ├── cli.py               # 薄 argparse 壳
+│       └── tools.py             # harnesslib Sandbox 工具注册
 ├── bin/
-│   ├── codememory.py         # Python CLI（核心实现，单文件）
-│   ├── codememory             # bash wrapper
-│   └── codememory.ps1         # PowerShell wrapper
-├── user/                      # 用户记忆（按主题域组织）
-├── self/                      # AI 内部记忆（思考、调试等）
-│   └── thoughts/
-├── schemas/                   # Schema 定义（template 类型记忆）
-├── .codememory/
-│   └── index.json             # 自动生成的索引（可重建）
+│   ├── codememory               # bash wrapper → python -m codememory.cli
+│   └── codememory.ps1
+├── examples/                    # 示例记忆数据（不是框架的一部分）
+│   └── investment/
 ├── docs/
-│   ├── architecture.md        # 系统架构
-│   ├── plans/                 # Sprint 计划
-│   └── pitfalls.md            # 陷阱知识库
-├── prd.md                     # 产品需求文档
-├── README.md
-└── .claude/                   # Claude Code 配置
+├── tests/
+├── pyproject.toml
+└── .claude/
 ```
 
 ## 核心概念
@@ -36,57 +41,131 @@ CodeMemory/
 | **composite** | 组合包（引用其他记忆） | 是 | 是（required/recommended/related） |
 | **schema** | 元模板（定义 instance 结构） | 是（instance 通过 schema 字段引用） | 否 |
 
+### Layer 0 认知接口
+
+Agent 与记忆系统之间的接口层，实现五个认知基础操作（稳定如 CPU 指令集）：
+
+| 认知行为 | 命令 | 说明 |
+|----------|------|------|
+| **扫视** | `codememory overview` | 会话启动自动注入 top 5 相关记忆摘要到 system prompt |
+| **注视** | `codememory focus <id> --level full\|summary` | 动态切换特定记忆的分辨率 |
+| **残留** | 瞬态 DAG + `codememory snapshot` | 会话推理链在内存中，snapshot 持久化 |
+| **重构** | `codememory resolve <id> --depth ... --budget ...` | DAG 拓扑拼装 + token 裁剪输出 |
+| **触景生情** | `codememory wander` / 联想搜索 | 随机或关联激活冷记忆 |
+
 ### 关键设计决策
 
 - 记忆加载是 DAG 解析问题，不是 vector search
 - 每个 .md 文件 = 一个记忆单元（YAML frontmatter + Markdown body）
 - 依赖通过 frontmatter 的 `imports` 显式声明，不靠语义相似度猜测
-- Token 预算裁剪：超预算时 required 节点降级为 summary，非 required 节点跳过
+- Token 预算裁剪：超预算时 required 节点降级为 summary
+- 遗忘是路径不可达问题，不是删除问题。系统只建议，不自动删除。
+- 框架（`src/codememory/`）与数据（`examples/`）物理分离
 
-## CLI 参考
+---
+
+## 硬约束（不可违反）
+
+### 1. Agent 视角：只用 Bash
+
+**所有 Agent 可用的记忆操作必须通过 bash 命令完成。** Agent 不调用 Python API，不 import codememory，不直接读写 .md 文件。
 
 ```bash
-# 创建记忆
-python bin/codememory.py create --type atom --id user/investment/my-thesis
-
-# 重建索引（新增/修改/删除记忆后）
-python bin/codememory.py reindex
-
-# 解析并输出上下文
-python bin/codememory.py resolve user/investment/context --depth required
-
-# 完整性验证
-python bin/codememory.py validate
+# Agent 看到的接口——全部是 bash 命令
+codememory overview --tags "investment"     # 扫视
+codememory resolve user/investment/context  # 重构
+codememory focus risk-tolerance --level full # 注视
+codememory wander                          # 触景生情
+codememory snapshot "session-001"          # 残留持久化
 ```
+
+底层实现可用 Python（处理 DAG、拓扑排序等复杂逻辑），但 Agent 视角下只有 bash 子命令。这遵循 Claude Code 的模式：`file edit` 和 `bash` 是接口，内部实现不限语言。
+
+### 2. Python 数据模型：Pydantic v2
+
+**所有 Python schema 类、配置模型、数据传递对象必须使用 Pydantic v2 实现。**
+
+```python
+from pydantic import BaseModel, Field
+
+class MemoryEntry(BaseModel):
+    type: str = Field(description="atom | instance | composite | schema")
+    id: str
+    summary: str
+    # ...
+
+# 序列化统一用
+data = entry.model_dump(mode="json")
+```
+
+禁止事项：
+- 禁止使用 Pydantic v1 API（`.dict()`, `class Config`, `schema()`）
+- 禁止用裸 `dict` 作为模块间 API 边界（改用 BaseModel）
+- 禁止在 Pydantic model 中使用 `Optional[T]` 不设 default=None（Pydantic v2 要求显式 default）
+
+---
 
 ## 代码规范
 
 ### 技术栈
-- Python 3.13+，唯一外部依赖 `pyyaml`
-- 单文件实现（`bin/codememory.py`），不超过 500 行
+- Python 3.13+，核心依赖：`pyyaml`、`pydantic>=2.0`
+- codememory 自身不依赖 harnesslib 或 llm_gateway（只在 tools.py 中适配 Sandbox 接口）
 - 原型阶段：token 估算用 `len(text)` 近似
 
 ### 编码约定
-- 所有函数类型注解覆盖公共接口
+- 所有公共函数类型注解覆盖
 - 错误输出到 `sys.stderr`，正常输出到 `sys.stdout`
 - frontmatter 修改不触发 stale（基于 body hash）
-- 无外部 API 调用，无需 async
-- 原型阶段用 `print()` 而非 `logging`
+- Phase 2 起：数据模型用 Pydantic v2，CLI 输出用 `print()`，系统日志用 `logging`
 
 ### 修改原则
 - 最小变更：只改与任务直接相关的代码
 - 不引入新依赖：除非有充分理由
-- 保持单文件结构：新功能优先在现有文件中实现
+- 不碰 `src/harnesslib/` 和 `src/llm_gateway/` 的内部实现（它们是独立组件，在其他仓库维护）
 - 先验证再提交：改代码后运行 `validate` + `resolve` 确认
+
+---
+
+## CLI 命令速查
+
+```bash
+# 创建
+codememory create --type atom --id user/ideas/my-thesis
+
+# 索引
+codememory reindex
+
+# 解析
+codememory resolve <id> [--depth required|recommended|full] [--budget N]
+
+# 验证
+codememory validate
+
+# 检索
+codememory search [--query <q>] [--tags <t>] [--type <t>]
+
+# Layer 0 认知工具
+codememory overview [--tags <t>]      # 扫视：摘要注入
+codememory focus <id> --level full|summary  # 注视：分辨率切换
+codememory wander                     # 触景生情：随机漫步
+codememory snapshot <id>              # 残留：瞬态持久化
+```
 
 ## 测试规范
 
-- 手工验证为主：`validate` → `resolve` → 检查输出
-- 边界测试：循环依赖、断链、空记忆、超大预算/零预算
-- 原型阶段无自动化测试框架要求
+- 手工验证：`validate` → `resolve` → 检查输出
+- 边界测试：循环依赖、断链、空记忆、超大/零预算
+- Phase 2 起：Pydantic model 单元测试覆盖序列化/反序列化
 - 验证命令：
   ```bash
-  python bin/codememory.py validate
-  python bin/codememory.py resolve user/investment/context
-  python bin/codememory.py resolve user/investment/context --budget 500
+  codememory validate
+  codememory resolve user/investment/context
+  codememory resolve user/investment/context --budget 500
   ```
+
+## 禁止事项
+
+- 禁止 Agent 绕过 bash CLI 直接调用 Python API 或 import codememory
+- 禁止在 Agent 工具定义中使用 Python 函数签名（Agent 只能看到 bash 命令描述）
+- 禁止 new 第三方依赖而不在 plan 中说明理由
+- 禁止修改 `src/harnesslib/` 或 `src/llm_gateway/` 的内部逻辑（它们在上游仓库维护）
