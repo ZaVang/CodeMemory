@@ -11,13 +11,21 @@ CodeMemory/
 │   ├── llm_gateway/             # 多 provider LLM 接入（跨项目复用）
 │   └── codememory/              # 记忆管理（本项目核心，Phase 2A 从 bin/ 提取）
 │       ├── __init__.py          # Public API
-│       ├── core.py              # frontmatter 解析, body hash
+│       ├── core.py              # frontmatter 解析, body hash, logging 配置
+│       ├── models.py            # Pydantic v2 数据模型
+│       ├── handlers.py          # 统一命令处理（cli + tools 共享）
 │       ├── index.py             # Index 加载/保存/reindex
-│       ├── resolve.py           # DAG + 拓扑排序 + token 裁剪
-│       ├── validate.py          # 循环检测 + 断链 + schema 合规
+│       ├── resolve.py           # DAG + 拓扑排序 + token 裁剪 + stale/pin 提醒
+│       ├── validate.py          # 循环检测 + 断链 + schema 合规 + 衰减建议
 │       ├── create.py            # 记忆模板生成
-│       ├── search.py            # 检索
-│       ├── cli.py               # 薄 argparse 壳
+│       ├── update.py            # 版本递增 + change_log + summary_hash 重算
+│       ├── search.py            # 检索（tags/query/type/status）
+│       ├── orphans.py           # 孤立记忆发现
+│       ├── changelog.py         # 变更历史查看
+│       ├── transient.py         # TransientDAG 会话级推理链
+│       ├── snapshot.py          # 瞬态持久化
+│       ├── integrations.py      # CodememoryToolkit（OpenAI format + Sandbox）
+│       ├── cli.py               # 薄 argparse 壳（< 200 行）
 │       └── tools.py             # harnesslib Sandbox 工具注册
 ├── bin/
 │   ├── codememory               # bash wrapper → python -m codememory.cli
@@ -109,14 +117,15 @@ data = entry.model_dump(mode="json")
 
 ### 技术栈
 - Python 3.13+，核心依赖：`pyyaml`、`pydantic>=2.0`
-- codememory 自身不依赖 harnesslib 或 llm_gateway（只在 tools.py 中适配 Sandbox 接口）
-- 原型阶段：token 估算用 `len(text)` 近似
+- codememory 自身不依赖 harnesslib 或 llm_gateway（只在 tools.py 和 integrations.py 中适配接口）
+- token 估算用 `len(text)` 近似
 
 ### 编码约定
 - 所有公共函数类型注解覆盖
-- 错误输出到 `sys.stderr`，正常输出到 `sys.stdout`
+- 系统日志走 `logging`（WARNING+），用户可见正文走 `print()`（stdout）
+- `--verbose` / `--quiet` 全局控制日志级别
 - frontmatter 修改不触发 stale（基于 body hash）
-- Phase 2 起：数据模型用 Pydantic v2，CLI 输出用 `print()`，系统日志用 `logging`
+- 命令处理委托给 `handlers.py`，cli.py 和 tools.py 只做薄壳
 
 ### 修改原则
 - 最小变更：只改与任务直接相关的代码
@@ -129,36 +138,35 @@ data = entry.model_dump(mode="json")
 ## CLI 命令速查
 
 ```bash
-# 创建
-codememory create --type atom --id user/ideas/my-thesis
+# 创建 / 更新
+codememory create --type atom --id user/ideas/my-thesis [--intensity N] [--dry-run] [--tags "a,b"]
+codememory update <id> --change-note "explanation" [--body "..."] [--summary "..."] [--status archived]
 
-# 索引
+# 索引 / 验证 / 检索
 codememory reindex
+codememory validate [-v|-q]
+codememory search [--query <q>] [--tags <t>] [--type <t>] [--status <s>]
 
-# 解析
-codememory resolve <id> [--depth required|recommended|full] [--budget N]
-
-# 验证
-codememory validate
-
-# 检索
-codememory search [--query <q>] [--tags <t>] [--type <t>]
+# 分析
+codememory orphans [--type <t>] [--min-intensity <n>]
+codememory changelog <id>
 
 # Layer 0 认知工具
-codememory overview [--tags <t>]      # 扫视：摘要注入
-codememory focus <id> --level full|summary  # 注视：分辨率切换
-codememory wander                     # 触景生情：随机漫步
-codememory snapshot <id>              # 残留：瞬态持久化
+codememory overview [--tags <t>] [--format inject] [--with-recall]
+codememory focus <id> --level full|summary [--content "..."] [--resolve]
+codememory wander [--mode cool|random] [--inject]
+codememory resolve <id> [--depth required|recommended|full] [--budget N]
+codememory snapshot <id> [--target <id> | --from-dag <json_file>]
 ```
 
 ## 测试规范
 
-- 手工验证：`validate` → `resolve` → 检查输出
+- 自动化：`PYTHONPATH=src python tests/integration_test.py` — 24 个断言覆盖全部场景
+- 手工验证：`validate` → `resolve` → `check output`
 - 边界测试：循环依赖、断链、空记忆、超大/零预算
-- Phase 2 起：Pydantic model 单元测试覆盖序列化/反序列化
 - 验证命令：
   ```bash
-  codememory validate
+  codememory reindex && codememory validate
   codememory resolve user/investment/context
   codememory resolve user/investment/context --budget 500
   ```
