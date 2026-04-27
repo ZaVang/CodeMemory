@@ -46,8 +46,15 @@ def save_index(root_dir: Path, index_data: dict):
 def reindex(root_dir: Path) -> int:
     """Scan memory directories and rebuild the index from scratch.
 
+    Preserves access_count and last_access from the previous index so that
+    reindex does not reset usage statistics.
+
     Returns the count of indexed memories.
     """
+    # Load old index to preserve access stats
+    old_index = load_index(root_dir)
+    old_memories = old_index.get("memories", {})
+
     index_data = {
         "version": 1,
         "updated": datetime.now().isoformat(),
@@ -78,6 +85,9 @@ def reindex(root_dir: Path) -> int:
 
                 actual_id = meta.get("id", memory_id)
 
+                # Preserve access stats from old index (do NOT reset on reindex)
+                old_entry = old_memories.get(actual_id, {})
+
                 entry = {
                     "type": meta.get("type"),
                     "summary": meta.get("summary", ""),
@@ -87,6 +97,9 @@ def reindex(root_dir: Path) -> int:
                     "updated": meta.get("updated", ""),
                     "version": meta.get("version", 1),
                     "path": rel_path,
+                    "intensity": meta.get("intensity", 5),
+                    "access_count": old_entry.get("access_count", 0),
+                    "last_access": old_entry.get("last_access"),
                 }
 
                 if "schema" in meta:

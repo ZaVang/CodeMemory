@@ -1,10 +1,11 @@
 """Memory resolution: DAG construction, cycle detection, topological sort, token budget."""
 
 import sys
+from datetime import datetime
 from pathlib import Path
 
-from .core import parse_frontmatter, estimate_tokens
-from .index import load_index
+from .core import compute_body_hash, parse_frontmatter, estimate_tokens
+from .index import load_index, save_index
 
 
 def _get_imports(meta: dict, depth: str) -> list[str]:
@@ -168,9 +169,18 @@ def resolve(
 
     lines = []
     lines.append(f"# Resolved Context for '{memory_id}'\n")
-    lines.append(f"*(Depth: {depth}, Budget: {max_budget} chars)*\n")
+    if budget:
+        lines.append(f"*(Depth: {depth}, Budget: {max_budget} chars)*\n")
+    else:
+        lines.append(f"*(Depth: {depth}, Budget: unlimited)*\n")
 
+    # Build both required-only and recommended-inclusive graphs for degradation
     req_graph = build_dag(memory_id, "required", index)
+    rec_graph = build_dag(memory_id, "recommended", index)
+    full_text_nodes: list[str] = []
+
+    # Collect notices for stale detection and pin version checks
+    notices: list[str] = []
 
     for i, mid in enumerate(ordered):
         if mid not in index["memories"]:
@@ -180,29 +190,90 @@ def resolve(
         file_path = root_dir / entry["path"]
         meta, body = parse_frontmatter(file_path)
 
+        # ── Stale detection: summary_hash vs actual body hash ──
+        stored_hash = meta.get("summary_hash", "")
+        if stored_hash:
+            actual_hash = compute_body_hash(body)
+            if stored_hash != actual_hash:
+                notices.append(
+                    f"[NOTICE] summary may be stale for {mid} (hash mismatch). "
+                    f"Run: codememory update {mid} --change-note \"update summary\""
+                )
+
+        # ── Pin version check: for each pinned import ──
+        imports_dict = entry.get("imports", {})
+        if isinstance(imports_dict, dict):
+            for strength in ("required", "recommended", "related"):
+                for ref in imports_dict.get(strength, []):
+                    if isinstance(ref, dict) and "pin" in ref:
+                        ref_id = ref.get("id", "")
+                        pin_version_str = ref.get("pin", "")
+                        if ref_id and pin_version_str and ref_id in index["memories"]:
+                            current_version = index["memories"][ref_id].get(
+                                "version", 1
+                            )
+                            # Parse "vN" format
+                            try:
+                                pin_num = int(pin_version_str.lstrip("v"))
+                            except ValueError:
+                                continue
+                            if current_version > pin_num:
+                                notices.append(
+                                    f"[NOTICE] pinned version {pin_version_str} of "
+                                    f"{ref_id} is behind current version v{current_version}. "
+                                    f"Review whether pin is still needed."
+                                )
+
         full_text = (
             f"## [{i + 1}/{len(ordered)}] {mid} ({entry['type']})\n\n{body}\n\n"
         )
         summary_text = (
-            f"## [{i + 1}/{len(ordered)}] {mid} ({entry['type']} - SUMMARY ONLY)\n\n"
+            f"## [{i + 1}/{len(ordered)}] {mid} ({entry['type']} - SUMMARY - budget)\n\n"
             f"> {entry['summary']}\n\n"
         )
 
         t_full = estimate_tokens(full_text)
         t_sum = estimate_tokens(summary_text)
 
+        is_required = mid in req_graph
+        is_recommended = mid in rec_graph and not is_required
+
         if used + t_full <= max_budget:
             lines.append(full_text)
             used += t_full
-        elif mid in req_graph:
+            full_text_nodes.append(mid)
+        elif is_required:
+            lines.append(summary_text)
+            used += t_sum
+        elif is_recommended:
+            # Recommended nodes degrade to summary (not skipped)
             lines.append(summary_text)
             used += t_sum
         else:
             lines.append(
-                f"## [{i + 1}/{len(ordered)}] {mid} (SKIPPED - Out of budget)\n\n"
+                f"## [{i + 1}/{len(ordered)}] {mid} "
+                f"(SKIPPED - budget)\n\n"
             )
 
     lines.append(f"---\nTotal Budget Used: {used}/{max_budget}")
+
+    # ── Append Notices section if any ──
+    if notices:
+        lines.append("")
+        lines.append("## Notices")
+        for notice in notices:
+            lines.append(notice)
+
+    # Track access: increment access_count for each node given full text
+    now_iso = datetime.now().isoformat()
+    for mid in full_text_nodes:
+        if mid in index["memories"]:
+            entry = index["memories"][mid]
+            entry["access_count"] = entry.get("access_count", 0) + 1
+            entry["last_access"] = now_iso
+
+    # Persist updated access stats
+    save_index(root_dir, index)
 
     result = "\n".join(lines)
     return result

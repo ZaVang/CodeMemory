@@ -6,7 +6,7 @@ from pathlib import Path
 
 import yaml
 
-from .core import get_memory_path
+from .core import compute_body_hash, get_memory_path
 from .index import reindex
 
 
@@ -16,7 +16,9 @@ def create(
     memory_id: str,
     schema: str | None = None,
     intensity: int = 5,
-) -> Path:
+    tags: list[str] | None = None,
+    dry_run: bool = False,
+) -> Path | None:
     """Create a new memory file with frontmatter template.
 
     Args:
@@ -25,22 +27,24 @@ def create(
         memory_id: The memory identifier (e.g. 'user/ideas/my-thesis').
         schema: Schema ID (required for type='instance').
         intensity: Relevance score 1-10 (default 5).
+        tags: Custom tags list (defaults to ["untagged"]).
+        dry_run: If True, preview frontmatter + body to stdout without writing.
 
     Returns:
-        Path to the created file.
+        Path to the created file, or None if dry_run.
     """
     file_path = get_memory_path(root_dir, memory_id)
 
-    if file_path.exists():
+    if not dry_run and file_path.exists():
         print(
             f"Error: Memory {memory_id} already exists at {file_path}",
             file=sys.stderr,
         )
         sys.exit(1)
 
-    file_path.parent.mkdir(parents=True, exist_ok=True)
-
     now = datetime.now().strftime("%Y-%m-%d")
+
+    tag_list = tags if tags is not None else ["untagged"]
 
     frontmatter = {
         "type": memory_type,
@@ -50,17 +54,19 @@ def create(
         "created": now,
         "updated": now,
         "version": 1,
-        "tags": ["untagged"],
+        "tags": tag_list,
         "intensity": intensity,
         "source": {
             "platform": "manual",
             "created_by": "user",
         },
-        "summary_hash": "placeholder",
     }
 
     if schema:
         frontmatter["schema"] = schema
+
+    if intensity >= 8:
+        frontmatter["protected"] = True
 
     if memory_type in ("composite", "instance"):
         frontmatter["imports"] = {
@@ -74,9 +80,17 @@ def create(
         "Write content here...\n"
     )
 
+    frontmatter["summary_hash"] = compute_body_hash(body_template)
+
     yaml_str = yaml.dump(frontmatter, allow_unicode=True, sort_keys=False)
     content = f"---\n{yaml_str}---\n{body_template}"
 
+    if dry_run:
+        print("=== DRY RUN PREVIEW ===")
+        print(content)
+        return None
+
+    file_path.parent.mkdir(parents=True, exist_ok=True)
     file_path.write_text(content, encoding="utf-8")
     print(f"Created memory at {file_path}")
 

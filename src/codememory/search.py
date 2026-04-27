@@ -30,16 +30,19 @@ def search(
     query: str | None = None,
     tags: list[str] | None = None,
     type_: str | None = None,
+    status: str | None = None,
 ) -> list[dict]:
-    """Search memories by query, tags, and/or type.
+    """Search memories by query, tags, type, and/or status.
 
-    Results are sorted by number of dependents (most-referenced first).
+    Results are sorted by dependents descending, then access_count descending,
+    then id ascending for stability.
 
     Args:
         root_dir: The memory root directory.
         query: Case-insensitive substring match against summary.
         tags: Filter to memories that have ALL listed tags.
         type_: Filter by memory type (atom, schema, instance, composite).
+        status: Filter by memory status (active, archived, superseded, draft).
 
     Returns:
         List of matching memory entries with 'dependents' count added.
@@ -50,6 +53,10 @@ def search(
     for mid, entry in index["memories"].items():
         # Filter by type
         if type_ and entry.get("type") != type_:
+            continue
+
+        # Filter by status
+        if status and entry.get("status") != status:
             continue
 
         # Filter by tags (AND logic)
@@ -65,8 +72,9 @@ def search(
                 continue
 
         dependents = _count_dependents(mid, index)
-        results.append({**entry, "id": mid, "dependents": dependents})
+        access_count = entry.get("access_count", 0)
+        results.append({**entry, "id": mid, "dependents": dependents, "access_count": access_count})
 
-    # Sort by dependents descending, then by id ascending for stability
-    results.sort(key=lambda r: (-r["dependents"], r["id"]))
+    # Sort by dependents descending, access_count descending, then id ascending
+    results.sort(key=lambda r: (-r["dependents"], -r["access_count"], r["id"]))
     return results

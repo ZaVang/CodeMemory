@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-04-24T18:31:36.595797",
+  "updated": "2026-04-27T12:40:07.875430",
   "memories": {
     "user/ideas/my-idea": {
       "type": "atom",
@@ -12,7 +12,10 @@
       "created": "2026-04-24",
       "updated": "2026-04-24",
       "version": 1,
-      "path": "user/ideas/my-idea.md"
+      "path": "user/ideas/my-idea.md",
+      "intensity": 5,
+      "access_count": 0,
+      "last_access": null
     },
     "user/ideas/sprint1-eval-test": {
       "type": "atom",
@@ -24,19 +27,10 @@
       "created": "2026-04-24",
       "updated": "2026-04-24",
       "version": 1,
-      "path": "user/ideas/sprint1-eval-test.md"
-    },
-    "user/ideas/sprint1-test": {
-      "type": "atom",
-      "summary": "TODO: fill in summary",
-      "status": "active",
-      "tags": [
-        "untagged"
-      ],
-      "created": "2026-04-24",
-      "updated": "2026-04-24",
-      "version": 1,
-      "path": "user/ideas/sprint1-test.md"
+      "path": "user/ideas/sprint1-eval-test.md",
+      "intensity": 5,
+      "access_count": 0,
+      "last_access": null
     },
     "user/ideas/sprint2-test": {
       "type": "atom",
@@ -48,7 +42,10 @@
       "created": "2026-04-24",
       "updated": "2026-04-24",
       "version": 1,
-      "path": "user/ideas/sprint2-test.md"
+      "path": "user/ideas/sprint2-test.md",
+      "intensity": 5,
+      "access_count": 0,
+      "last_access": null
     },
     "user/ideas/test": {
       "type": "atom",
@@ -60,7 +57,10 @@
       "created": "2026-04-24",
       "updated": "2026-04-24",
       "version": 1,
-      "path": "user/ideas/test.md"
+      "path": "user/ideas/test.md",
+      "intensity": 5,
+      "access_count": 0,
+      "last_access": null
     },
     "user/investment/context": {
       "type": "composite",
@@ -74,6 +74,9 @@
       "updated": "2026-04-24",
       "version": 1,
       "path": "user/investment/context.md",
+      "intensity": 5,
+      "access_count": 24,
+      "last_access": "2026-04-27T12:38:24.933168",
       "imports": {
         "required": [
           "user/investment/semiconductor-thesis",
@@ -95,6 +98,9 @@
       "updated": "2026-04-24",
       "version": 1,
       "path": "user/investment/current-holdings.md",
+      "intensity": 5,
+      "access_count": 27,
+      "last_access": "2026-04-27T12:38:24.933168",
       "imports": {
         "required": [
           "user/investment/position-semiconductor",
@@ -114,6 +120,9 @@
       "updated": "2026-04-24",
       "version": 2,
       "path": "user/investment/february-buy.md",
+      "intensity": 5,
+      "access_count": 24,
+      "last_access": "2026-04-27T12:38:24.933168",
       "schema": "schemas/decision",
       "imports": {
         "required": [
@@ -139,7 +148,10 @@
       "created": "2026-02-15",
       "updated": "2026-04-20",
       "version": 1,
-      "path": "user/investment/position-cash.md"
+      "path": "user/investment/position-cash.md",
+      "intensity": 5,
+      "access_count": 29,
+      "last_access": "2026-04-27T12:38:24.933168"
     },
     "user/investment/position-semiconductor": {
       "type": "atom",
@@ -152,7 +164,10 @@
       "created": "2026-02-15",
       "updated": "2026-04-20",
       "version": 1,
-      "path": "user/investment/position-semiconductor.md"
+      "path": "user/investment/position-semiconductor.md",
+      "intensity": 5,
+      "access_count": 29,
+      "last_access": "2026-04-27T12:38:24.933168"
     },
     "user/investment/risk-tolerance": {
       "type": "atom",
@@ -165,7 +180,10 @@
       "created": "2026-01-15",
       "updated": "2026-04-24",
       "version": 2,
-      "path": "user/investment/risk-tolerance.md"
+      "path": "user/investment/risk-tolerance.md",
+      "intensity": 5,
+      "access_count": 24,
+      "last_access": "2026-04-27T12:38:24.933168"
     },
     "user/investment/semiconductor-thesis": {
       "type": "atom",
@@ -178,7 +196,10 @@
       "created": "2026-02-10",
       "updated": "2026-04-24",
       "version": 1,
-      "path": "user/investment/semiconductor-thesis.md"
+      "path": "user/investment/semiconductor-thesis.md",
+      "intensity": 5,
+      "access_count": 24,
+      "last_access": "2026-04-27T12:38:24.933168"
     },
     "schemas/decision": {
       "type": "schema",
@@ -191,7 +212,10 @@
       "created": "2026-04-24",
       "updated": "2026-04-24",
       "version": 1,
-      "path": "schemas/decision.md"
+      "path": "schemas/decision.md",
+      "intensity": 5,
+      "access_count": 0,
+      "last_access": null
     }
   }
 }
