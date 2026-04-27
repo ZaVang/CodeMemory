@@ -146,6 +146,8 @@ tools = toolkit.get_tools_for_openai()  # -> OpenAI format tool list
 ## 文档
 
 - [集成指南](docs/INTEGRATION.md) -- 10 分钟上手集成
+- [Layer 0 认知接口原理](docs/layer0-cognitive-interface.md) -- 五个认知操作为什么这样设计
+- [Agent 记忆指南](docs/agent-memory-guide.md) -- 对话中自主维护记忆的决策树
 - [架构设计](docs/architecture.md)
 - [已知陷阱](docs/plans/pitfalls.md)
 
