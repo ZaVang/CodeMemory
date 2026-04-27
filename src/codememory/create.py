@@ -1,5 +1,6 @@
 """Memory creation: generate template markdown files with frontmatter."""
 
+import logging
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -8,6 +9,8 @@ import yaml
 
 from .core import compute_body_hash, get_memory_path
 from .index import reindex
+
+_logger = logging.getLogger("codememory")
 
 
 def create(
@@ -36,10 +39,7 @@ def create(
     file_path = get_memory_path(root_dir, memory_id)
 
     if not dry_run and file_path.exists():
-        print(
-            f"Error: Memory {memory_id} already exists at {file_path}",
-            file=sys.stderr,
-        )
+        _logger.error("Memory %s already exists at %s", memory_id, file_path)
         sys.exit(1)
 
     now = datetime.now().strftime("%Y-%m-%d")

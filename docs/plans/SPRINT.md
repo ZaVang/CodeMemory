@@ -1,196 +1,260 @@
-# Sprint 5 — 集成与发布
+# Sprint 6 — 代码质量 + 功能深化
 
 > **起始日期**：2026-04-27
-> **前置条件**：Sprint 4 完成（Layer 0 五个认知操作全部就绪）
-> **目标**：新开发者 10 分钟跑通 demo；codememory 可被一行代码集成到任意 Agent 项目
+> **前置条件**：Sprint 5 完成（Phase 2 全闭环可交付）
+> **目标**：消灭已知技术债务（handler 去重、Pydantic 迁移、logging）；补齐功能深化缺口（changelog、wander 加权、snapshot 统一、示例修复）
 
 ---
 
 ## 一、现状评估
 
-| 项目 | 状态 |
-|------|------|
-| README.md | 存在但过时（引用 `bin/codememory.py`，应改为 `python -m codememory.cli` / `pip install -e .`） |
-| INTEGRATION.md | 不存在 |
-| example_agent.py | 不存在 |
-| integrations package | 不存在（无 `CodememoryToolkit`） |
-| harnesslib docstrings | `harness.py`、`sandbox.py`、`event.py` 有少量注释，无 README |
-| llm_gateway docstrings | `bridge.py`、`router.py` 有 docstring，但无独立的 README |
+| 问题 | 严重程度 | 影响 |
+|------|----------|------|
+| cli.py + tools.py handler 重复 | 高 | 每次新增命令要改两处，Sprint 1-5 每次 Generator 都复制相同逻辑 |
+| 核心数据用裸 dict | 高 | CLAUDE.md 硬约束要求 Pydantic v2 但从未落；`MemoryEntry`、`IndexData` 无类型安全 |
+| print() 混用 stdout/stderr | 中 | notice/warning/error 全部走 `print(file=sys.stderr)`，无法按级别过滤 |
+| 示例 summary_hash 过时 | 中 | 8 个样例文件 `summary_hash: placeholder`，overview stale 检测对全部 8 个误报 |
+| 无 changelog 查看命令 | 低 | `change_log` 数据在磁盘，但没有 `changelog` 命令来查看 |
+| wander 1/3 硬切 | 低 | 权重生硬，access_count=0 和 access_count=1 在同一个池等概率 |
+| snapshot 两条路径 | 低 | `--target` vs `--from-dag` 逻辑重叠 |
 
 ---
 
 ## 二、Sprint Backlog
 
-### 任务 1：INTEGRATION.md — 集成指南 ✅
+### 任务 1：handler 去重 — 提取共享命令逻辑 ✅
 
-**产出一份让新开发者在 10 分钟内跑通 demo 的集成文档。**
-
-| # | 子任务 | 说明 |
-|---|--------|------|
-| 1.1 | 快速开始 | pip install 方式、最小配置、一条命令验证安装 |
-| 1.2 | 记忆库配置 | `--root` 参数、`CODEMEMORY_ROOT` 环境变量、`.codememory/index.json` 结构说明 |
-| 1.3 | CLI 使用 | 8 个命令速查（create/resolve/reindex/validate/search/orphans/wander/snapshot）+ Layer 0 接口（overview/focus） |
-| 1.4 | Sandbox 集成 | 如何注册 codememory tools 到 harresslib Sandbox：`await register_all(sandbox)` → 9 个 tool |
-| 1.5 | 自定义 overview 模板 | `overview --format inject` 输出如何嵌入 system prompt |
-| 1.6 | llm_gateway 配置 | `llm_gateway/config.yaml` 格式、API key 设置、model 选择 |
-
-**产出**：`INTEGRATION.md`
-
-**验收**：
-```bash
-test -f INTEGRATION.md && echo "OK" || echo "FAIL"
-grep -c "^## " INTEGRATION.md  # 至少 5 个标题
-```
-
----
-
-### 任务 2：README.md 更新 ✅
-
-**更新 README.md 以反映当前架构（`src/codememory/` package + `pip install -e .`）。**
+**新建 `src/codememory/handlers.py`，将所有命令的业务逻辑从 cli.py 和 tools.py 中提取出来，三处委托同一份实现。**
 
 | # | 子任务 | 说明 |
 |---|--------|------|
-| 2.1 | 快速开始更新 | `python bin/codememory.py` → `pip install -e . && codememory --root examples/investment reindex` |
-| 2.2 | 架构图更新 | 引用 `src/codememory/` 包结构，标注四层架构 |
-| 2.3 | CLI 命令速查 | 更新为当前 10 个命令 |
-| 2.4 | Python API 速查 | `from codememory import resolve, create, search` |
+| 1.1 | 提取 handler 函数 | `handle_create(root, args)` `handle_resolve(root, args)` 等 10 个同步函数，参数为 root + dataclass/namedtuple |
+| 1.2 | cli.py 改为薄壳 | 每个子命令 handler 变为 `result = handle_xxx(root, args); print(result)` |
+| 1.3 | tools.py handler 委托 | 每个 async handler 变为 `loop.run_in_executor(handle_xxx, ...)` 或直接调用同步版 |
+| 1.4 | 行数验证 | cli.py 从 300+ 行降到 150 行以内 |
 
-**产出**：更新的 `README.md`
+**产出**：新增 `src/codememory/handlers.py`，修改 `cli.py`、`tools.py`
 
 **验收**：
 ```bash
-# 快速开始命令可运行
-pip install -e . 2>&1 | tail -1
+# 功能完全等价
 codememory --root examples/investment reindex && codememory --root examples/investment validate
+codememory --root examples/investment resolve user/investment/context | head -5
+codememory --root examples/investment search --type atom | head -3
+codememory --root examples/investment orphans | head -3
+codememory --root examples/investment wander --inject
+codememory --root examples/investment overview
+codememory --root examples/investment focus user/investment/risk-tolerance --level summary
+
+# cli.py 行数
+wc -l src/codememory/cli.py  # < 200
 ```
 
 ---
 
-### 任务 3：example_agent.py — 最小 Agent 示例 ✅
+### 任务 2：Pydantic v2 数据模型 ✅
 
-**一个 ~150 行的 Python 脚本，展示 codememory × harnesslib × llm_gateway 完整闭环。**
-
-| # | 子任务 | 说明 |
-|---|--------|------|
-| 3.1 | 初始化 | 配置 codememory root + llm_gateway model + 注册 tools 到 Sandbox |
-| 3.2 | 对话循环 | 模拟用户提问 → Agent 调用 search → 发现缺失 → create 新记忆 → resolve 验证 → 输出答案 |
-| 3.3 | 自包含 | 不依赖外部 API key（使用 mock LLM 或跳过 LLM 调用，直接展示 tool 调用流程） |
-| 3.4 | 可运行 | `PYTHONPATH=src python examples/example_agent.py` 可执行并输出完整对话日志 |
-
-**产出**：`examples/example_agent.py`
-
-**验收**：
-```bash
-PYTHONPATH=src python examples/example_agent.py 2>&1 | head -30
-# 应输出模拟对话流程：search → create → resolve → 回答
-```
-
----
-
-### 任务 4：integrations 模块 — CodememoryToolkit ✅
-
-**新增 `src/codememory/integrations.py`，提供一行代码注册到各类 Agent 框架。**
+**所有模块间 API 边界从裸 dict 切换为 Pydantic v2 BaseModel。**
 
 | # | 子任务 | 说明 |
 |---|--------|------|
-| 4.1 | `CodememoryToolkit` class | 封装 codememory root 配置 + 9 个 tool 的注册逻辑 |
-| 4.2 | `register_to_sandbox(sandbox)` | 一行代码注册全部 codememory tools：`CodememoryToolkit(root="...").register_to_sandbox(sandbox)` |
-| 4.3 | `get_tools_for_openai()` | 导出 OpenAI function calling 格式的 tool list（`[{"type": "function", "function": {...}}]`），AI 平台可直接消费 |
-| 4.4 | `__init__.py` 导出 | `from codememory.integrations import CodememoryToolkit` |
+| 2.1 | `src/codememory/models.py` | `MemoryEntry`（type/id/summary/status/tags/intensity/version/path/access_count/last_access/imports/schema/summary_hash/protected）、`IndexData`（version/updated/memories: dict[str, MemoryEntry]）、`ImportRef`（id/pin/reason） |
+| 2.2 | index.py 适配 | `load_index()` 返回 `IndexData`；`save_index()` 接收 `IndexData`；`reindex()` 构建 `IndexData.model_validate()` |
+| 2.3 | resolve.py 适配 | `build_dag()` / `resolve()` 参数从 `dict` 改为 `IndexData` |
+| 2.4 | 其余模块适配 | search/validate/create/update/orphans 全部使用 `MemoryEntry` 和 `IndexData` |
+| 2.5 | `__init__.py` 导出 | `from codememory.models import MemoryEntry, IndexData, ImportRef` |
 
-**产出**：`src/codememory/integrations.py`，修改 `src/codememory/__init__.py`
+**产出**：新增 `src/codememory/models.py`，修改 index/resolve/search/validate/create/update/orphans/__init__
 
 **验收**：
 ```bash
-# 模块可导入
-PYTHONPATH=src python -c "from codememory.integrations import CodememoryToolkit; print('OK')"
-
-# OpenAI 格式导出
+# Pydantic v2 序列化
 PYTHONPATH=src python -c "
-from codememory.integrations import CodememoryToolkit
-tk = CodememoryToolkit(root='examples/investment')
-tools = tk.get_tools_for_openai()
-assert len(tools) == 9
-assert tools[0]['type'] == 'function'
-print(f'OK: {len(tools)} tools in OpenAI format')
+from codememory.models import MemoryEntry
+e = MemoryEntry(type='atom', id='test/x', summary='test', status='active',
+                tags=[], intensity=5, version=1, path='test/x.md',
+                access_count=0)
+d = e.model_dump(mode='json')
+assert d['type'] == 'atom'
+print('OK: Pydantic v2 model_dump')
+
+# 禁止 Pydantic v1 API
+import pydantic
+assert hasattr(pydantic, 'BaseModel')
+print(f'OK: pydantic version {pydantic.__version__}')
 "
 
-# Sandbox 注册
+# 功能回归
+codememory --root examples/investment reindex && codememory --root examples/investment validate
+codememory --root examples/investment resolve user/investment/context | grep "Resolved Context"
+```
+
+---
+
+### 任务 3：print() → logging 迁移 ✅
+
+**所有 stderr 输出统一走 `logging` 模块，stdout 正文保留 `print()`。**
+
+| # | 子任务 | 说明 |
+|---|--------|------|
+| 3.1 | logging 配置 | `core.py` 中设置 `logging.basicConfig(level=logging.WARNING, format='[%(levelname)s] %(message)s')` |
+| 3.2 | 替换规则 | `print(f"Error: ...", file=sys.stderr)` → `logging.error(...)`；`print(f"Warning: ...", file=sys.stderr)` → `logging.warning(...)`；`[NOTICE]` → `logging.info(...)` |
+| 3.3 | resolve notice 输出 | `[NOTICE]` 行仍输出到 stderr（通过 logging.info），不掺入 resolve 正文（正文走 stdout print） |
+| 3.4 | `--verbose` / `--quiet` | CLI 全局参数：`-v` 设置 `logging.getLogger().setLevel(logging.INFO)`；`-q` 设 `ERROR` |
+
+**产出**：修改 `core.py`、`resolve.py`、`validate.py`、`index.py`、`create.py`、`update.py`、`cli.py`（加全局 --verbose/--quiet）
+
+**验收**：
+```bash
+# --quiet 抑制 warnings
+codememory --root examples/investment validate -q 2>&1 | wc -l  # 应 < 5 行
+
+# --verbose 显示 info
+codememory --root examples/investment resolve user/investment/context -v 2>&1 | grep -i "notice\|loaded"
+
+# 默认级别（WARNING+）
+codememory --root examples/investment validate 2>&1  # 含 [DECAY-WARN]，不含 INFO
+```
+
+---
+
+### 任务 4：示例记忆 summary_hash 修复 ✅
+
+**更新全部 8 个样例文件 + index.json，使 `summary_hash` 与实际 body 一致。**
+
+| # | 子任务 | 说明 |
+|---|--------|------|
+| 4.1 | 批量计算脚本 | 遍历 `examples/investment/` 下所有 .md 文件，计算 body hash → 更新 frontmatter 中的 `summary_hash` |
+| 4.2 | index.json 同步 | reindex 后确认 index 中的条目不受影响（reindex 不存储 summary_hash，只存 path 等） |
+| 4.3 | 验证 stale 清零 | `overview` 对 8 个样例不再输出 `[stale]` |
+
+**产出**：修改 8 个样例文件的 frontmatter
+
+**验收**：
+```bash
+# overview 无 stale 误报
+codememory --root examples/investment reindex
+codememory --root examples/investment overview | grep -c "stale"  # 应为 0
+
+# 各文件 hash 匹配
 PYTHONPATH=src python -c "
-import asyncio
-from harnesslib.sandbox import Sandbox
-from codememory.integrations import CodememoryToolkit
-async def t():
-    s = Sandbox()
-    tk = CodememoryToolkit(root='examples/investment')
-    await tk.register_to_sandbox(s)
-    names = [d.name for d in s.list_tools()]
-    assert len(names) == 9
-    print(f'OK: {names}')
-asyncio.run(t())
+from pathlib import Path
+from codememory.core import parse_frontmatter, compute_body_hash
+root = Path('examples/investment')
+for f in sorted(root.rglob('*.md')):
+    meta, body = parse_frontmatter(f)
+    if not meta or 'summary_hash' not in meta:
+        continue
+    expected = compute_body_hash(body)
+    assert meta['summary_hash'] == expected, f'{f}: {meta[\"summary_hash\"]} != {expected}'
+    print(f'OK: {f.relative_to(root)}')
+print('ALL HASHES VALID')
 "
 ```
 
 ---
 
-### 任务 5：harnesslib + llm_gateway 关键 API 文档 ✅
+### 任务 5：changelog 命令 ✅
 
-**为两个通用组件补全 docstring 和模块级文档，确保独立可用。**
+**新增 `codememory changelog <id>` 命令，展示记忆的变更历史。**
 
 | # | 子任务 | 说明 |
 |---|--------|------|
-| 5.1 | harnesslib 模块 docstring | `__init__.py` 补充 Harness/Sandbox/Session 三个核心类的用途说明 + 最小示例 |
-| 5.2 | llm_gateway 模块 docstring | `__init__.py` 补充 LLMBridge/Router 用途说明 + 最小示例 |
-| 5.3 | Sandbox 关键方法 docstring | `sandbox.py` 的 `register()`/`execute()`/`list_tools()` 补充参数和返回值说明 |
-| 5.4 | LLMBridge 关键方法 docstring | `bridge.py` 的 `chat()`/`chat_with_tools()` 补充参数和返回值说明 |
+| 5.1 | `src/codememory/changelog.py` | 读取记忆的 `change_log` 列表，按时间倒序格式化输出 |
+| 5.2 | 输出格式 | `v3 (2026-04-27): <change_note>` 缩进列表 |
+| 5.3 | CLI 注册 + tools.py | `changelog` 子命令 + `changelog` Sandbox tool |
 
-**产出**：修改 `src/harnesslib/__init__.py`、`src/llm_gateway/__init__.py`、`src/harnesslib/sandbox.py`、`src/llm_gateway/bridge.py`
+**产出**：新增 `changelog.py`，修改 `cli.py`、`tools.py`
 
 **验收**：
 ```bash
-# harnesslib 文档可查看
-PYTHONPATH=src python -c "import harnesslib; help(harnesslib)" 2>&1 | head -20
-PYTHONPATH=src python -c "import llm_gateway; help(llm_gateway)" 2>&1 | head -20
+# 先制造变更历史
+codememory --root examples/investment update user/investment/risk-tolerance --change-note "Sprint 6 测试 changelog"
+codememory --root examples/investment update user/investment/risk-tolerance --summary "updated summary" --change-note "更新摘要"
+codememory --root examples/investment changelog user/investment/risk-tolerance
+# 应输出 2 条以上变更记录
+git checkout -- examples/investment/user/investment/risk-tolerance.md
+codememory --root examples/investment reindex
 ```
 
 ---
 
-### 任务 6：全场景闭环测试 ✅
+### 任务 6：wander 加权概率 ✅
 
-**模拟一个完整用户故事：用户分享偏好 → Agent 创建记忆 → 下次对话自动加载。**
+**wander cool 模式从"最低 1/3 等概率"改为加权随机。**
 
-| # | 验证项 | 说明 |
+| # | 子任务 | 说明 |
 |---|--------|------|
-| 6.1 | 场景 A：创建 + 检索 | create 一条 atom（偏好），search 能找到 |
-| 6.2 | 场景 B：resolve 上下文 | resolve 一个含依赖的 composite，拓扑顺序正确 |
-| 6.3 | 场景 C：update + stale | update body → overview 显示 stale → update summary → stale 消失 |
-| 6.4 | 场景 D：wander 发现冷记忆 | wander 返回低 access_count 记忆 + 邻居 |
-| 6.5 | 场景 E：snapshot 持久化 | TransientDAG → snapshot → composite .md 可被 resolve |
-| 6.6 | 清理 | 所有测试记忆删除，reindex 回到 12 条 |
+| 6.1 | 权重公式 | `weight = 1.0 / (access_count + 1)`，排除 protected（intensity >= 8） |
+| 6.2 | `random.choices(k=1, weights=...)` | 替换当前 `candidates[:len(candidates)//3]` 硬切逻辑 |
+| 6.3 | 保留 `--mode random` | 等概率模式不受影响 |
 
-**产出**：测试脚本 `tests/integration_test.py`（自动执行上述 5 个场景）
+**产出**：修改 `cli.py` wander handler
 
 **验收**：
 ```bash
-PYTHONPATH=src python tests/integration_test.py
-# 应输出 5 个场景全部 PASS
+# 多次 wander 结果有变化但冷记忆更频繁出现
+for i in $(seq 1 5); do
+  codememory --root examples/investment wander --inject
+done
+# 观察输出，低 access_count 的记忆（冷测试文件）应更频繁出现
 ```
 
 ---
 
-### 任务 7：回归验证 + 清理 ✅
+### 任务 7：snapshot 统一 ✅
 
-**确保 Sprint 5 变更不破坏已有能力。**
+**`snapshot --target <id>` 内部自动构建临时 DAG，消除与 `--from-dag` 的两条路径。**
+
+| # | 子任务 | 说明 |
+|---|--------|------|
+| 7.1 | snapshot.py 重构 | `snapshot(root, snapshot_id, target=None, dag=None)`：无 dag 时从 index 构建临时 DAG → resolve → 落盘 composite |
+| 7.2 | `--target` 和 `--from-dag` 互斥 | 只能传其中一个，内部走统一落盘逻辑 |
+| 7.3 | cli.py handler 简化 | 委托 `handlers.py` 的 handler |
+
+**产出**：修改 `snapshot.py`、`cli.py`
+
+**验收**：
+```bash
+# --target 模式（自动构建临时 DAG）
+codememory --root examples/investment snapshot test-target-snap --target user/investment/context
+ls examples/investment/user/snapshots/*test-target-snap.md 2>/dev/null && echo "OK: snapshot created"
+rm -f examples/investment/user/snapshots/*test-target-snap.md
+
+# --from-dag 模式（原有路径不受影响）
+PYTHONPATH=src python -c "
+import tempfile, json, subprocess, sys
+from pathlib import Path
+from codememory.transient import TransientDAG
+dag = TransientDAG()
+dag.add('s/x', type='atom', summary='X', body='X', intensity=5)
+tf = Path(tempfile.mktemp(suffix='.json'))
+tf.write_text(json.dumps(dag.to_dict(), ensure_ascii=False))
+r = subprocess.run([sys.executable, '-m', 'codememory.cli', '--root', 'examples/investment',
+    'snapshot', 'test-from-dag', '--from-dag', str(tf)], capture_output=True, text=True)
+print(r.stdout or r.stderr)
+snap = list(Path('examples/investment/user/snapshots').glob('*test-from-dag*'))[0]
+assert snap.exists()
+print(f'OK: {snap.name}')
+snap.unlink()
+tf.unlink()
+"
+```
+
+---
+
+### 任务 8：回归验证 + 清理 ✅
+
+**确保 Sprint 6 重构不破坏已有能力。**
 
 | # | 验证项 |
 |---|--------|
-| 7.1 | 模块可导入（含 integrations） |
-| 7.2 | `pip install -e .` 后 codememory CLI 全局可用 |
-| 7.3 | reindex + validate 0 errors |
-| 7.4 | resolve context 7 节点拓扑正确 |
-| 7.5 | overview/focus/wander/orphans/snapshot 全部可用 |
-| 7.6 | Sprint 1-4 验收命令不退化 |
-| 7.7 | 清理集成测试文件 |
+| 8.1 | 10 个 CLI 命令全部可用：create/resolve/reindex/validate/search/orphans/wander/snapshot/overview/focus/changelog |
+| 8.2 | `pip install -e .` + codememory 全局 CLI |
+| 8.3 | CodememoryToolkit 9+1 tools（+changelog） |
+| 8.4 | `tests/integration_test.py` 24/24 PASS |
+| 8.5 | Sprint 1-5 验收脚本不退化 |
+| 8.6 | 清理测试文件 + `git checkout -- risk-tolerance.md` |
 
 ---
 
@@ -198,21 +262,30 @@ PYTHONPATH=src python tests/integration_test.py
 
 ```
 新增：
-  INTEGRATION.md                        # 集成指南
-  examples/example_agent.py             # 最小 Agent 示例
-  src/codememory/integrations.py        # CodememoryToolkit
-  tests/integration_test.py             # 闭环测试
+  src/codememory/handlers.py          # 共享命令 handler
+  src/codememory/models.py            # Pydantic v2 数据模型
+  src/codememory/changelog.py         # changelog 命令
 
 修改：
-  README.md                             # 快速开始 + 架构图更新
-  src/codememory/__init__.py            # 导出 CodememoryToolkit
-  src/harnesslib/__init__.py            # 模块 docstring
-  src/llm_gateway/__init__.py           # 模块 docstring
-  src/harnesslib/sandbox.py             # 关键方法 docstring
-  src/llm_gateway/bridge.py             # 关键方法 docstring
+  src/codememory/__init__.py          # 导出新模块
+  src/codememory/cli.py               # 薄壳（-200 行）+ --verbose/--quiet
+  src/codememory/tools.py             # handler 委托 + changelog tool
+  src/codememory/core.py              # logging 初始化
+  src/codememory/index.py             # Pydantic 适配
+  src/codememory/resolve.py           # Pydantic + logging
+  src/codememory/validate.py          # Pydantic + logging
+  src/codememory/create.py            # Pydantic + logging
+  src/codememory/update.py            # Pydantic + logging
+  src/codememory/search.py            # Pydantic
+  src/codememory/orphans.py           # Pydantic
+  src/codememory/snapshot.py          # 统一路径
+  examples/investment/user/investment/*.md  # summary_hash 修复 (7 files)
+  examples/investment/schemas/decision.md   # summary_hash 修复
 
-不修改（Sprint 1-4 完成的模块）：
-  src/codememory/{core,create,update,index,resolve,validate,search,orphans,transient,snapshot,cli,tools}.py
+不修改：
+  src/codememory/transient.py
+  src/harnesslib/**
+  src/llm_gateway/**
 ```
 
 ---
@@ -221,43 +294,65 @@ PYTHONPATH=src python tests/integration_test.py
 
 ```bash
 # ── 模块导入 ──
-PYTHONPATH=src python -c "from codememory import resolve, create, update, search, validate, reindex; from codememory.integrations import CodememoryToolkit; print('OK')"
-
-# ── INTEGRATION.md 存在 ──
-test -f INTEGRATION.md && echo "OK" || echo "FAIL"
-grep -c "^## " INTEGRATION.md
-
-# ── README 快速开始可运行 ──
-pip install -e . 2>&1 | tail -1
-codememory --root examples/investment reindex && codememory --root examples/investment validate
-
-# ── example_agent.py 可运行 ──
-PYTHONPATH=src python examples/example_agent.py 2>&1 | head -30
-
-# ── CodememoryToolkit ──
 PYTHONPATH=src python -c "
-from codememory.integrations import CodememoryToolkit
-tk = CodememoryToolkit(root='examples/investment')
-tools = tk.get_tools_for_openai()
-assert len(tools) == 9
-print(f'OK: {len(tools)} tools in OpenAI format')
+from codememory.models import MemoryEntry, IndexData
+from codememory.handlers import handle_resolve
+from codememory.changelog import changelog
+print('OK')
 "
 
-# ── harnesslib + llm_gateway 文档 ──
-PYTHONPATH=src python -c "import harnesslib; help(harnesslib)" 2>&1 | head -5
-PYTHONPATH=src python -c "import llm_gateway; help(llm_gateway)" 2>&1 | head -5
+# ── handler 去重：cli.py < 200 行 ──
+wc -l src/codememory/cli.py
 
-# ── 闭环集成测试 ──
-PYTHONPATH=src python tests/integration_test.py
+# ── Pydantic v2 ──
+PYTHONPATH=src python -c "
+from codememory.models import MemoryEntry
+e = MemoryEntry(type='atom', id='t/x', summary='s', status='active',
+                tags=[], intensity=5, version=1, path='t/x.md', access_count=0)
+assert e.model_dump(mode='json')['type'] == 'atom'
+print('Pydantic OK')
+"
+
+# ── logging: --quiet --verbose ──
+codememory --root examples/investment validate -q 2>&1
+codememory --root examples/investment resolve user/investment/context -v 2>&1 | head -5
+
+# ── summary_hash 全部有效 ──
+PYTHONPATH=src python -c "
+from pathlib import Path
+from codememory.core import parse_frontmatter, compute_body_hash
+root = Path('examples/investment')
+for f in sorted(root.rglob('*.md')):
+    meta, body = parse_frontmatter(f)
+    if not meta or 'summary_hash' not in meta: continue
+    assert meta['summary_hash'] == compute_body_hash(body), f'{f}'
+print('ALL HASHES VALID')
+"
+codememory --root examples/investment overview | grep -c "stale"  # 0
+
+# ── changelog ──
+codememory --root examples/investment update user/investment/risk-tolerance --change-note "Sprint6 changelog test"
+codememory --root examples/investment changelog user/investment/risk-tolerance
+git checkout -- examples/investment/user/investment/risk-tolerance.md
+
+# ── wander 加权 ──
+for i in $(seq 1 3); do codememory --root examples/investment wander --inject; done
+
+# ── snapshot 统一 ──
+codememory --root examples/investment snapshot test-unified --target user/investment/context
+ls examples/investment/user/snapshots/*test-unified* && echo "OK" || echo "FAIL"
+rm -f examples/investment/user/snapshots/*test-unified*
 
 # ── 回归 ──
 codememory --root examples/investment reindex
 codememory --root examples/investment validate
-codememory --root examples/investment resolve user/investment/context
-codememory --root examples/investment orphans
-codememory --root examples/investment wander --inject
-codememory --root examples/investment overview
-codememory --root examples/investment focus user/investment/risk-tolerance --level summary
+codememory --root examples/investment resolve user/investment/context | grep "Resolved"
+codememory --root examples/investment orphans | head -3
+codememory --root examples/investment overview | head -3
+PYTHONPATH=src python tests/integration_test.py
+
+# ── 清理 ──
+codememory --root examples/investment reindex
 ```
 
 ---
@@ -266,19 +361,20 @@ codememory --root examples/investment focus user/investment/risk-tolerance --lev
 
 | 风险 | 缓解 |
 |------|------|
-| example_agent.py 依赖外部 LLM API | 使用 mock LLM handler，只验证 tool 调用流程，不依赖真实 API |
-| integrations.py 与 tools.py 功能重叠 | integrations.py 是外观层（facade），内部委托 tools.py 的已有 handler，不重写逻辑 |
-| harnesslib/llm_gateway 内部 API 不稳定 | 只补 docstring，不修改实现代码 |
-| `pip install -e .` 引入未声明依赖 | pyproject.toml 的 dependencies 已梳理过，只新增确认已有依赖 |
+| Pydantic 迁移导致所有模块改动 | models.py 定义清晰的 `model_validate(existing_dict)` 入口；每个模块逐个迁移并验证，不一次性全改 |
+| handler 去重引入行为差异 | 提取前后对比 10 个命令的输出，用 diff 验证一致性 |
+| logging 改变 stderr 格式 | `--verbose`/`--quiet` 可选；默认级别保持与 print() 时代相同的信息量 |
+| 示例文件批量修改出错 | 修改前 git stash 保留原状，修改后逐文件校验 hash |
 
 ---
 
 ## 六、完成定义
 
-1. `INTEGRATION.md` ≥ 5 个标题，覆盖快速开始、CLI、Sandbox 集成、overview 模板、llm_gateway 配置
-2. `README.md` 反映当前 `pip install -e .` + `src/codememory/` 架构
-3. `example_agent.py`~150 行，`PYTHONPATH=src python examples/example_agent.py` 可直接运行
-4. `from codememory.integrations import CodememoryToolkit` 可用，`get_tools_for_openai()` 返回 9 个 tool
-5. harnesslib + llm_gateway 关键 API 有 docstring，`help()` 可查看
-6. `tests/integration_test.py` 覆盖 5 个场景，全部 PASS
-7. Sprint 1-4 回归全部通过
+1. `handlers.py` 统一所有命令逻辑，cli.py < 200 行，tools.py 只做薄委托
+2. `models.py` 中 `MemoryEntry`/`IndexData`/`ImportRef` 为 Pydantic v2 BaseModel；核心模块接口类型标注全覆盖
+3. `--verbose`/`--quiet` 可控日志级别；resolve 正文不被日志污染
+4. 8 个样例 + 所有 .md 文件 `summary_hash` 与 body 一致；overview stale 计数 = 0
+5. `changelog` 命令存在并可用
+6. wander `--mode cool` 加权随机，结果多样性优于硬切
+7. snapshot `--target` 和 `--from-dag` 走统一落盘逻辑
+8. Sprint 1-5 回归 + `tests/integration_test.py` 全部通过

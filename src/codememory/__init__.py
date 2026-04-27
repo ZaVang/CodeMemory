@@ -8,6 +8,7 @@ from .core import compute_body_hash, get_root_dir, parse_frontmatter
 from .create import create
 from .index import load_index, reindex, save_index
 from .integrations import CodememoryToolkit
+from .models import ChangeLogEntry, ImportRef, IndexData, MemoryEntry
 from .orphans import find_orphans
 from .resolve import build_dag, find_cycle_participants, resolve, topological_sort
 from .search import search
@@ -20,6 +21,11 @@ __all__ = [
     "parse_frontmatter",
     "compute_body_hash",
     "get_root_dir",
+    # Data Models
+    "MemoryEntry",
+    "IndexData",
+    "ImportRef",
+    "ChangeLogEntry",
     # Index
     "load_index",
     "save_index",

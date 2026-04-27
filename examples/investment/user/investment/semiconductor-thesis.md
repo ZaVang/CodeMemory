@@ -1,18 +1,19 @@
 ---
 type: atom
 id: user/investment/semiconductor-thesis
-summary: "AI存储+AI制造双核心驱动，2026最确定产业趋势"
+summary: AI存储+AI制造双核心驱动，2026最确定产业趋势
 status: active
 created: 2026-02-10
 updated: 2026-04-24
 version: 1
-tags: [investment, thesis]
+tags:
+- investment
+- thesis
 source:
   platform: claude-code
   created_by: user
-summary_hash: placeholder
+summary_hash: 2291ad9
 ---
-
 # 半导体投资主线
 
 AI 存储需求爆发 + AI 制造国产替代，形成双核心驱动。这是 2026 年最确定的产业趋势之一。

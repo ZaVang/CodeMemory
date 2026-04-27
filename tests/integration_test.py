@@ -63,17 +63,14 @@ async def test_a_create_and_search(sandbox):
     _created_files.append(test_file)
     _check("A2: file exists on disk", test_file.exists())
 
-    # Search by tags (the template summary is "TODO: fill in summary",
-    # not the memory id, so we search by tags)
+    # Search by tags — search handler now returns {"result": <formatted string>}
     res = await sandbox.execute("search_memories", {
         "tags": ["sprint5", "scenario-a"],
         "root": _ROOT,
     })
-    results = res.get("results", [])
-    _check("A3: search by tags finds created memory", len(results) >= 1)
-    if results:
-        found = any("sprint5-a-test" in r.get("id", "") for r in results)
-        _check("A4: search result matches created id", found)
+    result_text = res.get("result", str(res))
+    _check("A3: search by tags finds created memory", "sprint5-a-test" in result_text)
+    _check("A4: search result matches created id", "sprint5-a-test" in result_text)
 
 
 # ===================================================================
@@ -325,7 +322,7 @@ async def main():
     await toolkit.register_to_sandbox(sandbox)
 
     names = [t.name for t in sandbox.list_tools()]
-    _check("INIT: 9 tools registered", len(names) == 9, f"got {len(names)}")
+    _check("INIT: 10 tools registered", len(names) == 10, f"got {len(names)}")
 
     # Run all scenarios
     await test_a_create_and_search(sandbox)
@@ -358,7 +355,7 @@ async def main():
     from codememory.index import reindex, load_index
     reindex(_ROOT_PATH)
     idx = load_index(_ROOT_PATH)
-    count = len(idx["memories"])
+    count = len(idx.memories)
     _check("CLEANUP: reindex back to 12 memories", count == 12, f"got {count}")
 
     # ── Summary ──────────────────────────────────────────────────────

@@ -12,9 +12,8 @@ intensity: 5
 source:
   platform: manual
   created_by: user
-summary_hash: placeholder
+summary_hash: '9241853'
 ---
-
 # Sprint2 Test
 
 Write content here...

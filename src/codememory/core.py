@@ -1,11 +1,28 @@
 """Core utilities for CodeMemory: frontmatter parsing, hashing, path resolution."""
 
 import hashlib
+import logging
 import os
 import sys
 from pathlib import Path
 
 import yaml
+
+_logger = logging.getLogger("codememory")
+
+
+def configure_logging(verbose: bool = False, quiet: bool = False) -> None:
+    """Configure the codememory logger.
+
+    Default level is WARNING.  ``--verbose`` promotes to INFO; ``--quiet``
+    suppresses everything below ERROR.
+    """
+    level = logging.WARNING
+    if verbose:
+        level = logging.INFO
+    if quiet:
+        level = logging.ERROR
+    logging.basicConfig(level=level, format="[%(levelname)s] %(message)s", stream=sys.stderr)
 
 
 def get_root_dir(custom_root: str | None = None) -> Path:
@@ -42,7 +59,7 @@ def parse_frontmatter(filepath: Path) -> tuple[dict, str]:
     try:
         content = filepath.read_text(encoding="utf-8-sig")
     except Exception as e:
-        print(f"Error reading {filepath}: {e}", file=sys.stderr)
+        _logger.error("Error reading %s: %s", filepath, e)
         return {}, ""
 
     if not content.startswith("---"):
@@ -58,7 +75,7 @@ def parse_frontmatter(filepath: Path) -> tuple[dict, str]:
     try:
         metadata = yaml.safe_load(frontmatter_str) or {}
     except yaml.YAMLError as e:
-        print(f"Error parsing YAML in {filepath}: {e}", file=sys.stderr)
+        _logger.error("Error parsing YAML in %s: %s", filepath, e)
         metadata = {}
 
     return metadata, body

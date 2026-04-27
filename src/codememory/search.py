@@ -3,13 +3,14 @@
 from pathlib import Path
 
 from .index import load_index
+from .models import IndexData, MemoryEntry
 
 
-def _count_dependents(memory_id: str, index: dict) -> int:
+def _count_dependents(memory_id: str, index: IndexData) -> int:
     """Count how many other memories import this one."""
     count = 0
-    for mid, entry in index["memories"].items():
-        imports_dict = entry.get("imports", {})
+    for mid, entry in index.memories.items():
+        imports_dict = entry.imports
         if not isinstance(imports_dict, dict):
             continue
         all_refs = (
@@ -35,46 +36,36 @@ def search(
     """Search memories by query, tags, type, and/or status.
 
     Results are sorted by dependents descending, then access_count descending,
-    then id ascending for stability.
-
-    Args:
-        root_dir: The memory root directory.
-        query: Case-insensitive substring match against summary.
-        tags: Filter to memories that have ALL listed tags.
-        type_: Filter by memory type (atom, schema, instance, composite).
-        status: Filter by memory status (active, archived, superseded, draft).
-
-    Returns:
-        List of matching memory entries with 'dependents' count added.
+    then id ascending.
     """
     index = load_index(root_dir)
-    results = []
+    results: list[dict] = []
 
-    for mid, entry in index["memories"].items():
-        # Filter by type
-        if type_ and entry.get("type") != type_:
+    for mid, entry in index.memories.items():
+        if type_ and entry.type != type_:
             continue
-
-        # Filter by status
-        if status and entry.get("status") != status:
+        if status and entry.status != status:
             continue
-
-        # Filter by tags (AND logic)
         if tags:
-            entry_tags = entry.get("tags", [])
-            if not all(t in entry_tags for t in tags):
+            if not all(t in entry.tags for t in tags):
                 continue
-
-        # Filter by query (case-insensitive summary match)
         if query:
-            summary = entry.get("summary", "").lower()
-            if query.lower() not in summary:
+            if query.lower() not in entry.summary.lower():
                 continue
 
         dependents = _count_dependents(mid, index)
-        access_count = entry.get("access_count", 0)
-        results.append({**entry, "id": mid, "dependents": dependents, "access_count": access_count})
+        results.append({
+            "id": mid,
+            "type": entry.type,
+            "summary": entry.summary,
+            "status": entry.status,
+            "tags": entry.tags,
+            "path": entry.path,
+            "intensity": entry.intensity,
+            "access_count": entry.access_count,
+            "last_access": entry.last_access,
+            "dependents": dependents,
+        })
 
-    # Sort by dependents descending, access_count descending, then id ascending
     results.sort(key=lambda r: (-r["dependents"], -r["access_count"], r["id"]))
     return results

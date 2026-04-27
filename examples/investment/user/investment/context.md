@@ -1,22 +1,23 @@
 ---
 type: composite
 id: user/investment/context
-summary: "投资决策的完整上下文包，包含主线判断、风险偏好、历史决策和当前持仓"
+summary: 投资决策的完整上下文包，包含主线判断、风险偏好、历史决策和当前持仓
 status: active
 created: 2026-04-24
 updated: 2026-04-24
 version: 1
-tags: [investment, context]
-purpose: "讨论投资话题时加载的完整上下文"
-
+tags:
+- investment
+- context
+purpose: 讨论投资话题时加载的完整上下文
 imports:
   required:
-    - user/investment/semiconductor-thesis
-    - user/investment/risk-tolerance
-    - user/investment/february-buy
-    - user/investment/current-holdings
+  - user/investment/semiconductor-thesis
+  - user/investment/risk-tolerance
+  - user/investment/february-buy
+  - user/investment/current-holdings
+summary_hash: 3b598a1
 ---
-
 # 投资决策上下文
 
 本组合提供完整的投资决策背景。

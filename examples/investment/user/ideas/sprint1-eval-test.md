@@ -12,9 +12,8 @@ intensity: 5
 source:
   platform: manual
   created_by: user
-summary_hash: placeholder
+summary_hash: 09a8f2f
 ---
-
 # Sprint1 Eval Test
 
 Write content here...

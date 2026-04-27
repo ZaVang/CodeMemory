@@ -388,3 +388,58 @@ Week 3 ─┬─ Phase 2D: 透明接口（Epic 3 完成）
 | §6 双焦距与分辨率层级 | **Layer 0**（focus 工具 + 自动分辨率切换） |
 | §7 让环境适应 LLM | Phase 2A（bash CLI + Markdown + Python package） |
 | §8 自组织记忆生态 | Phase 2C（遗忘由依赖图结构决定，不由系统裁决） |
+
+---
+
+## 十、Phase 3：工程化与打磨
+
+> 前置条件：Phase 2E 完成
+>
+> Phase 2 实现了完整的记忆功能闭环。Phase 3 消灭已知技术债务，提升代码质量，为独立发布做准备。
+
+### Phase 3A：代码质量（第 1 周）
+
+| # | 任务 | 产出 | 验证 |
+|---|------|------|------|
+| 3A.1 | cli/tools handler 去重 | `src/codememory/handlers.py`：所有命令的共享 handler，cli 和 tools 都委托给它 | 新增命令只需写一份逻辑；cli.py 回到 150 行以内 |
+| 3A.2 | Pydantic v2 数据模型 | `src/codememory/models.py`：`MemoryEntry`、`IndexData`、`ImportRef`、`ChangeLogEntry` 等 BaseModel | 序列化/反序列化走 `model_dump(mode="json")`，IDE 补全生效 |
+| 3A.3 | print() → logging | 所有 `print(x, file=sys.stderr)` → `logging.warning()`/`logging.error()`；stdout 输出保留 `print()` | 可控制日志级别；resolve notice 走 stderr，正文走 stdout |
+
+### Phase 3B：功能深化（第 1-2 周）
+
+| # | 任务 | 产出 | 验证 |
+|---|------|------|------|
+| 3B.1 | 示例记忆 hash 修复 | 8 个样例文件 + index.json 中的 `summary_hash` 全部更新为真实值 | `overview` 无 `[stale]` 误报 |
+| 3B.2 | `changelog` 命令 | `codememory changelog <id>` 输出该记忆的 change_log 历史（按时间倒序） | 查看 risk-tolerance 的版本变更轨迹 |
+| 3B.3 | wander 加权概率 | 当前"最低 1/3 等概率"改为加权随机：`weight = 1 / (access_count + 1)`，冷记忆更容易被选中，但不完全排除热门记忆 | 多次 wander 结果多样性优于当前硬切 1/3 |
+| 3B.4 | snapshot 统一 | `snapshot --target` 内部自动构建临时 DAG（委托 resolve 逻辑），消除与 `--from-dag` 的两条代码路径 | `snapshot <id>` 等价于 `snapshot <id> --target <id>`；snapshot.py 逻辑砍半 |
+| 3B.5 | `--format json` | 所有 CLI 命令支持 `--format json`：`resolve --format json`、`search --format json`、`overview --format json` | 输出机器可读 JSON，程序化集成不依赖文本解析 |
+
+### Phase 3C：测试体系（第 2 周）
+
+| # | 任务 | 产出 | 验证 |
+|---|------|------|------|
+| 3C.1 | resolve.py 单元测试 | `tests/unit/test_resolve.py`：DAG 构建、拓扑排序、循环检测、token 裁剪 | 10+ 纯函数测试，不依赖文件系统 |
+| 3C.2 | validate.py 单元测试 | `tests/unit/test_validate.py`：断链检测、schema 合规、衰减建议规则 | 覆盖 4 条衰减规则的边界 |
+| 3C.3 | create/update 集成测试 | `tests/unit/test_create_update.py`：protected 自动标记、version 递增、summary_hash 计算 | 临时目录隔离，不污染 examples |
+| 3C.4 | 边界测试 | 空记忆库、循环依赖、超大 budget、零 budget、缺失 imports | 所有边界不抛异常，输出合理错误信息 |
+
+### Phase 3D：独立发布（第 3 周）
+
+| # | 任务 | 产出 | 验证 |
+|---|------|------|------|
+| 3D.1 | harnesslib 独立 pip 包 | `src/harnesslib/` 有独立 `pyproject.toml`、`README.md`、CI 配置 | `pip install harnesslib` 可在其他项目使用 |
+| 3D.2 | llm_gateway 独立 pip 包 | `src/llm_gateway/` 有独立 `pyproject.toml`、`README.md`、CI 配置 | `pip install llm-gateway` 可在其他项目使用 |
+| 3D.3 | codememory 0.2.0 发布 | `pyproject.toml` 版本号、changelog、`pip install codememory` 可安装 | 新用户 `pip install codememory && codememory --root my-memories reindex` |
+| 3D.4 | LangChain/Anthropic tool 适配 | `integrations.py` 追加 `get_tools_for_anthropic()`（tool_use 格式）、`get_tools_for_langchain()`（BaseTool 列表） | 三个主流 Agent 框架各一行代码集成 |
+
+---
+
+## Phase 3 与 IDEA.md 的映射
+
+| IDEA.md 洞察 | 对应 Phase |
+|--------------|-----------|
+| §7 让环境适应 LLM | Phase 3A（handler 架构 + Pydantic + logging — 代码本身也更易被 LLM 理解和维护） |
+| §8 自组织记忆生态 | Phase 3B（changelog 可见历史、snapshot 统一 — 系统行为更可解释、可调试） |
+| — 工程基础 | Phase 3C（测试体系 — 所有后续迭代的安全网） |
+| — 生态分发 | Phase 3D（独立发布 — codememory 从 monorepo 内组件变为独立可安装的 pip 包） |

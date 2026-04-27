@@ -1,5 +1,6 @@
 """Snapshot persistence — export TransientDAG as a composite .md memory."""
 
+import logging
 import sys
 from datetime import datetime, date
 from pathlib import Path
@@ -7,6 +8,8 @@ from pathlib import Path
 import yaml
 
 from .core import compute_body_hash
+
+_logger = logging.getLogger("codememory")
 
 
 def _serialize_date(obj):
@@ -43,7 +46,7 @@ def snapshot_dag(root_dir: Path, dag, snapshot_id: str) -> Path:
     nodes = list(dag._nodes.values())
 
     if not nodes:
-        print("Error: TransientDAG is empty, nothing to snapshot.", file=sys.stderr)
+        _logger.error("TransientDAG is empty, nothing to snapshot.")
         sys.exit(1)
 
     # Collect all required imports from the DAG edges

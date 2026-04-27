@@ -2,31 +2,30 @@
 type: instance
 schema: schemas/decision
 id: user/investment/february-buy
-summary: "2月重仓半导体ETF，基于AI存储爆发+国产替代判断，置信度0.8"
+summary: 2月重仓半导体ETF，基于AI存储爆发+国产替代判断，置信度0.8
 status: active
 created: 2026-02-15
 updated: 2026-04-24
 version: 2
-tags: [investment, decision]
+tags:
+- investment
+- decision
 source:
   platform: antigravity
   created_by: user
-summary_hash: placeholder
-
-what: "重仓半导体ETF（512480），仓位从10%加到40%"
-why: "AI存储爆发 + 国产替代加速，双核心驱动确定性高"
+summary_hash: a22ae67
+what: 重仓半导体ETF（512480），仓位从10%加到40%
+why: AI存储爆发 + 国产替代加速，双核心驱动确定性高
 when: 2026-02-15
 confidence: 0.8
-outcome: "截至4月涨15%，判断暂时正确"
-
+outcome: 截至4月涨15%，判断暂时正确
 imports:
   required:
-    - id: user/investment/semiconductor-thesis
-    - id: user/investment/risk-tolerance
-      pin: v1
-      reason: "决策基于当时的激进风险偏好（v1），不是后来调整后的中高偏好"
+  - id: user/investment/semiconductor-thesis
+  - id: user/investment/risk-tolerance
+    pin: v1
+    reason: 决策基于当时的激进风险偏好（v1），不是后来调整后的中高偏好
 ---
-
 # 2月重仓半导体决策
 
 基于半导体主线判断，结合当时的风险偏好，决定将仓位从 10% 大幅加到 40%。

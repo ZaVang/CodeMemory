@@ -11,9 +11,8 @@ tags:
 source:
   platform: manual
   created_by: user
-summary_hash: placeholder
+summary_hash: 481b219
 ---
-
 # Test
 
 Write content here...

@@ -44,3 +44,6 @@ example_agent.py 在运行结束时删除自己创建的测试记忆文件，但
 
 ## [Sprint 5] INTEGRATION.md 与 README.md 内容重叠
 两份文档都包含"快速开始"章节。维护时应以 README.md 为入口（精简版，面向首次访问者），INTEGRATION.md 为深度集成指南（详细版，面向需要嵌入 Agent 项目的开发者）。避免在两个文件中维护重复的安装步骤。
+
+## [Sprint 6] Pydantic 模型属性访问 vs dict 下标访问
+`load_index()` 返回 `IndexData`，其 `memories` 字段是 `dict[str, MemoryEntry]`。MemoryEntry 是 Pydantic BaseModel，必须用 `entry.path` 而非 `entry["path"]`。但 `search()` 返回的是 dict 列表（非 MemoryEntry）。在 handler 函数中处理这两种来源的数据时，使用 `getattr(obj, "key", None) or obj.get("key", "")` 双兼容模式，或统一数据源输出为 MemoryEntry。

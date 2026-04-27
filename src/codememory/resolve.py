@@ -1,43 +1,46 @@
 """Memory resolution: DAG construction, cycle detection, topological sort, token budget."""
 
+import logging
 import sys
 from datetime import datetime
 from pathlib import Path
 
-from .core import compute_body_hash, parse_frontmatter, estimate_tokens
+from .core import compute_body_hash, estimate_tokens, parse_frontmatter
 from .index import load_index, save_index
+from .models import IndexData, MemoryEntry
+
+_logger = logging.getLogger("codememory")
 
 
-def _get_imports(meta: dict, depth: str) -> list[str]:
+def _get_imports(entry: MemoryEntry | dict, depth: str) -> list[str]:
     """Extract dependency IDs from a memory's imports dict based on depth.
 
-    Args:
-        meta: The frontmatter metadata dict.
-        depth: One of "required", "recommended", "full".
+    Accepts both MemoryEntry and legacy dict for backward compatibility.
     """
-    imports_dict = meta.get("imports", {})
+    if isinstance(entry, MemoryEntry):
+        imports_dict = entry.imports
+    else:
+        imports_dict = entry.get("imports", {})
+
     if not isinstance(imports_dict, dict):
         return []
 
-    deps = []
-    reqs = imports_dict.get("required", [])
-    for r in reqs:
+    deps: list[str] = []
+    for r in imports_dict.get("required", []):
         if isinstance(r, str):
             deps.append(r)
         elif isinstance(r, dict) and "id" in r:
             deps.append(r["id"])
 
     if depth in ("recommended", "full"):
-        recs = imports_dict.get("recommended", [])
-        for r in recs:
+        for r in imports_dict.get("recommended", []):
             if isinstance(r, str):
                 deps.append(r)
             elif isinstance(r, dict) and "id" in r:
                 deps.append(r["id"])
 
     if depth == "full":
-        rels = imports_dict.get("related", [])
-        for r in rels:
+        for r in imports_dict.get("related", []):
             if isinstance(r, str):
                 deps.append(r)
             elif isinstance(r, dict) and "id" in r:
@@ -46,12 +49,12 @@ def _get_imports(meta: dict, depth: str) -> list[str]:
     return deps
 
 
-def build_dag(memory_id: str, depth: str, index: dict) -> dict:
+def build_dag(memory_id: str, depth: str, index: IndexData) -> dict[str, list[str]]:
     """Build a dependency graph from the target memory.
 
     Returns {node_id: [dependency_ids]}.
     """
-    graph = {}
+    graph: dict[str, list[str]] = {}
     queue = [memory_id]
 
     while queue:
@@ -59,12 +62,12 @@ def build_dag(memory_id: str, depth: str, index: dict) -> dict:
         if curr in graph:
             continue
 
-        if curr not in index["memories"]:
-            print(f"Warning: Memory '{curr}' not found in index.", file=sys.stderr)
+        if curr not in index.memories:
+            _logger.warning("Memory '%s' not found in index.", curr)
             graph[curr] = []
             continue
 
-        entry = index["memories"][curr]
+        entry = index.memories[curr]
         deps = _get_imports(entry, depth)
         graph[curr] = deps
         queue.extend(deps)
@@ -84,7 +87,6 @@ def find_cycle_participants(graph: dict) -> list[str]:
         color[u] = 1
         for v in graph.get(u, []):
             if color.get(v, 0) == 1:
-                # Cycle detected
                 cycle_start = path.index(v) if v in path else 0
                 cycle_nodes.update(path[cycle_start:])
                 cycle_nodes.add(v)
@@ -107,7 +109,7 @@ def topological_sort(graph: dict) -> list[str]:
             in_degree[v] = in_degree.get(v, 0) + 1
 
     queue = [u for u in in_degree if in_degree[u] == 0]
-    topo_order = []
+    topo_order: list[str] = []
 
     while queue:
         u = queue.pop(0)
@@ -117,7 +119,6 @@ def topological_sort(graph: dict) -> list[str]:
             if in_degree[v] == 0:
                 queue.append(v)
 
-    # Reverse so dependencies load before dependents
     return list(reversed(topo_order))
 
 
@@ -127,15 +128,12 @@ def resolve(
     depth: str = "required",
     budget: int | None = None,
 ) -> str:
-    """Resolve and assemble memory context for a given memory ID.
-
-    Returns the assembled context as a string (also prints it).
-    """
+    """Resolve and assemble memory context for a given memory ID."""
     index = load_index(root_dir)
 
-    if memory_id not in index["memories"]:
+    if memory_id not in index.memories:
         msg = f"Error: Target memory '{memory_id}' not found. Did you reindex?"
-        print(msg, file=sys.stderr)
+        _logger.error(msg)
         return msg
 
     # 1. Build DAG
@@ -144,11 +142,8 @@ def resolve(
     # 2. Cycle Detection
     cycle_ids = find_cycle_participants(graph)
     if cycle_ids:
-        print(
-            f"WARNING: Circular dependency detected involving: {cycle_ids}",
-            file=sys.stderr,
-        )
-        print("Skipping cycle nodes to continue resolution...", file=sys.stderr)
+        _logger.warning("Circular dependency detected involving: %s", cycle_ids)
+        _logger.warning("Skipping cycle nodes to continue resolution...")
         for u in list(graph.keys()):
             graph[u] = [v for v in graph[u] if v not in cycle_ids]
 
@@ -167,30 +162,27 @@ def resolve(
     max_budget = budget if budget else float("inf")
     used = 0
 
-    lines = []
+    lines: list[str] = []
     lines.append(f"# Resolved Context for '{memory_id}'\n")
     if budget:
         lines.append(f"*(Depth: {depth}, Budget: {max_budget} chars)*\n")
     else:
         lines.append(f"*(Depth: {depth}, Budget: unlimited)*\n")
 
-    # Build both required-only and recommended-inclusive graphs for degradation
     req_graph = build_dag(memory_id, "required", index)
     rec_graph = build_dag(memory_id, "recommended", index)
     full_text_nodes: list[str] = []
-
-    # Collect notices for stale detection and pin version checks
     notices: list[str] = []
 
     for i, mid in enumerate(ordered):
-        if mid not in index["memories"]:
+        if mid not in index.memories:
             continue
 
-        entry = index["memories"][mid]
-        file_path = root_dir / entry["path"]
+        entry = index.memories[mid]
+        file_path = root_dir / entry.path
         meta, body = parse_frontmatter(file_path)
 
-        # ── Stale detection: summary_hash vs actual body hash ──
+        # Stale detection
         stored_hash = meta.get("summary_hash", "")
         if stored_hash:
             actual_hash = compute_body_hash(body)
@@ -200,19 +192,16 @@ def resolve(
                     f"Run: codememory update {mid} --change-note \"update summary\""
                 )
 
-        # ── Pin version check: for each pinned import ──
-        imports_dict = entry.get("imports", {})
+        # Pin version check
+        imports_dict = entry.imports
         if isinstance(imports_dict, dict):
             for strength in ("required", "recommended", "related"):
                 for ref in imports_dict.get(strength, []):
                     if isinstance(ref, dict) and "pin" in ref:
                         ref_id = ref.get("id", "")
                         pin_version_str = ref.get("pin", "")
-                        if ref_id and pin_version_str and ref_id in index["memories"]:
-                            current_version = index["memories"][ref_id].get(
-                                "version", 1
-                            )
-                            # Parse "vN" format
+                        if ref_id and pin_version_str and ref_id in index.memories:
+                            current_version = index.memories[ref_id].version
                             try:
                                 pin_num = int(pin_version_str.lstrip("v"))
                             except ValueError:
@@ -225,11 +214,11 @@ def resolve(
                                 )
 
         full_text = (
-            f"## [{i + 1}/{len(ordered)}] {mid} ({entry['type']})\n\n{body}\n\n"
+            f"## [{i + 1}/{len(ordered)}] {mid} ({entry.type})\n\n{body}\n\n"
         )
         summary_text = (
-            f"## [{i + 1}/{len(ordered)}] {mid} ({entry['type']} - SUMMARY - budget)\n\n"
-            f"> {entry['summary']}\n\n"
+            f"## [{i + 1}/{len(ordered)}] {mid} ({entry.type} - SUMMARY - budget)\n\n"
+            f"> {entry.summary}\n\n"
         )
 
         t_full = estimate_tokens(full_text)
@@ -246,34 +235,27 @@ def resolve(
             lines.append(summary_text)
             used += t_sum
         elif is_recommended:
-            # Recommended nodes degrade to summary (not skipped)
             lines.append(summary_text)
             used += t_sum
         else:
-            lines.append(
-                f"## [{i + 1}/{len(ordered)}] {mid} "
-                f"(SKIPPED - budget)\n\n"
-            )
+            lines.append(f"## [{i + 1}/{len(ordered)}] {mid} (SKIPPED - budget)\n\n")
 
     lines.append(f"---\nTotal Budget Used: {used}/{max_budget}")
 
-    # ── Append Notices section if any ──
     if notices:
         lines.append("")
         lines.append("## Notices")
         for notice in notices:
             lines.append(notice)
 
-    # Track access: increment access_count for each node given full text
+    # Track access: increment access_count for full-text nodes
     now_iso = datetime.now().isoformat()
     for mid in full_text_nodes:
-        if mid in index["memories"]:
-            entry = index["memories"][mid]
-            entry["access_count"] = entry.get("access_count", 0) + 1
-            entry["last_access"] = now_iso
+        if mid in index.memories:
+            entry = index.memories[mid]
+            entry.access_count += 1
+            entry.last_access = now_iso
 
-    # Persist updated access stats
     save_index(root_dir, index)
 
-    result = "\n".join(lines)
-    return result
+    return "\n".join(lines)

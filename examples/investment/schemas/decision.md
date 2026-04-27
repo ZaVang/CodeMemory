@@ -1,30 +1,32 @@
 ---
 type: schema
 id: schemas/decision
-summary: "决策类记忆的结构模板，包含 what/why/when/confidence/outcome"
+summary: 决策类记忆的结构模板，包含 what/why/when/confidence/outcome
 status: active
 created: 2026-04-24
 updated: 2026-04-24
 version: 1
-tags: [meta, template]
+tags:
+- meta
+- template
 fields:
-  - name: what
-    type: string
-    required: true
-  - name: why
-    type: string
-    required: true
-  - name: when
-    type: date
-    required: true
-  - name: confidence
-    type: float
-    required: true
-  - name: outcome
-    type: string
-    required: false
+- name: what
+  type: string
+  required: true
+- name: why
+  type: string
+  required: true
+- name: when
+  type: date
+  required: true
+- name: confidence
+  type: float
+  required: true
+- name: outcome
+  type: string
+  required: false
+summary_hash: df75881
 ---
-
 # Decision Schema
 
 所有"决策类"记忆应遵循此结构。适用于投资决策、项目决策、技术选型等场景。

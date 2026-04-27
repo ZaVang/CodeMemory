@@ -1,5 +1,6 @@
 """Memory update: version control, change tracking, summary_hash recalc."""
 
+import logging
 import sys
 from datetime import datetime, date
 from pathlib import Path
@@ -8,6 +9,8 @@ import yaml
 
 from .core import compute_body_hash, get_memory_path, parse_frontmatter
 from .index import reindex
+
+_logger = logging.getLogger("codememory")
 
 
 def _serialize_date(obj):
@@ -56,19 +59,13 @@ def update(
         Path to the updated file.
     """
     if not change_note:
-        print(
-            "Error: --change-note is required for update operations.",
-            file=sys.stderr,
-        )
+        _logger.error("--change-note is required for update operations.")
         sys.exit(1)
 
     file_path = get_memory_path(root_dir, memory_id)
 
     if not file_path.exists():
-        print(
-            f"Error: Memory '{memory_id}' not found at {file_path}",
-            file=sys.stderr,
-        )
+        _logger.error("Memory '%s' not found at %s", memory_id, file_path)
         sys.exit(1)
 
     # Read and parse existing file
@@ -76,10 +73,7 @@ def update(
     parts = raw.split("---", 2)
 
     if len(parts) < 3:
-        print(
-            f"Error: {file_path} does not have valid YAML frontmatter",
-            file=sys.stderr,
-        )
+        _logger.error("%s does not have valid YAML frontmatter", file_path)
         sys.exit(1)
 
     frontmatter_str = parts[1]
@@ -88,15 +82,14 @@ def update(
     try:
         meta = yaml.safe_load(frontmatter_str) or {}
     except yaml.YAMLError as e:
-        print(f"Error parsing YAML in {file_path}: {e}", file=sys.stderr)
+        _logger.error("Error parsing YAML in %s: %s", file_path, e)
         sys.exit(1)
 
     # Check protected
     if meta.get("protected") is True:
-        print(
-            f"Warning: Memory '{memory_id}' is protected. "
-            "Update will proceed but protection flag remains.",
-            file=sys.stderr,
+        _logger.warning(
+            "Memory '%s' is protected. Update will proceed but protection flag remains.",
+            memory_id,
         )
 
     # Version increment
@@ -148,10 +141,9 @@ def update(
     if status is not None:
         valid_statuses = {"active", "archived", "superseded", "draft"}
         if status not in valid_statuses:
-            print(
-                f"Error: Invalid status '{status}'. "
-                f"Must be one of: {', '.join(sorted(valid_statuses))}",
-                file=sys.stderr,
+            _logger.error(
+                "Invalid status '%s'. Must be one of: %s",
+                status, ", ".join(sorted(valid_statuses)),
             )
             sys.exit(1)
         meta["status"] = status
