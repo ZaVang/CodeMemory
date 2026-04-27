@@ -50,16 +50,19 @@ CodeMemory/
 ├── src/
 │   ├── codememory/              # 记忆管理核心（本项目）
 │   │   ├── __init__.py          # Public API
-│   │   ├── core.py              # frontmatter 解析, body hash
+│   │   ├── core.py              # frontmatter 解析, body hash, logging
+│   │   ├── models.py            # Pydantic v2 数据模型
+│   │   ├── handlers.py          # 统一命令处理（cli + tools 共享）
 │   │   ├── index.py             # Index 加载/保存/reindex
 │   │   ├── resolve.py           # DAG + 拓扑排序 + token 裁剪
-│   │   ├── validate.py          # 循环检测 + 断链 + schema 合规
+│   │   ├── validate.py          # 循环检测 + 断链 + schema 合规 + 衰减建议
 │   │   ├── create.py            # 记忆模板生成
 │   │   ├── update.py            # 版本控制 + change tracking
 │   │   ├── search.py            # 检索
 │   │   ├── orphans.py           # 孤立记忆检测
+│   │   ├── changelog.py         # 变更历史查看
 │   │   ├── transient.py         # 瞬态 DAG（会话内推理链）
-│   │   ├── snapshot.py          # TransientDAG → persistent .md
+│   │   ├── snapshot.py          # TransientDAG -> persistent .md
 │   │   ├── integrations.py      # CodememoryToolkit（一行注册）
 │   │   ├── cli.py               # argparse CLI 壳
 │   │   └── tools.py             # Sandbox tool 注册
@@ -107,6 +110,7 @@ codememory search [--query <q>] [--tags <t>] [--type <t>] [--status <s>]
 codememory reindex
 codememory validate
 codememory orphans [--type <t>] [--min-intensity N]
+codememory changelog <id>
 
 # Layer 0 认知操作
 codememory overview [--tags <t>] [--limit N] [--format default|inject] [--with-recall]
@@ -141,7 +145,7 @@ tools = toolkit.get_tools_for_openai()  # -> OpenAI format tool list
 
 ## 文档
 
-- [集成指南](INTEGRATION.md) -- 10 分钟上手集成
+- [集成指南](docs/INTEGRATION.md) -- 10 分钟上手集成
 - [架构设计](docs/architecture.md)
 - [已知陷阱](docs/plans/pitfalls.md)
 

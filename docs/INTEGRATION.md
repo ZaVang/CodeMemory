@@ -78,80 +78,260 @@ codememory reindex
 
 ## CLI Command Reference
 
-### Memory lifecycle
+### create — 创建新记忆
 
 ```bash
-# Create a new memory
 codememory create --type atom --id user/ideas/my-thesis --tags "research,ai"
-
-# Create an instance (requires --schema)
-codememory create --type instance --id user/decisions/buy-1 \
-  --schema schemas/investment/decision --tags "investment"
-
-# Update an existing memory (--change-note required)
-codememory update user/ideas/my-thesis \
-  --change-note "Refined thesis after Q2 data" \
-  --body "Updated content here..." \
-  --summary "Updated summary"
+codememory create --type instance --id user/decisions/buy-1 --schema schemas/decision
+codememory create --type atom --id user/notes/draft --intensity 9 --dry-run
 ```
 
-### Retrieval & inspection
+**做什么**：生成一个带 YAML frontmatter 模板的 `.md` 文件，并自动更新 `index.json`。
+
+**关键参数**：
+- `--type`：atom（事实）| instance（决策，需 --schema）| composite（组合包）| schema（元模板）
+- `--intensity`：1-10，>=8 自动标记 `protected: true`（永不衰减）
+- `--dry-run`：预览 frontmatter + body 但不写文件
+- `--tags`：逗号分隔，如 `"investment,thesis"`
+
+**输出示例**：
+```
+Created memory at examples/investment/user/ideas/my-thesis.md
+Updating index...
+Reindexed 13 memories successfully.
+```
+
+---
+
+### update — 更新记忆（含版本控制）
 
 ```bash
-# Resolve with dependencies (topological DAG assembly)
-codememory resolve user/investment/context
-codememory resolve user/investment/context --depth full --budget 4000
+codememory update user/ideas/my-thesis --change-note "根据 Q2 数据修改" --body "新正文..."
+codememory update user/investment/risk-tolerance --status archived --change-note "不再适用"
+```
 
-# Search by query, tags, type, status
-codememory search --query "risk" --tags "investment" --type atom
+**做什么**：修改记忆的 body/summary/status/imports，自动递增 `version`，追加 `change_log`，重算 `summary_hash`。
 
-# Validate integrity (cycles, broken links, schema compliance)
+**关键参数**：
+- `--change-note`（必填）：说明改了什么、为什么改
+- `--body`：新正文内容
+- `--summary`：新摘要（注意：不传 --summary 但传 --body 时，hash 不变 → 触发 stale 检测）
+- `--status`：active | archived | superseded | draft
+
+**输出示例**：
+```
+Updated user/investment/risk-tolerance to version 3
+Updating index...
+Reindexed 12 memories successfully.
+```
+
+---
+
+### reindex — 重建索引
+
+```bash
+codememory reindex
+```
+
+**做什么**：扫描 `<root>/user/`、`<root>/self/`、`<root>/schemas/` 下所有 `.md` 文件，提取 frontmatter 元数据写入 `.codememory/index.json`。**保留**已有 `access_count` 和 `last_access`（不重置）。
+
+**何时需要**：手动增删 `.md` 文件后、index.json 损坏时。
+
+**输出示例**：
+```
+Reindexed 12 memories successfully.
+```
+
+---
+
+### validate — 完整性校验 + 衰减建议
+
+```bash
 codememory validate
+codememory validate -v     # 详细模式（含 INFO）
+codememory validate -q     # 静默模式（仅 ERROR）
+```
 
-# Find orphaned memories (zero in-degree)
+**做什么**：检查四项：
+
+| 检查项 | 说明 | 严重程度 |
+|--------|------|----------|
+| 断链检测 | A 的 imports 引用了不存在的 B | ERROR |
+| schema 合规 | instance 缺少 schema 要求的必填字段 | ERROR |
+| 循环依赖 | A → B → A 形成环 | WARNING |
+| 衰减建议 | 孤立 + 冷记忆（access_count=0 + 无引用 + intensity<8） | DECAY-WARN |
+
+**输出示例**：
+```
+Running CodeMemory Validation...
+
+[DECAY-WARN] user/ideas/test has low access (access_count=0), no recent
+access, and is not referenced by any other memory. Consider re-linking
+or archiving this memory.
+
+Validation complete. 12 memories checked.
+Errors: 0, Warnings: 4
+```
+
+**如何解读**：
+- `Errors: 0` — 依赖图健康，可以放心用
+- `Warnings: N` — 有 N 条衰减建议，需要人工判断是否要归档或重新关联
+- 出现 ERROR 时 exit code = 1（CI 可据此失败）
+
+---
+
+### resolve — DAG 拓扑拼装上下文
+
+```bash
+codememory resolve user/investment/context
+codememory resolve user/investment/context --depth full --budget 2000
+```
+
+**做什么**：从目标记忆出发，递归加载其 `imports` 依赖，按拓扑排序（被依赖的在前）输出完整上下文。超预算时降级非核心节点为 summary。
+
+**关键参数**：
+- `--depth`：required（默认，只含 required imports）| recommended | full（含 related）
+- `--budget N`：token（字符）上限，触发降级策略
+
+**降级顺序**：required=full > recommended=full > required=summary > recommended=summary > related=full
+
+**输出末尾的 `## Notices` 节**：resolve 过程中发现的数据质量问题：
+- `[NOTICE] summary may be stale for <id>` — body 被改了但 summary_hash 未更新
+- `[NOTICE] pinned version v1 of <id> is behind current version v3` — 引用了旧版本
+
+---
+
+### search — 检索记忆
+
+```bash
+codememory search --query "risk" --tags "investment" --type atom --status active
+```
+
+**做什么**：按条件过滤记忆，按 `(被引用数, access_count)` 降序排列。
+
+**关键参数**：
+- `--query`/`-q`：summary 子串匹配（大小写不敏感）
+- `--tags`/`-t`：AND 逻辑
+- `--type`/`-T`：atom | schema | instance | composite
+- `--status`/`-s`：active | archived | superseded | draft
+
+**输出列含义**：`id  type  deps:被引用数  [tags]`，下面一行是 summary。
+
+---
+
+### orphans — 孤立记忆发现
+
+```bash
 codememory orphans
 codememory orphans --type atom --min-intensity 5
 ```
 
-### Layer 0 cognitive operations
+**做什么**：列出所有入度为 0（没有任何其他记忆 imports 它）的记忆。高 intensity 标注 `[protected]`，低 intensity 标注 `[decay-risk]`。
+
+**输出示例**：
+```
+user/ideas/sprint2-test   atom    intensity: 5  last_access: None  [decay-risk]
+schemas/decision          schema  intensity: 5  last_access: -     [protected]
+```
+
+---
+
+### overview — 透明感知摘要
 
 ```bash
-# 扫视 (Glance): session-start memory injection
 codememory overview
-codememory overview --tags "investment" --limit 5 --format inject
+codememory overview --tags "investment" --limit 5 --format inject --with-recall
+```
 
-# 注视 (Focus): adjust resolution on a specific memory
-codememory focus user/investment/risk-tolerance --level summary
-codememory focus user/investment/risk-tolerance --level full
+**做什么**：输出 top N 最相关（高 heat）的记忆摘要。Agent 会话启动时注入 system prompt 用。
 
-# 触景生情 (Wander): random/associative memory activation
+**heat 公式**：`heat = dependents * 10 + access_count`
+
+**输出格式**：
+- `default`：表格风格，含 `[active]`/`[stale]` 状态标签
+- `inject`：紧凑单行，可直接粘贴到 system prompt
+- `--with-recall`：末尾追加一行 `[recall]`（随机触景生情一条冷记忆）
+
+---
+
+### focus — 分辨率切换
+
+```bash
+codememory focus user/investment/risk-tolerance --level summary   # zoom-out
+codememory focus user/investment/risk-tolerance --level full      # zoom-in
+codememory focus some-id --content "body text" --summary "sum" --level full  # 免磁盘
+```
+
+**做什么**：对指定记忆切换 full（全文）/ summary（摘要）分辨率。`--content` 模式下不读磁盘，直接对传入内容切换。
+
+---
+
+### wander — 触景生情（随机漫步）
+
+```bash
 codememory wander
 codememory wander --mode cool --inject
-
-# 残留 (Snapshot): persist transient reasoning chain
-codememory snapshot "session-001"
-codememory snapshot "my-snapshot" --target user/investment/context
 ```
+
+**做什么**：随机选一条记忆展示。`--mode cool`（默认）偏向冷记忆（低 access_count 权重更高），模拟"触景生情"。
+
+**权重公式（cool 模式）**：`weight = 1 / (access_count + 1)`，排除 protected 记忆。
+
+**`--inject` 格式**：`[recall] <id> — <summary>（tags: t1,t2）`，单行可直接注入 system prompt。
+
+---
+
+### changelog — 变更历史
+
+```bash
+codememory changelog user/investment/risk-tolerance
+```
+
+**做什么**：展示该记忆的 `change_log` 历史，按时间倒序。
+
+**输出示例**：
+```
+# Change Log for user/investment/risk-tolerance
+
+v3 (2026-04-27): 根据 Q2 数据调整风险偏好
+v2 (2026-04-24): Sprint 2 测试 update 命令
+v1 (2026-03-15): 初始版本 — 从 v1 激进调整为中高
+```
+
+---
+
+### snapshot — 瞬态持久化
+
+```bash
+codememory snapshot "session-001"
+codememory snapshot "my-snap" --target user/investment/context  # 自动 DAG
+codememory snapshot "from-dag" --from-dag /tmp/dag.json         # TransientDAG
+```
+
+**做什么**：将会话推理链（或指定记忆的依赖上下文）导出为持久化的 composite `.md` 文件，落盘到 `user/snapshots/{date}-{id}.md`。
+
+---
 
 ### Full command list
 
-| Command | Purpose |
-|---------|---------|
-| `create` | Create a new memory file with frontmatter template |
-| `update` | Update an existing memory with version control |
-| `resolve` | Assemble memory context via DAG topological sort |
-| `reindex` | Rebuild the index from .md files on disk |
-| `validate` | Run integrity checks (cycles, broken links, schema) |
-| `search` | Search by query, tags, type, and status |
-| `orphans` | Find memories with zero in-degree |
-| `wander` | Random/associative memory exploration |
-| `snapshot` | Persist a transient reasoning context |
-| `overview` | Top-N memory summary with heat scores |
-| `focus` | Adjustable-resolution view of a single memory |
+| 命令 | 一句话 |
+|------|--------|
+| `create` | 创建记忆文件 + 更新索引 |
+| `update` | 版本递增 + change_log + hash 重算 |
+| `resolve` | DAG 拓扑拼装上下文 + stale/pin 提醒 |
+| `reindex` | 从 .md 文件重建 index.json |
+| `validate` | 断链/schema/循环/衰减 四项检查 |
+| `search` | 按 query/tags/type/status 检索 |
+| `orphans` | 列出入度为 0 的孤立记忆 |
+| `wander` | 随机漫步（偏置冷记忆） |
+| `snapshot` | 瞬态 → 持久化 composite .md |
+| `overview` | top N 摘要（heat 排序 + stale 检测） |
+| `focus` | 单个记忆 full/summary 分辨率切换 |
+| `changelog` | 查看变更历史 |
 
 ## Sandbox Integration
 
-Register all 9 codememory tools into a `harnesslib.Sandbox` with a single call:
+Register all 10 codememory tools into a `harnesslib.Sandbox` with a single call:
 
 ```python
 import asyncio
@@ -165,7 +345,7 @@ async def main():
     # One-line registration
     await toolkit.register_to_sandbox(sandbox)
 
-    # All 9 tools are now available
+    # All 10 tools are now available
     for tool_def in sandbox.list_tools():
         print(f"  {tool_def.name}: {tool_def.description}")
 
@@ -192,6 +372,7 @@ asyncio.run(main())
 | 7 | `snapshot` | Persist a TransientDAG as composite .md |
 | 8 | `find_orphans` | Find memories with zero in-degree |
 | 9 | `overview` | Top memories with heat scores, stale detection |
+| 10 | `changelog` | Show change_log history for a memory |
 
 ### OpenAI format export
 
