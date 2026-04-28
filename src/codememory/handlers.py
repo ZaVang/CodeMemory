@@ -17,7 +17,9 @@ from pathlib import Path
 from .core import compute_body_hash as _cbh
 from .core import get_memory_path, get_root_dir, parse_frontmatter as _pfm
 from .create import create
+from .import_cmd import import_text
 from .index import load_index, reindex
+from .log import show_log
 from .orphans import find_orphans
 from .resolve import resolve
 from .search import search
@@ -74,6 +76,7 @@ def handle_create(
     intensity: int = 5,
     tags: list[str] | None = None,
     dry_run: bool = False,
+    maturity: str = "draft",
 ) -> str:
     """Create a new memory.  Returns path string or dry-run preview."""
     file_path = create(
@@ -84,6 +87,7 @@ def handle_create(
         intensity=intensity,
         tags=tags,
         dry_run=dry_run,
+        maturity=maturity,
     )
     if file_path is None:
         return "dry-run: no file created"
@@ -121,9 +125,10 @@ def handle_resolve(
     memory_id: str,
     depth: str = "required",
     budget: int | None = None,
+    focus: str | None = None,
 ) -> str:
     """Resolve a memory context via DAG. Returns assembled text."""
-    return resolve(root, memory_id, depth=depth, budget=budget)
+    return resolve(root, memory_id, depth=depth, budget=budget, focus=focus)
 
 
 def handle_reindex(root: Path) -> str:
@@ -144,9 +149,12 @@ def handle_search(
     tags: list[str] | None = None,
     type_: str | None = None,
     status: str | None = None,
+    maturity: str | None = None,
+    semantic_type: str | None = None,
 ) -> str:
     """Search memories. Returns formatted result lines."""
-    results = search(root, query=query, tags=tags, type_=type_, status=status)
+    results = search(root, query=query, tags=tags, type_=type_, status=status,
+                     maturity=maturity, semantic_type=semantic_type)
     if not results:
         return "(no results)"
     lines: list[str] = []
@@ -436,3 +444,22 @@ def handle_changelog(root: Path, memory_id: str) -> str:
         elif isinstance(entry_log, str):
             lines.append(f"- {entry_log}")
     return "\n".join(lines)
+
+
+def handle_log(root: Path, limit: int = 20) -> str:
+    """View global log entries. Returns formatted log."""
+    return show_log(root, limit=limit)
+
+
+def handle_import(
+    root: Path,
+    text: str,
+    extract_types: list[str] | None = None,
+) -> str:
+    """Import memories from text. Returns summary of created files."""
+    paths = import_text(root, text, extract_types=extract_types)
+    if not paths:
+        return "(no memories imported)"
+    return "\n".join(str(p) for p in paths)
+
+

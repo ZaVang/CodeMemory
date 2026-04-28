@@ -138,4 +138,11 @@ def snapshot_dag(root_dir: Path, dag, snapshot_id: str) -> Path:
     from .index import reindex
     reindex(root_dir)
 
+    # Append to global log
+    try:
+        from .log import append_log
+        append_log(root_dir, "snapshot", f"{snapshot_id} ({len(nodes)} nodes)")
+    except ImportError:
+        pass
+
     return snap_path

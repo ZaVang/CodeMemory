@@ -125,11 +125,15 @@ Agent 不调用 Python API，不 import codememory，不直接读写 .md 文件�
 
 ---
 
-## 四、Phase 4A：知识治理（maturity + 审计日志 + 溯源）
+## 四、Phase 4A + 4B：已完成（2026-04-28）
 
+> **状态：✓ 全部完成（Sprint 8）**
+>
 > 设计讨论：2026-04-27，受外部团队知识库方案启发
 >
 > 核心理念：记忆的"可信度"应该靠使用验证（不是作者自评），变更历史应该全局可审计
+
+### 4A.1 maturity 字段——记忆成熟度 ✅
 
 ### 4A.1 maturity 字段——记忆成熟度
 
@@ -210,7 +214,7 @@ evidence:
 
 ---
 
-## 五、Phase 4B：知识组织（五层目录 + 语义分类）
+## 五、Phase 4B：知识组织（已完成 ✅）
 
 > 设计讨论：2026-04-27
 >
@@ -293,13 +297,13 @@ cat session-summary.md | codememory import --stdin
 
 ---
 
-## 六、Phase 4C：文档与生态
+## 六、Phase 4C：文档与生态（进行中）
 
-| # | 任务 | 产出 | 验证 |
-|---|------|------|------|
-| 4C.1 | 与外部方案的互操作文档 | `docs/interop-with-team-knowledge.md`：五层目录映射、semantic_type 对照、maturity 对照 | 持有那套方案的团队能直接理解差异和适配方式 |
-| 4C.2 | Layer 0 认知接口原理文档 | `docs/layer0-cognitive-interface.md`（已完成） | — |
-| 4C.3 | bash 等效性文档 | 同上文件的"Bash 是接口，CLI 是加速器"章节（已完成） | — |
+| # | 任务 | 状态 |
+|---|------|------|
+| 4C.1 | 与外部方案的互操作文档 | 进行中 |
+| 4C.2 | Layer 0 认知接口原理文档 | ✓ 已完成 |
+| 4C.3 | bash 等效性文档 | ✓ 已完成 |
 
 ---
 
@@ -308,27 +312,31 @@ cat session-summary.md | codememory import --stdin
 ```
 已完成 ─── Phase 1-2 (原型 → 完整记忆闭环)
          Phase 3A-3B (代码质量 + 功能深化)
+         Phase 3C (测试体系，57 单元测试)
+         Phase 3D (多 provider 工具适配)
+         Phase 4A (知识治理：maturity + log.md + evidence)
+         Phase 4B (知识组织：semantic_type + resolve --focus + import)
 
-待完成 ─── Phase 3C (测试体系)  ─── 约 1 周
-         Phase 3D (独立发布)    ─── 约 1 周
-         Phase 4A (知识治理)    ─── 约 1.5 周
-         Phase 4B (知识组织)    ─── 约 1.5 周
-         Phase 4C (文档)        ─── 约 0.5 周
+进行中 ─── Phase 4C (互操作文档)
+
+未开始 ─── (无)
 ```
 
 ---
 
 ## 八、完成定义
 
-1. `pip install codememory` 可独立安装，`--root` 指向任意记忆数据目录
+1. `pip install -e .` 可安装 codememory，`--root` 指向任意记忆数据目录
 2. Layer 0 五个认知操作全部可用：`overview` / `focus` / `resolve` / `wander` / `snapshot`
-3. Agent 通过 bash CLI 使用全部记忆操作，无需 function-calling 工具列表
-4. OpenAI/Anthropic/LangChain 各一行代码集成
-5. maturity 自动升降，LLM 零负担
-6. 全局 log.md 提供时间线审计
-7. 五层目录约定可承载个人到团队的知识
-8. 冷启动 import 让新用户从零开始
-9. 测试覆盖核心模块 + 边界
+3. Agent 通过 bash CLI 使用全部 14 个记忆操作命令
+4. OpenAI / Anthropic / Gemini 各一行代码集成
+5. maturity 自动升降（draft→verified→proven），LLM 零负担
+6. 全局 log.md 提供时间线审计 + `codememory log` 命令
+7. 冷启动 `import` 从文本提取初始记忆，maturity=draft 安全阀
+8. `search --maturity` / `--semantic-type` 多维过滤
+9. `resolve --focus` 按语义类型过滤节点输出分辨率
+10. 57 单元测试 + 24 集成测试覆盖核心模块 + 边界
+11. 文档体系：architecture.md / INTEGRATION.md / layer0-cognitive-interface.md / agent-memory-guide.md
 
 ---
 

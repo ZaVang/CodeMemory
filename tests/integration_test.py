@@ -322,7 +322,7 @@ async def main():
     await toolkit.register_to_sandbox(sandbox)
 
     names = [t.name for t in sandbox.list_tools()]
-    _check("INIT: 10 tools registered", len(names) == 10, f"got {len(names)}")
+    _check("INIT: 12 tools registered", len(names) == 12, f"got {len(names)}")
 
     # Run all scenarios
     await test_a_create_and_search(sandbox)

@@ -63,7 +63,9 @@ CodeMemory/
 │   │   ├── changelog.py         # 变更历史查看
 │   │   ├── transient.py         # 瞬态 DAG（会话内推理链）
 │   │   ├── snapshot.py          # TransientDAG -> persistent .md
-│   │   ├── integrations.py      # CodememoryToolkit（一行注册）
+│   │   ├── log.py                # 全局追加审计日志
+│   │   ├── import_cmd.py         # 冷启动文本导入
+│   │   ├── integrations.py      # CodememoryToolkit（OpenAI/Anthropic/Gemini）
 │   │   ├── cli.py               # argparse CLI 壳
 │   │   └── tools.py             # Sandbox tool 注册
 │   ├── harnesslib/              # 通用 Agent 编排（跨项目复用）
@@ -103,17 +105,22 @@ codememory create --type atom --id user/ideas/my-thesis --tags "ai"
 codememory update <id> --change-note "..." [--body ...] [--summary ...] [--status ...]
 
 # 检索
-codememory resolve <id> [--depth required|recommended|full] [--budget N]
-codememory search [--query <q>] [--tags <t>] [--type <t>] [--status <s>]
+codememory resolve <id> [--depth required|recommended|full] [--budget N] [--focus decision]
+codememory search [--query <q>] [--tags <t>] [--type <t>] [--status <s>] [--maturity proven] [--semantic-type decision]
 
 # 维护
 codememory reindex
 codememory validate
 codememory orphans [--type <t>] [--min-intensity N]
 codememory changelog <id>
+codememory log [--limit N]
+
+# 导入
+codememory import --file notes.txt --extract preferences,decisions
+codememory import --stdin --extract facts
 
 # Layer 0 认知操作
-codememory overview [--tags <t>] [--limit N] [--format default|inject] [--with-recall]
+codememory overview [--tags <t>] [--limit N] [--format default|inject] [--with-recall] [--min-maturity verified]
 codememory focus <id> --level full|summary [--resolve] [--content ...]
 codememory wander [--mode cool|random] [--inject]
 codememory snapshot <id> [--target <id>] [--budget N] [--from-dag <file>]
@@ -149,6 +156,7 @@ tools = toolkit.get_tools_for_openai()  # -> OpenAI format tool list
 - [Layer 0 认知接口原理](docs/layer0-cognitive-interface.md) -- 五个认知操作为什么这样设计
 - [Agent 记忆指南](docs/agent-memory-guide.md) -- 对话中自主维护记忆的决策树
 - [架构设计](docs/architecture.md)
+- [与团队知识库方案互操作](docs/interop-with-team-knowledge.md) -- 五层目录、语义分类、成熟度对照
 - [已知陷阱](docs/plans/pitfalls.md)
 
 ## 许可证

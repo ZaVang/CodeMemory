@@ -83,6 +83,10 @@ class MemoryEntry(BaseModel):
     # Source metadata
     source: dict[str, Any] | None = None
 
+    # Knowledge governance
+    maturity: str = Field(default="draft", description="draft | verified | proven | superseded")
+    evidence: dict[str, Any] | None = None
+
     # Extra fields that may appear in frontmatter (what/why/when for instances)
     extra: dict[str, Any] = Field(default_factory=dict, exclude=True)
 

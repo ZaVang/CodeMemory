@@ -8,6 +8,8 @@ from .handlers import (
     handle_changelog,
     handle_create,
     handle_focus,
+    handle_import,
+    handle_log,
     handle_orphans,
     handle_overview,
     handle_reindex,
@@ -40,6 +42,8 @@ def main(argv: list[str] | None = None):
     p.add_argument("--intensity", type=int, default=5, help="Relevance score 1-10 (default: 5)")
     p.add_argument("--dry-run", action="store_true", help="Preview without creating file")
     p.add_argument("--tags", help="Comma-separated tags")
+    p.add_argument("--maturity", choices=["draft", "verified", "proven"], default="draft",
+                   help="Initial maturity (default: draft)")
 
     # update
     p = subparsers.add_parser("update", help="Update an existing memory")
@@ -59,6 +63,7 @@ def main(argv: list[str] | None = None):
     p.add_argument("id", help="Memory ID to resolve")
     p.add_argument("--depth", choices=["required", "recommended", "full"], default="required")
     p.add_argument("--budget", type=int)
+    p.add_argument("--focus", help="Keep full text only for nodes matching this semantic type tag")
 
     # reindex
     p = subparsers.add_parser("reindex", help="Rebuild index.json")
@@ -76,6 +81,8 @@ def main(argv: list[str] | None = None):
     p.add_argument("--tags", "-t", nargs="*", help="Filter by tags (AND logic)")
     p.add_argument("--type", "-T", dest="type_", choices=["atom", "schema", "instance", "composite"])
     p.add_argument("--status", "-s", choices=["active", "archived", "superseded", "draft"])
+    p.add_argument("--maturity", "-m", choices=["draft", "verified", "proven", "superseded"])
+    p.add_argument("--semantic-type", dest="semantic_type", help="Filter by semantic type tag (e.g. decision, model, guideline)")
 
     # focus
     p = subparsers.add_parser("focus", help="Focus on a memory")
@@ -121,6 +128,18 @@ def main(argv: list[str] | None = None):
     _add_logging_flags(p)
     p.add_argument("id", help="Memory ID")
 
+    # log
+    p = subparsers.add_parser("log", help="View global operation log")
+    _add_logging_flags(p)
+    p.add_argument("--limit", type=int, default=20, help="Max entries (default: 20)")
+
+    # import
+    p = subparsers.add_parser("import", help="Import memories from text (cold start)")
+    _add_logging_flags(p)
+    p.add_argument("--file", help="Path to input file")
+    p.add_argument("--stdin", action="store_true", help="Read from stdin")
+    p.add_argument("--extract", help="Comma-separated tags for extracted memories")
+
     args = parser.parse_args(argv)
 
     configure_logging(verbose=args.verbose, quiet=args.quiet)
@@ -135,7 +154,8 @@ def main(argv: list[str] | None = None):
         if args.tags:
             tags_list = [t.strip() for t in args.tags.split(",") if t.strip()]
         print(handle_create(root, args.type, args.id, schema=args.schema,
-                            intensity=args.intensity, tags=tags_list, dry_run=args.dry_run))
+                            intensity=args.intensity, tags=tags_list, dry_run=args.dry_run,
+                            maturity=args.maturity))
     elif cmd == "update":
         print(handle_update(root, args.id, body=args.body, summary=args.summary,
                             change_note=args.change_note, status=args.status,
@@ -145,13 +165,16 @@ def main(argv: list[str] | None = None):
     elif cmd == "reindex":
         handle_reindex(root)
     elif cmd == "resolve":
-        print(handle_resolve(root, args.id, depth=args.depth, budget=args.budget))
+        print(handle_resolve(root, args.id, depth=args.depth, budget=args.budget,
+                            focus=args.focus))
     elif cmd == "validate":
         errors = handle_validate(root)
         if errors > 0:
             sys.exit(1)
     elif cmd == "search":
-        print(handle_search(root, query=args.query, tags=args.tags, type_=args.type_, status=args.status))
+        print(handle_search(root, query=args.query, tags=args.tags, type_=args.type_,
+                            status=args.status, maturity=args.maturity,
+                            semantic_type=args.semantic_type))
     elif cmd == "focus":
         print(handle_focus(root, args.id, level=args.level, content=args.content,
                            summary_override=args.summary_override, resolve_flag=args.resolve))
@@ -168,6 +191,19 @@ def main(argv: list[str] | None = None):
                               budget=args.budget, from_dag=args.from_dag))
     elif cmd == "changelog":
         print(handle_changelog(root, args.id))
+    elif cmd == "log":
+        print(handle_log(root, limit=args.limit))
+    elif cmd == "import":
+        if args.stdin:
+            text = sys.stdin.read()
+        elif args.file:
+            text = Path(args.file).read_text(encoding="utf-8")
+        else:
+            parser.error("import requires --stdin or --file")
+        extract_types = None
+        if args.extract:
+            extract_types = [t.strip() for t in args.extract.split(",") if t.strip()]
+        print(handle_import(root, text, extract_types=extract_types))
 
 
 if __name__ == "__main__":

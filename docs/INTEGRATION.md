@@ -192,6 +192,7 @@ codememory resolve user/investment/context --depth full --budget 2000
 **关键参数**：
 - `--depth`：required（默认，只含 required imports）| recommended | full（含 related）
 - `--budget N`：token（字符）上限，触发降级策略
+- `--focus <type>`：按语义类型过滤（如 `decision`、`pitfall`），匹配的节点保持正文，不匹配的降级为 summary
 
 **降级顺序**：required=full > recommended=full > required=summary > recommended=summary > related=full
 
@@ -214,6 +215,8 @@ codememory search --query "risk" --tags "investment" --type atom --status active
 - `--tags`/`-t`：AND 逻辑
 - `--type`/`-T`：atom | schema | instance | composite
 - `--status`/`-s`：active | archived | superseded | draft
+- `--maturity`：过滤 maturity 级别（draft | verified | proven）
+- `--semantic-type`：按语义类型过滤（model | decision | guideline | pitfall | process）
 
 **输出列含义**：`id  type  deps:被引用数  [tags]`，下面一行是 summary。
 
@@ -312,6 +315,37 @@ codememory snapshot "from-dag" --from-dag /tmp/dag.json         # TransientDAG
 
 ---
 
+### log — 全局审计日志
+
+```bash
+codememory log
+codememory log --limit 10
+```
+
+**做什么**：查看 `.codememory/log.md` 最近 N 条操作记录（create/update/snapshot/maturity 升级）。全局追加日志，按时间倒序输出。
+
+**何时使用**：想知道"这个知识库最近发生了什么变化"——不需要翻几十个 `.md` 的 change_log，一条命令看时间线。
+
+---
+
+### import — 冷启动导入
+
+```bash
+codememory import --file chat-log.txt --extract preferences
+echo "用户偏好长期持有..." | codememory import --stdin --extract decisions
+```
+
+**做什么**：从非结构化文本中提取初始记忆，生成 maturity=draft 的 `.md` 文件。所有 import 产物都是 draft 级别——必须经过后续 resolve 验证才能升级到 verified。
+
+**关键参数**：
+- `--file <path>`：从文件读取
+- `--stdin`：从 stdin 读取
+- `--extract <types>`：提取类型（preferences | decisions | facts），逗号分隔
+
+**安全阀**：import 产物 maturity=draft，未被引用的 draft 会被衰减建议标记。不会因自动提取产生不可逆转的噪声。
+
+---
+
 ### Full command list
 
 | 命令 | 一句话 |
@@ -328,10 +362,12 @@ codememory snapshot "from-dag" --from-dag /tmp/dag.json         # TransientDAG
 | `overview` | top N 摘要（heat 排序 + stale 检测） |
 | `focus` | 单个记忆 full/summary 分辨率切换 |
 | `changelog` | 查看变更历史 |
+| `log` | 全局审计日志（时间线） |
+| `import` | 从文本提取初始记忆（draft） |
 
 ## Sandbox Integration
 
-Register all 10 codememory tools into a `harnesslib.Sandbox` with a single call:
+Register all 12 codememory tools into a `harnesslib.Sandbox` with a single call:
 
 ```python
 import asyncio
@@ -373,6 +409,8 @@ asyncio.run(main())
 | 8 | `find_orphans` | Find memories with zero in-degree |
 | 9 | `overview` | Top memories with heat scores, stale detection |
 | 10 | `changelog` | Show change_log history for a memory |
+| 11 | `log` | Show global audit log timeline |
+| 12 | `import_memories` | Import draft memories from text |
 
 ### OpenAI format export
 

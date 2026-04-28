@@ -31,32 +31,64 @@ CodeMemory 的核心洞察：**AI 记忆加载的本质是依赖解析，不是�
 ## 三、数据流
 
 ```
-create → 生成 .md 文件（带 frontmatter 模板）
+create → 生成 .md 文件（带 frontmatter 模板）→ 自动追加 log.md
     ↓
 reindex → 扫描所有 .md → 解析 frontmatter → 写入 index.json
     ↓
 resolve → 读取 index.json → 构建 DAG → 拓扑排序 → token 裁剪 → 输出
-    ↓
-validate → 循环检测 + 断链检查 + schema 合规验证
+    ↓                        → maturity 自动升降（draft→verified→proven）
+    ↓                        → 追加 log.md（maturity 升级记录）
+validate → 循环检测 + 断链检查 + schema 合规 + maturity 复核建议
+```
+
+日志流（全局追加）：
+
+```
+create/update/snapshot → append_log() → .codememory/log.md（只追加不修改）
+maturity auto-upgrade  → append_log() → .codememory/log.md
+codememory log         → show_log()   → 时间线审计
 ```
 
 ## 四、目录布局
 
 ```
 CodeMemory/
-├── bin/codememory.py           # CLI 入口（单文件，<500 行）
-├── user/                       # 用户记忆
-│   └── {domain}/               # 主题域（investment, ideas, work...）
-│       └── {memory-name}.md    # 记忆文件
-├── self/                       # AI 内部记忆
-│   └── thoughts/               # 思考记录
-├── schemas/                    # Schema 定义
-│   └── {schema-name}.md        # Schema 文件（type=schema）
-├── .codememory/
-│   └── index.json              # 自动生成索引
-└── docs/
-    ├── architecture.md         # 本文件
-    └── plans/
+├── src/codememory/               # 记忆引擎（17 模块）
+│   ├── core.py                   #   frontmatter 解析, body hash, logging
+│   ├── models.py                 #   Pydantic v2 数据模型
+│   ├── handlers.py               #   统一命令处理（cli + tools 共享）
+│   ├── index.py                  #   Index 加载/保存/reindex
+│   ├── resolve.py                #   DAG + 拓扑排序 + token 裁剪 + maturity
+│   ├── validate.py               #   循环/断链/schema/衰减/maturity 复核
+│   ├── create.py / update.py     #   记忆 CRUD + log 集成
+│   ├── search.py / orphans.py    #   检索 + 孤立发现
+│   ├── log.py                    #   全局追加日志
+│   ├── import_cmd.py             #   冷启动文本导入
+│   ├── cli.py / tools.py         #   薄壳接口层
+│   └── integrations.py           #   OpenAI/Anthropic/Gemini 工具适配
+├── docs/
+├── examples/                     # 示例记忆数据（与框架分离）
+│   └── investment/
+├── tests/
+│   └── unit/                     # 57 个单元测试
+├── pyproject.toml
+└── .claude/
+```
+
+记忆数据目录（可任意路径）：
+
+```
+<memory-root>/
+├── user/                         # 个人记忆
+│   ├── preferences/              #   偏好、习惯、约束
+│   └── {domain}/                 #   按领域（investment, ideas...）
+├── team/                         # 团队约定（可选，Git 共享）
+├── tech/                         # 技术知识（可选，跨项目共享）
+├── biz/                          # 业务知识（可选，按领域）
+├── schemas/                      # Schema 定义
+└── .codememory/
+    ├── index.json                # DAG 索引
+    └── log.md                    # 全局追加审计日志
 ```
 
 ## 五、index.json 结构
@@ -74,7 +106,15 @@ CodeMemory/
       "created": "2026-02-10",
       "updated": "2026-04-24",
       "version": 1,
-      "path": "user/investment/semiconductor-thesis.md"
+      "path": "user/investment/semiconductor-thesis.md",
+      "maturity": "proven",
+      "evidence": {
+        "contributors": ["agent"],
+        "sessions": ["#a3f8c2"],
+        "verified_in": [
+          {"session": "#c5f0e2", "date": "2026-04-28"}
+        ]
+      }
     }
   }
 }
@@ -104,6 +144,26 @@ CodeMemory/
 | `recommended` | required + `imports.recommended` |
 | `full` | required + recommended + `imports.related` |
 
+### Focus 参数
+
+| focus | 行为 |
+|-------|------|
+| `decision` | 标记为 decision 的节点全文输出，其余降级为 summary |
+| `pitfall` | 标记为 pitfall 的节点全文输出，其余降级为 summary |
+| 逗号分隔 | `decision,pitfall` 交叉过滤 |
+
+### Maturity 自动升降
+
+```
+resolve 时自动检查（LLM 零负担）：
+  access_count >= 3              → draft → verified
+  access_count >= 10 + dependents > 0 → verified → proven
+  update --status superseded     → maturity = superseded
+
+validate 时复核（仅建议，不降级）：
+  proven + 12 个月无 resolve     → 建议复核
+```
+
 ## 七、Frontmatter 规范
 
 每个记忆文件以 YAML frontmatter 开头：
@@ -117,7 +177,12 @@ status: active | archived | draft
 created: "2026-01-15"
 updated: "2026-04-24"
 version: 1
-tags: ["investment", "thesis"]
+tags: ["investment", "thesis", "decision"]
+maturity: draft | verified | proven     # 使用验证级别（自动升降）
+intensity: 5                            # 1-10，>=8 自动 protected
+evidence:                               # 溯源信息（自动维护）
+  contributors: ["agent"]
+  sessions: ["#a3f8c2"]
 schema: "schemas/decision"              # instance 必须指定
 imports:                                # composite / instance 必须
   required:
@@ -146,10 +211,20 @@ imports:                                # composite / instance 必须
 | Schema 字段缺失 | `validate` error |
 | 目标记忆不存在 | `resolve` 报错退出 |
 | 零预算 | 全部 required 节点降级为 summary |
+| maturity 过期 | `validate` 建议复核（不自动降级） |
 
-## 九、已知限制（原型阶段）
+## 九、新增功能（Phase 4）
+
+- **Maturity 自动升降**：resolve 根据 access_count + dependents 自动升级 maturity；LLM 零负担
+- **全局审计日志**：`.codememory/log.md` 全局追加，`codememory log` 时间线查看
+- **Evidence 溯源**：create 时自动记录 session；maturity 升级时追加 verified_in
+- **semantic_type**：通过 tags 标记知识类型（model/decision/guideline/pitfall/process），`search --semantic-type` 过滤
+- **resolve --focus**：按语义类型过滤节点输出分辨率，保持因果链完整
+- **冷启动 import**：从文本提取初始记忆，maturity=draft 安全阀
+
+## 十、已知限制
 
 - Token 估算用 `len(text)` 代替真实 tokenizer
 - 版本锁定（`pin: v1`）未实现，始终加载当前文件
-- 无自动版本历史管理
 - 循环检测只在 validate/resolve 时运行，不在 create 时阻止
+- maturity 升级是会话内的（基于 index 内存数据），reindex 后从 YAML frontmatter 恢复默认值

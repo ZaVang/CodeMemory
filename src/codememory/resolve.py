@@ -12,6 +12,28 @@ from .models import IndexData, MemoryEntry
 _logger = logging.getLogger("codememory")
 
 
+def _count_dependents(memory_id: str, index: IndexData) -> int:
+    """Count how many other memories import this one."""
+    count = 0
+    for mid, entry in index.memories.items():
+        if mid == memory_id:
+            continue
+        imports_dict = entry.imports
+        if not isinstance(imports_dict, dict):
+            continue
+        all_refs = (
+            imports_dict.get("required", [])
+            + imports_dict.get("recommended", [])
+            + imports_dict.get("related", [])
+        )
+        for ref in all_refs:
+            ref_id = ref if isinstance(ref, str) else ref.get("id", "")
+            if ref_id == memory_id:
+                count += 1
+                break
+    return count
+
+
 def _get_imports(entry: MemoryEntry | dict, depth: str) -> list[str]:
     """Extract dependency IDs from a memory's imports dict based on depth.
 
@@ -127,8 +149,13 @@ def resolve(
     memory_id: str,
     depth: str = "required",
     budget: int | None = None,
+    focus: str | None = None,
 ) -> str:
-    """Resolve and assemble memory context for a given memory ID."""
+    """Resolve and assemble memory context for a given memory ID.
+
+    If ``focus`` is provided, nodes whose tags contain the focus type get
+    full-text output; all others are downgraded to summary (never deleted).
+    """
     index = load_index(root_dir)
 
     if memory_id not in index.memories:
@@ -213,13 +240,32 @@ def resolve(
                                     f"Review whether pin is still needed."
                                 )
 
-        full_text = (
-            f"## [{i + 1}/{len(ordered)}] {mid} ({entry.type})\n\n{body}\n\n"
-        )
-        summary_text = (
-            f"## [{i + 1}/{len(ordered)}] {mid} ({entry.type} - SUMMARY - budget)\n\n"
-            f"> {entry.summary}\n\n"
-        )
+        # Build display labels
+        if focus:
+            if focus in entry.tags:
+                full_text = (
+                    f"## [{i + 1}/{len(ordered)}] {mid} ({entry.type} - FOCUS)\n\n{body}\n\n"
+                )
+                summary_text = (
+                    f"## [{i + 1}/{len(ordered)}] {mid} ({entry.type} - FOCUS - SUMMARY (budget))\n\n"
+                    f"> {entry.summary}\n\n"
+                )
+            else:
+                full_text = (
+                    f"## [{i + 1}/{len(ordered)}] {mid} ({entry.type})\n\n{body}\n\n"
+                )
+                summary_text = (
+                    f"## [{i + 1}/{len(ordered)}] {mid} ({entry.type} - SUMMARY (focus filter))\n\n"
+                    f"> {entry.summary}\n\n"
+                )
+        else:
+            full_text = (
+                f"## [{i + 1}/{len(ordered)}] {mid} ({entry.type})\n\n{body}\n\n"
+            )
+            summary_text = (
+                f"## [{i + 1}/{len(ordered)}] {mid} ({entry.type} - SUMMARY - budget)\n\n"
+                f"> {entry.summary}\n\n"
+            )
 
         t_full = estimate_tokens(full_text)
         t_sum = estimate_tokens(summary_text)
@@ -227,7 +273,22 @@ def resolve(
         is_required = mid in req_graph
         is_recommended = mid in rec_graph and not is_required
 
-        if used + t_full <= max_budget:
+        # Focus mode: matching nodes get full text, others get summary
+        if focus:
+            if focus in entry.tags:
+                # Matching focus: try full text first
+                if used + t_full <= max_budget:
+                    lines.append(full_text)
+                    used += t_full
+                    full_text_nodes.append(mid)
+                else:
+                    lines.append(summary_text)
+                    used += t_sum
+            else:
+                # Not matching focus: always summary
+                lines.append(summary_text)
+                used += t_sum
+        elif used + t_full <= max_budget:
             lines.append(full_text)
             used += t_full
             full_text_nodes.append(mid)
@@ -250,12 +311,41 @@ def resolve(
 
     # Track access: increment access_count for full-text nodes
     now_iso = datetime.now().isoformat()
+    maturity_changes: list[str] = []
     for mid in full_text_nodes:
         if mid in index.memories:
             entry = index.memories[mid]
             entry.access_count += 1
             entry.last_access = now_iso
 
+            # Maturity auto-upgrade
+            old_maturity = entry.maturity
+            if old_maturity == "draft" and entry.access_count >= 3:
+                entry.maturity = "verified"
+                if "evidence" not in entry.__dict__ or entry.evidence is None:
+                    entry.evidence = {}
+                verified_in = entry.evidence.get("verified_in", [])
+                verified_in.append({"version": entry.version, "date": now_iso[:10]})
+                entry.evidence["verified_in"] = verified_in
+                maturity_changes.append(f"{mid}: draft -> verified")
+            elif old_maturity == "verified" and entry.access_count >= 10 and _count_dependents(mid, index) > 0:
+                entry.maturity = "proven"
+                if "evidence" not in entry.__dict__ or entry.evidence is None:
+                    entry.evidence = {}
+                verified_in = entry.evidence.get("verified_in", [])
+                verified_in.append({"version": entry.version, "date": now_iso[:10]})
+                entry.evidence["verified_in"] = verified_in
+                maturity_changes.append(f"{mid}: verified -> proven")
+
     save_index(root_dir, index)
+
+    # Append maturity change log
+    if maturity_changes:
+        try:
+            from .log import append_log
+            for change in maturity_changes:
+                append_log(root_dir, "maturity", change)
+        except ImportError:
+            pass  # log module created in T2
 
     return "\n".join(lines)

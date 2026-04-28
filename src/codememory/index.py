@@ -108,6 +108,10 @@ def reindex(root_dir: Path) -> int:
                     entry.protected = True
                 if "source" in meta:
                     entry.source = meta["source"]
+                if "maturity" in meta:
+                    entry.maturity = str(meta["maturity"])
+                if "evidence" in meta:
+                    entry.evidence = meta["evidence"]
 
                 index_data.memories[actual_id] = entry
                 count += 1

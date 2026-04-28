@@ -147,6 +147,9 @@ def update(
             )
             sys.exit(1)
         meta["status"] = status
+        # Auto-set maturity: superseded status → superseded maturity
+        if status == "superseded":
+            meta["maturity"] = "superseded"
 
     # Update imports if provided
     if "imports" not in meta:
@@ -184,5 +187,12 @@ def update(
     # Auto-update index
     print("Updating index...")
     reindex(root_dir)
+
+    # Append to global log
+    try:
+        from .log import append_log
+        append_log(root_dir, "update", f"{memory_id} v{new_version}: {change_note}")
+    except ImportError:
+        pass
 
     return file_path

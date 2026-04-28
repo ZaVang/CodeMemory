@@ -24,7 +24,9 @@ CodeMemory/
 │       ├── changelog.py         # 变更历史查看
 │       ├── transient.py         # TransientDAG 会话级推理链
 │       ├── snapshot.py          # 瞬态持久化
-│       ├── integrations.py      # CodememoryToolkit（OpenAI format + Sandbox）
+│       ├── log.py                # 全局追加审计日志
+│       ├── import_cmd.py         # 冷启动文本导入
+│       ├── integrations.py      # CodememoryToolkit（OpenAI/Anthropic/Gemini）
 │       ├── cli.py               # 薄 argparse 壳（< 200 行）
 │       └── tools.py             # harnesslib Sandbox 工具注册
 ├── bin/
@@ -145,23 +147,29 @@ codememory update <id> --change-note "explanation" [--body "..."] [--summary "..
 # 索引 / 验证 / 检索
 codememory reindex
 codememory validate [-v|-q]
-codememory search [--query <q>] [--tags <t>] [--type <t>] [--status <s>]
+codememory search [--query <q>] [--tags <t>] [--type <t>] [--status <s>] [--maturity proven] [--semantic-type decision]
 
-# 分析
+# 分析 / 日志
 codememory orphans [--type <t>] [--min-intensity <n>]
 codememory changelog <id>
+codememory log [--limit N]
+
+# 导入
+codememory import --file notes.txt --extract preferences
+codememory import --stdin --extract decisions
 
 # Layer 0 认知工具
-codememory overview [--tags <t>] [--format inject] [--with-recall]
+codememory overview [--tags <t>] [--format inject] [--with-recall] [--min-maturity verified]
 codememory focus <id> --level full|summary [--content "..."] [--resolve]
 codememory wander [--mode cool|random] [--inject]
-codememory resolve <id> [--depth required|recommended|full] [--budget N]
+codememory resolve <id> [--depth required|recommended|full] [--budget N] [--focus decision]
 codememory snapshot <id> [--target <id> | --from-dag <json_file>]
 ```
 
 ## 测试规范
 
-- 自动化：`PYTHONPATH=src python tests/integration_test.py` — 24 个断言覆盖全部场景
+- 单元测试：`PYTHONPATH=src python -m pytest tests/unit/ -v` — 57 个测试覆盖 resolve/validate/create/update/边界
+- 集成测试：`PYTHONPATH=src python tests/integration_test.py` — 24 个断言覆盖全部场景
 - 手工验证：`validate` → `resolve` → `check output`
 - 边界测试：循环依赖、断链、空记忆、超大/零预算
 - 验证命令：

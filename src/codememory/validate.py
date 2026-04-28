@@ -49,6 +49,31 @@ def _compute_in_degree(memory_id: str, index: IndexData) -> int:
     return 0
 
 
+def _check_maturity_stale(memory_id: str, entry: MemoryEntry) -> list[str]:
+    """Check if proven memories have gone too long without access."""
+    warnings: list[str] = []
+    if entry.maturity != "proven":
+        return warnings
+
+    if not entry.last_access:
+        warnings.append(
+            f"{memory_id} is proven but has never been accessed. "
+            f"Consider review to confirm status."
+        )
+        return warnings
+
+    try:
+        last_access = datetime.fromisoformat(entry.last_access)
+        if last_access < datetime.now() - timedelta(days=365):
+            warnings.append(
+                f"{memory_id} is proven but last accessed {entry.last_access} "
+                f"(>12 months ago). Consider review to confirm proven status."
+            )
+    except (ValueError, TypeError):
+        pass
+    return warnings
+
+
 def _check_decay(memory_id: str, entry: MemoryEntry, index: IndexData) -> list[str]:
     """Check whether a memory is at risk of decay."""
     warnings: list[str] = []
@@ -120,7 +145,12 @@ def validate(root_dir: Path) -> tuple[int, int]:
             print("          Fix: Consider merging atoms or placing in a composite as siblings.")
             warnings += 1
 
-        # 4. Decay check
+        # 4. Maturity staleness check
+        for msg in _check_maturity_stale(mid, entry):
+            print(f"[MATURITY-WARN] {msg}")
+            warnings += 1
+
+        # 5. Decay check
         if entry.type != "schema":
             for msg in _check_decay(mid, entry, index):
                 print(f"[DECAY-WARN] {msg}")

@@ -9,6 +9,8 @@ from .handlers import (
     handle_changelog,
     handle_create,
     handle_focus,
+    handle_import,
+    handle_log,
     handle_orphans,
     handle_overview,
     handle_resolve,
@@ -33,6 +35,7 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
                 "id": {"type": "string", "description": "Memory ID to resolve"},
                 "depth": {"type": "string", "enum": ["required", "recommended", "full"], "default": "required"},
                 "budget": {"type": "integer", "description": "Token budget in characters"},
+                "focus": {"type": "string", "description": "Keep full text only for nodes with this semantic type tag"},
                 "root": {"type": "string", "description": "Root directory for memory data"},
             },
             "required": ["id"],
@@ -57,7 +60,7 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
     },
     {
         "name": "search_memories",
-        "description": "Search memories by query, tags, type, and status.",
+        "description": "Search memories by query, tags, type, status, maturity, and semantic type.",
         "input_schema": {
             "type": "object",
             "properties": {
@@ -65,6 +68,8 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
                 "tags": {"type": "array", "items": {"type": "string"}, "description": "Filter by tags (AND logic)"},
                 "type": {"type": "string", "enum": ["atom", "schema", "instance", "composite"]},
                 "status": {"type": "string", "enum": ["active", "archived", "superseded", "draft"]},
+                "maturity": {"type": "string", "enum": ["draft", "verified", "proven", "superseded"]},
+                "semantic_type": {"type": "string", "description": "Filter by semantic type tag"},
                 "root": {"type": "string", "description": "Root directory for memory data"},
             },
         },
@@ -166,6 +171,30 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
             "required": ["id"],
         },
     },
+    {
+        "name": "log",
+        "description": "View the global operation log (create/update/snapshot/maturity events).",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "limit": {"type": "integer", "default": 20, "description": "Max entries to show"},
+                "root": {"type": "string", "description": "Root directory for memory data"},
+            },
+        },
+    },
+    {
+        "name": "import_memories",
+        "description": "Import memories from raw text (cold start). All imports are maturity=draft.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "text": {"type": "string", "description": "Raw text to extract memories from"},
+                "extract_types": {"type": "array", "items": {"type": "string"}, "description": "Tags for extracted memories"},
+                "root": {"type": "string", "description": "Root directory for memory data"},
+            },
+            "required": ["text"],
+        },
+    },
 ]
 
 
@@ -174,7 +203,8 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
 
 async def _resolve_handler(payload: dict[str, Any]) -> dict[str, Any]:
     root = get_root_dir(payload.get("root"))
-    result = handle_resolve(root, payload["id"], depth=payload.get("depth", "required"), budget=payload.get("budget"))
+    result = handle_resolve(root, payload["id"], depth=payload.get("depth", "required"),
+                           budget=payload.get("budget"), focus=payload.get("focus"))
     return {"result": result}
 
 
@@ -182,14 +212,17 @@ async def _create_handler(payload: dict[str, Any]) -> dict[str, Any]:
     root = get_root_dir(payload.get("root"))
     result = handle_create(root, memory_type=payload["type"], memory_id=payload["id"],
                            schema=payload.get("schema"), intensity=payload.get("intensity", 5),
-                           tags=payload.get("tags"), dry_run=payload.get("dry_run", False))
+                           tags=payload.get("tags"), dry_run=payload.get("dry_run", False),
+                           maturity=payload.get("maturity", "draft"))
     return {"result": result}
 
 
 async def _search_handler(payload: dict[str, Any]) -> dict[str, Any]:
     root = get_root_dir(payload.get("root"))
     results = handle_search(root, query=payload.get("query"), tags=payload.get("tags"),
-                            type_=payload.get("type"), status=payload.get("status"))
+                            type_=payload.get("type"), status=payload.get("status"),
+                            maturity=payload.get("maturity"),
+                            semantic_type=payload.get("semantic_type"))
     return {"result": results}
 
 
@@ -268,6 +301,19 @@ async def _changelog_handler(payload: dict[str, Any]) -> dict[str, Any]:
     return {"result": result}
 
 
+async def _log_handler(payload: dict[str, Any]) -> dict[str, Any]:
+    root = get_root_dir(payload.get("root"))
+    result = handle_log(root, limit=payload.get("limit", 20))
+    return {"result": result}
+
+
+async def _import_handler(payload: dict[str, Any]) -> dict[str, Any]:
+    root = get_root_dir(payload.get("root"))
+    result = handle_import(root, text=payload["text"],
+                          extract_types=payload.get("extract_types"))
+    return {"result": result}
+
+
 _HANDLER_MAP = {
     "resolve_context": _resolve_handler,
     "create_memory": _create_handler,
@@ -279,6 +325,8 @@ _HANDLER_MAP = {
     "find_orphans": _orphans_handler,
     "overview": _overview_handler,
     "changelog": _changelog_handler,
+    "log": _log_handler,
+    "import_memories": _import_handler,
 }
 
 

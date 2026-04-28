@@ -21,6 +21,7 @@ def create(
     intensity: int = 5,
     tags: list[str] | None = None,
     dry_run: bool = False,
+    maturity: str = "draft",
 ) -> Path | None:
     """Create a new memory file with frontmatter template.
 
@@ -32,6 +33,7 @@ def create(
         intensity: Relevance score 1-10 (default 5).
         tags: Custom tags list (defaults to ["untagged"]).
         dry_run: If True, preview frontmatter + body to stdout without writing.
+        maturity: Initial maturity (default "draft").
 
     Returns:
         Path to the created file, or None if dry_run.
@@ -56,6 +58,11 @@ def create(
         "version": 1,
         "tags": tag_list,
         "intensity": intensity,
+        "maturity": maturity,
+        "evidence": {
+            "contributors": ["user"],
+            "sessions": [],
+        },
         "source": {
             "platform": "manual",
             "created_by": "user",
@@ -97,5 +104,12 @@ def create(
     # Auto-update index
     print("Updating index...")
     reindex(root_dir)
+
+    # Append to global log
+    try:
+        from .log import append_log
+        append_log(root_dir, "create", f"{memory_id} ({memory_type})")
+    except ImportError:
+        pass
 
     return file_path

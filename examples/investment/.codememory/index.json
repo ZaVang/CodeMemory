@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-04-27T16:11:50.287212",
+  "updated": "2026-04-27T19:42:50.021455",
   "memories": {
     "user/ideas/my-idea": {
       "type": "atom",
@@ -26,7 +26,9 @@
       "source": {
         "platform": "manual",
         "created_by": "user"
-      }
+      },
+      "maturity": "draft",
+      "evidence": null
     },
     "user/ideas/sprint1-eval-test": {
       "type": "atom",
@@ -52,7 +54,9 @@
       "source": {
         "platform": "manual",
         "created_by": "user"
-      }
+      },
+      "maturity": "draft",
+      "evidence": null
     },
     "user/ideas/sprint2-test": {
       "type": "atom",
@@ -78,7 +82,9 @@
       "source": {
         "platform": "manual",
         "created_by": "user"
-      }
+      },
+      "maturity": "draft",
+      "evidence": null
     },
     "user/ideas/test": {
       "type": "atom",
@@ -104,7 +110,9 @@
       "source": {
         "platform": "manual",
         "created_by": "user"
-      }
+      },
+      "maturity": "draft",
+      "evidence": null
     },
     "user/investment/context": {
       "type": "composite",
@@ -118,8 +126,8 @@
       "intensity": 5,
       "version": 1,
       "path": "user/investment/context.md",
-      "access_count": 15,
-      "last_access": "2026-04-27T15:49:37.455315",
+      "access_count": 25,
+      "last_access": "2026-04-27T19:42:38.340498",
       "created": "2026-04-24",
       "updated": "2026-04-24",
       "imports": {
@@ -135,7 +143,9 @@
       "protected": null,
       "change_note": null,
       "change_log": [],
-      "source": null
+      "source": null,
+      "maturity": "draft",
+      "evidence": null
     },
     "user/investment/current-holdings": {
       "type": "composite",
@@ -149,8 +159,8 @@
       "intensity": 5,
       "version": 1,
       "path": "user/investment/current-holdings.md",
-      "access_count": 15,
-      "last_access": "2026-04-27T15:49:37.455315",
+      "access_count": 25,
+      "last_access": "2026-04-27T19:42:38.340498",
       "created": "2026-04-20",
       "updated": "2026-04-24",
       "imports": {
@@ -164,7 +174,9 @@
       "protected": null,
       "change_note": null,
       "change_log": [],
-      "source": null
+      "source": null,
+      "maturity": "draft",
+      "evidence": null
     },
     "user/investment/february-buy": {
       "type": "instance",
@@ -178,8 +190,8 @@
       "intensity": 5,
       "version": 2,
       "path": "user/investment/february-buy.md",
-      "access_count": 15,
-      "last_access": "2026-04-27T15:49:37.455315",
+      "access_count": 29,
+      "last_access": "2026-04-27T19:42:38.340498",
       "created": "2026-02-15",
       "updated": "2026-04-24",
       "imports": {
@@ -202,7 +214,9 @@
       "source": {
         "platform": "antigravity",
         "created_by": "user"
-      }
+      },
+      "maturity": "draft",
+      "evidence": null
     },
     "user/investment/position-cash": {
       "type": "atom",
@@ -216,8 +230,8 @@
       "intensity": 5,
       "version": 1,
       "path": "user/investment/position-cash.md",
-      "access_count": 15,
-      "last_access": "2026-04-27T15:49:37.455315",
+      "access_count": 25,
+      "last_access": "2026-04-27T19:42:38.340498",
       "created": "2026-02-15",
       "updated": "2026-04-20",
       "imports": {},
@@ -229,7 +243,9 @@
       "source": {
         "platform": "manual",
         "created_by": "user"
-      }
+      },
+      "maturity": "draft",
+      "evidence": null
     },
     "user/investment/position-semiconductor": {
       "type": "atom",
@@ -243,8 +259,8 @@
       "intensity": 5,
       "version": 1,
       "path": "user/investment/position-semiconductor.md",
-      "access_count": 15,
-      "last_access": "2026-04-27T15:49:37.455315",
+      "access_count": 25,
+      "last_access": "2026-04-27T19:42:38.340498",
       "created": "2026-02-15",
       "updated": "2026-04-20",
       "imports": {},
@@ -256,7 +272,9 @@
       "source": {
         "platform": "manual",
         "created_by": "user"
-      }
+      },
+      "maturity": "draft",
+      "evidence": null
     },
     "user/investment/risk-tolerance": {
       "type": "atom",
@@ -270,8 +288,8 @@
       "intensity": 5,
       "version": 2,
       "path": "user/investment/risk-tolerance.md",
-      "access_count": 15,
-      "last_access": "2026-04-27T15:49:37.455315",
+      "access_count": 25,
+      "last_access": "2026-04-27T19:42:38.340498",
       "created": "2026-01-15",
       "updated": "2026-04-24",
       "imports": {},
@@ -283,7 +301,9 @@
       "source": {
         "platform": "antigravity",
         "created_by": "user"
-      }
+      },
+      "maturity": "draft",
+      "evidence": null
     },
     "user/investment/semiconductor-thesis": {
       "type": "atom",
@@ -297,8 +317,8 @@
       "intensity": 5,
       "version": 1,
       "path": "user/investment/semiconductor-thesis.md",
-      "access_count": 15,
-      "last_access": "2026-04-27T15:49:37.455315",
+      "access_count": 25,
+      "last_access": "2026-04-27T19:42:38.340498",
       "created": "2026-02-10",
       "updated": "2026-04-24",
       "imports": {},
@@ -310,7 +330,9 @@
       "source": {
         "platform": "claude-code",
         "created_by": "user"
-      }
+      },
+      "maturity": "draft",
+      "evidence": null
     },
     "schemas/decision": {
       "type": "schema",
@@ -334,7 +356,9 @@
       "protected": null,
       "change_note": null,
       "change_log": [],
-      "source": null
+      "source": null,
+      "maturity": "draft",
+      "evidence": null
     }
   }
 }

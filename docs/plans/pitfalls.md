@@ -47,3 +47,12 @@ example_agent.py 在运行结束时删除自己创建的测试记忆文件，但
 
 ## [Sprint 6] Pydantic 模型属性访问 vs dict 下标访问
 `load_index()` 返回 `IndexData`，其 `memories` 字段是 `dict[str, MemoryEntry]`。MemoryEntry 是 Pydantic BaseModel，必须用 `entry.path` 而非 `entry["path"]`。但 `search()` 返回的是 dict 列表（非 MemoryEntry）。在 handler 函数中处理这两种来源的数据时，使用 `getattr(obj, "key", None) or obj.get("key", "")` 双兼容模式，或统一数据源输出为 MemoryEntry。
+
+## [Sprint 6] argparse parents 与 subparser 冲突
+argparse `parents=[base]` 在主 parser 和 subparser 同时使用时会导致 subparser 的 action 覆盖主 parser 的解析结果（如 `--root` 被重置为 None）。应使用独立的 `add_argument` 而非 parent sharing。
+
+## [Sprint 6] YAML date 对象与 Pydantic str 字段冲突
+YAML 将 `2026-04-24` 解析为 `datetime.date`，Pydantic str 字段拒绝。需在 Pydantic model 中添加 `@field_validator(mode="before")` 转换。同样，全数字的 `summary_hash: 9241853` 被 YAML 解析为 int，也需要 validator 处理。
+
+## [Sprint 6] Sandbox handler 返回格式不可变更
+旧 search handler 返回 `{"results": [...], "count": N}` 但约定是 `{"result": str}`。迁移到 handler 统一后需更新测试适配新格式。

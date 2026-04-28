@@ -32,8 +32,10 @@ def search(
     tags: list[str] | None = None,
     type_: str | None = None,
     status: str | None = None,
+    maturity: str | None = None,
+    semantic_type: str | None = None,
 ) -> list[dict]:
-    """Search memories by query, tags, type, and/or status.
+    """Search memories by query, tags, type, status, maturity, and/or semantic type.
 
     Results are sorted by dependents descending, then access_count descending,
     then id ascending.
@@ -45,6 +47,10 @@ def search(
         if type_ and entry.type != type_:
             continue
         if status and entry.status != status:
+            continue
+        if maturity and entry.maturity != maturity:
+            continue
+        if semantic_type and semantic_type not in entry.tags:
             continue
         if tags:
             if not all(t in entry.tags for t in tags):
@@ -65,6 +71,7 @@ def search(
             "access_count": entry.access_count,
             "last_access": entry.last_access,
             "dependents": dependents,
+            "maturity": entry.maturity,
         })
 
     results.sort(key=lambda r: (-r["dependents"], -r["access_count"], r["id"]))

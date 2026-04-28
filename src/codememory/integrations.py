@@ -35,7 +35,7 @@ class CodememoryToolkit:
 
     Encapsulates the codememory root directory and provides convenience
     methods for registering tools with Agent harnesses or exporting
-    tool definitions for OpenAI-compatible platforms.
+    tool definitions for OpenAI, Anthropic, and Google Gemini formats.
 
     Parameters
     ----------
@@ -47,9 +47,21 @@ class CodememoryToolkit:
     Examples
     --------
     >>> toolkit = CodememoryToolkit(root="examples/investment")
-    >>> tools = toolkit.get_tools_for_openai()
-    >>> len(tools)
-    9
+    >>>
+    >>> # OpenAI format
+    >>> openai_tools = toolkit.get_tools_for_openai()
+    >>> len(openai_tools)
+    10
+    >>>
+    >>> # Anthropic format
+    >>> anthropic_tools = toolkit.get_tools_for_anthropic()
+    >>> len(anthropic_tools)
+    10
+    >>>
+    >>> # Gemini format
+    >>> gemini_tools = toolkit.get_tools_for_gemini()
+    >>> len(gemini_tools)
+    10
     """
 
     def __init__(self, root: str | None = None) -> None:
@@ -97,11 +109,82 @@ class CodememoryToolkit:
         return tools
 
     # ------------------------------------------------------------------
+    # Anthropic format
+    # ------------------------------------------------------------------
+
+    def get_tools_for_anthropic(self) -> list[dict[str, Any]]:
+        """Return all codememory tools in Anthropic tool_use format.
+
+        Each tool is represented as::
+
+            {
+                "name": "resolve_context",
+                "description": "...",
+                "input_schema": {...}
+            }
+
+        This is the format expected by the Anthropic Messages API when
+        passing tools directly (without the OpenAI-style ``"type": "function"``
+        wrapper).
+
+        Returns
+        -------
+        list[dict]
+            List of tool definitions, one per codememory operation.
+        """
+        from .tools import TOOL_DEFINITIONS
+
+        tools: list[dict[str, Any]] = []
+        for td in TOOL_DEFINITIONS:
+            tools.append({
+                "name": td["name"],
+                "description": td["description"],
+                "input_schema": td.get("input_schema", {}),
+            })
+        return tools
+
+    # ------------------------------------------------------------------
+    # Gemini format
+    # ------------------------------------------------------------------
+
+    def get_tools_for_gemini(self) -> list[dict[str, Any]]:
+        """Return all codememory tools in Google Gemini function_declarations format.
+
+        Each tool is represented as::
+
+            {
+                "name": "resolve_context",
+                "description": "...",
+                "parameters": {...}
+            }
+
+        This format matches the ``function_declarations`` array expected by
+        the Google Gemini API.  Note that Google uses ``parameters`` as the
+        schema key (vs. OpenAI/Anthropic ``input_schema`` / ``parameters``
+        nesting).
+
+        Returns
+        -------
+        list[dict]
+            List of tool definitions, one per codememory operation.
+        """
+        from .tools import TOOL_DEFINITIONS
+
+        tools: list[dict[str, Any]] = []
+        for td in TOOL_DEFINITIONS:
+            tools.append({
+                "name": td["name"],
+                "description": td["description"],
+                "parameters": td.get("input_schema", {}),
+            })
+        return tools
+
+    # ------------------------------------------------------------------
     # Sandbox integration
     # ------------------------------------------------------------------
 
     async def register_to_sandbox(self, sandbox) -> None:
-        """Register all 9 codememory tools with a harnesslib Sandbox.
+        """Register all 10 codememory tools with a harnesslib Sandbox.
 
         Parameters
         ----------
