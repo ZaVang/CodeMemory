@@ -51,7 +51,7 @@ class MemoryEntry(BaseModel):
     dict key, not inside each entry.
     """
 
-    type: str = Field(default="atom", description="atom | schema | instance | composite")
+    type: str = Field(default="atom", description="atom | schema")
     id: str = Field(default="", description="Memory identifier (e.g. 'user/ideas/thesis')")
     summary: str = ""
     status: str = Field(default="active")
@@ -64,10 +64,10 @@ class MemoryEntry(BaseModel):
     created: str = ""
     updated: str = ""
 
-    # Optional structured imports (instance / composite)
+    # Optional structured imports
     imports: dict[str, list[Any]] = Field(default_factory=dict)
 
-    # Schema reference (instance only)
+    # Schema reference (optional)
     schema: str | None = None
 
     # Staleness tracking

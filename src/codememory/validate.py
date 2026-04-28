@@ -129,8 +129,8 @@ def validate(root_dir: Path) -> tuple[int, int]:
                 print(f"[ERROR] {mid} imports non-existent memory: {dep}")
                 errors += 1
 
-        # 2. Schema compliance
-        if entry.type == "instance":
+        # 2. Schema compliance (only when schema field is present)
+        if entry.schema:
             file_path = root_dir / entry.path
             meta, _ = parse_frontmatter(file_path)
             for err in check_schema_compliance(meta, schemas):

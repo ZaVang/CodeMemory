@@ -1,4 +1,4 @@
-"""Snapshot persistence — export TransientDAG as a composite .md memory."""
+"""Snapshot persistence — export TransientDAG as an atom .md memory."""
 
 import logging
 import sys
@@ -31,7 +31,7 @@ def _format_frontmatter_value(value):
 
 
 def snapshot_dag(root_dir: Path, dag, snapshot_id: str) -> Path:
-    """Export a TransientDAG as a persistent composite .md memory.
+    """Export a TransientDAG as a persistent atom .md memory.
 
     Args:
         root_dir: The memory root directory.
@@ -100,7 +100,7 @@ def snapshot_dag(root_dir: Path, dag, snapshot_id: str) -> Path:
         imports_dict["related"] = related_imports
 
     frontmatter = {
-        "type": "composite",
+        "type": "atom",
         "id": f"user/snapshots/{snapshot_id}",
         "summary": f"Session snapshot: {snapshot_id}",
         "status": "active",

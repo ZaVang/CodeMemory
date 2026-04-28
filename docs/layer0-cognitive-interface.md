@@ -138,7 +138,7 @@ TransientDAG（内存）
     ├── resolve()     — 在内存中构建 DAG 查看当前推理状态
     │
     └── snapshot_dag("session-001")  → user/snapshots/2026-04-27-session-001.md
-                                       （落盘为 composite 类型的 .md 文件）
+                                       （落盘为 atom 类型的 .md 文件）
 ```
 
 `--target` 模式：不是快照 TransientDAG，而是对 index 中的某个记忆执行 DAG 解析后落盘——"把这个记忆的完整因果上下文拍个快照，存档"。
@@ -319,7 +319,7 @@ codememory reindex   # 更新 index.json（LLM 也可手动更新 index.json，�
 # 等效于：
 # 1. 读 index.json
 # 2. 对每个 memory 的 imports 做存在性检查（断链检测）
-# 3. 对 instance 做 schema 字段合规检查
+# 3. 对有 schema 字段的记忆做 schema 字段合规检查
 # 4. 对 imports 图做 DFS 三色标记循环检测
 # 5. 对孤立 + 冷记忆做衰减判断（access_count=0 + 无引用 + intensity<8）
 ```

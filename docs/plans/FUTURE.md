@@ -7,118 +7,162 @@
 
 ## 一、已完成
 
-Phase 1-4 全部完成（8 个 Sprint）：
+Phase 1-5 全部完成（9 个 Sprint）：
 
-- **Phase 1**：原型验证（四种原语 + resolve + validate）
-- **Phase 2A-E**：框架化 + Agent 自主维护 + 智能检索 + Layer 0 认知接口 + 集成发布
-- **Phase 3A-B**：代码质量（handlers 去重 + Pydantic v2 + logging）+ 功能深化（changelog + wander 加权 + snapshot 统一）
-- **Phase 3C-D**：测试体系（57 单元 + 24 集成）+ OpenAI/Anthropic/Gemini 工具适配
-- **Phase 4A**：知识治理（maturity 自动升降 + 全局 log.md + evidence 溯源）
-- **Phase 4B**：知识组织（semantic_type + resolve --focus + 冷启动 import）
-- **Phase 4C**：文档体系（architecture.md / INTEGRATION.md / layer0-cognitive-interface.md / interop-with-team-knowledge.md / agent-memory-guide.md）
+- **Phase 1-2**：原型验证 + 框架化 + Agent 自主维护 + 智能检索 + Layer 0 认知接口 + 集成发布
+- **Phase 3**：代码质量 + 功能深化 + 测试体系（57+24）+ 多 provider 适配
+- **Phase 4**：知识治理（maturity + log.md + evidence）+ 知识组织（semantic_type + resolve --focus + import）
+- **Phase 5**：自动依赖推断（suggest-deps：三层过滤 + 双向推断）
 
-当前状态：14 个 CLI 命令，12 个 Sandbox 工具，57+24 测试覆盖。
+当前状态：15 个 CLI 命令，12 个 Sandbox 工具。
 
 ---
 
-## 二、Phase 5：自动依赖推断（suggest-deps）
+## 二、Phase 6：类型体系简化
 
-> 核心问题：`create` 生成空 `imports` 模板，全靠人/LLM 手动填。记忆少时没问题，500 条时 LLM 无法全量分析。
->
-> 设计目标：依赖推断命令，输入新记忆 ID，输出候选依赖列表。不做向量/embedding（零新依赖）。
+> 核心问题：atom/instance/composite 三种类型结构几乎相同——
+> instance = atom + schema + imports，composite = atom + imports（三种强度）。
+> 区别不在文件结构，在 DAG 里的角色。而角色是网络位置决定的，不应该写死在 type 字段里。
 
-### 2.1 三层过滤算法
-
-```
-codememory suggest-deps user/ideas/new-memory
-
-Layer 1: 标签交集评分（成本≈0）
-  新记忆 tags: ["investment", "decision", "risk"]
-  扫描 index 中所有记忆，计算标签交集数
-  交集 >= 1 → 进入候选池
-  预期：500 → ~40-60
-
-Layer 2: Schema 结构模式（成本≈0）
-  如果新记忆 type=instance + schema=schemas/decision：
-    找所有同 schema 的 instance，统计它们最常 import 哪些记忆
-    高频被引用的记忆 → 加权加分
-    例：85% 的 decision instance 都 import 了 risk-tolerance
-  如果新记忆 type=composite：
-    找所有 composite，统计常见依赖模式
-
-Layer 3: 热度加权排序
-  候选池按以下公式排序：
-    score = tag_overlap × 3 + schema_pattern_score × 5 + dependents
-  dependents 高的记忆是"大家都需要它"，很可能新记忆也需要
-```
-
-### 2.2 双向推断
-
-正向是新→旧（"理解 B 需要先读 A"），但实践中也常见反向——**旧的果，新的因**：
-
-> 1 月观察到 SOXL 暴跌（A），当时不知道为什么。3 月发现 NVIDIA 延迟出货（B），B 完美解释了 A。B 创建时，A 的 imports 应该补上 B。
+### 2.1 设计理念：来自 Engram 的启发
 
 ```
-codememory suggest-deps user/facts/nvidia-delay
-
-====================
-This memory should IMPORT:
-====================
-  [REQUIRED] user/facts/nvidia-earnings-q4    score:8  tags:2
-  [RELATED]  user/industry/semicon-trends      score:4  tags:1
-
-====================
-These may need to IMPORT this (retroactive):
-====================
-  [REQUIRED] user/observations/soxl-drop-jan   score:11 tags:3 | missing same-domain deps
-  [RELATED]  user/investment/buy-feb            score:6  tags:2 | partial explanation
+Engram（companion-agent）           CodeMemory（新设计）
+─────────────────────────          ─────────────────────
+NeuronCell（基本单元）      ←→     atom（.md 文件，一个事实/决策/组合入口）
+连接（A→B, B→A）           ←→     imports（显式声明依赖）
+Engram（一组神经元+连接）   ←→     resolve 的输出（不是文件，是一次计算结果）
 ```
 
-反向推断的启发式：候选记忆 C 的 imports 里缺少同标签领域的依赖（说明 C 当时是"孤立的果"），而新记忆 B 的标签恰好覆盖这个缺口。反向建议标为 `retroactive`，不会自动 apply。
+**关键是 engram 没有文件类型——它是激活扩散的结果。** resolve 已经在做同样的事：从一个入口 atom 出发，沿 imports 递归扩散，拓扑排序输出完整的因果上下文。
 
-### 2.3 CLI 设计
+### 2.2 新类型体系
+
+```
+只保留两种：
+
+  schema   — 模板。定义字段结构，不是记忆。
+  atom     — 记忆。所有记忆的基础类型。
+
+atom 的可选属性：
+  schema      可选   — 有 = 遵守某个模板结构
+  imports     可选   — 有 = 可以作为 resolve 入口
+  intensity   必选   — 1-10，>=8 自动 protected
+  maturity    自动   — draft/verified/proven
+  tags        可选   — 包括语义类型（decision/guideline/pitfall/...）
+
+删除的类型：
+  instance    — 等价于 atom + schema + imports
+  composite   — 等价于 atom + imports（三种强度）
+```
+
+创建时 LLM 只需写 `type: atom`。schema 和 imports 都是可选的、可后加的。
+
+### 2.3 角色由数据决定，不由 type 决定
+
+| 旧概念 | 旧定义 | 新定义 |
+|--------|--------|--------|
+| atom（原料） | `type: atom`，无 imports | 出度=0 的 atom |
+| instance（菜品） | `type: instance`，有 schema + required imports | 有 schema 的 atom |
+| composite（套餐入口） | `type: composite`，三种 imports 强度 | 有 imports 的 atom（尤其是被 snapshot 的） |
+| "高层记忆" | 无 | user/snapshots/ 下的 atom，imports 记录了某次 resolve 的 DAG |
+
+查找方式不依赖 type：
 
 ```bash
-codememory suggest-deps <id>                     # 基础：标签 + schema 模式
-codememory suggest-deps <id> --min-score 5        # 只输出高分建议
-codememory suggest-deps <id> --dry-run            # 仅输出建议（默认行为）
-codememory suggest-deps <id> --forward-only       # 只做正向推断
-codememory suggest-deps <id> --retroactive-only   # 只做反向推断
+# 找到"原料"（无 imports 的记忆）
+codememory orphans              # 入度为0 = 不被任何记忆引用
+
+# 找到"入口"（有 imports 的记忆）
+codememory search --has-imports
+
+# 找到"高层记忆"（被 snapshot 固化的）
+codememory search --tags snapshot
+ls user/snapshots/
+
+# 找到遵守模板的
+codememory search --has-schema
 ```
 
-默认 `--dry-run`，需要手动确认后通过 `update` 写入 imports。不自动修改任何文件。
-
-### 2.4 不做什么
-
-- 不引入 embedding/向量——零新依赖
-- 不做在 `create` 里——suggest-deps 是独立操作
-- 不自动写入——默认 `--dry-run`
-- 不强依赖 LLM——前两层纯统计算法；未来可选加 `--llm` 做最终精排
-- 不做反向自动 apply——反向建议需要人工判断因果方向
-
-### 2.5 文件变更
+### 2.4 完整的记忆生命周期
 
 ```
-新增：
-  src/codememory/suggest_deps.py    # 依赖推断逻辑（~120 行）
+1. 散落的 atom（无 imports）
+   user/facts/a.md    user/facts/b.md    user/facts/c.md
+   像孤立的神经元
 
-修改：
-  src/codememory/cli.py             # + suggest-deps 子命令
-  src/codememory/handlers.py        # + handle_suggest_deps
+2. suggest-deps 发现连接
+   → b imports a（a 解释了 b）
+   → c imports a, b（c 依赖 a 和 b）
+   建立了出向连接
+
+3. resolve c
+   → DAG：c → a → b（拓扑排序）
+   这是一次临时的 engram——算出来的，不落盘
+
+4. snapshot 固化
+   → user/snapshots/2026-04-28-xxx.md
+   这是一个 atom，它的 imports 记录了这次 resolve 的 DAG
+   下次 resolve 这个 snapshot 就能复现整个上下文
 ```
 
-### 2.6 验收
+**snapshot 产出的就是一个 atom——不是"composite 类型"，只是 imports 字段被填满的 atom。** 下次 resolve 它时，imports 递归展开，原样复现当时的完整上下文。
+
+### 2.5 具体变更
+
+| 文件 | 变更 |
+|------|------|
+| `models.py` | type 字段的允许值从 `atom\|instance\|composite\|schema` 改为 `atom\|schema` |
+| `create.py` | 不再需要选 type（默认 atom）；不再生成 instance/composite 特有的空 imports 模板 |
+| `validate.py` | 去掉"instance 必须有 schema"的检查；去掉"atom 不能有 imports"的限制 |
+| `index.py` | reindex 时兼容旧数据（旧 type → 新 type 映射） |
+| `resolve.py` | 去掉 `if type == "instance"` 等分支判断 |
+| `search.py` | 添加 `--has-imports` / `--has-schema` 过滤器 |
+| `handlers.py` | suggest-deps 对所有 atom 生效（不再检查 type） |
+| `cli.py` | create 子命令去掉 `--type` 参数或默认 atom |
+| `agent-memory-guide.md` | 更新原语选择规则 |
+| `README.md` / `CLAUDE.md` / `architecture.md` / `INTEGRATION.md` | 同步更新 |
+
+### 2.6 向后兼容
+
+旧数据迁移规则：
+
+```python
+OLD_TYPE_MAP = {
+    "atom":      "atom",
+    "instance":  "atom",     # schema + imports 保留在文件中
+    "composite": "atom",     # imports 保留在文件中
+    "schema":    "schema",
+}
+```
+
+reindex 时自动映射，旧 .md 文件无需修改 frontmatter（下次 update 时自然更新）。
+
+### 2.7 验收
 
 ```bash
-# 标签交集过滤
-codememory --root examples/investment suggest-deps user/investment/new-buy-decision
-# 预期：输出正向 + 反向候选列表，按 score 降序
+# type 体系
+PYTHONPATH=src python -c "
+from codememory.models import MemoryEntry
+e = MemoryEntry(type='atom', id='t/x', summary='s')
+assert e.type == 'atom'
+print('OK: atom only')
+"
 
-# --min-score
-codememory suggest-deps user/investment/new-buy-decision --min-score 5
+# 旧数据兼容：instance → atom
+codememory --root examples/investment reindex
+codememory --root examples/investment validate
+# 预期：0 errors
 
-# --forward-only
-codememory suggest-deps user/investment/new-buy-decision --forward-only
+# --has-imports 过滤
+codememory --root examples/investment search --has-imports
+
+# suggest-deps 对所有记忆生效
+codememory --root examples/investment suggest-deps user/investment/semiconductor-thesis
+
+# 全量回归
+PYTHONPATH=src python -m pytest tests/unit/ -v --tb=short
+PYTHONPATH=src python tests/integration_test.py
 ```
 
 ---
@@ -126,9 +170,9 @@ codememory suggest-deps user/investment/new-buy-decision --forward-only
 ## 三、时间线
 
 ```
-已完成 ─── Phase 1-4 (全部 8 个 Sprint)
+已完成 ─── Phase 1-5 (全部 9 个 Sprint)
 
-待开始 ─── Phase 5 (suggest-deps)    约 0.5 周
+待开始 ─── Phase 6 (类型简化)    约 0.5 周
 ```
 
 ---
@@ -137,6 +181,7 @@ codememory suggest-deps user/investment/new-buy-decision --forward-only
 
 | 风险 | 缓解 |
 |------|------|
-| suggest-deps 标签交集噪声（无关记忆因标签巧合被推荐） | 三层评分叠加：标签权重低（×3），schema 模式权重高（×5），最终靠 score 排序过滤 |
-| 反向推断误判（B 并不真的解释 A） | 反向建议标注 `retroactive`，需人工确认；默认不自动 apply |
-| 大规模记忆库标签交集计算慢 | 标签交集计算是 O(n) 字典查找，500 条记忆在毫秒级；可在 index.json 中预建标签倒排索引加速 |
+| 旧数据迁移后 validate 规则变化导致误报 | 去掉 instance/composite 特有检查，validate 规则变少（更宽松），不会新增误报 |
+| 现有测试依赖旧 type 值 | reindex 自动映射 `instance→atom`、`composite→atom`；测试预期同步更新 |
+| LLM 在没有 type 指引时困惑 | agent-memory-guide.md 更新为"用 imports/schema/tags 表达角色，不靠 type" |
+| schema 字段在旧 instance 文件中丢失 | 旧 instance 的 frontmatter 中 `schema:` 字段保持不变，reindex 正常读取 |

@@ -80,11 +80,16 @@ def reindex(root_dir: Path) -> int:
 
                 actual_id = meta.get("id")
 
+                # Map legacy types to atom (backward compatibility)
+                raw_type = str(meta.get("type", "?")).strip()
+                if raw_type in ("instance", "composite"):
+                    raw_type = "atom"
+
                 # Preserve access stats from old index
                 old_entry = old_memories.get(actual_id)
 
                 entry = MemoryEntry(
-                    type=meta.get("type", "?"),
+                    type=raw_type,
                     id=actual_id,
                     summary=meta.get("summary", ""),
                     status=meta.get("status", "active"),

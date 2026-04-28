@@ -32,14 +32,12 @@ codememory reindex && codememory validate
 
 ## 核心概念
 
-记忆被拆分为四种**原语**：
+记忆有两种**原语**：
 
-| 类型 | 说明 | 可被引用 | 有 imports |
-|------|------|---------|-----------|
-| **atom** | 不可再分的原子事实 | 是 | 否 |
-| **instance** | 依附 schema 的决策/事件 | 是 | 是（required） |
-| **composite** | 组合其他记忆的上下文包 | 是 | 是（required/recommended/related） |
-| **schema** | 定义 instance 结构的元模板 | 是（instance 通过 schema 引用） | 否 |
+| 类型 | 说明 |
+|------|------|
+| **atom** | 通用记忆——角色通过 `imports`、`schema`、`tags`、目录表达，不靠 type 区分 |
+| **schema** | 元模板——定义记忆结构（如决策模板、会议模板），atom 通过 `schema` 字段引用 |
 
 每个记忆是一个 Markdown 文件（YAML frontmatter + body），通过 `imports` 显式声明依赖关系。记忆加载是 DAG 解析问题，不是 vector search。
 
@@ -102,12 +100,16 @@ CodeMemory/
 
 ```bash
 # 记忆生命周期
-codememory create --type atom --id user/ideas/my-thesis --tags "ai"
+codememory create --id user/ideas/my-thesis --tags "ai"         # 默认 type=atom
+codememory create --type schema --id schemas/my-template --tags "template"
+codememory create --id user/decisions/buy --schema schemas/decision --tags "investment"
 codememory update <id> --change-note "..." [--body ...] [--summary ...] [--status ...]
 
 # 检索
 codememory resolve <id> [--depth required|recommended|full] [--budget N] [--focus decision]
 codememory search [--query <q>] [--tags <t>] [--type <t>] [--status <s>] [--maturity proven] [--semantic-type decision]
+codememory search --has-imports          # 有依赖的记忆
+codememory search --has-schema           # 有 schema 引用的记忆
 
 # 维护
 codememory reindex

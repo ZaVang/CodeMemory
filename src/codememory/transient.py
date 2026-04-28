@@ -22,7 +22,7 @@ class TransientNode(BaseModel):
     """A temporary in-memory memory node — never persisted to disk."""
 
     id: str
-    type: str = Field(default="atom", description="atom | instance | composite | schema")
+    type: str = Field(default="atom", description="atom | schema")
     summary: str = ""
     body: str = ""
     imports: dict[str, list[str]] = Field(default_factory=dict)
@@ -36,7 +36,7 @@ class TransientDAG:
         dag = TransientDAG()
         dag.add("session/step1", type="atom", summary="...", body="...")
         dag.add("session/step2", type="atom", summary="...", body="...")
-        dag.add("session/conclusion", type="composite", summary="...",
+        dag.add("session/conclusion", type="atom", summary="...",
                 body="...", imports={"required": ["session/step1", "session/step2"]})
         text = dag.resolve(root=Path("examples/investment"))
     """

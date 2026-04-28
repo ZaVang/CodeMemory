@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-04-28T14:48:21.816500",
+  "updated": "2026-04-28T18:33:34.415596",
   "memories": {
     "user/ideas/my-idea": {
       "type": "atom",
@@ -115,7 +115,7 @@
       "evidence": null
     },
     "user/investment/context": {
-      "type": "composite",
+      "type": "atom",
       "id": "user/investment/context",
       "summary": "投资决策的完整上下文包，包含主线判断、风险偏好、历史决策和当前持仓",
       "status": "active",
@@ -126,8 +126,8 @@
       "intensity": 5,
       "version": 1,
       "path": "user/investment/context.md",
-      "access_count": 29,
-      "last_access": "2026-04-28T14:48:21.710316",
+      "access_count": 33,
+      "last_access": "2026-04-28T18:33:29.727581",
       "created": "2026-04-24",
       "updated": "2026-04-24",
       "imports": {
@@ -148,7 +148,7 @@
       "evidence": null
     },
     "user/investment/current-holdings": {
-      "type": "composite",
+      "type": "atom",
       "id": "user/investment/current-holdings",
       "summary": "当前持仓概览：半导体ETF 40% + 现金 30%",
       "status": "active",
@@ -159,8 +159,8 @@
       "intensity": 5,
       "version": 1,
       "path": "user/investment/current-holdings.md",
-      "access_count": 29,
-      "last_access": "2026-04-28T14:48:21.710316",
+      "access_count": 33,
+      "last_access": "2026-04-28T18:33:29.727581",
       "created": "2026-04-20",
       "updated": "2026-04-24",
       "imports": {
@@ -179,7 +179,7 @@
       "evidence": null
     },
     "user/investment/february-buy": {
-      "type": "instance",
+      "type": "atom",
       "id": "user/investment/february-buy",
       "summary": "2月重仓半导体ETF，基于AI存储爆发+国产替代判断，置信度0.8",
       "status": "active",
@@ -190,8 +190,8 @@
       "intensity": 5,
       "version": 2,
       "path": "user/investment/february-buy.md",
-      "access_count": 33,
-      "last_access": "2026-04-28T14:48:21.710316",
+      "access_count": 37,
+      "last_access": "2026-04-28T18:33:29.727581",
       "created": "2026-02-15",
       "updated": "2026-04-24",
       "imports": {
@@ -230,8 +230,8 @@
       "intensity": 5,
       "version": 1,
       "path": "user/investment/position-cash.md",
-      "access_count": 29,
-      "last_access": "2026-04-28T14:48:21.710316",
+      "access_count": 33,
+      "last_access": "2026-04-28T18:33:29.727581",
       "created": "2026-02-15",
       "updated": "2026-04-20",
       "imports": {},
@@ -259,8 +259,8 @@
       "intensity": 5,
       "version": 1,
       "path": "user/investment/position-semiconductor.md",
-      "access_count": 29,
-      "last_access": "2026-04-28T14:48:21.710316",
+      "access_count": 33,
+      "last_access": "2026-04-28T18:33:29.727581",
       "created": "2026-02-15",
       "updated": "2026-04-20",
       "imports": {},
@@ -288,8 +288,8 @@
       "intensity": 5,
       "version": 2,
       "path": "user/investment/risk-tolerance.md",
-      "access_count": 29,
-      "last_access": "2026-04-28T14:48:21.710316",
+      "access_count": 33,
+      "last_access": "2026-04-28T18:33:29.727581",
       "created": "2026-01-15",
       "updated": "2026-04-24",
       "imports": {},
@@ -317,8 +317,8 @@
       "intensity": 5,
       "version": 1,
       "path": "user/investment/semiconductor-thesis.md",
-      "access_count": 29,
-      "last_access": "2026-04-28T14:48:21.710316",
+      "access_count": 33,
+      "last_access": "2026-04-28T18:33:29.727581",
       "created": "2026-02-10",
       "updated": "2026-04-24",
       "imports": {},

@@ -1,47 +1,36 @@
 # Agent Memory Guide — 记忆操作决策树
 
-在对话中自主创建和维护记忆时，按以下决策树选择正确的原语、依赖强度和参数。
+在对话中自主创建和维护记忆时，按以下决策树选择正确的参数和依赖强度。
 
 ---
 
 ## 原语选择规则
 
-四种记忆类型的判断标准：
+CodeMemory 有两种记忆类型：
 
-### atom — 原子事实
+### atom — 通用记忆
 
-**何时使用：** 单一、不可再分的知识单元。一个 atom 只表达一个事实。
+**所有非模板记忆都是 atom。** 角色通过 `imports`、`schema`、`tags`、目录来表达，不靠 type 字段区分。
+
+**何时使用：** 任何需要记住的知识、偏好、决策、事件、事实、上下文包——全部用 atom。
 
 - 用户的偏好或习惯："用户偏好长期持有"
 - 一个外部知识点："VIX 指数是恐慌指数"
 - 一个约束条件："不使用杠杆"
+- 一次具体的买入/卖出决策（有 schema 时带上 `--schema` 参数）
+- 将多个关联记忆打包的上下文入口（用 `imports` 引用被包含的记忆）
 
-**反例（不要用 atom）：**
-- 需要引用其他记忆才能理解的判断 → 用 instance
-- 多个关联事实的集合 → 拆成多个 atom，或用 composite 包装
+**有 schema 的 atom：** 当一个记忆需要依附某个结构模板（如 `schemas/decision`），使用 `--schema` 参数声明。这和旧版的 `instance` 概念对应，但现在类型统一为 atom。
 
-### instance — 依附 schema 的具体决策/事件
+```
+codememory create --id user/investment/new-decision --schema schemas/decision --tags "investment,decision"
+```
 
-**何时使用：** 某个 schema 模板的具体实例，需要记录"谁、何时、做了什么决策、为什么"。
-
-- 一次买入/卖出决策 → 依附 `schemas/decision`
-- 一次风险评估会议记录 → 依附 `schemas/risk-assessment`
-- 一次投资复盘 → 依附 `schemas/review`
-
-**必填：** `--schema` 参数指定其依附的 schema ID。instance 的 `imports.required` 至少包含其 schema。
-
-### composite — 组合包
-
-**何时使用：** 将多个关联记忆打包为一个上下文入口。本身不包含实质内容，而是通过 `imports` 引用其他记忆。
-
-- 某个主题的完整上下文（如 `user/investment/context` 组合了风险偏好、持仓、历史决策）
-- 一个项目启动时需要加载的所有背景记忆
-
-**注意：** composite 的 body 应该是简短的说明和加载顺序指导，主要内容在被引用的记忆中。
+**有 imports 的 atom：** 当一个记忆需要引用其他记忆作为依赖（如上下文包引用其组成部分），使用 `--import-*` 参数声明。这和旧版的 `composite` 概念对应，但现在类型统一为 atom。
 
 ### schema — 元模板
 
-**何时使用：** 定义某类 instance 的结构。schema 本身不是记忆数据，而是记忆的"类型定义"。
+**何时使用：** 定义某类记忆的结构。schema 本身不是记忆数据，而是记忆的"类型定义"。
 
 - `schemas/decision`：定义一次决策需要记录哪些字段（日期、标的、金额、理由、结果）
 - `schemas/meeting`：定义一次会议记录的结构
@@ -58,8 +47,8 @@
 
 **规则：** 理解 B 必须先读 A，则 A 是 B 的 required 依赖。
 
-- instance 对其 schema 的引用 → required
-- composite 对其核心组成记忆的引用 → required
+- 记忆对其 schema 的引用 → required
+- 上下文包对其核心组成记忆的引用 → required
 - 决策记忆引用其依据的约束条件 → required
 
 **效果：** resolve 时 required 节点一定被加载；token 超预算时降级为 summary 而非丢弃。
@@ -140,7 +129,7 @@ summary 是记忆的"名片"，在 token 裁剪时替代正文。必须独立可
 
 **Agent 的决策过程：**
 
-1. **选择原语：** 这是单个偏好/约束 → **atom**
+1. **选择类型：** 这是单个偏好/约束 → **atom**（无 schema，无 imports）
 2. **评估 intensity：** 这是投资约束，可能影响未来决策 → **7**（重要）
 3. **依赖声明：** 不依赖其他记忆 → 无 imports
 4. **summary：** "用户偏好分散投资，单只股票仓位不超过20%"
@@ -165,7 +154,7 @@ tags: [investment, preference, risk-management]
 
 **Agent 的决策过程：**
 
-1. **选择原语：** 这是一个具体决策事件，需要记录标的、时间、理由 → **instance**（依附 `schemas/decision`）
+1. **选择类型：** 这是一个具体决策事件，需要记录标的、时间、理由 → **atom**，使用 `--schema schemas/decision`
 2. **评估 intensity：** 重大调仓决策 → **8**
 3. **依赖声明：**
    - `required`：`user/investment/semiconductor-thesis`（主线判断）、`user/investment/current-holdings`（此前的持仓记录）、`user/preferences/position-limit`（偏好约束）
@@ -174,7 +163,7 @@ tags: [investment, preference, risk-management]
 
 **生成的 frontmatter：**
 ```yaml
-type: instance
+type: atom
 id: user/investment/april-sell-soxl
 schema: schemas/decision
 summary: "2026年4月27日清仓SOXL，因AI需求放缓且仓位过重影响睡眠"
@@ -201,7 +190,7 @@ imports:
 
 **Agent 的决策过程：**
 
-1. **选择原语：** 这是一个暂时性的待办/事件信息 → **atom**
+1. **选择类型：** 这是一个暂时性的待办/事件信息 → **atom**
 2. **评估 intensity：** 下周的事，结束后可能不再重要 → **2**（临时信息）
 3. **依赖声明：** 与现有投资记忆无直接关联 → 无 imports
 4. **summary：** "下周有新能源行业线上分享会，用户可能参加"
@@ -222,8 +211,8 @@ tags: [event, new-energy]
 | 错误 | 正确做法 |
 |------|----------|
 | 把所有偏好放一个 atom | 拆成多个 atom，每个只表达一个事实 |
-| instance 不填 schema | instance 必须有 schema |
-| composite 自己写很长的 body | composite 的 body 应简短，内容在被引用的记忆中 |
+| 有 schema 依赖但忘记声明 schema | 使用 `--schema` 参数声明 |
+| 上下文包自己写很长的 body | 上下文包的 body 应简短，内容在被引用的记忆中 |
 | 把所有依赖都标 required | 区分 required / recommended / related |
 | 所有记忆 intensity=5 | 根据重要性差异化评分 |
 | summary 写 "TODO" | 必须写一句话摘要 |

@@ -1,107 +1,150 @@
-# Sprint 9 — 自动依赖推断 ✅
+# Sprint 10 — 类型体系简化
 
 > **起始日期**：2026-04-28
-> **前置条件**：Sprint 8 完成（Phase 4A + 4B：知识治理 + 知识组织）
-> **目标**：实现 `suggest-deps` 命令——基于标签 + Schema 模式的三层过滤算法，输出正向+反向候选依赖列表，零新依赖
-> **状态**：已完成
+> **前置条件**：Sprint 9 完成（Phase 5：suggest-deps）
+> **目标**：将 atom/instance/composite 合并为单一 `atom` 类型，保留 `schema`。角色由 imports/schema/tags/目录 表达，不靠 type 字段。
 
 ---
 
 ## 一、任务
 
-### 任务 1：suggest-deps 命令 ✅
+### 任务 1：type 体系简化
 
-**新增 `suggest-deps` 命令，帮助 LLM/用户判断新记忆应该 import 哪些已有记忆。**
+**取消 instance 和 composite 类型。所有记忆统一为 `atom`。schema 保留。**
 
-| # | 子任务 | 说明 |
-|---|--------|------|
-| 1.1 | `suggest_deps.py` ✅ | 三层过滤算法：标签交集评分 → Schema 结构模式统计 → 热度加权排序。`score = tag_overlap * 3 + schema_pattern_score * 5 + dependents` |
-| 1.2 | 正向推断 ✅ | 输出"新记忆该 import 谁"的候选列表，按 required/recommended/related 分类（根据 score 阈值） |
-| 1.3 | 反向推断 ✅ | 输出"谁该 import 新记忆"的候选列表。启发式：候选记忆在同标签领域缺少 imports（孤立的果），新记忆覆盖了该缺口 |
-| 1.4 | CLI ✅ | `suggest-deps` 子命令：`--min-score N`（默认 3）、`--dry-run`（默认行为）、`--forward-only`、`--retroactive-only` |
-| 1.5 | handlers.py ✅ | `handle_suggest_deps(root, args)` 委托 suggest_deps.py |
+| # | 子任务 | 说明 | 状态 |
+|---|--------|------|------|
+| 1.1 | `models.py` | type 字段允许值 `atom\|instance\|composite\|schema` → `atom\|schema`；`MemoryEntry` 的 type 默认值改为 `"atom"` | ✅ 完成 |
+| 1.2 | `create.py` | 去掉 type 选择逻辑（默认 atom）；不再生成 instance/composite 特有的空 imports 模板；`--type` 参数保留但只接受 atom/schema，默认 atom | ✅ 完成 |
+| 1.3 | `index.py` | reindex 时自动映射旧 type：`instance→atom`、`composite→atom`；不影响文件内容，只影响 index.json 中的 type 值 | ✅ 完成 |
+| 1.4 | `validate.py` | 去掉"instance 必须有 schema"检查；去掉"atom 不能有 imports"限制；schema 合规检查改为"有 schema 字段时才检查" | ✅ 完成 |
+| 1.5 | `resolve.py` | 去掉 `if type == "instance"` / `if type == "composite"` 等分支判断 | ✅ 完成（无需改动） |
+| 1.6 | `search.py` | 添加 `--has-imports`（出度>0）、`--has-schema`（有 schema 字段）过滤器 | ✅ 完成 |
+| 1.7 | `handlers.py` | suggest-deps 对所有 atom 生效，不再检查 type | ✅ 完成 |
+| 1.8 | `cli.py` | `create` 子命令的 `--type` 参数 choices 改为 `["atom", "schema"]`，默认 `"atom"` | ✅ 完成 |
 
-**产出**：新增 `suggest_deps.py`，修改 `cli.py`、`handlers.py`
-
-**算法细节**：
-
-```
-Layer 1: 标签交集评分
-  新记忆 tags 与每条已有记忆 tags 的交集数 → 交集 >= 1 进入候选池
-
-Layer 2: Schema 结构模式
-  如果新记忆 type=instance + schema=schemas/decision：
-    找所有同 schema 的 instance，统计它们最常 import 哪些记忆
-    高频被引用的记忆获得加分（每被一个同 schema 的 instance 引用 +1）
-  如果新记忆 type=composite：
-    找所有 composite，统计常见 required imports
-
-Layer 3: 热度加权
-  score = tag_overlap * 3 + schema_pattern_score * 5 + dependents
-  按 score 降序输出
-
-反向推断：
-  候选记忆 C 在同标签领域缺少 imports（has_same_domain_deps == False）
-  且 tag_overlap >= 2 → 标记为 retroactive 候选
-```
+**产出**：修改 8 个核心模块
 
 ---
 
-## 二、文件变更总览
+### 任务 2：文档同步
+
+**更新项目文档反映新类型体系。**
+
+| # | 子任务 | 说明 | 状态 |
+|---|--------|------|------|
+| 2.1 | `agent-memory-guide.md` | 去掉 atom/instance/composite 的区分，改为"所有记忆都是 atom，用 imports/schema/tags 表达角色" | ✅ 完成 |
+| 2.2 | `README.md` / `CLAUDE.md` | 四种原语 → 两种（atom + schema）；更新 CLI create 示例 | ✅ 完成 |
+| 2.3 | `architecture.md` | 更新记忆原语章节 | ✅ 完成 |
+| 2.4 | `INTEGRATION.md` | 更新 create 命令说明；更新四原语概念 | ✅ 完成 |
+
+**产出**：修改 5 个文档文件
+
+---
+
+## 二、向后兼容
+
+旧数据的第一行 frontmatter 不动。reindex 时自动映射：
 
 ```
-新增：
-  src/codememory/suggest_deps.py    # 依赖推断逻辑（~120 行）
+instance  → type: atom（schema + imports 保留）
+composite → type: atom（imports 保留）
+atom     → type: atom（不变）
+schema   → type: schema（不变）
+```
 
-修改：
-  src/codememory/cli.py             # + suggest-deps 子命令
-  src/codememory/handlers.py        # + handle_suggest_deps
+旧 .md 文件在下次 `update` 时自然更新 frontmatter 中的 type 值。
+
+---
+
+## 三、文件变更总览
+
+```
+修改（代码）：
+  src/codememory/models.py           # type 允许值
+  src/codememory/create.py           # 去掉 type 选择逻辑
+  src/codememory/index.py            # reindex 旧数据映射
+  src/codememory/validate.py         # 去掉 instance/composite 检查
+  src/codememory/resolve.py          # 去掉 type 分支
+  src/codememory/search.py           # --has-imports, --has-schema
+  src/codememory/handlers.py         # suggest-deps 全 atom 生效
+  src/codememory/cli.py              # --type choices
+
+修改（文档）：
+  docs/agent-memory-guide.md
+  README.md
+  .claude/CLAUDE.md
+  docs/architecture.md
+  docs/INTEGRATION.md
 
 不修改：
-  src/codememory/ 其余模块
   src/harnesslib/**
   src/llm_gateway/**
-  tests/
+  tests/（待更新测试预期）
 ```
 
 ---
 
-## 三、验收命令汇总
+## 四、验收命令汇总
 
 ```bash
-# suggest-deps 基础功能
+# type 体系
+PYTHONPATH=src python -c "
+from codememory.models import MemoryEntry
+e = MemoryEntry(type='atom', id='t/x', summary='s')
+assert e.type == 'atom'
+print('OK: atom only')
+"
+
+# 旧数据兼容
+codememory --root examples/investment reindex
+codememory --root examples/investment validate
+# 预期：0 errors
+
+# --has-imports / --has-schema
+codememory --root examples/investment search --has-imports
+codememory --root examples/investment search --has-schema
+
+# suggest-deps 对所有记忆生效
 codememory --root examples/investment suggest-deps user/investment/semiconductor-thesis
-# 预期：输出正向候选列表（含 score + tags 信息）
 
-# --forward-only
-codememory --root examples/investment suggest-deps user/investment/semiconductor-thesis --forward-only
-
-# --min-score
-codememory --root examples/investment suggest-deps user/investment/semiconductor-thesis --min-score 5
+# create 默认 atom
+codememory --root examples/investment create --id user/test/typecheck --tags "test"
+PYTHONPATH=src python -c "
+from codememory.index import load_index
+from pathlib import Path
+idx = load_index(Path('examples/investment'))
+e = idx.memories['user/test/typecheck']
+assert e.type == 'atom'
+print('OK: default type is atom')
+"
+rm -f examples/investment/user/test/typecheck.md
+codememory --root examples/investment reindex
 
 # 全量回归
-codememory --root examples/investment reindex && codememory --root examples/investment validate
-codememory --root examples/investment resolve user/investment/context | grep "Resolved"
 PYTHONPATH=src python -m pytest tests/unit/ -v --tb=short
 PYTHONPATH=src python tests/integration_test.py
 ```
 
 ---
 
-## 四、风险
+## 五、风险
 
 | 风险 | 缓解 |
 |------|------|
-| 标签交集噪声（无关记忆因标签巧合被推荐） | 三层评分叠加：标签权重低（×3），schema 模式权重高（×5），靠 score 排序过滤 |
-| 反向推断误判 | 反向建议标 `retroactive`，不自动 apply；默认 dry-run |
-| 大规模记忆库性能 | 标签交集是 O(n) 字典查找，500 条毫秒级 |
+| 现有代码中有对 `type == "instance"` 的硬编码分支 | grep 全局搜索 + 逐个改为检查 `schema` 字段存在性或 `imports` 存在性 |
+| 旧测试断言了 `type` 值 | reindex 映射后测试预期同步更新；expert 测试数据文件不改 frontmatter |
+| LLM 失去 type 指引后困惑 | agent-memory-guide 更新：用标签/imports/schema/目录来表达旧概念 |
 
 ---
 
-## 五、完成定义
+## 六、完成定义
 
-1. `suggest-deps <id>` 输出正向候选依赖列表，按 score 降序
-2. 输出包含反向候选（retroactive），标注缺失同领域依赖的记忆
-3. `--min-score` / `--forward-only` / `--retroactive-only` 参数可用
-4. 默认 dry-run，不修改任何文件
-5. 57+24 测试不退化
+1. `type` 字段只接受 `atom` 或 `schema`
+2. create 默认 type=atom，`--type` 参数可选 atom/schema
+3. reindex 自动将旧 instance/composite 映射为 atom
+4. validate 不再要求 instance 有 schema，不再禁止 atom 有 imports
+5. search 支持 `--has-imports` 和 `--has-schema` 过滤
+6. suggest-deps 对所有 atom 有效
+7. 文档全部同步（agent-memory-guide、README、CLAUDE、architecture、INTEGRATION）
+8. 57+24 测试不退化

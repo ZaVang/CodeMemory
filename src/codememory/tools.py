@@ -47,15 +47,15 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
         "input_schema": {
             "type": "object",
             "properties": {
-                "type": {"type": "string", "enum": ["atom", "schema", "instance", "composite"]},
+                "type": {"type": "string", "enum": ["atom", "schema"], "default": "atom"},
                 "id": {"type": "string", "description": "Memory identifier"},
-                "schema": {"type": "string", "description": "Schema ID (for instances)"},
+                "schema": {"type": "string", "description": "Schema ID (for atoms with schema)"},
                 "intensity": {"type": "integer", "default": 5, "description": "Relevance score 1-10"},
                 "dry_run": {"type": "boolean", "default": False},
                 "tags": {"type": "array", "items": {"type": "string"}, "description": "Custom tags list"},
                 "root": {"type": "string", "description": "Root directory for memory data"},
             },
-            "required": ["type", "id"],
+            "required": ["id"],
         },
     },
     {
@@ -66,10 +66,12 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
             "properties": {
                 "query": {"type": "string", "description": "Substring match against summary"},
                 "tags": {"type": "array", "items": {"type": "string"}, "description": "Filter by tags (AND logic)"},
-                "type": {"type": "string", "enum": ["atom", "schema", "instance", "composite"]},
+                "type": {"type": "string", "enum": ["atom", "schema"]},
                 "status": {"type": "string", "enum": ["active", "archived", "superseded", "draft"]},
                 "maturity": {"type": "string", "enum": ["draft", "verified", "proven", "superseded"]},
                 "semantic_type": {"type": "string", "description": "Filter by semantic type tag"},
+                "has_imports": {"type": "boolean", "description": "Only show memories with non-empty imports"},
+                "has_schema": {"type": "boolean", "description": "Only show memories with a schema reference"},
                 "root": {"type": "string", "description": "Root directory for memory data"},
             },
         },
@@ -121,7 +123,7 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
     },
     {
         "name": "snapshot",
-        "description": "Persist a TransientDAG as a composite .md memory file.",
+        "description": "Persist a TransientDAG as an atom .md memory file.",
         "input_schema": {
             "type": "object",
             "properties": {
@@ -138,7 +140,7 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
         "input_schema": {
             "type": "object",
             "properties": {
-                "type": {"type": "string", "enum": ["atom", "schema", "instance", "composite"]},
+                "type": {"type": "string", "enum": ["atom", "schema"]},
                 "min_intensity": {"type": "integer", "description": "Minimum intensity filter"},
                 "root": {"type": "string", "description": "Root directory for memory data"},
             },
@@ -210,7 +212,7 @@ async def _resolve_handler(payload: dict[str, Any]) -> dict[str, Any]:
 
 async def _create_handler(payload: dict[str, Any]) -> dict[str, Any]:
     root = get_root_dir(payload.get("root"))
-    result = handle_create(root, memory_type=payload["type"], memory_id=payload["id"],
+    result = handle_create(root, memory_type=payload.get("type", "atom"), memory_id=payload["id"],
                            schema=payload.get("schema"), intensity=payload.get("intensity", 5),
                            tags=payload.get("tags"), dry_run=payload.get("dry_run", False),
                            maturity=payload.get("maturity", "draft"))
@@ -222,7 +224,9 @@ async def _search_handler(payload: dict[str, Any]) -> dict[str, Any]:
     results = handle_search(root, query=payload.get("query"), tags=payload.get("tags"),
                             type_=payload.get("type"), status=payload.get("status"),
                             maturity=payload.get("maturity"),
-                            semantic_type=payload.get("semantic_type"))
+                            semantic_type=payload.get("semantic_type"),
+                            has_imports=payload.get("has_imports", False),
+                            has_schema=payload.get("has_schema", False))
     return {"result": results}
 
 

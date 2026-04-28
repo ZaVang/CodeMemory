@@ -152,10 +152,13 @@ def handle_search(
     status: str | None = None,
     maturity: str | None = None,
     semantic_type: str | None = None,
+    has_imports: bool = False,
+    has_schema: bool = False,
 ) -> str:
     """Search memories. Returns formatted result lines."""
     results = search(root, query=query, tags=tags, type_=type_, status=status,
-                     maturity=maturity, semantic_type=semantic_type)
+                     maturity=maturity, semantic_type=semantic_type,
+                     has_imports=has_imports, has_schema=has_schema)
     if not results:
         return "(no results)"
     lines: list[str] = []

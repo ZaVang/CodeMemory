@@ -34,6 +34,8 @@ def search(
     status: str | None = None,
     maturity: str | None = None,
     semantic_type: str | None = None,
+    has_imports: bool = False,
+    has_schema: bool = False,
 ) -> list[dict]:
     """Search memories by query, tags, type, status, maturity, and/or semantic type.
 
@@ -58,6 +60,14 @@ def search(
         if query:
             if query.lower() not in entry.summary.lower():
                 continue
+        if has_imports:
+            imports_dict = entry.imports
+            if not isinstance(imports_dict, dict) or not any(
+                imports_dict.get(k) for k in ("required", "recommended", "related")
+            ):
+                continue
+        if has_schema and not entry.schema:
+            continue
 
         dependents = _count_dependents(mid, index)
         results.append({

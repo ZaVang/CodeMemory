@@ -49,7 +49,7 @@ def _build_schema_pattern(
     Only computed when the target is an ``instance`` with a known schema.
     """
     pattern: dict[str, int] = {}
-    if target_type != "instance" or not target_schema:
+    if not target_schema:
         return pattern
 
     for mid, entry in memories.items():
@@ -201,7 +201,7 @@ def suggest_deps(
     if not retroactive_only:
         lines.append(f"# Suggest-deps for '{memory_id}' (forward)")
         lines.append(f"  Tags: {', '.join(target.tags)}")
-        if target_type == "instance" and target_schema:
+        if target_schema:
             lines.append(f"  Schema: {target_schema}")
         lines.append("")
 

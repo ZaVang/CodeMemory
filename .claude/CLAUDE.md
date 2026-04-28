@@ -43,14 +43,14 @@ CodeMemory/
 
 ## 核心概念
 
-### 四种记忆原语
+### 两种记忆原语
 
-| 类型 | 含义 | 可被引用？ | 有 imports？ |
-|------|------|-----------|-------------|
-| **atom** | 原子事实（不可再分） | 是 | 否 |
-| **instance** | 具体决策/事件（依附 schema） | 是 | 是（required） |
-| **composite** | 组合包（引用其他记忆） | 是 | 是（required/recommended/related） |
-| **schema** | 元模板（定义 instance 结构） | 是（instance 通过 schema 字段引用） | 否 |
+| 类型 | 含义 |
+|------|------|
+| **atom** | 通用记忆——角色通过 `imports`、`schema`、`tags`、目录表达 |
+| **schema** | 元模板——定义记忆结构，atom 通过 `schema` 字段引用 |
+
+所有记忆统一为 `atom`，旧概念 `instance`（有 schema 的决策）和 `composite`（依赖其他记忆的组合包）现在都是带 `schema` 和/或 `imports` 的 atom。reindex 自动映射旧 type 值。
 
 ### Layer 0 认知接口
 
@@ -100,7 +100,7 @@ codememory snapshot "session-001"          # 残留持久化
 from pydantic import BaseModel, Field
 
 class MemoryEntry(BaseModel):
-    type: str = Field(description="atom | instance | composite | schema")
+    type: str = Field(description="atom | schema")
     id: str
     summary: str
     # ...
@@ -142,13 +142,14 @@ data = entry.model_dump(mode="json")
 
 ```bash
 # 创建 / 更新
-codememory create --type atom --id user/ideas/my-thesis [--intensity N] [--dry-run] [--tags "a,b"]
+codememory create --id user/ideas/my-thesis [--intensity N] [--dry-run] [--tags "a,b"] [--schema <id>]
+codememory create --type schema --id schemas/my-template
 codememory update <id> --change-note "explanation" [--body "..."] [--summary "..."] [--status archived]
 
 # 索引 / 验证 / 检索
 codememory reindex
 codememory validate [-v|-q]
-codememory search [--query <q>] [--tags <t>] [--type <t>] [--status <s>] [--maturity proven] [--semantic-type decision]
+codememory search [--query <q>] [--tags <t>] [--type <t>] [--status <s>] [--maturity proven] [--semantic-type decision] [--has-imports] [--has-schema]
 
 # 分析 / 日志
 codememory orphans [--type <t>] [--min-intensity <n>]

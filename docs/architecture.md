@@ -8,25 +8,19 @@ CodeMemory 的核心洞察：**AI 记忆加载的本质是依赖解析，不是�
 
 ## 二、记忆原语
 
-### Atom（原子）
-- 不可再分的单一事实
-- 无 `imports`，不被其他记忆污染
-- 例：投资主线判断、风险偏好、持仓明细
+所有记忆统一为 `atom`。角色通过 `imports`、`schema`、`tags`、目录来表达，不靠 type 字段区分。
 
-### Instance（实例）
-- 依附某个 `schema` 的具体决策或事件
-- 有 `imports.required`（决策依赖的前置知识）
-- 例："2月买入半导体ETF"决策，依赖 `semiconductor-thesis` + `risk-tolerance`
+### Atom（通用记忆）
+- 所有用户记忆都是 atom
+- 可选的 `imports`：声明依赖关系（required/recommended/related）
+- 可选的 `schema`：声明依附的元模板
+- 例：投资主线判断、风险偏好、持仓明细、决策记录、上下文组合包
 
-### Composite（组合）
-- 将多个记忆打包为可一键加载的上下文
-- 有 `imports.required/recommended/related`
-- 例："投资决策完整上下文" = 主线 + 风险 + 历史决策 + 当前持仓
-
-### Schema（模板）
-- 定义 instance 的元结构
+### Schema（元模板）
+- 定义记忆的结构模板
 - 本身不是用户记忆，是 type 约束
-- 例："决策模板"要求 instance 必须有 what/why/when/confidence 字段
+- atom 通过 `schema` 字段引用
+- 例："决策模板"定义 what/why/when/confidence 字段
 
 ## 三、数据流
 
@@ -170,7 +164,7 @@ validate 时复核（仅建议，不降级）：
 
 ```yaml
 ---
-type: atom | instance | composite | schema
+type: atom | schema
 id: "user/investment/my-thesis"        # 全局唯一 ID
 summary: "一句话摘要"                    # 用于 token 裁剪降级
 status: active | archived | draft
@@ -183,8 +177,8 @@ intensity: 5                            # 1-10，>=8 自动 protected
 evidence:                               # 溯源信息（自动维护）
   contributors: ["agent"]
   sessions: ["#a3f8c2"]
-schema: "schemas/decision"              # instance 必须指定
-imports:                                # composite / instance 必须
+schema: "schemas/decision"              # 可选：声明依附的 schema
+imports:                                # 可选：显式依赖声明
   required:
     - user/investment/semiconductor-thesis
     - id: user/investment/risk-tolerance
@@ -199,7 +193,7 @@ imports:                                # composite / instance 必须
 
 - `summary` 在 token 裁剪时替代 body 输出
 - `imports.required` 中 `pin: v1` 锁定历史版本（原型阶段未实现）
-- Schema 合规：instance 必须包含其 schema 定义的所有 required 字段
+- Schema 合规：有 schema 字段的记忆需包含其 schema 定义的所有 required 字段
 - Body hash 基于 Markdown body 计算（不含 frontmatter），修改 frontmatter 不触发 stale
 
 ## 八、错误处理
@@ -208,7 +202,7 @@ imports:                                # composite / instance 必须
 |------|------|
 | 循环依赖 | `validate` warn + `resolve` 跳过循环节点继续加载 |
 | 断链（import 不存在的 ID） | `validate` error |
-| Schema 字段缺失 | `validate` error |
+| Schema 字段缺失（有 schema 字段时） | `validate` error |
 | 目标记忆不存在 | `resolve` 报错退出 |
 | 零预算 | 全部 required 节点降级为 summary |
 | maturity 过期 | `validate` 建议复核（不自动降级） |

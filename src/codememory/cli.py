@@ -37,7 +37,7 @@ def main(argv: list[str] | None = None):
     # create
     p = subparsers.add_parser("create", help="Create a new memory")
     _add_logging_flags(p)
-    p.add_argument("--type", required=True, choices=["atom", "schema", "instance", "composite"])
+    p.add_argument("--type", default="atom", choices=["atom", "schema"], help="Memory type (default: atom)")
     p.add_argument("--id", required=True)
     p.add_argument("--schema")
     p.add_argument("--intensity", type=int, default=5, help="Relevance score 1-10 (default: 5)")
@@ -80,10 +80,12 @@ def main(argv: list[str] | None = None):
     p.add_argument("--quiet", action="store_true")
     p.add_argument("--query", "-q", help="Substring match against summary")
     p.add_argument("--tags", "-t", nargs="*", help="Filter by tags (AND logic)")
-    p.add_argument("--type", "-T", dest="type_", choices=["atom", "schema", "instance", "composite"])
+    p.add_argument("--type", "-T", dest="type_", choices=["atom", "schema"])
     p.add_argument("--status", "-s", choices=["active", "archived", "superseded", "draft"])
     p.add_argument("--maturity", "-m", choices=["draft", "verified", "proven", "superseded"])
     p.add_argument("--semantic-type", dest="semantic_type", help="Filter by semantic type tag (e.g. decision, model, guideline)")
+    p.add_argument("--has-imports", action="store_true", help="Filter to memories with non-empty imports")
+    p.add_argument("--has-schema", action="store_true", help="Filter to memories with a schema reference")
 
     # focus
     p = subparsers.add_parser("focus", help="Focus on a memory")
@@ -113,7 +115,7 @@ def main(argv: list[str] | None = None):
     # orphans
     p = subparsers.add_parser("orphans", help="Find orphaned memories")
     _add_logging_flags(p)
-    p.add_argument("--type", "-T", dest="type_", choices=["atom", "schema", "instance", "composite"])
+    p.add_argument("--type", "-T", dest="type_", choices=["atom", "schema"])
     p.add_argument("--min-intensity", type=int)
 
     # snapshot
@@ -160,8 +162,6 @@ def main(argv: list[str] | None = None):
     cmd = args.command
 
     if cmd == "create":
-        if args.type == "instance" and not args.schema:
-            parser.error("--schema is required when type is 'instance'")
         tags_list = None
         if args.tags:
             tags_list = [t.strip() for t in args.tags.split(",") if t.strip()]
@@ -186,7 +186,8 @@ def main(argv: list[str] | None = None):
     elif cmd == "search":
         print(handle_search(root, query=args.query, tags=args.tags, type_=args.type_,
                             status=args.status, maturity=args.maturity,
-                            semantic_type=args.semantic_type))
+                            semantic_type=args.semantic_type,
+                            has_imports=args.has_imports, has_schema=args.has_schema))
     elif cmd == "focus":
         print(handle_focus(root, args.id, level=args.level, content=args.content,
                            summary_override=args.summary_override, resolve_flag=args.resolve))

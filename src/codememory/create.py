@@ -27,9 +27,9 @@ def create(
 
     Args:
         root_dir: The memory root directory.
-        memory_type: One of 'atom', 'schema', 'instance', 'composite'.
+        memory_type: 'atom' or 'schema'.
         memory_id: The memory identifier (e.g. 'user/ideas/my-thesis').
-        schema: Schema ID (required for type='instance').
+        schema: Optional schema ID reference.
         intensity: Relevance score 1-10 (default 5).
         tags: Custom tags list (defaults to ["untagged"]).
         dry_run: If True, preview frontmatter + body to stdout without writing.
@@ -74,13 +74,6 @@ def create(
 
     if intensity >= 8:
         frontmatter["protected"] = True
-
-    if memory_type in ("composite", "instance"):
-        frontmatter["imports"] = {
-            "required": [],
-            "recommended": [],
-            "related": [],
-        }
 
     body_template = (
         f"\n# {memory_id.split('/')[-1].replace('-', ' ').title()}\n\n"
