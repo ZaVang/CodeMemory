@@ -7,12 +7,13 @@
 
 ## 一、已完成
 
-Phase 1-5 全部完成（9 个 Sprint）：
+Phase 1-6 全部完成（10 个 Sprint）：
 
 - **Phase 1-2**：原型验证 + 框架化 + Agent 自主维护 + 智能检索 + Layer 0 认知接口 + 集成发布
 - **Phase 3**：代码质量 + 功能深化 + 测试体系（57+24）+ 多 provider 适配
 - **Phase 4**：知识治理（maturity + log.md + evidence）+ 知识组织（semantic_type + resolve --focus + import）
 - **Phase 5**：自动依赖推断（suggest-deps：三层过滤 + 双向推断）
+- **Phase 6**：类型体系简化（atom/schema 两种，instance/composite 删除）
 
 当前状态：15 个 CLI 命令，12 个 Sandbox 工具。
 
@@ -170,9 +171,9 @@ PYTHONPATH=src python tests/integration_test.py
 ## 三、时间线
 
 ```
-已完成 ─── Phase 1-5 (全部 9 个 Sprint)
+已完成 ─── Phase 1-6 (全部 10 个 Sprint)
 
-待开始 ─── Phase 6 (类型简化)    约 0.5 周
+待开始 ─── (无)
 ```
 
 ---
