@@ -26,6 +26,7 @@ CodeMemory/
 │       ├── snapshot.py          # 瞬态持久化
 │       ├── log.py                # 全局追加审计日志
 │       ├── import_cmd.py         # 冷启动文本导入
+│       ├── suggest_deps.py       # 自动依赖推断（三层过滤 + 双向）
 │       ├── integrations.py      # CodememoryToolkit（OpenAI/Anthropic/Gemini）
 │       ├── cli.py               # 薄 argparse 壳（< 200 行）
 │       └── tools.py             # harnesslib Sandbox 工具注册
@@ -157,6 +158,9 @@ codememory log [--limit N]
 # 导入
 codememory import --file notes.txt --extract preferences
 codememory import --stdin --extract decisions
+
+# 依赖推断
+codememory suggest-deps <id> [--min-score N] [--forward-only] [--retroactive-only]
 
 # Layer 0 认知工具
 codememory overview [--tags <t>] [--format inject] [--with-recall] [--min-maturity verified]

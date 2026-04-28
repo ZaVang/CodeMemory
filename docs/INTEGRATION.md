@@ -346,6 +346,30 @@ echo "用户偏好长期持有..." | codememory import --stdin --extract decisio
 
 ---
 
+### suggest-deps — 自动依赖推断
+
+```bash
+codememory suggest-deps user/investment/new-decision
+codememory suggest-deps user/investment/new-decision --min-score 5
+codememory suggest-deps user/investment/new-decision --forward-only
+codememory suggest-deps user/investment/new-decision --retroactive-only
+```
+
+**做什么**：基于三层过滤算法（标签交集 ×3 + Schema 模式 ×5 + dependents），为指定记忆推荐候选依赖列表。输出分为两部分：
+
+- **正向推断**："新记忆该 import 谁"——按 required/recommended/related 分类
+- **反向推断**："谁该 import 新记忆"——检测已有记忆中缺少同领域依赖的"孤立的果"
+
+**关键参数**：
+- `--min-score N`：只输出得分 >= N 的候选（默认 3）
+- `--forward-only`：只做正向推断
+- `--retroactive-only`：只做反向推断
+- 默认 dry-run，不修改任何文件
+
+**何时使用**：创建新记忆后，不确定该声明哪些 imports 时。suggest-deps 不引入向量/embedding，零新依赖。
+
+---
+
 ### Full command list
 
 | 命令 | 一句话 |
@@ -364,6 +388,7 @@ echo "用户偏好长期持有..." | codememory import --stdin --extract decisio
 | `changelog` | 查看变更历史 |
 | `log` | 全局审计日志（时间线） |
 | `import` | 从文本提取初始记忆（draft） |
+| `suggest-deps` | 自动推断候选依赖（正向+反向） |
 
 ## Sandbox Integration
 
