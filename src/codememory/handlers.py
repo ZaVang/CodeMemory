@@ -24,6 +24,7 @@ from .orphans import find_orphans
 from .resolve import resolve
 from .search import search
 from .snapshot import snapshot_dag
+from .suggest_deps import suggest_deps
 from .update import update
 from .validate import validate
 
@@ -463,3 +464,18 @@ def handle_import(
     return "\n".join(str(p) for p in paths)
 
 
+def handle_suggest_deps(
+    root: Path,
+    memory_id: str,
+    min_score: int = 3,
+    forward_only: bool = False,
+    retroactive_only: bool = False,
+) -> str:
+    """Suggest dependencies for a memory via three-layer filtering."""
+    return suggest_deps(
+        root,
+        memory_id,
+        min_score=min_score,
+        forward_only=forward_only,
+        retroactive_only=retroactive_only,
+    )

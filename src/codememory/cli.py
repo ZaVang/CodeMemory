@@ -16,6 +16,7 @@ from .handlers import (
     handle_resolve,
     handle_search,
     handle_snapshot,
+    handle_suggest_deps,
     handle_update,
     handle_validate,
     handle_wander,
@@ -140,6 +141,17 @@ def main(argv: list[str] | None = None):
     p.add_argument("--stdin", action="store_true", help="Read from stdin")
     p.add_argument("--extract", help="Comma-separated tags for extracted memories")
 
+    # suggest-deps
+    p = subparsers.add_parser("suggest-deps", help="Suggest dependency imports for a memory")
+    _add_logging_flags(p)
+    p.add_argument("id", help="Target memory ID")
+    p.add_argument("--min-score", type=int, default=3,
+                   help="Minimum score threshold (default: 3)")
+    p.add_argument("--forward-only", action="store_true",
+                   help="Show only forward candidates (target should import them)")
+    p.add_argument("--retroactive-only", dest="retroactive_only", action="store_true",
+                   help="Show only retroactive candidates (they should import the target)")
+
     args = parser.parse_args(argv)
 
     configure_logging(verbose=args.verbose, quiet=args.quiet)
@@ -204,6 +216,13 @@ def main(argv: list[str] | None = None):
         if args.extract:
             extract_types = [t.strip() for t in args.extract.split(",") if t.strip()]
         print(handle_import(root, text, extract_types=extract_types))
+    elif cmd == "suggest-deps":
+        print(handle_suggest_deps(
+            root, args.id,
+            min_score=args.min_score,
+            forward_only=args.forward_only,
+            retroactive_only=args.retroactive_only,
+        ))
 
 
 if __name__ == "__main__":
