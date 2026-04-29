@@ -228,3 +228,30 @@
 | 2026-04-29 13:44:47 | maturity     | user/investment/current-holdings: draft -> verified
 | 2026-04-29 13:44:47 | maturity     | user/investment/february-buy: draft -> verified
 | 2026-04-29 13:44:47 | maturity     | user/investment/context: draft -> verified
+| 2026-04-29 15:42:11 | create       | user/test/sprint5-a-test (atom)
+| 2026-04-29 15:42:11 | maturity     | user/investment/risk-tolerance: draft -> verified
+| 2026-04-29 15:42:11 | maturity     | user/investment/semiconductor-thesis: draft -> verified
+| 2026-04-29 15:42:11 | maturity     | user/investment/current-holdings: draft -> verified
+| 2026-04-29 15:42:11 | maturity     | user/investment/february-buy: draft -> verified
+| 2026-04-29 15:42:11 | maturity     | user/investment/context: draft -> verified
+| 2026-04-29 15:42:11 | create       | user/test/sprint5-c-stale (atom)
+| 2026-04-29 15:42:11 | update       | user/test/sprint5-c-stale v2: Set initial body and summary
+| 2026-04-29 15:42:11 | update       | user/test/sprint5-c-stale v3: Change body without updating summary
+| 2026-04-29 15:42:11 | update       | user/test/sprint5-c-stale v4: Fix summary to match new body
+| 2026-04-29 15:42:11 | snapshot     | sprint5-e-154211 (2 nodes)
+| 2026-04-29 15:47:29 | create       | user/test/sprint5-a-test (atom)
+| 2026-04-29 15:47:29 | maturity     | user/investment/risk-tolerance: draft -> verified
+| 2026-04-29 15:47:29 | maturity     | user/investment/semiconductor-thesis: draft -> verified
+| 2026-04-29 15:47:29 | maturity     | user/investment/current-holdings: draft -> verified
+| 2026-04-29 15:47:29 | maturity     | user/investment/february-buy: draft -> verified
+| 2026-04-29 15:47:29 | maturity     | user/investment/context: draft -> verified
+| 2026-04-29 15:47:29 | create       | user/test/sprint5-c-stale (atom)
+| 2026-04-29 15:47:29 | update       | user/test/sprint5-c-stale v2: Set initial body and summary
+| 2026-04-29 15:47:29 | update       | user/test/sprint5-c-stale v3: Change body without updating summary
+| 2026-04-29 15:47:29 | update       | user/test/sprint5-c-stale v4: Fix summary to match new body
+| 2026-04-29 15:47:29 | snapshot     | sprint5-e-154729 (2 nodes)
+| 2026-04-29 15:49:52 | maturity     | user/investment/risk-tolerance: draft -> verified
+| 2026-04-29 15:49:52 | maturity     | user/investment/semiconductor-thesis: draft -> verified
+| 2026-04-29 15:49:52 | maturity     | user/investment/current-holdings: draft -> verified
+| 2026-04-29 15:49:52 | maturity     | user/investment/february-buy: draft -> verified
+| 2026-04-29 15:49:52 | maturity     | user/investment/context: draft -> verified

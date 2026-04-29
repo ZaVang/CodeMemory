@@ -56,3 +56,15 @@ YAML 将 `2026-04-24` 解析为 `datetime.date`，Pydantic str 字段拒绝。�
 
 ## [Sprint 6] Sandbox handler 返回格式不可变更
 旧 search handler 返回 `{"results": [...], "count": N}` 但约定是 `{"result": str}`。迁移到 handler 统一后需更新测试适配新格式。
+
+## [Sprint 11] Vite 端口可能被占用
+Vite 实际可能绑定到非默认端口（如 5174、5175），不是写死的 5173。验收脚本和 proxy 配置不应硬编码端口号。检查实际端口用 Vite 的标准输出或 `vite.config.ts` 中的 `server.port`。
+
+## [Sprint 11] Tailwind v4 使用 CSS @theme 而非 tailwind.config.ts
+Tailwind v4 的配置方式改为 CSS `@theme` 指令，不再需要 `tailwind.config.ts` 文件。SPRINT.md 和其他文档中列出的文件结构如果有 `tailwind.config.ts`，实际不会生成。不影响功能，但可能导致文件结构验收时的差异。
+
+## [Sprint 11] Vite 脚手架残留文件
+`npm create vite` 生成的模板自带 `src/App.css` 和 `src/assets/` 目录。Tailwind 项目中不需要这些文件，应手动删除。验收时应检查是否有残留的脚手架文件。
+
+## [Sprint 11] Backend 需要正确设置 CODEMORY_ROOT
+Backend server.py 读取记忆数据时依赖 `CODEMORY_ROOT` 环境变量或 `--root` 参数。如果 backend 启动时未指定 root 路径，会找不到 index.json 和 .md 文件。验收脚本中应先 `export CODEMORY_ROOT=examples/investment` 再启动 uvicorn，或在 server.py 中设置默认 root。

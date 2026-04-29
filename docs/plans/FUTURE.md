@@ -168,17 +168,238 @@ PYTHONPATH=src python tests/integration_test.py
 
 ---
 
-## 三、时间线
+## 三、Phase 7：React 前端 + Backend API
+
+> 目标：为 CodeMemory 搭建可视化界面。DAG 图展示记忆间的依赖关系——这是语义搜索类工具做不到的。
+
+### 3.1 架构
 
 ```
-已完成 ─── Phase 1-6 (全部 10 个 Sprint)
+浏览器 (React SPA)
+    │
+    ▼
+FastAPI backend (:8000)          ← 薄壳，委托给现有 handlers
+    │
+    ▼
+src/codememory/  (不变)          ← handlers.py / resolve.py / index.py ...
+    │
+    ▼
+文件系统 (.md + index.json)
+```
 
-待开始 ─── (无)
+- **Backend**：FastAPI（与现有 Python 技术栈一致），只做 JSON 序列化 + 委托
+- **Frontend**：React + TypeScript，图形库用 cytoscape 或 react-flow
+- **不修改** `src/codememory/` 内部逻辑——backend 只是现有 handlers 的 HTTP 壳
+
+### 3.2 Tier 1：DAG 图 + 记忆详情（MVP）
+
+**目标：** 打开页面就看到记忆依赖图，点击节点查看详情。
+
+**Backend 端点：**
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/memories` | 所有记忆列表（id, type, summary, tags, intensity, maturity） |
+| GET | `/api/memories/{id}` | 单条记忆完整内容（frontmatter + body markdown） |
+| GET | `/api/graph` | 节点 + 边数据（nodes: id/summary/directory/tags/intensity, edges: source/target/strength） |
+
+**前端页面：**
+
+- **主画布**：力导向 DAG 图
+  - 节点颜色按目录（facts=蓝, preferences=绿, observations=橙, investment=紫, snapshots=灰）
+  - 节点大小按 intensity（越大越重要）
+  - 边样式按依赖强度（实线=required, 虚线=recommended, 点线=related）
+  - 边带箭头表示依赖方向
+- **侧面板**：点击节点 → 渲染 markdown body + frontmatter 元数据卡片
+- **顶部搜索栏**：按 tag/目录/maturity 过滤，高亮匹配节点
+- **图例**：目录颜色 + 边类型说明
+
+**文件结构：**
+
+```
+frontend/
+├── package.json
+├── tsconfig.json
+├── vite.config.ts
+├── index.html
+└── src/
+    ├── App.tsx
+    ├── api.ts              # fetch 封装
+    ├── components/
+    │   ├── GraphCanvas.tsx  # DAG 主画布
+    │   ├── MemoryDetail.tsx # 侧边详情面板
+    │   ├── SearchBar.tsx    # 搜索/过滤
+    │   └── Legend.tsx       # 图例
+    └── types.ts            # TypeScript 类型定义
+
+backend/
+├── server.py               # FastAPI app + 路由
+└── requirements.txt        # fastapi, uvicorn
+```
+
+### 3.3 Tier 2：交互式 Resolve
+
+**目标：** 在图上动态展示依赖解析过程。
+
+**Backend 端点：**
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| POST | `/api/resolve` | body: `{id, depth, budget}` → 返回拓扑排序后的节点列表 + 每个节点的裁剪级别 |
+
+**前端交互：**
+
+- 任意节点右键 / 按钮 → "从此节点 Resolve"
+- 动画展示拓扑遍历顺序（节点依次高亮，显示加载顺序）
+- **Token budget 滑块**：拖动时实时看到节点在 "full body" ↔ "summary only" 之间切换（裁剪的节点变灰/折叠）
+- Focus 模式：选择一个决策节点，其他节点自动折叠为 summary
+
+### 3.4 Tier 3：管理面板
+
+**目标：** 在 UI 中完成记忆的增删改查 + 系统健康检查。
+
+**Backend 端点：**
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| POST | `/api/memories` | 创建新记忆 |
+| PUT | `/api/memories/{id}` | 更新记忆 |
+| GET | `/api/stats` | 统计（总数、maturity 分布、stale 数量、tag 分布） |
+| POST | `/api/wander` | 触发 wander，返回一条冷记忆 |
+| POST | `/api/validate` | 运行 validate，返回诊断结果 |
+
+**前端页面：**
+
+- **Dashboard 页**：统计卡片（总记忆数、stale 数、maturity 分布饼图、tag 词云）
+- **创建/编辑表单**：markdown 编辑器 + frontmatter 字段表单
+- **Stale 热力图**：按目录分组，高亮 stale 记忆
+- **Wander 按钮**：点击随机激活一条冷记忆，展示在弹窗中
+
+### 3.5 任务拆分
+
+```
+Phase 7 — Sprint 11: Backend API + Tier 1 MVP
+  [ ] 7.1  创建 frontend/ 项目脚手架（Vite + React + TypeScript）
+  [ ] 7.2  创建 backend/server.py FastAPI 应用 + CORS
+  [ ] 7.3  GET /api/memories + GET /api/memories/{id}
+  [ ] 7.4  GET /api/graph（从 index.json 构建节点+边）
+  [ ] 7.5  GraphCanvas 组件（cytoscape/react-flow 力导向图）
+  [ ] 7.6  MemoryDetail 侧面板（markdown 渲染 + 元数据卡片）
+  [ ] 7.7  SearchBar + Legend 组件
+  [ ] 7.8  验收：页面加载 → 看到 DAG 图 → 点击节点 → 看到详情
+
+Phase 7 — Sprint 12: Interactive Resolve (Tier 2)
+  [ ] 7.9  POST /api/resolve 端点
+  [ ] 7.10 图上 resolve 交互（右键 → 拓扑动画）
+  [ ] 7.11 Token budget 滑块 + 节点裁剪可视化
+  [ ] 7.12 验收：拖动 budget → 节点折叠/展开
+
+Phase 7 — Sprint 13: Management Dashboard (Tier 3)
+  [ ] 7.13 POST /api/memories + PUT /api/memories/{id}
+  [ ] 7.14 GET /api/stats + POST /api/wander + POST /api/validate
+  [ ] 7.15 Dashboard 页面（统计卡片 + 饼图 + 词云）
+  [ ] 7.16 记忆创建/编辑表单
+  [ ] 7.17 Stale 记忆高亮 + Wander 按钮
+  [ ] 7.18 验收：全功能可用的管理工具
+```
+
+### 3.6 技术选型
+
+| 层 | 选择 | 理由 |
+|----|------|------|
+| 图可视化 | cytoscape + dagre | 学术级图算法，支持分层/力导向切换 |
+| Markdown 渲染 | react-markdown + remark-gfm | 轻量，支持 GFM |
+| 图表 | recharts | React-native，简单够用 |
+| 构建 | Vite | 快 |
+| Backend | FastAPI + uvicorn | 与现有 Python 栈一致 |
+| CSS | Tailwind CSS | 原子类，组件不多时最快 |
+| 设计系统 | Claude（docs/design/claude-DESIGN.md） | 书卷感、温暖知性，契合记忆管理工具 |
+
+### 3.6.1 设计系统映射
+
+基于 Claude 设计系统，CodeMemory 专属配色映射：
+
+**目录 → 节点颜色（图节点）：**
+
+| 目录 | 色值 | 理由 |
+|------|------|------|
+| `facts/` | `#141413` 近黑 | 事实是基石，最重 |
+| `preferences/` | `#c96442` 赤陶 | 偏好有温度 |
+| `observations/` | `#d97757` 珊瑚 | 观察是流动的 |
+| `investment/` | `#3898ec` 专注蓝 | 决策需冷静，唯一冷色 |
+| `snapshots/` | `#87867f` 灰 | 快照是凝固的时间 |
+| 其他域 | `#e8e6dc` 暖沙 | 默认中性 |
+
+**依赖边样式：**
+
+| 强度 | 样式 | 颜色 |
+|------|------|------|
+| required | 实线 2px | `#141413` |
+| recommended | 虚线 1.5px | `#87867f` |
+| related | 点线 1px | `#e8e6dc` |
+
+**节点大小（按 intensity）：**
+
+| intensity | 大小 | 效果 |
+|-----------|------|------|
+| 1-3 | 小 (24px) | 临时信息 |
+| 4-6 | 中 (32px) | 常规记忆 |
+| 7-9 | 大 (40px) | 重要判断 |
+| 10 | 最大 (48px) | ring shadow 光环 |
+
+**状态徽章：**
+
+| maturity | 样式 |
+|----------|------|
+| draft | Sand 底 + `#87867f` 字 |
+| verified | `#3898ec/15%` 底 + `#3898ec` 字 |
+| proven | `#22c55e/15%` 底 + `#22c55e` 字 |
+| stale | `#b53333/15%` 底 + `#b53333` 字 |
+
+**图布局切换：**
+- 默认：Dagre 分层布局（自上而下，展示依赖方向）
+- 可切换：力导向布局（探索性浏览）
+- 切换按钮在画布工具栏
+
+**字体：** Georgia（标题）、Inter（正文）、SF Mono（代码）
+
+**底色：** `#f5f4ed` Parchment（页面）、`#faf9f5` Ivory（卡片/侧面板）
+
+### 3.7 验收命令
+
+```bash
+# Backend 启动
+cd backend && uvicorn server:app --reload
+
+# Frontend 启动
+cd frontend && npm run dev
+
+# 集成验证
+curl http://localhost:8000/api/memories | jq 'length'
+curl http://localhost:8000/api/graph | jq '.nodes | length'
+curl -X POST http://localhost:8000/api/resolve \
+  -H "Content-Type: application/json" \
+  -d '{"id":"user/investment/context","depth":"required","budget":2000}'
 ```
 
 ---
 
-## 四、风险与缓解
+## 四、时间线
+
+```
+已完成 ─── Phase 1-6 (全部 10 个 Sprint)
+
+当前     ─── Phase 7: React 前端 + Backend API (Sprint 11-13)
+            ├── Sprint 11: Backend API + Tier 1 DAG 图 + 详情
+            ├── Sprint 12: 交互式 Resolve
+            └── Sprint 13: 管理面板
+
+待开始   ─── Phase 8+: (待定)
+```
+
+---
+
+## 五、风险与缓解
 
 | 风险 | 缓解 |
 |------|------|
@@ -186,3 +407,6 @@ PYTHONPATH=src python tests/integration_test.py
 | 现有测试依赖旧 type 值 | reindex 自动映射 `instance→atom`、`composite→atom`；测试预期同步更新 |
 | LLM 在没有 type 指引时困惑 | agent-memory-guide.md 更新为"用 imports/schema/tags 表达角色，不靠 type" |
 | schema 字段在旧 instance 文件中丢失 | 旧 instance 的 frontmatter 中 `schema:` 字段保持不变，reindex 正常读取 |
+| Frontend 引入新语言栈（TypeScript）增加维护面 | Backend 只做薄壳委托，核心逻辑仍在 Python；前端不碰记忆引擎 |
+| 图可视化在大数据量下性能下降 | 默认只展示 required 边，分页加载 recommended/related；节点数 < 500 时不会有问题 |
+| backend 直接读文件系统可能有并发写风险 | FastAPI 单线程 async，所有写操作走现有 handlers（已有文件锁保护） |
