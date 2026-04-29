@@ -1,0 +1,321 @@
+{
+  "version": 1,
+  "updated": "2026-04-29T18:13:17.725605",
+  "memories": {
+    "user/context": {
+      "type": "atom",
+      "id": "user/context",
+      "summary": "陪伴记忆入口——从日常生活习惯→情感状态→重要人物→价值观→关键时刻，一键加载完整的个人世界",
+      "status": "active",
+      "tags": [
+        "companion",
+        "context",
+        "entry-point"
+      ],
+      "intensity": 8,
+      "version": 1,
+      "path": "user/context.md",
+      "access_count": 1,
+      "last_access": "2026-04-29T18:12:26.280540",
+      "created": "2026-04-27",
+      "updated": "",
+      "imports": {
+        "required": [
+          "user/preferences/morning-coffee",
+          "user/preferences/dislike-crowds",
+          "user/feelings/burnout-april",
+          "user/feelings/proud-moment",
+          "user/people/mom-weekly-call",
+          "user/people/best-friend-li",
+          "user/beliefs/friendship-view",
+          "user/beliefs/life-pace"
+        ],
+        "recommended": [
+          "user/moments/rainy-sunday"
+        ]
+      },
+      "schema": null,
+      "summary_hash": "d1d43d7",
+      "protected": true,
+      "change_note": null,
+      "change_log": [],
+      "source": null,
+      "maturity": "verified",
+      "evidence": null
+    },
+    "user/beliefs/friendship-view": {
+      "type": "atom",
+      "id": "user/beliefs/friendship-view",
+      "summary": "真正的朋友不需要常联系，但需要的时候一定在。数量不重要，质量才重要",
+      "status": "active",
+      "tags": [
+        "companion",
+        "belief",
+        "friendship",
+        "value"
+      ],
+      "intensity": 6,
+      "version": 1,
+      "path": "user/beliefs/friendship-view.md",
+      "access_count": 1,
+      "last_access": "2026-04-29T18:12:26.280540",
+      "created": "2026-04-22",
+      "updated": "",
+      "imports": {},
+      "schema": null,
+      "summary_hash": "7d3738e",
+      "protected": null,
+      "change_note": null,
+      "change_log": [],
+      "source": null,
+      "maturity": "draft",
+      "evidence": null
+    },
+    "user/beliefs/life-pace": {
+      "type": "atom",
+      "id": "user/beliefs/life-pace",
+      "summary": "人生不是百米冲刺是马拉松，走慢一点也没关系。但知道这个道理跟做到是两回事",
+      "status": "active",
+      "tags": [
+        "companion",
+        "belief",
+        "value",
+        "reflection"
+      ],
+      "intensity": 6,
+      "version": 1,
+      "path": "user/beliefs/life-pace.md",
+      "access_count": 1,
+      "last_access": "2026-04-29T18:12:26.280540",
+      "created": "2026-04-27",
+      "updated": "",
+      "imports": {
+        "recommended": [
+          "user/feelings/burnout-april",
+          "user/feelings/proud-moment"
+        ]
+      },
+      "schema": null,
+      "summary_hash": "be777f5",
+      "protected": null,
+      "change_note": null,
+      "change_log": [],
+      "source": null,
+      "maturity": "draft",
+      "evidence": null
+    },
+    "user/feelings/burnout-april": {
+      "type": "atom",
+      "id": "user/feelings/burnout-april",
+      "summary": "四月份连续加班三周，感觉整个人被掏空了。周末也提不起精神做任何事，连最喜欢的咖啡都不香了",
+      "status": "active",
+      "tags": [
+        "companion",
+        "feeling",
+        "work",
+        "mental-health"
+      ],
+      "intensity": 7,
+      "version": 1,
+      "path": "user/feelings/burnout-april.md",
+      "access_count": 1,
+      "last_access": "2026-04-29T18:12:26.280540",
+      "created": "2026-04-14",
+      "updated": "",
+      "imports": {
+        "required": [
+          "user/preferences/morning-coffee"
+        ]
+      },
+      "schema": null,
+      "summary_hash": "d4c258b",
+      "protected": null,
+      "change_note": null,
+      "change_log": [],
+      "source": null,
+      "maturity": "verified",
+      "evidence": null
+    },
+    "user/feelings/proud-moment": {
+      "type": "atom",
+      "id": "user/feelings/proud-moment",
+      "summary": "上周做的项目方案被大老板在全员邮件里表扬了，很久没有这种被认可的感觉了。但同时也心虚——知道有运气的成分",
+      "status": "active",
+      "tags": [
+        "companion",
+        "feeling",
+        "work",
+        "achievement"
+      ],
+      "intensity": 6,
+      "version": 1,
+      "path": "user/feelings/proud-moment.md",
+      "access_count": 1,
+      "last_access": "2026-04-29T18:12:26.280540",
+      "created": "2026-04-26",
+      "updated": "",
+      "imports": {
+        "related": [
+          "user/feelings/burnout-april"
+        ]
+      },
+      "schema": null,
+      "summary_hash": "3b1b5c3",
+      "protected": null,
+      "change_note": null,
+      "change_log": [],
+      "source": null,
+      "maturity": "draft",
+      "evidence": null
+    },
+    "user/moments/rainy-sunday": {
+      "type": "atom",
+      "id": "user/moments/rainy-sunday",
+      "summary": "上周日下雨没出门，窝在沙发上把《海上钢琴师》又看了一遍，意外的放松和满足",
+      "status": "active",
+      "tags": [
+        "companion",
+        "moment",
+        "weekend",
+        "movie"
+      ],
+      "intensity": 4,
+      "version": 1,
+      "path": "user/moments/rainy-sunday.md",
+      "access_count": 0,
+      "last_access": null,
+      "created": "2026-04-19",
+      "updated": "",
+      "imports": {
+        "related": [
+          "user/preferences/dislike-crowds"
+        ]
+      },
+      "schema": null,
+      "summary_hash": "43ada73",
+      "protected": null,
+      "change_note": null,
+      "change_log": [],
+      "source": null,
+      "maturity": "draft",
+      "evidence": null
+    },
+    "user/people/best-friend-li": {
+      "type": "atom",
+      "id": "user/people/best-friend-li",
+      "summary": "李是我大学室友和最好的朋友，现在在上海做金融。每个月约一次饭，见面不用寒暄直接进入正题",
+      "status": "active",
+      "tags": [
+        "companion",
+        "people",
+        "friendship"
+      ],
+      "intensity": 6,
+      "version": 1,
+      "path": "user/people/best-friend-li.md",
+      "access_count": 1,
+      "last_access": "2026-04-29T18:12:26.280540",
+      "created": "2026-04-25",
+      "updated": "",
+      "imports": {
+        "recommended": [
+          "user/beliefs/friendship-view"
+        ]
+      },
+      "schema": null,
+      "summary_hash": "4ef153e",
+      "protected": null,
+      "change_note": null,
+      "change_log": [],
+      "source": null,
+      "maturity": "draft",
+      "evidence": null
+    },
+    "user/people/mom-weekly-call": {
+      "type": "atom",
+      "id": "user/people/mom-weekly-call",
+      "summary": "每周日晚上八点给妈妈打电话，雷打不动。她最近迷上了学做面包，每次电话都跟我分享新成果",
+      "status": "active",
+      "tags": [
+        "companion",
+        "family",
+        "routine",
+        "mom"
+      ],
+      "intensity": 7,
+      "version": 1,
+      "path": "user/people/mom-weekly-call.md",
+      "access_count": 1,
+      "last_access": "2026-04-29T18:12:26.280540",
+      "created": "2026-04-18",
+      "updated": "",
+      "imports": {
+        "recommended": [
+          "user/preferences/dislike-crowds"
+        ]
+      },
+      "schema": null,
+      "summary_hash": "4bb8b26",
+      "protected": null,
+      "change_note": null,
+      "change_log": [],
+      "source": null,
+      "maturity": "verified",
+      "evidence": null
+    },
+    "user/preferences/dislike-crowds": {
+      "type": "atom",
+      "id": "user/preferences/dislike-crowds",
+      "summary": "很讨厌人多的商场和拥挤的地方，周末宁愿去公园或者在家待着。不是社恐，只是觉得嘈杂的环境让人烦躁",
+      "status": "active",
+      "tags": [
+        "companion",
+        "preference",
+        "lifestyle"
+      ],
+      "intensity": 5,
+      "version": 1,
+      "path": "user/preferences/dislike-crowds.md",
+      "access_count": 1,
+      "last_access": "2026-04-29T18:12:26.280540",
+      "created": "2026-04-10",
+      "updated": "",
+      "imports": {},
+      "schema": null,
+      "summary_hash": "55dc503",
+      "protected": null,
+      "change_note": null,
+      "change_log": [],
+      "source": null,
+      "maturity": "draft",
+      "evidence": null
+    },
+    "user/preferences/morning-coffee": {
+      "type": "atom",
+      "id": "user/preferences/morning-coffee",
+      "summary": "早上必须喝手冲咖啡，不喝没法工作。试过挂耳但觉得不够香，认准了哥伦比亚单品豆",
+      "status": "active",
+      "tags": [
+        "companion",
+        "habit",
+        "daily-life"
+      ],
+      "intensity": 5,
+      "version": 1,
+      "path": "user/preferences/morning-coffee.md",
+      "access_count": 1,
+      "last_access": "2026-04-29T18:12:26.280540",
+      "created": "2026-04-10",
+      "updated": "",
+      "imports": {},
+      "schema": null,
+      "summary_hash": "0c733ba",
+      "protected": null,
+      "change_note": null,
+      "change_log": [],
+      "source": null,
+      "maturity": "verified",
+      "evidence": null
+    }
+  }
+}
