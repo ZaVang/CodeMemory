@@ -1,5 +1,5 @@
 ---
-type: instance
+type: atom
 schema: schemas/decision
 id: user/investment/february-buy
 summary: 2月重仓半导体ETF，基于AI存储爆发+国产替代判断，置信度0.8

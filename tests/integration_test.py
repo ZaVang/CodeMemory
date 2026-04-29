@@ -89,26 +89,23 @@ async def test_b_resolve_context(sandbox):
     text = res.get("result", str(res))
     _check("B1: resolve returns text", len(text) > 100)
 
-    # Actual memory IDs as they exist in examples/investment (7 nodes)
+    # Actual memory IDs as they exist in examples/investment (6 required nodes)
     expected_ids = [
-        "user/investment/position-cash",
-        "user/investment/position-semiconductor",
         "user/investment/risk-tolerance",
         "user/investment/semiconductor-thesis",
         "user/investment/current-holdings",
         "user/investment/february-buy",
+        "user/preferences/no-leverage",
         "user/investment/context",
     ]
-    # Find node positions by the heading pattern "## [N/7] <id>"
-    # (avoids matching the title line "Resolved Context for '...'")
+    # Find node positions by the heading pattern "## [N/6] <id>"
     positions: dict[str, int] = {}
     all_found = True
     for eid in expected_ids:
-        # Heading format: "## [N/7] <id> (type)"
+        # Heading format: "## [N/6] <id> (type)"
         marker = f"] {eid} "
         idx = text.find(marker)
         if idx >= 0:
-            # Verify it's preceded by "## ["
             prefix_start = max(0, idx - 8)
             if "## [" in text[prefix_start:idx]:
                 positions[eid] = idx
@@ -118,7 +115,7 @@ async def test_b_resolve_context(sandbox):
         else:
             positions[eid] = -1
             all_found = False
-    _check("B2: all 7 expected nodes found in resolve output", all_found)
+    _check("B2: all 6 expected nodes found in resolve output", all_found)
 
     # Topological order: composite should be last (all deps before it)
     composite_pos = positions.get("user/investment/context", -1)
@@ -356,7 +353,7 @@ async def main():
     reindex(_ROOT_PATH)
     idx = load_index(_ROOT_PATH)
     count = len(idx.memories)
-    _check("CLEANUP: reindex back to 12 memories", count == 12, f"got {count}")
+    _check("CLEANUP: reindex back to 10 memories", count == 10, f"got {count}")
 
     # ── Summary ──────────────────────────────────────────────────────
     print("\n" + "=" * 62)

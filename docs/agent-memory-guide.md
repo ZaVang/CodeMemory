@@ -39,6 +39,27 @@ codememory create --id user/investment/new-decision --schema schemas/decision --
 
 ---
 
+## 目录约定
+
+`id` 的第一段就是目录。创建 atom 时，按以下约定选择目录：
+
+| 目录 | 用途 | 示例 ID |
+|------|------|---------|
+| `user/facts/` | 外部事实、背景知识（不因用户而变） | `user/facts/nvidia-earnings` |
+| `user/observations/` | 观察到的现象、事件（当时可能不知道原因） | `user/observations/soxl-drop-march` |
+| `user/preferences/` | 偏好、约束、习惯（关于用户的） | `user/preferences/no-leverage` |
+| `user/{domain}/` | 某个领域的判断、决策、上下文 | `user/investment/context` |
+| `user/snapshots/` | snapshot 命令固化的推理链 | `user/snapshots/2026-04-28-止盈分析` |
+| `schemas/` | 模板定义（仅 schema 类型） | `schemas/decision` |
+
+**规则：**
+1. **目录区分"种类"** — 这是什么东西（事实？观察？偏好？决策？）
+2. **tags 区分"主题"** — 这跟什么有关（`["semiconductor"]`、`["investment"]`）
+3. **不要在目录里按主题再分子文件夹** — 一个 fact 可能同时涉及半导体和市场，放 `user/facts/semiconductor/` 还是 `user/facts/market/`？tags 天然支持交叉，目录不支持
+4. **不确定时默认 `user/facts/`** — 最通用的种类
+
+---
+
 ## 依赖声明规则
 
 `imports` 有三种强度，从强到弱：
@@ -198,7 +219,7 @@ imports:
 **生成的 frontmatter：**
 ```yaml
 type: atom
-id: user/events/new-energy-webinar
+id: user/observations/new-energy-webinar
 summary: "下周有新能源行业线上分享会，用户可能参加"
 intensity: 2
 tags: [event, new-energy]

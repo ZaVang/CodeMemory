@@ -11,7 +11,7 @@ source:
   platform: antigravity
   created_by: user
 change_note: "经历3月波动后，从v1的'激进'调整为'中高'"
-summary_hash: placeholder
+summary_hash: e7bcb54
 ---
 
 # 风险偏好

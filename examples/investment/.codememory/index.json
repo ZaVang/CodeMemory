@@ -1,182 +1,149 @@
 {
   "version": 1,
-  "updated": "2026-04-28T18:33:34.415596",
+  "updated": "2026-04-29T13:44:47.816896",
   "memories": {
-    "user/ideas/my-idea": {
+    "user/facts/nvidia-earnings": {
       "type": "atom",
-      "id": "user/ideas/my-idea",
-      "summary": "TODO: fill in summary",
+      "id": "user/facts/nvidia-earnings",
+      "summary": "NVIDIA Q4超预期但Q1 2026指引不及预期，芯片供应链紧张影响H200生产，半导体板块连锁下跌",
       "status": "active",
       "tags": [
-        "untagged"
+        "investment",
+        "fact",
+        "semiconductor",
+        "market-event"
       ],
-      "intensity": 5,
+      "intensity": 7,
       "version": 1,
-      "path": "user/ideas/my-idea.md",
-      "access_count": 0,
-      "last_access": null,
-      "created": "2026-04-24",
-      "updated": "2026-04-24",
+      "path": "user/facts/nvidia-earnings.md",
+      "access_count": 3,
+      "last_access": "2026-04-29T13:44:47.816711",
+      "created": "2026-03-10",
+      "updated": "",
       "imports": {},
       "schema": null,
-      "summary_hash": "06e4490",
+      "summary_hash": "b2fe296",
       "protected": null,
       "change_note": null,
       "change_log": [],
-      "source": {
-        "platform": "manual",
-        "created_by": "user"
-      },
-      "maturity": "draft",
+      "source": null,
+      "maturity": "verified",
       "evidence": null
     },
-    "user/ideas/sprint1-eval-test": {
+    "user/facts/soxl-composition": {
       "type": "atom",
-      "id": "user/ideas/sprint1-eval-test",
-      "summary": "TODO: fill in summary",
+      "id": "user/facts/soxl-composition",
+      "summary": "SOXL是3倍杠杆ETF追踪ICE半导体指数，重仓NVIDIA（~12%）和半导体设备股，放大芯片板块波动约3倍",
       "status": "active",
       "tags": [
-        "untagged"
+        "investment",
+        "fact",
+        "etf"
       ],
-      "intensity": 5,
+      "intensity": 6,
       "version": 1,
-      "path": "user/ideas/sprint1-eval-test.md",
-      "access_count": 0,
-      "last_access": null,
-      "created": "2026-04-24",
-      "updated": "2026-04-24",
+      "path": "user/facts/soxl-composition.md",
+      "access_count": 3,
+      "last_access": "2026-04-29T13:44:47.816711",
+      "created": "2026-02-20",
+      "updated": "",
       "imports": {},
       "schema": null,
-      "summary_hash": "09a8f2f",
+      "summary_hash": "9a18eb3",
       "protected": null,
       "change_note": null,
       "change_log": [],
-      "source": {
-        "platform": "manual",
-        "created_by": "user"
-      },
-      "maturity": "draft",
-      "evidence": null
-    },
-    "user/ideas/sprint2-test": {
-      "type": "atom",
-      "id": "user/ideas/sprint2-test",
-      "summary": "TODO: fill in summary",
-      "status": "active",
-      "tags": [
-        "untagged"
-      ],
-      "intensity": 5,
-      "version": 1,
-      "path": "user/ideas/sprint2-test.md",
-      "access_count": 0,
-      "last_access": null,
-      "created": "2026-04-24",
-      "updated": "2026-04-24",
-      "imports": {},
-      "schema": null,
-      "summary_hash": "9241853",
-      "protected": null,
-      "change_note": null,
-      "change_log": [],
-      "source": {
-        "platform": "manual",
-        "created_by": "user"
-      },
-      "maturity": "draft",
-      "evidence": null
-    },
-    "user/ideas/test": {
-      "type": "atom",
-      "id": "user/ideas/test",
-      "summary": "TODO: fill in summary",
-      "status": "active",
-      "tags": [
-        "untagged"
-      ],
-      "intensity": 5,
-      "version": 1,
-      "path": "user/ideas/test.md",
-      "access_count": 0,
-      "last_access": null,
-      "created": "2026-04-24",
-      "updated": "2026-04-24",
-      "imports": {},
-      "schema": null,
-      "summary_hash": "481b219",
-      "protected": null,
-      "change_note": null,
-      "change_log": [],
-      "source": {
-        "platform": "manual",
-        "created_by": "user"
-      },
-      "maturity": "draft",
-      "evidence": null
+      "source": null,
+      "maturity": "verified",
+      "evidence": {
+        "verified_in": [
+          {
+            "version": 1,
+            "date": "2026-04-29"
+          }
+        ]
+      }
     },
     "user/investment/context": {
       "type": "atom",
       "id": "user/investment/context",
-      "summary": "投资决策的完整上下文包，包含主线判断、风险偏好、历史决策和当前持仓",
+      "summary": "投资决策完整上下文——从主线判断→市场事实→风险约束→历史决策→当前持仓，一键加载因果链",
       "status": "active",
       "tags": [
         "investment",
-        "context"
+        "context",
+        "entry-point"
       ],
-      "intensity": 5,
+      "intensity": 8,
       "version": 1,
       "path": "user/investment/context.md",
-      "access_count": 33,
-      "last_access": "2026-04-28T18:33:29.727581",
+      "access_count": 42,
+      "last_access": "2026-04-29T13:44:47.816711",
       "created": "2026-04-24",
-      "updated": "2026-04-24",
+      "updated": "",
       "imports": {
         "required": [
           "user/investment/semiconductor-thesis",
           "user/investment/risk-tolerance",
+          "user/preferences/no-leverage",
           "user/investment/february-buy",
           "user/investment/current-holdings"
+        ],
+        "recommended": [
+          "user/facts/nvidia-earnings",
+          "user/facts/soxl-composition",
+          "user/observations/soxl-drop-march"
         ]
       },
       "schema": null,
-      "summary_hash": "3b598a1",
-      "protected": null,
+      "summary_hash": "fbd6e11",
+      "protected": true,
       "change_note": null,
       "change_log": [],
       "source": null,
-      "maturity": "draft",
-      "evidence": null
+      "maturity": "verified",
+      "evidence": {
+        "verified_in": [
+          {
+            "version": 1,
+            "date": "2026-04-29"
+          }
+        ]
+      }
     },
     "user/investment/current-holdings": {
       "type": "atom",
       "id": "user/investment/current-holdings",
-      "summary": "当前持仓概览：半导体ETF 40% + 现金 30%",
+      "summary": "持仓概览：半导体ETF 40%（成本1.25现价1.44）+ 现金30% + SOXL 5%观察仓 + 其他25%",
       "status": "active",
       "tags": [
         "investment",
-        "portfolio"
+        "portfolio",
+        "current-state"
       ],
-      "intensity": 5,
+      "intensity": 6,
       "version": 1,
       "path": "user/investment/current-holdings.md",
-      "access_count": 33,
-      "last_access": "2026-04-28T18:33:29.727581",
+      "access_count": 42,
+      "last_access": "2026-04-29T13:44:47.816711",
       "created": "2026-04-20",
-      "updated": "2026-04-24",
-      "imports": {
-        "required": [
-          "user/investment/position-semiconductor",
-          "user/investment/position-cash"
-        ]
-      },
+      "updated": "",
+      "imports": {},
       "schema": null,
-      "summary_hash": "ae005a6",
+      "summary_hash": "a28750d",
       "protected": null,
       "change_note": null,
       "change_log": [],
       "source": null,
-      "maturity": "draft",
-      "evidence": null
+      "maturity": "verified",
+      "evidence": {
+        "verified_in": [
+          {
+            "version": 1,
+            "date": "2026-04-29"
+          }
+        ]
+      }
     },
     "user/investment/february-buy": {
       "type": "atom",
@@ -190,8 +157,8 @@
       "intensity": 5,
       "version": 2,
       "path": "user/investment/february-buy.md",
-      "access_count": 37,
-      "last_access": "2026-04-28T18:33:29.727581",
+      "access_count": 46,
+      "last_access": "2026-04-29T13:44:47.816711",
       "created": "2026-02-15",
       "updated": "2026-04-24",
       "imports": {
@@ -215,66 +182,15 @@
         "platform": "antigravity",
         "created_by": "user"
       },
-      "maturity": "draft",
-      "evidence": null
-    },
-    "user/investment/position-cash": {
-      "type": "atom",
-      "id": "user/investment/position-cash",
-      "summary": "现金仓位30%，预留用于加仓或应对极端行情",
-      "status": "active",
-      "tags": [
-        "investment",
-        "position"
-      ],
-      "intensity": 5,
-      "version": 1,
-      "path": "user/investment/position-cash.md",
-      "access_count": 33,
-      "last_access": "2026-04-28T18:33:29.727581",
-      "created": "2026-02-15",
-      "updated": "2026-04-20",
-      "imports": {},
-      "schema": null,
-      "summary_hash": "a8c4209",
-      "protected": null,
-      "change_note": null,
-      "change_log": [],
-      "source": {
-        "platform": "manual",
-        "created_by": "user"
-      },
-      "maturity": "draft",
-      "evidence": null
-    },
-    "user/investment/position-semiconductor": {
-      "type": "atom",
-      "id": "user/investment/position-semiconductor",
-      "summary": "持有半导体ETF(512480)，仓位40%，成本价1.25元",
-      "status": "active",
-      "tags": [
-        "investment",
-        "position"
-      ],
-      "intensity": 5,
-      "version": 1,
-      "path": "user/investment/position-semiconductor.md",
-      "access_count": 33,
-      "last_access": "2026-04-28T18:33:29.727581",
-      "created": "2026-02-15",
-      "updated": "2026-04-20",
-      "imports": {},
-      "schema": null,
-      "summary_hash": "5d575bc",
-      "protected": null,
-      "change_note": null,
-      "change_log": [],
-      "source": {
-        "platform": "manual",
-        "created_by": "user"
-      },
-      "maturity": "draft",
-      "evidence": null
+      "maturity": "verified",
+      "evidence": {
+        "verified_in": [
+          {
+            "version": 2,
+            "date": "2026-04-29"
+          }
+        ]
+      }
     },
     "user/investment/risk-tolerance": {
       "type": "atom",
@@ -288,13 +204,13 @@
       "intensity": 5,
       "version": 2,
       "path": "user/investment/risk-tolerance.md",
-      "access_count": 33,
-      "last_access": "2026-04-28T18:33:29.727581",
+      "access_count": 42,
+      "last_access": "2026-04-29T13:44:47.816711",
       "created": "2026-01-15",
       "updated": "2026-04-24",
       "imports": {},
       "schema": null,
-      "summary_hash": "placeholder",
+      "summary_hash": "e7bcb54",
       "protected": null,
       "change_note": null,
       "change_log": [],
@@ -302,8 +218,15 @@
         "platform": "antigravity",
         "created_by": "user"
       },
-      "maturity": "draft",
-      "evidence": null
+      "maturity": "verified",
+      "evidence": {
+        "verified_in": [
+          {
+            "version": 2,
+            "date": "2026-04-29"
+          }
+        ]
+      }
     },
     "user/investment/semiconductor-thesis": {
       "type": "atom",
@@ -317,8 +240,8 @@
       "intensity": 5,
       "version": 1,
       "path": "user/investment/semiconductor-thesis.md",
-      "access_count": 33,
-      "last_access": "2026-04-28T18:33:29.727581",
+      "access_count": 42,
+      "last_access": "2026-04-29T13:44:47.816711",
       "created": "2026-02-10",
       "updated": "2026-04-24",
       "imports": {},
@@ -331,7 +254,81 @@
         "platform": "claude-code",
         "created_by": "user"
       },
-      "maturity": "draft",
+      "maturity": "verified",
+      "evidence": {
+        "verified_in": [
+          {
+            "version": 1,
+            "date": "2026-04-29"
+          }
+        ]
+      }
+    },
+    "user/observations/soxl-drop-march": {
+      "type": "atom",
+      "id": "user/observations/soxl-drop-march",
+      "summary": "3月17日SOXL单日暴跌15%，当时原因不明，后来确认是被NVIDIA指引不及预期引发的板块连锁下跌",
+      "status": "active",
+      "tags": [
+        "investment",
+        "observation",
+        "market-event"
+      ],
+      "intensity": 6,
+      "version": 2,
+      "path": "user/observations/soxl-drop-march.md",
+      "access_count": 3,
+      "last_access": "2026-04-29T13:44:47.816711",
+      "created": "2026-03-17",
+      "updated": "2026-03-20",
+      "imports": {
+        "required": [
+          "user/facts/nvidia-earnings",
+          "user/facts/soxl-composition"
+        ]
+      },
+      "schema": null,
+      "summary_hash": "87a7255",
+      "protected": null,
+      "change_note": null,
+      "change_log": [],
+      "source": null,
+      "maturity": "verified",
+      "evidence": {
+        "verified_in": [
+          {
+            "version": 2,
+            "date": "2026-04-29"
+          }
+        ]
+      }
+    },
+    "user/preferences/no-leverage": {
+      "type": "atom",
+      "id": "user/preferences/no-leverage",
+      "summary": "投资硬约束：绝不使用杠杆，不碰Margin、期权、杠杆ETF。十五年的铁律，源于2008年目睹朋友爆仓",
+      "status": "active",
+      "tags": [
+        "investment",
+        "preference",
+        "constraint",
+        "guideline"
+      ],
+      "intensity": 10,
+      "version": 1,
+      "path": "user/preferences/no-leverage.md",
+      "access_count": 8,
+      "last_access": "2026-04-29T13:44:47.816711",
+      "created": "2025-06-01",
+      "updated": "",
+      "imports": {},
+      "schema": null,
+      "summary_hash": "7bf1b78",
+      "protected": true,
+      "change_note": null,
+      "change_log": [],
+      "source": null,
+      "maturity": "proven",
       "evidence": null
     },
     "schemas/decision": {
