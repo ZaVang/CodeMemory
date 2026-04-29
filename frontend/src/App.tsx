@@ -3,6 +3,7 @@ import GraphCanvas from './components/GraphCanvas'
 import MemoryDetail from './components/MemoryDetail'
 import MemoryForm from './components/MemoryForm'
 import Dashboard from './components/Dashboard'
+import HelpPanel from './components/HelpPanel'
 import SearchBar from './components/SearchBar'
 import Legend from './components/Legend'
 import { fetchResolve } from './api'
@@ -37,6 +38,9 @@ export default function App() {
   // Memory form state
   const [formMemoryId, setFormMemoryId] = useState<string | null>(null) // null = create mode
   const [showCreateForm, setShowCreateForm] = useState(false)
+
+  // Help panel state
+  const [showHelp, setShowHelp] = useState(false)
 
   // Context menu state
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null)
@@ -364,6 +368,30 @@ export default function App() {
             </div>
           </>
         )}
+
+        {/* Help button */}
+        <button
+          onClick={() => setShowHelp(true)}
+          title="Help"
+          style={{
+            width: 28,
+            height: 28,
+            borderRadius: 2,
+            border: '1px solid #D4D4D8',
+            backgroundColor: 'transparent',
+            cursor: 'pointer',
+            fontSize: 14,
+            fontFamily: "'Cormorant Garamond', serif",
+            color: '#57534E',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexShrink: 0,
+            marginLeft: 'auto',
+          }}
+        >
+          ?
+        </button>
       </header>
 
       {/* Main content */}
@@ -456,6 +484,9 @@ export default function App() {
           onChange={handleMemoryChange}
         />
       )}
+
+      {/* Help panel */}
+      {showHelp && <HelpPanel onClose={() => setShowHelp(false)} />}
 
       {/* Context menu for right-click on graph nodes */}
       {contextMenu && (
