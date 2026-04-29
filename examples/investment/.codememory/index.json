@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-04-29T15:49:52.956554",
+  "updated": "2026-04-29T17:31:01.285022",
   "memories": {
     "user/facts/nvidia-earnings": {
       "type": "atom",
@@ -70,8 +70,8 @@
       "intensity": 8,
       "version": 1,
       "path": "user/investment/context.md",
-      "access_count": 45,
-      "last_access": "2026-04-29T15:49:52.956372",
+      "access_count": 53,
+      "last_access": "2026-04-29T17:31:01.179486",
       "created": "2026-04-24",
       "updated": "",
       "imports": {
@@ -94,15 +94,8 @@
       "change_note": null,
       "change_log": [],
       "source": null,
-      "maturity": "verified",
-      "evidence": {
-        "verified_in": [
-          {
-            "version": 1,
-            "date": "2026-04-29"
-          }
-        ]
-      }
+      "maturity": "draft",
+      "evidence": null
     },
     "user/investment/current-holdings": {
       "type": "atom",
@@ -117,8 +110,8 @@
       "intensity": 6,
       "version": 1,
       "path": "user/investment/current-holdings.md",
-      "access_count": 45,
-      "last_access": "2026-04-29T15:49:52.956372",
+      "access_count": 54,
+      "last_access": "2026-04-29T17:31:01.179486",
       "created": "2026-04-20",
       "updated": "",
       "imports": {},
@@ -128,15 +121,8 @@
       "change_note": null,
       "change_log": [],
       "source": null,
-      "maturity": "verified",
-      "evidence": {
-        "verified_in": [
-          {
-            "version": 1,
-            "date": "2026-04-29"
-          }
-        ]
-      }
+      "maturity": "draft",
+      "evidence": null
     },
     "user/investment/february-buy": {
       "type": "atom",
@@ -150,8 +136,8 @@
       "intensity": 5,
       "version": 2,
       "path": "user/investment/february-buy.md",
-      "access_count": 49,
-      "last_access": "2026-04-29T15:49:52.956372",
+      "access_count": 59,
+      "last_access": "2026-04-29T17:31:01.179486",
       "created": "2026-02-15",
       "updated": "2026-04-24",
       "imports": {
@@ -175,15 +161,8 @@
         "platform": "antigravity",
         "created_by": "user"
       },
-      "maturity": "verified",
-      "evidence": {
-        "verified_in": [
-          {
-            "version": 2,
-            "date": "2026-04-29"
-          }
-        ]
-      }
+      "maturity": "draft",
+      "evidence": null
     },
     "user/investment/risk-tolerance": {
       "type": "atom",
@@ -197,8 +176,8 @@
       "intensity": 5,
       "version": 2,
       "path": "user/investment/risk-tolerance.md",
-      "access_count": 45,
-      "last_access": "2026-04-29T15:49:52.956372",
+      "access_count": 62,
+      "last_access": "2026-04-29T17:31:01.179486",
       "created": "2026-01-15",
       "updated": "2026-04-24",
       "imports": {},
@@ -211,15 +190,8 @@
         "platform": "antigravity",
         "created_by": "user"
       },
-      "maturity": "verified",
-      "evidence": {
-        "verified_in": [
-          {
-            "version": 2,
-            "date": "2026-04-29"
-          }
-        ]
-      }
+      "maturity": "draft",
+      "evidence": null
     },
     "user/investment/semiconductor-thesis": {
       "type": "atom",
@@ -233,8 +205,8 @@
       "intensity": 5,
       "version": 1,
       "path": "user/investment/semiconductor-thesis.md",
-      "access_count": 45,
-      "last_access": "2026-04-29T15:49:52.956372",
+      "access_count": 58,
+      "last_access": "2026-04-29T17:31:01.179486",
       "created": "2026-02-10",
       "updated": "2026-04-24",
       "imports": {},
@@ -247,15 +219,8 @@
         "platform": "claude-code",
         "created_by": "user"
       },
-      "maturity": "verified",
-      "evidence": {
-        "verified_in": [
-          {
-            "version": 1,
-            "date": "2026-04-29"
-          }
-        ]
-      }
+      "maturity": "draft",
+      "evidence": null
     },
     "user/observations/soxl-drop-march": {
       "type": "atom",
@@ -303,8 +268,8 @@
       "intensity": 10,
       "version": 1,
       "path": "user/preferences/no-leverage.md",
-      "access_count": 11,
-      "last_access": "2026-04-29T15:49:52.956372",
+      "access_count": 19,
+      "last_access": "2026-04-29T17:31:01.179486",
       "created": "2025-06-01",
       "updated": "",
       "imports": {},

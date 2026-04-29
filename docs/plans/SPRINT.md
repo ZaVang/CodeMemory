@@ -1,133 +1,108 @@
-# Sprint 11 — Backend API + DAG 图前端 MVP
+# Sprint 13 — 管理面板
 
 > **起始日期**：2026-04-29
-> **前置条件**：Sprint 10 完成（类型体系简化）
-> **目标**：搭建 FastAPI backend + React 前端，实现 DAG 依赖图可视化 + 记忆详情面板
+> **前置条件**：Sprint 12 完成（交互式 Resolve + budget 滑块 + 拓扑动画）
+> **目标**：在 UI 中完成记忆的增删改查 + 系统健康检查，打造完整管理工具
 
 ---
 
 ## 一、任务
 
-### 任务 1：项目脚手架
+### 任务 1：Backend 管理端点
 
 | # | 子任务 | 说明 | 状态 |
 |---|--------|------|------|
-| 1.1 | 创建 `frontend/` 项目 | Vite + React + TypeScript + Tailwind CSS | [x] |
-| 1.2 | 安装依赖 | cytoscape, dagre, react-markdown, remark-gfm | [x] |
-| 1.3 | 创建 `backend/` | FastAPI + uvicorn + CORS | [x] |
-| 1.4 | Tailwind 配置 | 按 Claude 设计系统的颜色/字体/间距 | [x] |
+| 1.1 | `POST /api/memories` | 创建新记忆（委托 `handle_create()`），返回创建后的记忆数据 | [x] |
+| 1.2 | `PUT /api/memories/{id}` | 更新记忆（委托 `handle_update()`），支持修改 body/summary/tags/intensity/status | [x] |
+| 1.3 | `GET /api/stats` | 返回统计数据：总数、maturity 分布（draft/verified/proven）、stale 数量、tag 频次 | [x] |
+| 1.4 | `POST /api/wander` | 触发 wander，返回一条冷记忆（低访问次数 + 高 intensity 加权随机） | [x] |
+| 1.5 | `POST /api/validate` | 运行 validate，返回诊断结果（循环/断链/schema 合规/maturity 建议） | [x] |
 
-**产出**：两个可启动的空项目骨架
+**产出**：5 个管理端点，通过 curl 可验证
 
 ---
 
-### 任务 2：Backend API 端点
+### 任务 2：Dashboard 页面
 
 | # | 子任务 | 说明 | 状态 |
 |---|--------|------|------|
-| 2.1 | `GET /api/memories` | 返回所有记忆列表（id, type, summary, tags, intensity, maturity, directory） | [x] |
-| 2.2 | `GET /api/memories/{id}` | 返回单条记忆完整内容（frontmatter 所有字段 + body markdown） | [x] |
-| 2.3 | `GET /api/graph` | 从 index.json 构建 cytoscape 格式的节点+边数据 | [x] |
+| 2.1 | Dashboard 视图 | 统计卡片行（总记忆数、stale 数、proven 数）+ maturity 分布图 + tag 列表 | [x] |
+| 2.2 | 视图切换 | 顶部导航切换 "Graph" / "Dashboard" 两个视图 | [x] |
+| 2.3 | Stale 记忆高亮 | Dashboard 中高亮展示所有 stale 记忆，点击可跳转到详情 | [x] |
+| 2.4 | Wander 按钮 | 点击随机召回一条冷记忆，弹窗展示其 summary + id | [x] |
+| 2.5 | Validate 结果展示 | 运行 validate 后展示诊断结果列表（errors/warnings） | [x] |
 
-**产出**：3 个 REST 端点，通过 curl 可验证
+**产出**：Dashboard 视图 + Graph 视图可切换
 
 ---
 
-### 任务 3：DAG 图可视化
+### 任务 3：记忆创建/编辑表单
 
 | # | 子任务 | 说明 | 状态 |
 |---|--------|------|------|
-| 3.1 | `api.ts` | fetch 封装层，对接 backend 三个端点 | [x] |
-| 3.2 | `GraphCanvas.tsx` | cytoscape 力导向图组件，节点颜色按目录、大小按 intensity、边样式按依赖强度 | [x] |
-| 3.3 | `Legend.tsx` | 图例：目录颜色 + 边类型说明 | [x] |
-| 3.4 | 布局切换 | 默认 Dagre 分层布局，工具栏按钮切换力导向 | [x] |
+| 3.1 | 创建表单 | 滑出面板或弹窗中的表单：id、summary、tags、intensity、body（textarea） | [x] |
+| 3.2 | 编辑表单 | 复用创建表单组件，预填现有数据，支持更新 body/summary/tags/intensity/status | [x] |
+| 3.3 | 图节点右键菜单 | 右键节点 → "Edit" / "Delete" 选项，触发编辑表单或删除确认 | [x] |
 
-**产出**：页面加载 → 看到 DAG 依赖图
-
----
-
-### 任务 4：记忆详情 + 搜索
-
-| # | 子任务 | 说明 | 状态 |
-|---|--------|------|------|
-| 4.1 | `MemoryDetail.tsx` | 侧边面板：点击节点 → 渲染 markdown body + frontmatter 元数据卡片（Claude 风格卡片，whisper shadow） | [x] |
-| 4.2 | `SearchBar.tsx` | 顶部搜索栏：按 tag/目录/maturity 过滤，高亮匹配节点 | [x] |
-| 4.3 | `App.tsx` | 主布局：左侧画布 + 右侧详情面板 + 顶部搜索栏 | [x] |
-
-**产出**：完整的 MVP 交互流
+**产出**：可通过 UI 创建和编辑记忆，图实时刷新
 
 ---
 
 ## 二、技术约束
 
-- 后端只读 `index.json` 和 `.md` 文件，不修改 `src/codememory/` 内部逻辑
-- 设计系统：`docs/design/claude-DESIGN.md`（Parchment 底色、Georgia/Inter 字体、whisper shadow、ring shadow）
-- 配色映射：facts→#141413, preferences→#c96442, observations→#d97757, investment→#3898ec, snapshots→#87867f
-- 边样式：required=实线2px #141413, recommended=虚线1.5px #87867f, related=点线1px #e8e6dc
-- 一切按 Claude 设计系统的 Do's and Don'ts（无纯黑 #000、无纯白 #fff 底色、少用赤陶主色、serif 标题）
-- 状态徽章按 Claude 设计系统：draft=Sand底+灰字, verified=蓝底+蓝字, proven=绿底+绿字, stale=红底+红字
+- 所有 Backend 端点委托 `src/codememory/handlers.py`，不重复实现业务逻辑
+- Dashboard 和 Graph 视图切换不销毁 cytoscape 实例（保持图状态）
+- 创建/编辑表单使用 LuxCart 设计系统风格
+- 表单验证：id 必填（创建时），intensity 范围 1-10
+- 删除操作需要确认弹窗
+- 不修改 `src/codememory/` 内部逻辑
+- 不修改 `src/harnesslib/` 或 `src/llm_gateway/`
 
 ---
 
-## 三、文件结构
-
-```
-frontend/
-├── package.json
-├── tsconfig.json
-├── vite.config.ts
-├── tailwind.config.ts
-├── index.html
-└── src/
-    ├── App.tsx
-    ├── main.tsx
-    ├── index.css
-    ├── api.ts
-    ├── types.ts
-    └── components/
-        ├── GraphCanvas.tsx
-        ├── MemoryDetail.tsx
-        ├── SearchBar.tsx
-        └── Legend.tsx
-
-backend/
-├── server.py
-└── requirements.txt
-```
-
----
-
-## 四、验收命令汇总
+## 三、验收命令汇总
 
 ```bash
-# Backend 启动
-cd backend && pip install -r requirements.txt && uvicorn server:app --reload
+# Backend 统计端点
+curl http://localhost:8000/api/stats | python -m json.tool
 
-# 端点验证
-curl http://localhost:8000/api/memories | python -m json.tool
-curl http://localhost:8000/api/memories/user/investment/context | python -m json.tool
-curl http://localhost:8000/api/graph | python -m json.tool
+# Backend wander
+curl -X POST http://localhost:8000/api/wander | python -m json.tool
 
-# Frontend 启动
-cd frontend && npm install && npm run dev
+# Backend validate
+curl -X POST http://localhost:8000/api/validate | python -m json.tool
 
-# TypeScript 类型检查
+# Backend 创建 + 清理
+curl -X POST http://localhost:8000/api/memories \
+  -H "Content-Type: application/json" \
+  -d '{"id":"user/test/sprint13-test","summary":"Sprint 13 test memory","tags":["test"],"intensity":5,"body":"Test body content."}'
+curl http://localhost:8000/api/memories/user/test/sprint13-test | python -m json.tool
+curl -X PUT http://localhost:8000/api/memories/user/test/sprint13-test \
+  -H "Content-Type: application/json" \
+  -d '{"change_note":"update summary","summary":"Updated test summary"}'
+# Clean up: manually delete the test file + reindex
+
+# Frontend TypeScript 类型检查
 cd frontend && npx tsc --noEmit
 
-# 全量回归（确保现有功能不受影响）
+# Frontend 构建
+cd frontend && npx vite build
+
+# 全量回归
 PYTHONPATH=src python -m pytest tests/unit/ -v --tb=short
 PYTHONPATH=src python tests/integration_test.py
 ```
 
 ---
 
-## 五、完成定义
+## 四、完成定义
 
-1. `backend/server.py` 启动，3 个端点返回正确 JSON
-2. `frontend/` 启动，页面加载后显示 DAG 依赖图
-3. 节点颜色按目录区分、大小按 intensity、边样式按依赖强度
-4. 点击节点 → 侧面板显示 markdown body + frontmatter 元数据
-5. 搜索栏可按 tag 过滤，高亮匹配节点
-6. 布局可在 Dagre 分层 / 力导向之间切换
-7. 配色/字体/阴影遵循 Claude 设计系统
-8. 现有 57+24 测试不退化
+1. 5 个管理端点全部可用（create/update/stats/wander/validate）
+2. Dashboard 视图展示统计卡片 + maturity 分布 + stale 列表
+3. Graph / Dashboard 视图可切换
+4. 可通过 UI 创建新记忆，创建后图自动刷新
+5. 可通过 UI 编辑现有记忆（右键 → Edit）
+6. Wander 按钮可召回冷记忆
+7. Validate 结果可展示
+8. TypeScript 零错误，前端可构建
+9. 57+24 测试不退化

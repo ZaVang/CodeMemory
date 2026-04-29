@@ -1,13 +1,17 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import cytoscape, { type Core } from 'cytoscape'
 import dagre from 'dagre'
-import type { GraphData, GraphNode, GraphEdge } from '../types'
+import type { GraphData, GraphNode, GraphEdge, ResolveResponse } from '../types'
 import { fetchGraph } from '../api'
 
 interface Props {
   searchText: string
   onNodeClick: (id: string) => void
+  onNodeContextMenu?: (id: string, position: { x: number; y: number }) => void
   layoutMode: 'dagre' | 'force'
+  resolveData: ResolveResponse | null
+  isResolving: boolean
+  refreshTrigger?: number  // increment to reload graph data
 }
 
 // LuxCart directory colors — border color for nodes
@@ -55,7 +59,7 @@ function intensityToRadius(intensity: number): number {
   return Math.max(18, Math.min(50, 14 + intensity * 4))
 }
 
-export default function GraphCanvas({ searchText, onNodeClick, layoutMode }: Props) {
+export default function GraphCanvas({ searchText, onNodeClick, onNodeContextMenu, layoutMode, resolveData, isResolving, refreshTrigger }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const cyRef = useRef<Core | null>(null)
   const [graphData, setGraphData] = useState<GraphData | null>(null)
@@ -63,7 +67,7 @@ export default function GraphCanvas({ searchText, onNodeClick, layoutMode }: Pro
   // Load graph data
   useEffect(() => {
     fetchGraph().then(setGraphData).catch(console.error)
-  }, [])
+  }, [refreshTrigger])
 
   // Run dagre layout on node positions
   const runDagreLayout = useCallback((cy: Core) => {
@@ -220,6 +224,42 @@ export default function GraphCanvas({ searchText, onNodeClick, layoutMode }: Pro
             'overlay-opacity': 0,
           },
         },
+        // Resolve highlight — gold glow during topological animation
+        {
+          selector: 'node.resolve-highlight',
+          style: {
+            'border-width': 3,
+            'border-color': '#B8860B',
+            'background-color': '#FDF6E8',
+            'opacity': 1,
+            'z-index': 10,
+          },
+        },
+        // Trim: summary — semi-transparent, dashed border, shrunk
+        {
+          selector: 'node.trim-summary',
+          style: {
+            'opacity': 0.4,
+            'border-style': 'dashed',
+            'border-width': 1.5,
+            'width': (el) => intensityToRadius(el.data('intensity') || 5) * 1.3,
+            'height': (el) => intensityToRadius(el.data('intensity') || 5) * 1.3,
+            'font-size': '9px',
+          },
+        },
+        // Trim: skipped — very dim, dashed, even smaller
+        {
+          selector: 'node.trim-skipped',
+          style: {
+            'opacity': 0.2,
+            'border-style': 'dashed',
+            'border-width': 1,
+            'width': (el) => intensityToRadius(el.data('intensity') || 5) * 1.1,
+            'height': (el) => intensityToRadius(el.data('intensity') || 5) * 1.1,
+            'font-size': '8px',
+            'color': '#A8A29E',
+          },
+        },
       ],
       layout: { name: 'preset' },
       wheelSensitivity: 0.3,
@@ -239,6 +279,17 @@ export default function GraphCanvas({ searchText, onNodeClick, layoutMode }: Pro
       const node = evt.target
       onNodeClick(node.id())
     })
+
+    // Right-click context menu
+    if (onNodeContextMenu) {
+      cy.on('cxttap', 'node', (evt) => {
+        const node = evt.target
+        onNodeContextMenu(node.id(), {
+          x: evt.originalEvent.clientX,
+          y: evt.originalEvent.clientY,
+        })
+      })
+    }
 
     // Fit to view
     setTimeout(() => cy.fit(undefined, 50), 100)
@@ -289,6 +340,67 @@ export default function GraphCanvas({ searchText, onNodeClick, layoutMode }: Pro
       }
     })
   }, [searchText])
+
+  // Handle resolve animation + trim styles
+  useEffect(() => {
+    const cy = cyRef.current
+    if (!cy) return
+
+    // Clear previous resolve classes
+    cy.nodes().removeClass('resolve-highlight trim-summary trim-skipped')
+
+    if (!resolveData || isResolving) return
+
+    // Sort nodes by topological index
+    const orderedNodes = [...resolveData.nodes].sort((a, b) => a.index - b.index)
+
+    // Build a set of trim levels by node id
+    const trimMap = new Map<string, 'full' | 'summary' | 'skipped'>()
+    for (const n of resolveData.nodes) {
+      trimMap.set(n.id, n.trim)
+    }
+
+    // Run topological animation: highlight each node 300ms apart
+    let delay = 0
+    const STEP_MS = 300
+
+    orderedNodes.forEach((nodeInfo) => {
+      delay += STEP_MS
+      setTimeout(() => {
+        const node = cy.getElementById(nodeInfo.id)
+        if (node.length > 0) {
+          // Flash the node with gold highlight
+          node.addClass('resolve-highlight')
+
+          // Fade out the highlight after the step
+          setTimeout(() => {
+            if (node.length > 0 && !node.hasClass('trim-summary') && !node.hasClass('trim-skipped')) {
+              node.removeClass('resolve-highlight')
+            }
+          }, STEP_MS * 0.8)
+        }
+      }, delay)
+    })
+
+    // After all animations complete, apply trim styles
+    const totalDelay = delay + STEP_MS
+    setTimeout(() => {
+      trimMap.forEach((trim, nodeId) => {
+        const node = cy.getElementById(nodeId)
+        if (node.length === 0) return
+
+        // Remove highlight from all nodes
+        node.removeClass('resolve-highlight')
+
+        if (trim === 'summary') {
+          node.addClass('trim-summary')
+        } else if (trim === 'skipped') {
+          node.addClass('trim-skipped')
+        }
+        // 'full' nodes: no trim class (normal appearance)
+      })
+    }, totalDelay)
+  }, [resolveData, isResolving])
 
   return (
     <div

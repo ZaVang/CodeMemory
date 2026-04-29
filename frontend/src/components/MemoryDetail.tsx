@@ -7,6 +7,7 @@ import type { MemoryDetail as MemoryDetailType } from '../types'
 interface Props {
   memoryId: string | null
   onClose: () => void
+  onResolve: (id: string) => void
 }
 
 function StatusBadge({ status }: { status: string }) {
@@ -68,7 +69,7 @@ function MaturityBadge({ maturity }: { maturity: string }) {
   )
 }
 
-export default function MemoryDetail({ memoryId, onClose }: Props) {
+export default function MemoryDetail({ memoryId, onClose, onResolve }: Props) {
   const [memory, setMemory] = useState<MemoryDetailType | null>(null)
   const [loading, setLoading] = useState(false)
   const [visible, setVisible] = useState(false)
@@ -160,6 +161,26 @@ export default function MemoryDetail({ memoryId, onClose }: Props) {
           >
             {memory?.summary || memoryId}
           </h2>
+          <button
+            onClick={() => onResolve(memoryId!)}
+            title="Resolve dependency DAG from this node"
+            style={{
+              border: '1px solid #B8860B',
+              background: 'transparent',
+              cursor: 'pointer',
+              fontSize: 11,
+              fontWeight: 600,
+              fontFamily: 'Raleway, sans-serif',
+              color: '#B8860B',
+              padding: '4px 12px',
+              borderRadius: 2,
+              textTransform: 'uppercase',
+              letterSpacing: '0.08em',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            Resolve
+          </button>
           <button
             onClick={onClose}
             style={{
