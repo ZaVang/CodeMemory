@@ -23,3 +23,5 @@ Thumbs.db
 
 # Temporary orchestration artifacts
 docs/orch/
+
+examples/quant_operators/

@@ -68,3 +68,12 @@ Tailwind v4 的配置方式改为 CSS `@theme` 指令，不再需要 `tailwind.c
 
 ## [Sprint 11] Backend 需要正确设置 CODEMORY_ROOT
 Backend server.py 读取记忆数据时依赖 `CODEMORY_ROOT` 环境变量或 `--root` 参数。如果 backend 启动时未指定 root 路径，会找不到 index.json 和 .md 文件。验收脚本中应先 `export CODEMORY_ROOT=examples/investment` 再启动 uvicorn，或在 server.py 中设置默认 root。
+
+## [Sprint 13 PL1] server.py 中 imports 直接写 YAML frontmatter
+handle_create/handle_update 不原生支持 imports 参数。server.py 通过在创建/更新后绕开 handler 直接编辑 YAML frontmatter 来写入 imports。如果未来 create.py/handlers.py 增加 imports 原生支持，server.py 中的重复写入逻辑应移除。进口 API 的 wire format 为 `dict[str, list[str]]`（每个 import ID 映射到 strength 字符串列表）。
+
+## [Sprint 13 PL1] Budget 无操作检查仅对增加方向有效
+`App.tsx` 中的 budget no-op 检查只在所有节点已为 full-text 且 budget 上调时跳过 re-resolve。降低 budget 始终触发正确的 re-resolve。调试 budget 行为时应双向测试（从低预算上调 + 从高预算下调）。
+
+## [Sprint 13 PL1] 空 body 的 summary_hash 是确定性的
+`compute_body_hash("")` 返回 `"e3b0c44"`（SHA-256 空字符串的前 7 位十六进制）。任何未来对 body hash 计算的更改必须为空白正文记忆保留此不变量。

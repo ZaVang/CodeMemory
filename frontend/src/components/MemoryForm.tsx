@@ -23,6 +23,9 @@ export default function MemoryForm({ memoryId, onClose, onChange, onSelectMemory
   const [body, setBody] = useState('')
   const [status, setStatus] = useState('active')
   const [changeNote, setChangeNote] = useState('')
+  // Imports (PL1-9): comma-separated IDs with strength selection
+  const [importsText, setImportsText] = useState('')
+  const [importStrengths, setImportStrengths] = useState<Record<string, string>>({})
 
   // UI state
   const [loading, setLoading] = useState(false)
@@ -59,6 +62,27 @@ export default function MemoryForm({ memoryId, onClose, onChange, onSelectMemory
         setBody(mem.body || '')
         setStatus(mem.status || 'active')
         setChangeNote('')
+        // PL1-9: populate imports from existing memory
+        if (mem.imports) {
+          const allIds: string[] = []
+          const strengths: Record<string, string> = {}
+          for (const [strength, deps] of Object.entries(mem.imports)) {
+            if (Array.isArray(deps)) {
+              for (const dep of deps) {
+                const depId = typeof dep === 'string' ? dep : (dep as { id?: string }).id || ''
+                if (depId) {
+                  allIds.push(depId)
+                  strengths[depId] = strength
+                }
+              }
+            }
+          }
+          setImportsText(allIds.join(', '))
+          setImportStrengths(strengths)
+        } else {
+          setImportsText('')
+          setImportStrengths({})
+        }
       })
       .catch((err) => {
         console.error('Failed to load memory:', err)
@@ -98,12 +122,25 @@ export default function MemoryForm({ memoryId, onClose, onChange, onSelectMemory
         .map((t) => t.trim())
         .filter(Boolean)
 
+      // PL1-9: build imports structure from comma-separated IDs + strengths
+      const importIds = importsText
+        .split(',')
+        .map((t) => t.trim())
+        .filter(Boolean)
+      const imports: Record<string, string[]> = { required: [], recommended: [], related: [] }
+      for (const impId of importIds) {
+        const strength = (importStrengths[impId] || 'required') as 'required' | 'recommended' | 'related'
+        imports[strength].push(impId)
+      }
+      const hasImports = imports.required.length > 0 || imports.recommended.length > 0 || imports.related.length > 0
+
       await createMemory({
         id: id.trim(),
         summary: summary.trim() || undefined,
         tags: tagList.length > 0 ? tagList : undefined,
         intensity,
         body: body || undefined,
+        ...(hasImports ? { imports } : {}),
       })
 
       onChange()
@@ -135,6 +172,18 @@ export default function MemoryForm({ memoryId, onClose, onChange, onSelectMemory
         .map((t) => t.trim())
         .filter(Boolean)
 
+      // PL1-9: build imports structure
+      const importIds = importsText
+        .split(',')
+        .map((t) => t.trim())
+        .filter(Boolean)
+      const imports: Record<string, string[]> = { required: [], recommended: [], related: [] }
+      for (const impId of importIds) {
+        const strength = (importStrengths[impId] || 'required') as 'required' | 'recommended' | 'related'
+        imports[strength].push(impId)
+      }
+      const hasImports = imports.required.length > 0 || imports.recommended.length > 0 || imports.related.length > 0
+
       await updateMemory(memoryId, {
         body: body || undefined,
         summary: summary.trim() || undefined,
@@ -142,6 +191,7 @@ export default function MemoryForm({ memoryId, onClose, onChange, onSelectMemory
         intensity,
         status: status || undefined,
         change_note: changeNote.trim() || 'UI update',
+        ...(hasImports ? { imports } : {}),
       })
 
       onChange()
@@ -342,6 +392,76 @@ export default function MemoryForm({ memoryId, onClose, onChange, onSelectMemory
                 placeholder="tag1, tag2, tag3"
                 style={inputStyle}
               />
+            </Field>
+
+            {/* Imports (PL1-9) */}
+            <Field label="Imports (comma-separated IDs)">
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <input
+                  type="text"
+                  value={importsText}
+                  onChange={(e) => {
+                    setImportsText(e.target.value)
+                    // Parse IDs and init strengths for new ones
+                    const ids = e.target.value
+                      .split(',')
+                      .map((t) => t.trim())
+                      .filter(Boolean)
+                    const newStrengths = { ...importStrengths }
+                    for (const id of ids) {
+                      if (!newStrengths[id]) {
+                        newStrengths[id] = 'required'
+                      }
+                    }
+                    // Remove strengths for removed IDs
+                    for (const key of Object.keys(newStrengths)) {
+                      if (!ids.includes(key)) {
+                        delete newStrengths[key]
+                      }
+                    }
+                    setImportStrengths(newStrengths)
+                  }}
+                  placeholder="user/ideas/a, user/facts/b"
+                  style={inputStyle}
+                />
+                {Object.entries(importStrengths).length > 0 && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    {Object.entries(importStrengths).map(([impId, strength]) => (
+                      <div
+                        key={impId}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 8,
+                          fontSize: 12,
+                          fontFamily: 'JetBrains Mono, monospace',
+                          color: '#57534E',
+                        }}
+                      >
+                        <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {impId}
+                        </span>
+                        <select
+                          value={strength}
+                          onChange={(e) =>
+                            setImportStrengths((prev) => ({ ...prev, [impId]: e.target.value }))
+                          }
+                          style={{
+                            ...inputStyle,
+                            width: 120,
+                            padding: '2px 8px',
+                            fontSize: 11,
+                          }}
+                        >
+                          <option value="required">Required</option>
+                          <option value="recommended">Recommended</option>
+                          <option value="related">Related</option>
+                        </select>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </Field>
 
             {/* Intensity */}
@@ -578,7 +698,7 @@ export default function MemoryForm({ memoryId, onClose, onChange, onSelectMemory
                 disabled={deleting}
                 style={{
                   padding: '8px 20px',
-                  backgroundColor: '#991B1B',
+                  backgroundColor: '#57534E',
                   color: '#FFFFFF',
                   border: 'none',
                   cursor: 'pointer',

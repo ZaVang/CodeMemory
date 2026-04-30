@@ -2,12 +2,13 @@ import { useState, useEffect } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { fetchMemory } from '../api'
-import type { MemoryDetail as MemoryDetailType } from '../types'
+import type { MemoryDetail as MemoryDetailType, ResolveResponse } from '../types'
 
 interface Props {
   memoryId: string | null
   onClose: () => void
   onResolve: (id: string) => void
+  resolveData?: ResolveResponse | null
 }
 
 function StatusBadge({ status }: { status: string }) {
@@ -69,7 +70,7 @@ function MaturityBadge({ maturity }: { maturity: string }) {
   )
 }
 
-export default function MemoryDetail({ memoryId, onClose, onResolve }: Props) {
+export default function MemoryDetail({ memoryId, onClose, onResolve, resolveData }: Props) {
   const [memory, setMemory] = useState<MemoryDetailType | null>(null)
   const [loading, setLoading] = useState(false)
   const [visible, setVisible] = useState(false)
@@ -324,6 +325,101 @@ export default function MemoryDetail({ memoryId, onClose, onResolve }: Props) {
               </div>
             )}
           </div>
+
+          {/* Resolve results */}
+          {resolveData && resolveData.nodes.length > 0 && (
+            <div
+              style={{
+                padding: '16px 24px',
+                borderBottom: '1px solid #E7E5E4',
+                flexShrink: 0,
+                maxHeight: 260,
+                overflowY: 'auto',
+              }}
+            >
+              <div
+                style={{
+                  fontSize: 11,
+                  fontWeight: 600,
+                  fontFamily: 'Raleway, sans-serif',
+                  color: '#57534E',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.08em',
+                  marginBottom: 8,
+                }}
+              >
+                Resolve — {resolveData.nodes.length} nodes
+                {resolveData.budget && (
+                  <span style={{ color: '#A8A29E', fontWeight: 400, textTransform: 'none', letterSpacing: '0' }}>
+                    {' '}· budget {resolveData.budget} · depth {resolveData.depth}
+                  </span>
+                )}
+              </div>
+              {[...resolveData.nodes]
+                .sort((a, b) => a.index - b.index)
+                .map((node) => (
+                  <div
+                    key={node.id}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 8,
+                      padding: '3px 0',
+                      fontSize: 11,
+                      fontFamily: 'Raleway, sans-serif',
+                      opacity: node.trim === 'skipped' ? 0.4 : node.trim === 'summary' ? 0.65 : 1,
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontFamily: 'JetBrains Mono, monospace',
+                        fontSize: 10,
+                        color: '#A8A29E',
+                        minWidth: 24,
+                      }}
+                    >
+                      [{node.index}]
+                    </span>
+                    <span style={{
+                      display: 'inline-block',
+                      width: 6,
+                      height: 6,
+                      borderRadius: 1,
+                      backgroundColor:
+                        node.trim === 'full' ? '#166534' :
+                        node.trim === 'summary' ? '#CA8A04' : '#A8A29E',
+                      flexShrink: 0,
+                    }}/>
+                    <code
+                      style={{
+                        fontFamily: 'JetBrains Mono, monospace',
+                        fontSize: 10,
+                        color: '#1C1917',
+                        flex: 1,
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {node.id}
+                    </code>
+                    <span
+                      style={{
+                        fontSize: 9,
+                        fontWeight: 600,
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.04em',
+                        color:
+                          node.trim === 'full' ? '#166534' :
+                          node.trim === 'summary' ? '#CA8A04' : '#A8A29E',
+                      }}
+                    >
+                      {node.trim}
+                    </span>
+                  </div>
+                ))}
+            </div>
+          )}
 
           {/* Body markdown */}
           <div

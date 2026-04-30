@@ -106,3 +106,53 @@ PYTHONPATH=src python tests/integration_test.py
 7. Validate 结果可展示
 8. TypeScript 零错误，前端可构建
 9. 57+24 测试不退化
+
+---
+
+## 第 1 轮追加任务（基于体验官审计 — 2026-04-30）
+
+### 第一梯队（关键缺陷 — 阻止发布）
+
+- [x] PL1-1: 修复 Dashboard Stale 记忆检测逻辑
+  - 目标：Dashboard 的 stale 记忆列表能正确显示那些 body hash 与 summary_hash 不匹配的记忆
+  - 验收：人为制造一条 stale 记忆后，Dashboard 的 stale 列表中出现该记忆（含 ID），而非永远显示空列表
+
+- [x] PL1-2: 为 POST /api/memories 添加 ID 格式校验
+  - 目标：API 拒绝不含 "/" 分隔符或为空的 memory ID，与前端表单校验一致
+  - 验收：curl 发送 `{"id":"badid"}` 返回 422 + 可读错误信息；`{"id":"user/test/ok"}` 正常创建
+
+- [x] PL1-3: 为 server.py 添加 `__main__` 入口块
+  - 目标：用户按 Sprint 文档执行 `python backend/server.py` 即可启动后端，无需自行拼接 uvicorn 命令行
+  - 验收：执行 `python backend/server.py` 后服务在 localhost:8000 可用
+
+### 第二梯队（重要改进 — 必须随后完成）
+
+- [x] PL1-4: 向 /api/stats 响应中添加 stale_ids 字段
+  - 目标：用户不仅能看到 stale_count 聚合数字，还能知道具体哪些记忆是 stale 的
+  - 验收：当存在 stale 记忆时，/api/stats 返回 `stale_ids: ["user/ideas/a", "user/facts/b"]` 且列表完整
+
+- [x] PL1-5: 统一 Archive/Delete 术语
+  - 目标：在所有 UI 位置（右键菜单、编辑表单、确认弹窗）统一使用 "Archive" 一词，明确其可逆含义
+  - 验收：右键菜单中出现 "Archive" 选项（非 "Delete"）；按钮颜色不误导为不可逆操作；确认弹窗说明 archive 后仍可通过取消 archive 恢复
+
+- [x] PL1-6: 实现跨视图数据刷新
+  - 目标：在 Graph 视图中创建/编辑/归档记忆后，切换到 Dashboard 时自动显示最新数据
+  - 验收：在 Graph 视图创建一条记忆 → 切换到 Dashboard → 总记忆数和 tag 分布已更新，无需手动刷新浏览器
+
+- [x] PL1-7: 添加空状态引导
+  - 目标：零记忆或零依赖时显示清晰的 Call-To-Action，引导用户迈出第一步
+  - 验收：删除所有记忆后页面显示 "No memories yet. Create your first memory to get started." 及创建按钮；有记忆但无 imports 边时显示对应提示
+
+- [x] PL1-8: Budget 滑块无效果时提供视觉反馈
+  - 目标：当 budget 变化未改变 resolve 结果（所有节点均已包含）时，以非侵入方式告知用户
+  - 验收：在 10 节点数据集上拖动 budget 滑块（200-5000），不再出现无意义的 "Resolving..." 动画，而是显示 "All N nodes fit within budget" 提示
+
+- [x] PL1-9: 在创建/编辑表单中暴露 imports 字段
+  - 目标：用户可通过 UI 为记忆添加依赖边，而非必须使用 CLI
+  - 验收：表单中可输入逗号分隔的 import IDs，每条带强度选择器（required/recommended/related）；提交后新记忆的 resolve 结果包含其 imports 链
+
+### 第三梯队（锦上添花 — 本轮至少完成一项）
+
+- [x] PL1-10: 替换默认占位 body 文本
+  - 目标：消除用户误提交占位文本记忆导致索引污染的风险
+  - 验收：新建记忆的 body 字段为空白或含结构化提示模板，不再出现 "Write content here..." 等无意义文本；提交空 body 的记忆也按最小有效记忆处理

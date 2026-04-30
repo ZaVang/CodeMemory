@@ -295,8 +295,8 @@ export default function HelpPanel({ onClose }: Props) {
           </h3>
 
           <div style={{ fontSize: 13, fontFamily: 'Raleway, sans-serif', color: '#57534E', marginBottom: 16 }}>
-            以下命令通过 <code style={{ backgroundColor: '#F5F5F4', padding: '1px 4px', borderRadius: 2, fontFamily: 'JetBrains Mono, monospace', fontSize: 11 }}>codememory &lt;command&gt;</code> 在终端中使用。
-            本前端 Backend 将其中的 11 个封装为 REST API。
+            以下 15 个命令通过 <code style={{ backgroundColor: '#F5F5F4', padding: '1px 4px', borderRadius: 2, fontFamily: 'JetBrains Mono, monospace', fontSize: 11 }}>codememory &lt;command&gt;</code> 在终端中使用。
+            其中的 10 个已封装为 REST API 供前端调用——见下方 API 参考。
           </div>
 
           {CLI_COMMANDS.map(({ cmd, args, desc, layer }) => (
@@ -350,6 +350,77 @@ export default function HelpPanel({ onClose }: Props) {
               </div>
               <div style={{ fontSize: 11, fontFamily: 'Raleway, sans-serif', color: '#57534E', lineHeight: 1.5 }}>
                 {desc}
+              </div>
+            </div>
+          ))}
+
+          {/* REST API Reference */}
+          <h3
+            style={{
+              fontSize: 16,
+              fontFamily: "'Cormorant Garamond', serif",
+              fontWeight: 600,
+              color: '#B8860B',
+              marginBottom: 20,
+              marginTop: 32,
+              letterSpacing: '0.02em',
+            }}
+          >
+            REST API 端点
+          </h3>
+
+          <div style={{ fontSize: 13, fontFamily: 'Raleway, sans-serif', color: '#57534E', marginBottom: 16 }}>
+            前端通过以下端点与后端通信。所有端点委托 <code style={{ backgroundColor: '#F5F5F4', padding: '1px 4px', borderRadius: 2, fontFamily: 'JetBrains Mono, monospace', fontSize: 11 }}>src/codememory/handlers.py</code>，不重复实现业务逻辑。
+          </div>
+
+          {[
+            { method: 'GET', path: '/api/memories', desc: '所有记忆摘要列表（id, type, summary, tags, intensity, maturity, directory）' },
+            { method: 'GET', path: '/api/memories/{id}', desc: '单条记忆完整内容（frontmatter 所有字段 + body markdown）' },
+            { method: 'GET', path: '/api/graph', desc: 'cytoscape 格式的节点 + 边数据，节点颜色/大小/边样式由此驱动' },
+            { method: 'POST', path: '/api/resolve', desc: 'DAG 拓扑解析：body 传 {id, depth, budget}，返回排序节点列表 + 裁剪级别' },
+            { method: 'POST', path: '/api/memories', desc: '创建新记忆，body 传 {id, summary, tags, intensity, body}，委托 handle_create()' },
+            { method: 'PUT', path: '/api/memories/{id}', desc: '更新记忆，body 传 {change_note, body?, summary?, tags?, intensity?, status?}，委托 handle_update()' },
+            { method: 'GET', path: '/api/stats', desc: '统计：总数、maturity 分布（draft/verified/proven）、stale 数量、tag 频次' },
+            { method: 'POST', path: '/api/wander', desc: '加权随机召回一条冷记忆（低 access_count + 高 intensity），返回 summary + id' },
+            { method: 'POST', path: '/api/validate', desc: '运行 validate()，返回诊断结果（循环/断链/schema/maturity 错误和警告）' },
+          ].map((ep) => (
+            <div
+              key={ep.path + ep.method}
+              style={{
+                marginBottom: 8,
+                paddingBottom: 8,
+                borderBottom: '1px solid #F5F5F4',
+                display: 'flex',
+                alignItems: 'flex-start',
+                gap: 10,
+              }}
+            >
+              <span
+                style={{
+                  display: 'inline-block',
+                  padding: '1px 6px',
+                  borderRadius: 2,
+                  fontSize: 9,
+                  fontWeight: 600,
+                  fontFamily: 'JetBrains Mono, monospace',
+                  textTransform: 'uppercase',
+                  color: ep.method === 'GET' ? '#166534' : ep.method === 'POST' ? '#1E40AF' : '#CA8A04',
+                  backgroundColor: ep.method === 'GET' ? '#16653415' : ep.method === 'POST' ? '#1E40AF15' : '#CA8A0415',
+                  minWidth: 36,
+                  textAlign: 'center',
+                  flexShrink: 0,
+                  marginTop: 1,
+                }}
+              >
+                {ep.method}
+              </span>
+              <div>
+                <code style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: '#1C1917' }}>
+                  {ep.path}
+                </code>
+                <div style={{ fontSize: 11, fontFamily: 'Raleway, sans-serif', color: '#57534E', lineHeight: 1.5, marginTop: 1 }}>
+                  {ep.desc}
+                </div>
               </div>
             </div>
           ))}

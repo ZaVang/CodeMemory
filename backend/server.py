@@ -20,7 +20,7 @@ from typing import Any
 import yaml
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 # Ensure codememory package is importable
 _CODEMEMORY_SRC = Path(__file__).resolve().parent.parent / "src"
@@ -259,10 +259,25 @@ class CreateMemoryRequest(BaseModel):
     summary: str = Field(default="TODO: fill in summary")
     tags: list[str] = Field(default_factory=list)
     intensity: int = Field(default=5, ge=1, le=10)
-    body: str = Field(default="Write content here...\n")
+    body: str = Field(default="")
     type: str = Field(default="atom", description="atom | schema")
     schema: str | None = None
     maturity: str = Field(default="draft")
+    imports: dict[str, list[str]] | None = Field(
+        default=None,
+        description="Dependency map by strength: {'required': ['user/ideas/a'], 'recommended': ['user/facts/b']}",
+    )
+
+    @field_validator("id")
+    @classmethod
+    def validate_id(cls, v: str) -> str:
+        """Ensure memory ID has the required format: non-empty and contains at least one '/'."""
+        v = v.strip()
+        if not v:
+            raise ValueError("Memory ID must not be empty")
+        if "/" not in v:
+            raise ValueError('Memory ID must contain at least one "/" separator (e.g. "user/ideas/my-thesis")')
+        return v
 
 
 @app.post("/api/memories")
@@ -285,24 +300,23 @@ def post_create_memory(req: CreateMemoryRequest):
     if not filepath.exists():
         raise HTTPException(status_code=500, detail="Memory file was not created")
 
-    # Update body if provided (different from template default)
-    if req.body and req.body != "Write content here...\n":
-        meta, _ = _parse_frontmatter(filepath)
-        if req.summary and req.summary != "TODO: fill in summary":
-            body_to_write = req.body
-        else:
-            body_to_write = req.body
-        # Write body + update summary_hash
-        content = filepath.read_text(encoding="utf-8-sig")
-        parts = content.split("---", 2)
-        meta = yaml.safe_load(parts[1]) or {}
-        if req.summary and req.summary != "TODO: fill in summary":
-            meta["summary"] = req.summary
-        from codememory.core import compute_body_hash
-        meta["summary_hash"] = compute_body_hash(req.body.strip())
-        yaml_str = yaml.dump(meta, allow_unicode=True, sort_keys=False)
-        new_content = f"---\n{yaml_str}---\n{req.body}"
-        filepath.write_text(new_content, encoding="utf-8")
+    # Customize the created file: always write body to ensure summary_hash matches
+    meta, _ = _parse_frontmatter(filepath)
+    needs_summary_update = req.summary and req.summary != "TODO: fill in summary"
+    if needs_summary_update:
+        meta["summary"] = req.summary
+
+    # PL1-9: write imports to frontmatter if provided
+    if req.imports:
+        meta["imports"] = req.imports
+
+    from codememory.core import compute_body_hash
+    body_to_write = req.body  # may be empty (valid minimal memory)
+    meta["summary_hash"] = compute_body_hash(body_to_write.strip())
+
+    yaml_str = yaml.dump(meta, allow_unicode=True, sort_keys=False)
+    new_content = f"---\n{yaml_str}---\n{body_to_write}"
+    filepath.write_text(new_content, encoding="utf-8")
 
     # Reindex to pick up the new memory
     reindex(MEMORY_ROOT)
@@ -324,6 +338,7 @@ class UpdateMemoryRequest(BaseModel):
     intensity: int | None = Field(default=None, ge=1, le=10)
     status: str | None = None
     change_note: str | None = None
+    imports: dict[str, list[str]] | None = None
 
 
 @app.put("/api/memories/{memory_id:path}")
@@ -356,6 +371,7 @@ def put_update_memory(memory_id: str, req: UpdateMemoryRequest):
     has_metadata_update = any([
         req.tags is not None,
         req.intensity is not None,
+        req.imports is not None,
     ])
 
     # Use handle_update for core fields (version tracking, change_log, etc.)
@@ -370,13 +386,15 @@ def put_update_memory(memory_id: str, req: UpdateMemoryRequest):
             status=req.status,
         )
 
-    # Directly update tags/intensity in frontmatter
+    # Directly update tags/intensity/imports in frontmatter
     if has_metadata_update:
         meta_updates: dict[str, Any] = {}
         if req.tags is not None:
             meta_updates["tags"] = req.tags
         if req.intensity is not None:
             meta_updates["intensity"] = req.intensity
+        if req.imports is not None:
+            meta_updates["imports"] = req.imports
         _update_frontmatter_fields(filepath, meta_updates)
 
     # Reindex to pick up changes
@@ -402,6 +420,7 @@ def get_stats():
     total = 0
     maturity_counts: dict[str, int] = {}
     stale_count = 0
+    stale_ids: list[str] = []
     tag_counts: dict[str, int] = {}
     type_counts: dict[str, int] = {}
     status_counts: dict[str, int] = {}
@@ -436,6 +455,7 @@ def get_stats():
         # Stale check
         if _stale_check(mem_id, entry):
             stale_count += 1
+            stale_ids.append(mem_id)
 
     # Sort tag_counts by frequency descending
     sorted_tags = sorted(tag_counts.items(), key=lambda x: x[1], reverse=True)
@@ -446,6 +466,7 @@ def get_stats():
         "type": type_counts,
         "status": status_counts,
         "stale_count": stale_count,
+        "stale_ids": stale_ids,
         "tags": [{"tag": t, "count": c} for t, c in sorted_tags],
     })
 
@@ -752,3 +773,15 @@ def post_resolve(req: ResolveRequest):
         "nodes": nodes,
         "full_text": text,
     }
+
+
+# ---------------------------------------------------------------------------
+# Entry point: run with `python backend/server.py`
+# ---------------------------------------------------------------------------
+
+if __name__ == "__main__":
+    import uvicorn
+
+    print(f"CodeMemory API starting on http://localhost:8000")
+    print(f"Memory root: {MEMORY_ROOT}")
+    uvicorn.run(app, host="0.0.0.0", port=8000)

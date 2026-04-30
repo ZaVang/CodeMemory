@@ -12,25 +12,36 @@ interface Props {
   resolveData: ResolveResponse | null
   isResolving: boolean
   refreshTrigger?: number  // increment to reload graph data
+  zoomLevel?: number  // 0.15 to 2.0, default 0.5
 }
 
 // LuxCart directory colors — border color for nodes
 const DIRECTORY_COLORS: Record<string, string> = {
-  'user/facts': '#1C1917',         // Charcoal — foundation
-  'user/preferences': '#B8860B',   // Gold — personal values
-  'user/observations': '#57534E',  // Warm Gray — neutral
-  'user/investment': '#1E40AF',    // Info Blue — analytical
+  'user/facts': '#1C1917',         // Charcoal — objective facts
+  'user/observations': '#57534E',  // Warm Gray — observations
+  'user/preferences': '#B8860B',   // Gold — personal preferences
+  'user/decisions': '#991B1B',     // Error Red — decisions have consequences
+  'user/feelings': '#CA8A04',      // Warning Amber — emotions are signals
+  'user/people': '#7C3AED',        // Purple — people are special
+  'user/beliefs': '#166534',       // Success Green — deeply held beliefs
+  'user/moments': '#D97757',       // Coral — fleeting moments
   'user/snapshots': '#A8A29E',     // Light Gray — frozen in time
+  'api': '#1E40AF',                // Info Blue — external knowledge
   schemas: '#1C1917',
 }
 
 // LuxCart tints — light fill for nodes
 const DIRECTORY_TINTS: Record<string, string> = {
   'user/facts': '#F5F5F4',
-  'user/preferences': '#FDF6E8',   // warm gold
   'user/observations': '#F5F5F4',
-  'user/investment': '#EEF2FA',    // cool blue
+  'user/preferences': '#FDF6E8',   // warm gold
+  'user/decisions': '#FDF2F2',     // warm red
+  'user/feelings': '#FEF9F0',      // warm amber
+  'user/people': '#F5F0FE',        // light purple
+  'user/beliefs': '#EDF7F0',       // light green
+  'user/moments': '#FDF3EE',       // light coral
   'user/snapshots': '#F5F5F4',
+  'api': '#EEF2FA',                // cool blue
   schemas: '#FDFBF5',
 }
 
@@ -59,7 +70,7 @@ function intensityToRadius(intensity: number): number {
   return Math.max(18, Math.min(50, 14 + intensity * 4))
 }
 
-export default function GraphCanvas({ searchText, onNodeClick, onNodeContextMenu, layoutMode, resolveData, isResolving, refreshTrigger }: Props) {
+export default function GraphCanvas({ searchText, onNodeClick, onNodeContextMenu, layoutMode, resolveData, isResolving, refreshTrigger, zoomLevel = 0.5 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const cyRef = useRef<Core | null>(null)
   const [graphData, setGraphData] = useState<GraphData | null>(null)
@@ -224,6 +235,15 @@ export default function GraphCanvas({ searchText, onNodeClick, onNodeContextMenu
             'overlay-opacity': 0,
           },
         },
+        // Resolve: off-path nodes and edges (not in dependency tree)
+        {
+          selector: 'node.off-path',
+          style: { 'opacity': 0.06, 'text-opacity': 0 },
+        },
+        {
+          selector: 'edge.off-path',
+          style: { 'opacity': 0.04 },
+        },
         // Resolve highlight — gold glow during topological animation
         {
           selector: 'node.resolve-highlight',
@@ -291,14 +311,26 @@ export default function GraphCanvas({ searchText, onNodeClick, onNodeContextMenu
       })
     }
 
-    // Fit to view
-    setTimeout(() => cy.fit(undefined, 50), 100)
+    // Apply initial zoom from prop (after layout renders)
+    setTimeout(() => {
+      cy.zoom(zoomLevel)
+      cy.center()
+    }, 150)
 
     return () => {
       cy.destroy()
       cyRef.current = null
     }
   }, [graphData]) // Only re-init when graph data changes
+
+  // Handle zoom level changes
+  useEffect(() => {
+    const cy = cyRef.current
+    if (!cy) return
+    cy.stop()
+    cy.zoom(zoomLevel)
+    cy.center()
+  }, [zoomLevel])
 
   // Handle layout mode changes without full re-init
   useEffect(() => {
@@ -341,66 +373,94 @@ export default function GraphCanvas({ searchText, onNodeClick, onNodeContextMenu
     })
   }, [searchText])
 
-  // Handle resolve animation + trim styles
+  // Handle resolve: dim non-path nodes + apply trim. No animation.
   useEffect(() => {
     const cy = cyRef.current
     if (!cy) return
 
     // Clear previous resolve classes
-    cy.nodes().removeClass('resolve-highlight trim-summary trim-skipped')
+    cy.nodes().removeClass('resolve-highlight trim-summary trim-skipped off-path')
+    cy.edges().removeClass('off-path')
 
-    if (!resolveData || isResolving) return
+    if (!resolveData || isResolving) {
+      return
+    }
 
-    // Sort nodes by topological index
-    const orderedNodes = [...resolveData.nodes].sort((a, b) => a.index - b.index)
-
-    // Build a set of trim levels by node id
+    // Build path ID set + trim map
+    const pathIds = new Set(resolveData.nodes.map((n) => n.id))
     const trimMap = new Map<string, 'full' | 'summary' | 'skipped'>()
     for (const n of resolveData.nodes) {
       trimMap.set(n.id, n.trim)
     }
 
-    // Run topological animation: highlight each node 300ms apart
-    let delay = 0
-    const STEP_MS = 300
-
-    orderedNodes.forEach((nodeInfo) => {
-      delay += STEP_MS
-      setTimeout(() => {
-        const node = cy.getElementById(nodeInfo.id)
-        if (node.length > 0) {
-          // Flash the node with gold highlight
-          node.addClass('resolve-highlight')
-
-          // Fade out the highlight after the step
-          setTimeout(() => {
-            if (node.length > 0 && !node.hasClass('trim-summary') && !node.hasClass('trim-skipped')) {
-              node.removeClass('resolve-highlight')
-            }
-          }, STEP_MS * 0.8)
-        }
-      }, delay)
+    // Dim off-path, apply trim to on-path
+    cy.nodes().forEach((node) => {
+      if (!pathIds.has(node.id())) {
+        node.addClass('off-path')
+      } else {
+        const trim = trimMap.get(node.id())
+        if (trim === 'summary') node.addClass('trim-summary')
+        else if (trim === 'skipped') node.addClass('trim-skipped')
+      }
+    })
+    cy.edges().forEach((edge) => {
+      if (!pathIds.has(edge.source().id()) || !pathIds.has(edge.target().id())) {
+        edge.addClass('off-path')
+      }
     })
 
-    // After all animations complete, apply trim styles
-    const totalDelay = delay + STEP_MS
-    setTimeout(() => {
-      trimMap.forEach((trim, nodeId) => {
-        const node = cy.getElementById(nodeId)
-        if (node.length === 0) return
-
-        // Remove highlight from all nodes
-        node.removeClass('resolve-highlight')
-
-        if (trim === 'summary') {
-          node.addClass('trim-summary')
-        } else if (trim === 'skipped') {
-          node.addClass('trim-skipped')
-        }
-        // 'full' nodes: no trim class (normal appearance)
-      })
-    }, totalDelay)
   }, [resolveData, isResolving])
+
+  // PL1-7: Empty state when no memories exist
+  if (graphData && graphData.nodes.length === 0) {
+    return (
+      <div
+        style={{
+          width: '100%',
+          height: '100%',
+          backgroundColor: '#FFFBEB',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: 32,
+        }}
+      >
+        <div
+          style={{
+            fontSize: 48,
+            color: '#D4D4D8',
+            marginBottom: 16,
+            fontFamily: "'Cormorant Garamond', serif",
+          }}
+        >
+          +
+        </div>
+        <h3
+          style={{
+            fontSize: 18,
+            fontFamily: "'Cormorant Garamond', serif",
+            fontWeight: 500,
+            color: '#1C1917',
+            margin: '0 0 8px 0',
+          }}
+        >
+          No memories yet
+        </h3>
+        <p
+          style={{
+            fontSize: 14,
+            fontFamily: 'Raleway, sans-serif',
+            color: '#A8A29E',
+            margin: '0 0 24px 0',
+            lineHeight: 1.6,
+          }}
+        >
+          Create your first memory to get started.
+        </p>
+      </div>
+    )
+  }
 
   return (
     <div

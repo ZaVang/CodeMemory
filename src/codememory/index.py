@@ -61,7 +61,7 @@ def reindex(root_dir: Path) -> int:
     old_memories = old_index.memories
 
     index_data = IndexData()
-    search_dirs = ["user", "self", "schemas"]
+    search_dirs = ["user", "self", "schemas", "api"]
     count = 0
 
     for d in search_dirs:

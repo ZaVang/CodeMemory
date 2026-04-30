@@ -96,6 +96,7 @@ export interface StatsResponse {
   type: Record<string, number>
   status: Record<string, number>
   stale_count: number
+  stale_ids: string[]
   tags: { tag: string; count: number }[]
 }
 
@@ -124,6 +125,12 @@ export interface ValidateResponse {
   warnings: ValidateResultItem[]
 }
 
+/** A single import dependency with strength */
+export interface ImportEntry {
+  id: string
+  strength: 'required' | 'recommended' | 'related'
+}
+
 /** Create memory request */
 export interface CreateMemoryRequest {
   id: string
@@ -134,6 +141,7 @@ export interface CreateMemoryRequest {
   type?: string
   schema?: string | null
   maturity?: string
+  imports?: Record<string, string[]>
 }
 
 /** Update memory request */
@@ -144,4 +152,5 @@ export interface UpdateMemoryRequest {
   intensity?: number | null
   status?: string | null
   change_note?: string | null
+  imports?: Record<string, string[]> | null
 }

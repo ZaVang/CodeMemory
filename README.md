@@ -30,6 +30,43 @@ export CODEMEMORY_ROOT=examples/investment
 codememory reindex && codememory validate
 ```
 
+## 启动完整应用
+
+CodeMemory 提供 Web 管理面板（Graph 视图 + Dashboard + CRUD 表单）。
+
+### Backend
+
+```bash
+# 直接启动（默认 root = examples/investment）
+python backend/server.py
+
+# 指定记忆数据集
+CODEMEMORY_ROOT=examples/all python backend/server.py
+
+# 或通过 uvicorn
+python -m uvicorn backend.server:app --host 0.0.0.0 --port 8000
+```
+
+Backend 启动后访问 http://localhost:8000/docs 查看 Swagger API 文档。
+
+### Frontend
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Vite 默认监听 5173 端口；端口被占用时自动选择下一个可用端口（关注终端输出中的实际 URL）。
+
+### 访问地址
+
+| 界面 | 地址 |
+|------|------|
+| 前端 UI（Graph + Dashboard） | http://localhost:5173 |
+| Backend API | http://localhost:8000 |
+| Swagger 文档 | http://localhost:8000/docs |
+
 ## 核心概念
 
 记忆有两种**原语**：

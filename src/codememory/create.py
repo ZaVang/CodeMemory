@@ -77,7 +77,7 @@ def create(
 
     body_template = (
         f"\n# {memory_id.split('/')[-1].replace('-', ' ').title()}\n\n"
-        "Write content here...\n"
+        "\n"
     )
 
     frontmatter["summary_hash"] = compute_body_hash(body_template)

@@ -6,7 +6,7 @@ import Dashboard from './components/Dashboard'
 import HelpPanel from './components/HelpPanel'
 import SearchBar from './components/SearchBar'
 import Legend from './components/Legend'
-import { fetchResolve } from './api'
+import { fetchResolve, updateMemory } from './api'
 import type { ResolveResponse } from './types'
 
 type LayoutMode = 'dagre' | 'force'
@@ -28,6 +28,9 @@ export default function App() {
   const [searchText, setSearchText] = useState('')
   const [layoutMode, setLayoutMode] = useState<LayoutMode>('dagre')
 
+  // Zoom level for the graph view
+  const [zoomLevel, setZoomLevel] = useState(0.5)
+
   // Resolve state
   const [resolveData, setResolveData] = useState<ResolveResponse | null>(null)
   const [budget, setBudget] = useState(BUDGET_DEFAULT)
@@ -45,6 +48,13 @@ export default function App() {
   // Context menu state
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null)
 
+  // Archive confirmation state
+  const [archiveConfirmId, setArchiveConfirmId] = useState<string | null>(null)
+  const [archiving, setArchiving] = useState(false)
+
+  // Budget no-op feedback (PL1-8)
+  const [allNodesFit, setAllNodesFit] = useState(false)
+
   // Graph refresh trigger (increment to reload)
   const [refreshTrigger, setRefreshTrigger] = useState(0)
 
@@ -52,10 +62,15 @@ export default function App() {
     (nodeId: string, budgetValue: number) => {
       setIsResolving(true)
       setResolveError(null)
+      setAllNodesFit(false)
       fetchResolve({ id: nodeId, depth: 'required', budget: budgetValue })
         .then((data) => {
           setResolveData(data)
           setIsResolving(false)
+          // PL1-8: detect when all nodes fit within budget (no trimming occurred)
+          if (data.nodes.length > 0 && data.nodes.every((n) => n.trim === 'full')) {
+            setAllNodesFit(true)
+          }
         })
         .catch((err) => {
           console.error('Resolve failed:', err)
@@ -70,14 +85,19 @@ export default function App() {
   const handleBudgetChange = useCallback(
     (newBudget: number) => {
       setBudget(newBudget)
+      if (allNodesFit && resolveData && newBudget >= budget) {
+        // PL1-8: increasing budget when all nodes already fit is a no-op
+        return
+      }
       if (resolveData) {
+        setAllNodesFit(false)
         if (debounceRef.current) clearTimeout(debounceRef.current)
         debounceRef.current = setTimeout(() => {
           doResolve(resolveData.target, newBudget)
         }, 300)
       }
     },
-    [resolveData, doResolve],
+    [resolveData, doResolve, allNodesFit, budget],
   )
 
   // Trigger resolve from MemoryDetail
@@ -152,6 +172,31 @@ export default function App() {
     setFormMemoryId(null)
     setShowCreateForm(false)
   }, [])
+
+  // Archive from context menu (PL1-5)
+  const handleArchiveFromContext = useCallback(() => {
+    if (contextMenu) {
+      setArchiveConfirmId(contextMenu.nodeId)
+      setContextMenu(null)
+    }
+  }, [contextMenu])
+
+  const handleArchiveConfirm = useCallback(async () => {
+    if (!archiveConfirmId) return
+    setArchiving(true)
+    try {
+      await updateMemory(archiveConfirmId, {
+        status: 'archived',
+        change_note: 'Archived via UI',
+      })
+      handleMemoryChange()
+    } catch (err) {
+      console.error('Archive failed:', err)
+    } finally {
+      setArchiving(false)
+      setArchiveConfirmId(null)
+    }
+  }, [archiveConfirmId, handleMemoryChange])
 
   // Close context menu on any click outside
   useEffect(() => {
@@ -271,9 +316,45 @@ export default function App() {
           {viewMode === 'graph' && <SearchBar value={searchText} onChange={setSearchText} />}
         </div>
 
-        {/* Token Budget + Layout toggle — only in graph view */}
+        {/* Token Budget + Node Size + Layout toggle — only in graph view */}
         {viewMode === 'graph' && (
           <>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                flexShrink: 0,
+              }}
+            >
+              <label
+                style={{
+                  fontSize: 11,
+                  fontWeight: 600,
+                  fontFamily: 'Raleway, sans-serif',
+                  color: '#57534E',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.08em',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                Zoom
+              </label>
+              <input
+                type="range"
+                min={0.15}
+                max={2.0}
+                step={0.05}
+                value={zoomLevel}
+                onChange={(e) => setZoomLevel(Number(e.target.value))}
+                style={{
+                  width: 100,
+                  accentColor: '#B8860B',
+                  cursor: 'pointer',
+                }}
+              />
+            </div>
+
             <div
               style={{
                 display: 'flex',
@@ -374,23 +455,23 @@ export default function App() {
           onClick={() => setShowHelp(true)}
           title="Help"
           style={{
-            width: 28,
-            height: 28,
-            borderRadius: 2,
-            border: '1px solid #D4D4D8',
-            backgroundColor: 'transparent',
+            padding: '6px 18px',
+            backgroundColor: '#B8860B',
+            color: '#FFFBEB',
+            border: 'none',
             cursor: 'pointer',
-            fontSize: 14,
-            fontFamily: "'Cormorant Garamond', serif",
-            color: '#57534E',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
+            fontSize: 11,
+            fontWeight: 600,
+            fontFamily: 'Raleway, sans-serif',
+            textTransform: 'uppercase',
+            letterSpacing: '0.08em',
+            borderRadius: 2,
+            whiteSpace: 'nowrap',
             flexShrink: 0,
             marginLeft: 'auto',
           }}
         >
-          ?
+          Help
         </button>
       </header>
 
@@ -413,6 +494,7 @@ export default function App() {
             resolveData={resolveData}
             isResolving={isResolving}
             refreshTrigger={refreshTrigger}
+            zoomLevel={zoomLevel}
           />
           <Legend />
 
@@ -457,12 +539,33 @@ export default function App() {
               Resolving...
             </div>
           )}
+
+          {/* PL1-8: Budget no-op feedback */}
+          {allNodesFit && !isResolving && resolveData && (
+            <div
+              style={{
+                position: 'absolute',
+                top: 16,
+                left: 16,
+                backgroundColor: '#166534',
+                color: '#FFFFFF',
+                padding: '6px 14px',
+                borderRadius: 2,
+                fontSize: 12,
+                fontFamily: 'Raleway, sans-serif',
+                zIndex: 15,
+                boxShadow: '0 2px 8px rgba(28,25,23,0.06)',
+              }}
+            >
+              All {resolveData.nodes.length} nodes fit within budget
+            </div>
+          )}
         </div>
 
         {/* Dashboard view — shown when viewMode === 'dashboard' */}
         {viewMode === 'dashboard' && (
           <div style={{ flex: 1, overflow: 'hidden' }}>
-            <Dashboard onSelectMemory={handleDashSelect} />
+            <Dashboard onSelectMemory={handleDashSelect} refreshTrigger={refreshTrigger} />
           </div>
         )}
 
@@ -472,6 +575,7 @@ export default function App() {
             memoryId={selectedNode}
             onClose={handleClosePanel}
             onResolve={handleResolve}
+            resolveData={resolveData}
           />
         )}
       </div>
@@ -524,6 +628,118 @@ export default function App() {
             </div>
             <ContextMenuItem label="View Details" onClick={handleDetailFromContext} />
             <ContextMenuItem label="Edit" onClick={handleEditFromContext} />
+            <div
+              style={{
+                height: 1,
+                backgroundColor: '#E7E5E4',
+                margin: '4px 0',
+              }}
+            />
+            <ContextMenuItem label="Archive" onClick={handleArchiveFromContext} />
+          </div>
+        </>
+      )}
+
+      {/* Archive confirmation modal (non-destructive styling — PL1-5) */}
+      {archiveConfirmId && (
+        <>
+          <div
+            onClick={() => setArchiveConfirmId(null)}
+            style={{
+              position: 'fixed',
+              inset: 0,
+              backgroundColor: 'rgba(28,25,23,0.15)',
+              zIndex: 100,
+            }}
+          />
+          <div
+            style={{
+              position: 'fixed',
+              top: '50%',
+              left: '50%',
+              transform: 'translate(-50%, -50%)',
+              backgroundColor: '#FFFBEB',
+              border: '1px solid #E7E5E4',
+              borderRadius: 2,
+              padding: 28,
+              maxWidth: 420,
+              width: '90%',
+              zIndex: 101,
+              boxShadow: '0 4px 24px rgba(28,25,23,0.12)',
+            }}
+          >
+            <h3
+              style={{
+                fontSize: 18,
+                fontFamily: "'Cormorant Garamond', serif",
+                fontWeight: 500,
+                color: '#1C1917',
+                margin: '0 0 12px 0',
+              }}
+            >
+              Archive Memory
+            </h3>
+            <p
+              style={{
+                fontSize: 14,
+                fontFamily: 'Raleway, sans-serif',
+                color: '#57534E',
+                lineHeight: 1.6,
+                margin: '0 0 8px 0',
+              }}
+            >
+              Archive this memory? It will be hidden from most views but can be
+              restored later by editing its status back to &quot;active&quot;.
+            </p>
+            <p
+              style={{
+                fontSize: 12,
+                fontFamily: 'JetBrains Mono, monospace',
+                color: '#A8A29E',
+                margin: '0 0 20px 0',
+              }}
+            >
+              {archiveConfirmId}
+            </p>
+            <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => setArchiveConfirmId(null)}
+                style={{
+                  padding: '8px 20px',
+                  border: '1px solid #D4D4D8',
+                  background: 'transparent',
+                  color: '#57534E',
+                  cursor: 'pointer',
+                  fontSize: 11,
+                  fontWeight: 600,
+                  fontFamily: 'Raleway, sans-serif',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.08em',
+                  borderRadius: 2,
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleArchiveConfirm}
+                disabled={archiving}
+                style={{
+                  padding: '8px 20px',
+                  backgroundColor: '#57534E',
+                  color: '#FFFFFF',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontSize: 11,
+                  fontWeight: 600,
+                  fontFamily: 'Raleway, sans-serif',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.08em',
+                  borderRadius: 2,
+                }}
+              >
+                {archiving ? 'Archiving...' : 'Yes, Archive'}
+              </button>
+            </div>
           </div>
         </>
       )}

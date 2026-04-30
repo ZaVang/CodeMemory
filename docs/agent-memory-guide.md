@@ -48,8 +48,13 @@ codememory create --id user/investment/new-decision --schema schemas/decision --
 | `user/facts/` | 外部事实、背景知识（不因用户而变） | `user/facts/nvidia-earnings` |
 | `user/observations/` | 观察到的现象、事件（当时可能不知道原因） | `user/observations/soxl-drop-march` |
 | `user/preferences/` | 偏好、约束、习惯（关于用户的） | `user/preferences/no-leverage` |
-| `user/{domain}/` | 某个领域的判断、决策、上下文 | `user/investment/context` |
+| `user/decisions/` | 具体的决策/行动（有 schema 时带上 `--schema`） | `user/decisions/february-buy` |
+| `user/feelings/` | 情绪状态、心理觉察（陪伴模式） | `user/feelings/burnout-april` |
+| `user/people/` | 用户生活中的重要人物（陪伴模式） | `user/people/best-friend-li` |
+| `user/beliefs/` | 价值观、人生观、投资主线判断 | `user/beliefs/semiconductor-thesis` |
+| `user/moments/` | 具体的生活事件、经历（陪伴模式） | `user/moments/rainy-sunday` |
 | `user/snapshots/` | snapshot 命令固化的推理链 | `user/snapshots/2026-04-28-止盈分析` |
+| `api/` | API 文档等外部结构化知识 | `api/quantexpr/sharpe` |
 | `schemas/` | 模板定义（仅 schema 类型） | `schemas/decision` |
 
 **规则：**
@@ -57,6 +62,7 @@ codememory create --id user/investment/new-decision --schema schemas/decision --
 2. **tags 区分"主题"** — 这跟什么有关（`["semiconductor"]`、`["investment"]`）
 3. **不要在目录里按主题再分子文件夹** — 一个 fact 可能同时涉及半导体和市场，放 `user/facts/semiconductor/` 还是 `user/facts/market/`？tags 天然支持交叉，目录不支持
 4. **不确定时默认 `user/facts/`** — 最通用的种类
+5. **陪伴模式用 `feelings/``people/``beliefs/``moments/`** — 见 `companion-mode.md`
 
 ---
 

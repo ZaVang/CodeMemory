@@ -1,10 +1,15 @@
 const DIRECTORY_COLORS: Record<string, { color: string; label: string }> = {
-  facts: { color: '#1C1917', label: 'facts' },
-  preferences: { color: '#B8860B', label: 'preferences' },
-  observations: { color: '#57534E', label: 'observations' },
-  investment: { color: '#1E40AF', label: 'investment' },
-  snapshots: { color: '#A8A29E', label: 'snapshots' },
-  schemas: { color: '#1C1917', label: 'schemas' },
+  facts: { color: '#1C1917', label: 'facts — 事实' },
+  observations: { color: '#57534E', label: 'observations — 观察' },
+  preferences: { color: '#B8860B', label: 'preferences — 偏好' },
+  decisions: { color: '#991B1B', label: 'decisions — 决策' },
+  feelings: { color: '#CA8A04', label: 'feelings — 情感' },
+  people: { color: '#7C3AED', label: 'people — 人物' },
+  beliefs: { color: '#166534', label: 'beliefs — 信念' },
+  moments: { color: '#D97757', label: 'moments — 瞬间' },
+  snapshots: { color: '#A8A29E', label: 'snapshots — 快照' },
+  api: { color: '#1E40AF', label: 'api — 外部知识' },
+  schemas: { color: '#1C1917', label: 'schemas — 模板' },
 }
 
 const EDGE_STYLES = [
@@ -28,6 +33,7 @@ export default function Legend() {
         fontSize: 12,
         fontFamily: 'Raleway, sans-serif',
         zIndex: 10,
+        maxWidth: 220,
       }}
     >
       {/* Directory colors */}
@@ -35,19 +41,20 @@ export default function Legend() {
         <h4 style={{ margin: '0 0 6px 0', fontSize: 11, fontWeight: 600, color: '#57534E', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
           Directories
         </h4>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px 12px', marginBottom: 8 }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 10px' }}>
           {Object.entries(DIRECTORY_COLORS).map(([key, { color, label }]) => (
-            <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
               <span
                 style={{
                   display: 'inline-block',
-                  width: 10,
-                  height: 10,
+                  width: 9,
+                  height: 9,
                   borderRadius: 2,
                   backgroundColor: color,
+                  flexShrink: 0,
                 }}
               />
-              <span style={{ color: '#57534E' }}>{label}</span>
+              <span style={{ color: '#57534E', fontSize: 11, whiteSpace: 'nowrap' }}>{label}</span>
             </div>
           ))}
         </div>
@@ -69,7 +76,7 @@ export default function Legend() {
                   borderTop: style,
                 }}
               />
-              <span style={{ color: '#57534E' }}>{label}</span>
+              <span style={{ color: '#57534E', fontSize: 11 }}>{label}</span>
             </div>
           ))}
         </div>

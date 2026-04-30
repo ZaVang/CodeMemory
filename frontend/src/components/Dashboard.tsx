@@ -1,16 +1,16 @@
 import { useState, useEffect, useCallback } from 'react'
-import { fetchStats, fetchWander, fetchValidate, fetchMemories } from '../api'
-import type { StatsResponse, WanderResponse, ValidateResponse, MemorySummary } from '../types'
+import { fetchStats, fetchWander, fetchValidate } from '../api'
+import type { StatsResponse, WanderResponse, ValidateResponse } from '../types'
 
 interface Props {
   onSelectMemory: (id: string) => void
+  refreshTrigger?: number
 }
 
-export default function Dashboard({ onSelectMemory }: Props) {
+export default function Dashboard({ onSelectMemory, refreshTrigger }: Props) {
   const [stats, setStats] = useState<StatsResponse | null>(null)
   const [wanderResult, setWanderResult] = useState<WanderResponse | null>(null)
   const [validateResult, setValidateResult] = useState<ValidateResponse | null>(null)
-  const [staleMemories, setStaleMemories] = useState<MemorySummary[]>([])
   const [loading, setLoading] = useState(true)
   const [wanderOpen, setWanderOpen] = useState(false)
   const [validateOpen, setValidateOpen] = useState(false)
@@ -27,18 +27,11 @@ export default function Dashboard({ onSelectMemory }: Props) {
 
   useEffect(() => {
     loadData()
-  }, [loadData])
+  }, [loadData, refreshTrigger])
 
-  // Identify stale memories by comparing all memories
-  useEffect(() => {
-    fetchMemories()
-      .then((mems) => {
-        // A stale memory has status that suggests staleness
-        // We fetch the full details to check stale condition
-        setStaleMemories(mems.filter((m) => m.status === 'stale' || m.maturity === 'stale'))
-      })
-      .catch(console.error)
-  }, [])
+  // Stale memories are identified by the backend via body-hash comparison.
+  // We use stale_ids from the stats response (PL1-1 fix).
+  const staleIds = stats?.stale_ids ?? []
 
   const handleWander = useCallback(() => {
     setWandering(true)
@@ -169,7 +162,53 @@ export default function Dashboard({ onSelectMemory }: Props) {
         </p>
       )}
 
-      {stats && !loading && (
+      {stats && !loading && stats.total === 0 && (
+        <div
+          style={{
+            textAlign: 'center',
+            padding: '64px 32px',
+            backgroundColor: '#FFFFFF',
+            borderRadius: 2,
+            border: '1px solid #F5F5F4',
+            boxShadow: '0 1px 2px rgba(28,25,23,0.04)',
+          }}
+        >
+          <div
+            style={{
+              fontSize: 48,
+              color: '#D4D4D8',
+              marginBottom: 16,
+              fontFamily: "'Cormorant Garamond', serif",
+            }}
+          >
+            +
+          </div>
+          <h3
+            style={{
+              fontSize: 18,
+              fontFamily: "'Cormorant Garamond', serif",
+              fontWeight: 500,
+              color: '#1C1917',
+              margin: '0 0 8px 0',
+            }}
+          >
+            No memories yet
+          </h3>
+          <p
+            style={{
+              fontSize: 14,
+              fontFamily: 'Raleway, sans-serif',
+              color: '#A8A29E',
+              margin: '0 0 24px 0',
+              lineHeight: 1.6,
+            }}
+          >
+            Create your first memory to get started.
+          </p>
+        </div>
+      )}
+
+      {stats && !loading && stats.total > 0 && (
         <>
           {/* Stat cards row */}
           <div
@@ -295,13 +334,13 @@ export default function Dashboard({ onSelectMemory }: Props) {
           </div>
 
           {/* Stale memories section */}
-          {staleMemories.length > 0 && (
-            <SectionCard title={`Stale Memories (${staleMemories.length})`}>
+          {staleIds.length > 0 && (
+            <SectionCard title={`Stale Memories (${staleIds.length})`}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                {staleMemories.map((mem) => (
+                {staleIds.map((memId) => (
                   <div
-                    key={mem.id}
-                    onClick={() => onSelectMemory(mem.id)}
+                    key={memId}
+                    onClick={() => onSelectMemory(memId)}
                     style={{
                       display: 'flex',
                       alignItems: 'center',
@@ -322,7 +361,7 @@ export default function Dashboard({ onSelectMemory }: Props) {
                           color: '#1C1917',
                         }}
                       >
-                        {mem.summary || mem.id}
+                        {memId}
                       </div>
                       <div
                         style={{
@@ -332,7 +371,7 @@ export default function Dashboard({ onSelectMemory }: Props) {
                           marginTop: 2,
                         }}
                       >
-                        {mem.id}
+                        {memId}
                       </div>
                     </div>
                     <div style={{ display: 'flex', gap: 8 }}>
