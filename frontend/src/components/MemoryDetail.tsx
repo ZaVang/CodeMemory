@@ -8,6 +8,7 @@ interface Props {
   memoryId: string | null
   onClose: () => void
   onResolve: (id: string) => void
+  onNavigateMemory?: (id: string) => void
   resolveData?: ResolveResponse | null
 }
 
@@ -45,7 +46,7 @@ function MaturityBadge({ maturity }: { maturity: string }) {
     draft: { bg: '#F5F5F4', color: '#57534E' },
     verified: { bg: '#1E40AF15', color: '#1E40AF' },
     proven: { bg: '#16653415', color: '#166534' },
-    stale: { bg: '#991B1B15', color: '#991B1B' },
+    superseded: { bg: '#F5F5F4', color: '#A8A29E' },
   }
 
   const s = styles[maturity] || styles.draft
@@ -70,7 +71,7 @@ function MaturityBadge({ maturity }: { maturity: string }) {
   )
 }
 
-export default function MemoryDetail({ memoryId, onClose, onResolve, resolveData }: Props) {
+export default function MemoryDetail({ memoryId, onClose, onResolve, onNavigateMemory, resolveData }: Props) {
   const [memory, setMemory] = useState<MemoryDetailType | null>(null)
   const [loading, setLoading] = useState(false)
   const [visible, setVisible] = useState(false)
@@ -310,11 +311,29 @@ export default function MemoryDetail({ memoryId, onClose, onResolve, resolveData
                 {Object.entries(memory.imports).map(([strength, deps]) => (
                   <div key={strength} style={{ marginBottom: 2 }}>
                     <span style={{ fontSize: 11, color: '#A8A29E', fontStyle: 'italic' }}>{strength}:</span>
-                    {(Array.isArray(deps) ? deps : []).slice(0, 5).map((dep) => (
-                      <div key={typeof dep === 'string' ? dep : (dep as Record<string, unknown>).id as string || ''} style={{ fontSize: 11, color: '#57534E', paddingLeft: 12, fontFamily: 'Raleway, sans-serif' }}>
-                        {typeof dep === 'string' ? dep : (dep as Record<string, unknown>).id as string || ''}
-                      </div>
-                    ))}
+                    {(Array.isArray(deps) ? deps : []).slice(0, 5).map((dep) => {
+                      const depId = typeof dep === 'string' ? dep : (dep as Record<string, unknown>).id as string || ''
+                      return (
+                        <div
+                          key={depId}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            if (onNavigateMemory && depId) onNavigateMemory(depId)
+                          }}
+                          title={`Navigate to ${depId}`}
+                          style={{
+                            fontSize: 11,
+                            color: '#1E40AF',
+                            paddingLeft: 12,
+                            fontFamily: 'Raleway, sans-serif',
+                            cursor: 'pointer',
+                            textDecoration: 'underline',
+                          }}
+                        >
+                          {depId}
+                        </div>
+                      )
+                    })}
                     {Array.isArray(deps) && deps.length > 5 && (
                       <div style={{ fontSize: 11, color: '#A8A29E', paddingLeft: 12, fontFamily: 'Raleway, sans-serif' }}>
                         ...and {deps.length - 5} more
@@ -337,6 +356,30 @@ export default function MemoryDetail({ memoryId, onClose, onResolve, resolveData
                 overflowY: 'auto',
               }}
             >
+              {/* Pinned version notices — shown prominently before node list */}
+              {resolveData.notices && resolveData.notices.length > 0 && (
+                <div style={{ marginBottom: 12 }}>
+                  {resolveData.notices.map((notice, i) => (
+                    <div
+                      key={i}
+                      style={{
+                        padding: '6px 10px',
+                        backgroundColor: '#CA8A0415',
+                        borderLeft: '3px solid #CA8A04',
+                        borderRadius: 2,
+                        fontSize: 11,
+                        fontFamily: 'Raleway, sans-serif',
+                        color: '#CA8A04',
+                        marginBottom: 4,
+                        lineHeight: 1.5,
+                      }}
+                    >
+                      {notice}
+                    </div>
+                  ))}
+                </div>
+              )}
+
               <div
                 style={{
                   fontSize: 11,

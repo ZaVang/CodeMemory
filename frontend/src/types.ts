@@ -87,6 +87,7 @@ export interface ResolveResponse {
   budget: number
   nodes: ResolveNode[]
   full_text: string
+  notices: string[]
 }
 
 /** Stats endpoint response */
@@ -119,6 +120,7 @@ export interface ValidateResultItem {
 }
 
 export interface ValidateResponse {
+  validated_count: number
   error_count: number
   warning_count: number
   errors: ValidateResultItem[]

@@ -190,3 +190,14 @@ codememory snapshot <id> [--target <id> | --from-dag <json_file>]
 - 禁止在 Agent 工具定义中使用 Python 函数签名（Agent 只能看到 bash 命令描述）
 - 禁止 new 第三方依赖而不在 plan 中说明理由
 - 禁止修改 `src/harnesslib/` 或 `src/llm_gateway/` 的内部逻辑（它们在上游仓库维护）
+
+## 开发环境
+
+### 端口
+
+| 服务 | 默认端口 | 启动命令 | 备注 |
+|------|---------|---------|------|
+| Backend (FastAPI) | 8000 | `python backend/server.py` | 可通过 `--root` 参数或 `CODEMEMORY_ROOT` 环境变量指定记忆数据目录 |
+| Frontend (Vite) | 5299 | `cd frontend && npm run dev` | 若端口被占用，Vite 会自动递增到 5300、5301 等；proxy 配置固定指向 backend `localhost:8000` |
+
+实际端口以启动时终端输出为准。验收脚本不应硬编码端口号——优先读 `vite.config.ts` 中的 `server.port` 或启动日志。

@@ -198,12 +198,19 @@ export default function App() {
     }
   }, [archiveConfirmId, handleMemoryChange])
 
-  // Close context menu on any click outside
+  // Close context menu on any click outside or Escape key
   useEffect(() => {
     if (!contextMenu) return
-    const handler = () => closeContextMenu()
-    window.addEventListener('click', handler)
-    return () => window.removeEventListener('click', handler)
+    const clickHandler = () => closeContextMenu()
+    const keyHandler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') closeContextMenu()
+    }
+    window.addEventListener('click', clickHandler)
+    window.addEventListener('keydown', keyHandler)
+    return () => {
+      window.removeEventListener('click', clickHandler)
+      window.removeEventListener('keydown', keyHandler)
+    }
   }, [contextMenu, closeContextMenu])
 
   return (
@@ -575,6 +582,12 @@ export default function App() {
             memoryId={selectedNode}
             onClose={handleClosePanel}
             onResolve={handleResolve}
+            onNavigateMemory={(targetId: string) => {
+              setSelectedNode(targetId)
+              setResolveData(null)
+              setResolveError(null)
+              setAllNodesFit(false)
+            }}
             resolveData={resolveData}
           />
         )}

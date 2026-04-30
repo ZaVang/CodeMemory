@@ -16,6 +16,7 @@ export default function Dashboard({ onSelectMemory, refreshTrigger }: Props) {
   const [validateOpen, setValidateOpen] = useState(false)
   const [wandering, setWandering] = useState(false)
   const [validating, setValidating] = useState(false)
+  const [wanderMode, setWanderMode] = useState<'cool' | 'random'>('cool')
 
   const loadData = useCallback(() => {
     setLoading(true)
@@ -35,14 +36,14 @@ export default function Dashboard({ onSelectMemory, refreshTrigger }: Props) {
 
   const handleWander = useCallback(() => {
     setWandering(true)
-    fetchWander()
+    fetchWander(wanderMode)
       .then((result) => {
         setWanderResult(result)
         setWanderOpen(true)
       })
       .catch(console.error)
       .finally(() => setWandering(false))
-  }, [])
+  }, [wanderMode])
 
   const handleValidate = useCallback(() => {
     setValidating(true)
@@ -96,7 +97,52 @@ export default function Dashboard({ onSelectMemory, refreshTrigger }: Props) {
         >
           Dashboard
         </h1>
-        <div style={{ display: 'flex', gap: 12 }}>
+        <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+          {/* Wander mode toggle */}
+          <div
+            style={{
+              display: 'flex',
+              borderRadius: 2,
+              border: '1px solid #D4D4D8',
+              overflow: 'hidden',
+              flexShrink: 0,
+            }}
+          >
+            <button
+              onClick={() => setWanderMode('cool')}
+              style={{
+                padding: '6px 14px',
+                border: 'none',
+                cursor: 'pointer',
+                fontSize: 11,
+                fontFamily: 'Raleway, sans-serif',
+                fontWeight: 600,
+                textTransform: 'uppercase',
+                letterSpacing: '0.06em',
+                backgroundColor: wanderMode === 'cool' ? '#B8860B' : 'transparent',
+                color: wanderMode === 'cool' ? '#FFFBEB' : '#57534E',
+              }}
+            >
+              Cool
+            </button>
+            <button
+              onClick={() => setWanderMode('random')}
+              style={{
+                padding: '6px 14px',
+                border: 'none',
+                cursor: 'pointer',
+                fontSize: 11,
+                fontFamily: 'Raleway, sans-serif',
+                fontWeight: 600,
+                textTransform: 'uppercase',
+                letterSpacing: '0.06em',
+                backgroundColor: wanderMode === 'random' ? '#B8860B' : 'transparent',
+                color: wanderMode === 'random' ? '#FFFBEB' : '#57534E',
+              }}
+            >
+              Random
+            </button>
+          </div>
           <button
             onClick={handleWander}
             disabled={wandering}
@@ -538,6 +584,21 @@ export default function Dashboard({ onSelectMemory, refreshTrigger }: Props) {
             Validation Results
           </h2>
           <div style={{ display: 'flex', gap: 16, marginBottom: 20 }}>
+            <div
+              style={{
+                padding: '8px 16px',
+                borderRadius: 2,
+                backgroundColor: '#16653415',
+                borderLeft: '3px solid #166534',
+              }}
+            >
+              <div style={{ fontSize: 10, fontWeight: 600, color: '#57534E', textTransform: 'uppercase', letterSpacing: '0.08em', fontFamily: 'Raleway, sans-serif' }}>
+                Checked
+              </div>
+              <div style={{ fontSize: 22, fontFamily: "'Cormorant Garamond', serif", color: '#1C1917' }}>
+                {validateResult.validated_count}
+              </div>
+            </div>
             <div
               style={{
                 padding: '8px 16px',

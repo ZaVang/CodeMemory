@@ -156,3 +156,51 @@ PYTHONPATH=src python tests/integration_test.py
 - [x] PL1-10: 替换默认占位 body 文本
   - 目标：消除用户误提交占位文本记忆导致索引污染的风险
   - 验收：新建记忆的 body 字段为空白或含结构化提示模板，不再出现 "Write content here..." 等无意义文本；提交空 body 的记忆也按最小有效记忆处理
+
+## 第 2 轮追加任务（基于体验官审计 — 2026-04-30）
+
+### 第一梯队（重要 UI 缺陷 — 本轮必须完成）
+
+- [x] PL2-1: 前端正确展示 API 校验错误详情
+  - 目标：前端的 API 错误处理能从 FastAPI 响应体中提取 detail 字段，用户看到的是 "Memory ID must contain at least one '/' separator" 而非 "API error: 422 Unprocessable Entity"
+  - 验收：提交一个无效 ID（无 "/" 分隔符），前端表单错误栏显示人类可读的校验信息而非 HTTP 状态码文本
+
+- [x] PL2-2: 修复 Legend 目录颜色键使其与 GraphCanvas 一致
+  - 目标：Legend 组件使用的目录颜色键与 GraphCanvas 实际渲染逻辑使用的键完全对齐，当节点落入未映射目录时的默认颜色也有图例说明
+  - 验收：检查 Legend 中的每个颜色条目，与 GraphCanvas 中对应目录节点的实际渲染颜色逐项比对一致；图例包含默认颜色（#57534E）的含义说明
+
+- [x] PL2-3: 使 MemoryDetail 面板中的 imports 依赖可点击导航
+  - 目标：MemoryDetail 面板中显示的每个 import 依赖 ID 都是可点击链接，点击后关闭当前详情并打开该依赖的详情面板
+  - 验收：打开一条有 imports 的记忆详情，点击其中一个依赖 ID，详情面板切换为该依赖记忆的信息
+
+- [x] PL2-4: 为 /api/validate 响应添加 validated_count 字段
+  - 目标：validate 响应中包含 `validated_count` 字段指示实际扫描了多少条记忆，前端结果模态展示此数字
+  - 验收：curl POST /api/validate 返回 `validated_count: 10`（或与实际记忆数一致）；前端 validate 结果弹窗显示 "N 条记忆已检查"
+
+- [x] PL2-5: 移除 MaturityBadge 中无法触达的 "stale" 样式条目
+  - 目标：删除 MaturityBadge 组件中为不存在的 maturity 值 "stale" 定义的颜色样式，消除死代码
+  - 验收：代码审查确认 MaturityBadge 样式映射中不再包含 "stale" 键；stale 状态仅通过 Dashboard 的 stale_ids 机制呈现
+
+### 第二梯队（一致性改进 — 本轮尽量完成）
+
+- [x] PL2-6: 统一 Archive 按钮颜色
+  - 目标：上下文菜单的 Archive 确认按钮（灰色）与编辑表单的 Archive 按钮（红色边框）使用一致的视觉信号
+  - 验收：表单中的 Archive 按钮改为与上下文菜单一致的灰色/非警示色系，两者视觉上传达同一语义
+
+- [x] PL2-7: 统一端口文档
+  - 目标：消除 CLAUDE.md、vite.config.ts 中端口号的不一致，使文档与代码中声明的端口完全对齐
+  - 验收：检查 CLAUDE.md、vite.config.ts 和其他提及端口号的文档，端口号不再互相矛盾
+
+- [x] PL2-8: 为上下文菜单添加 Escape 键关闭支持
+  - 目标：按下 Escape 键可以关闭已打开的右键上下文菜单，与 MemoryDetail 和 MemoryForm 的 Escape 关闭行为一致
+  - 验收：在图上右键打开上下文菜单，按 Escape 键菜单关闭；已关闭后按 Escape 不会产生副作用
+
+### 第三梯队（体验增强 — 本轮视时间完成至少一项）
+
+- [x] PL2-9: 在 Wander 界面暴露 cool/random 模式切换
+  - 目标：用户可以在 UI 中选择 Wander 的探索模式（cool 冷记忆 / random 随机），而非仅支持后端默认模式
+  - 验收：Wander 触发按钮旁（或弹窗内）有模式选择控件；选择不同模式后 Wander 返回行为有明显差异
+
+- [x] PL2-10: 在 resolve 输出中突出展示 pinned 版本提示
+  - 目标：resolve 返回的 pinned 版本过时通知（"[NOTICE] pinned version v1 of ... is behind current version v2"）在 MemoryDetail 面板的 Resolve 区域有醒目展示，而非埋在 raw text 末尾
+  - 验收：resolve 一条含有 pinned 版本依赖的记忆后，版本落后通知出现在 Detail 面板的可见区域（非正文片段末尾）

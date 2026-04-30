@@ -1,15 +1,16 @@
 const DIRECTORY_COLORS: Record<string, { color: string; label: string }> = {
-  facts: { color: '#1C1917', label: 'facts — 事实' },
-  observations: { color: '#57534E', label: 'observations — 观察' },
-  preferences: { color: '#B8860B', label: 'preferences — 偏好' },
-  decisions: { color: '#991B1B', label: 'decisions — 决策' },
-  feelings: { color: '#CA8A04', label: 'feelings — 情感' },
-  people: { color: '#7C3AED', label: 'people — 人物' },
-  beliefs: { color: '#166534', label: 'beliefs — 信念' },
-  moments: { color: '#D97757', label: 'moments — 瞬间' },
-  snapshots: { color: '#A8A29E', label: 'snapshots — 快照' },
+  'user/facts': { color: '#1C1917', label: 'user/facts — 事实' },
+  'user/observations': { color: '#57534E', label: 'user/observations — 观察' },
+  'user/preferences': { color: '#B8860B', label: 'user/preferences — 偏好' },
+  'user/decisions': { color: '#991B1B', label: 'user/decisions — 决策' },
+  'user/feelings': { color: '#CA8A04', label: 'user/feelings — 情感' },
+  'user/people': { color: '#7C3AED', label: 'user/people — 人物' },
+  'user/beliefs': { color: '#166534', label: 'user/beliefs — 信念' },
+  'user/moments': { color: '#D97757', label: 'user/moments — 瞬间' },
+  'user/snapshots': { color: '#A8A29E', label: 'user/snapshots — 快照' },
   api: { color: '#1E40AF', label: 'api — 外部知识' },
   schemas: { color: '#1C1917', label: 'schemas — 模板' },
+  __default: { color: '#57534E', label: 'other — 未映射目录' },
 }
 
 const EDGE_STYLES = [

@@ -554,9 +554,9 @@ export default function MemoryForm({ memoryId, onClose, onChange, onSelectMemory
               disabled={saving || deleting}
               style={{
                 padding: '10px 20px',
-                border: '1px solid #991B1B',
+                border: '1px solid #A8A29E',
                 background: 'transparent',
-                color: '#991B1B',
+                color: '#57534E',
                 cursor: 'pointer',
                 fontSize: 12,
                 fontWeight: 600,

@@ -592,7 +592,12 @@ def post_validate(req: ValidateRequest = ValidateRequest()):
                 "message": line.removeprefix("[DECAY-WARN]").strip(),
             })
 
+    # Count how many memories were actually scanned
+    index = _load_index()
+    validated_count = len(index.get("memories", {}))
+
     return _serialize({
+        "validated_count": validated_count,
         "error_count": error_count,
         "warning_count": warning_count,
         "errors": errors,
@@ -766,12 +771,17 @@ def post_resolve(req: ResolveRequest):
         if i < len(lines) and lines[i].startswith("---"):
             break
 
+    # Parse pinned version notices from the resolve output
+    notice_lines = [ln.strip() for ln in lines if ln.strip().startswith("[NOTICE]")]
+    notices = [ln.removeprefix("[NOTICE]").strip() for ln in notice_lines]
+
     return {
         "target": req.id,
         "depth": req.depth,
         "budget": req.budget,
         "nodes": nodes,
         "full_text": text,
+        "notices": notices,
     }
 
 

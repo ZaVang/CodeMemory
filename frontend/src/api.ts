@@ -5,7 +5,23 @@ const BASE = '/api'
 async function fetcher<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, init)
   if (!res.ok) {
-    throw new Error(`API error: ${res.status} ${res.statusText}`)
+    // Try to extract FastAPI detail field from the error response body
+    let detail = `${res.status} ${res.statusText}`
+    try {
+      const body = await res.json()
+      if (body && typeof body === 'object' && 'detail' in body) {
+        const d = (body as { detail: unknown }).detail
+        if (Array.isArray(d)) {
+          // FastAPI validation errors: detail is an array of { msg, loc } objects
+          detail = d.map((e: { msg?: string }) => e.msg || String(e)).join('; ')
+        } else if (typeof d === 'string') {
+          detail = d
+        }
+      }
+    } catch {
+      // Response body is not JSON; fall back to status text
+    }
+    throw new Error(detail)
   }
   return res.json() as Promise<T>
 }
@@ -34,11 +50,11 @@ export async function fetchStats(): Promise<StatsResponse> {
   return fetcher<StatsResponse>(`${BASE}/stats`)
 }
 
-export async function fetchWander(): Promise<WanderResponse> {
+export async function fetchWander(mode: 'cool' | 'random' = 'cool'): Promise<WanderResponse> {
   return fetcher<WanderResponse>(`${BASE}/wander`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: '{}',
+    body: JSON.stringify({ mode }),
   })
 }
 
