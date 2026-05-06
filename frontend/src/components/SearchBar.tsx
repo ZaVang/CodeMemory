@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { fetchSearch } from '../api'
+import { fetchSearch, fetchStats } from '../api'
 import type { SearchResultItem } from '../api'
 
 interface Props {
@@ -12,8 +12,27 @@ export default function SearchBar({ value, onChange, onNavigate }: Props) {
   const [results, setResults] = useState<SearchResultItem[]>([])
   const [showResults, setShowResults] = useState(false)
   const [searching, setSearching] = useState(false)
+  const [hasSearched, setHasSearched] = useState(false)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
+
+  // R9-tag-autocomplete: tag suggestions
+  const [allTags, setAllTags] = useState<string[]>([])
+
+  useEffect(() => {
+    fetchStats()
+      .then((stats) => setAllTags(stats.tags.map((t) => t.tag).sort()))
+      .catch(() => setAllTags([]))
+  }, [])
+
+  // Compute matching tag suggestions from current input
+  const tagMatches = (() => {
+    if (!value.trim()) return []
+    const q = value.trim().toLowerCase()
+    return allTags
+      .filter((t) => t.toLowerCase().includes(q) && t.toLowerCase() !== q)
+      .slice(0, 5)
+  })()
 
   // Close results on click outside
   useEffect(() => {
@@ -42,6 +61,7 @@ export default function SearchBar({ value, onChange, onNavigate }: Props) {
     if (!query.trim()) {
       setResults([])
       setShowResults(false)
+      setHasSearched(false)
       return
     }
     debounceRef.current = setTimeout(async () => {
@@ -49,11 +69,13 @@ export default function SearchBar({ value, onChange, onNavigate }: Props) {
       try {
         const res = await fetchSearch(query.trim())
         setResults(res.results)
-        setShowResults(res.results.length > 0)
+        setShowResults(true)
+        setHasSearched(true)
       } catch (err) {
         console.error('Search failed:', err)
         setResults([])
-        setShowResults(false)
+        setShowResults(true)
+        setHasSearched(true)
       } finally {
         setSearching(false)
       }
@@ -69,6 +91,7 @@ export default function SearchBar({ value, onChange, onNavigate }: Props) {
 
   const handleInputChange = (val: string) => {
     onChange(val)
+    setHasSearched(false)
     doSearch(val)
   }
 
@@ -140,6 +163,7 @@ export default function SearchBar({ value, onChange, onNavigate }: Props) {
               onChange('')
               setResults([])
               setShowResults(false)
+              setHasSearched(false)
             }}
             style={{
               border: 'none',
@@ -157,8 +181,8 @@ export default function SearchBar({ value, onChange, onNavigate }: Props) {
         )}
       </div>
 
-      {/* Results dropdown */}
-      {showResults && results.length > 0 && (
+      {/* Tag suggestions + Results dropdown */}
+      {((showResults && results.length > 0) || tagMatches.length > 0 || (hasSearched && results.length === 0 && !searching && value.trim())) && (
         <div
           style={{
             position: 'absolute',
@@ -175,6 +199,93 @@ export default function SearchBar({ value, onChange, onNavigate }: Props) {
             marginTop: 2,
           }}
         >
+          {/* R9-tag-autocomplete: matching tag suggestions */}
+          {tagMatches.length > 0 && (
+            <>
+              <div
+                style={{
+                  fontSize: 10,
+                  fontWeight: 600,
+                  fontFamily: 'Raleway, sans-serif',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.08em',
+                  color: 'var(--cm-text-tertiary)',
+                  padding: '6px 12px',
+                  borderBottom: '1px solid var(--cm-bg-subtle)',
+                }}
+              >
+                Tags
+              </div>
+              {tagMatches.map((tag) => (
+                <div
+                  key={'tag-' + tag}
+                  onClick={() => {
+                    onChange(tag)
+                    setShowResults(false)
+                    if (onNavigate) onNavigate(tag)
+                  }}
+                  style={{
+                    padding: '6px 12px',
+                    cursor: 'pointer',
+                    borderBottom: '1px solid var(--cm-bg-subtle)',
+                    fontSize: 12,
+                    fontFamily: 'Raleway, sans-serif',
+                    color: 'var(--cm-text-secondary)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                  }}
+                  onMouseEnter={(e) => {
+                    (e.currentTarget as HTMLDivElement).style.backgroundColor = 'var(--cm-bg-hover)'
+                  }}
+                  onMouseLeave={(e) => {
+                    (e.currentTarget as HTMLDivElement).style.backgroundColor = 'transparent'
+                  }}
+                >
+                  <span style={{
+                    fontSize: 10,
+                    color: 'var(--cm-text-tertiary)',
+                  }}>
+                    #
+                  </span>
+                  {tag}
+                </div>
+              ))}
+            </>
+          )}
+
+          {/* R9-empty-search: no results message */}
+          {hasSearched && results.length === 0 && !searching && value.trim() && (
+            <div
+              style={{
+                padding: '20px 16px',
+                textAlign: 'center',
+              }}
+            >
+              <div
+                style={{
+                  fontSize: 13,
+                  fontFamily: 'Raleway, sans-serif',
+                  color: 'var(--cm-text-secondary)',
+                  marginBottom: 4,
+                }}
+              >
+                No memories found matching &ldquo;{value.trim()}&rdquo;
+              </div>
+              <div
+                style={{
+                  fontSize: 11,
+                  fontFamily: 'Raleway, sans-serif',
+                  color: 'var(--cm-text-tertiary)',
+                }}
+              >
+                Try broadening your search or using different keywords.
+              </div>
+            </div>
+          )}
+
+          {/* Existing search results header */}
+          {showResults && results.length > 0 && (
           <div
             style={{
               fontSize: 10,
@@ -185,6 +296,7 @@ export default function SearchBar({ value, onChange, onNavigate }: Props) {
               color: 'var(--cm-text-tertiary)',
               padding: '6px 12px',
               borderBottom: '1px solid var(--cm-bg-subtle)',
+              borderTop: tagMatches.length > 0 ? '1px solid var(--cm-bg-subtle)' : 'none',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
@@ -197,6 +309,7 @@ export default function SearchBar({ value, onChange, onNavigate }: Props) {
               </span>
             )}
           </div>
+          )}
           {results.map((item) => (
             <div
               key={item.id}

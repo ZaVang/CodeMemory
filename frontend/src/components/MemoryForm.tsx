@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { fetchMemory, createMemory, updateMemory, fetchAllMemories } from '../api'
+import { fetchMemory, createMemory, updateMemory, fetchAllMemories, fetchStats } from '../api'
 import type { MemoryDetail, MemorySummary } from '../types'
 
 interface Props {
@@ -44,6 +44,12 @@ export default function MemoryForm({ memoryId, onClose, onChange, onUndoEntry }:
   // Template support (R5-template-create)
   const [templates, setTemplates] = useState<MemorySummary[]>([])
   const [selectedTemplate, setSelectedTemplate] = useState('')
+
+  // R9-tag-autocomplete: tag suggestions
+  const [allTags, setAllTags] = useState<string[]>([])
+  const [showTagSuggestions, setShowTagSuggestions] = useState(false)
+  const [highlightedTagIndex, setHighlightedTagIndex] = useState(0)
+  const tagInputRef = useRef<HTMLInputElement>(null)
 
   // Load existing data in edit mode
   useEffect(() => {
@@ -135,6 +141,13 @@ export default function MemoryForm({ memoryId, onClose, onChange, onUndoEntry }:
       .catch(() => setTemplates([]))
   }, [isEdit])
 
+  // R9-tag-autocomplete: load available tags from current dataset
+  useEffect(() => {
+    fetchStats()
+      .then((stats) => setAllTags(stats.tags.map((t) => t.tag).sort()))
+      .catch(() => setAllTags([]))
+  }, [])
+
   // When a template is selected, load its details and prefill form
   const handleTemplateSelect = useCallback((templateId: string) => {
     if (!templateId) return
@@ -152,6 +165,20 @@ export default function MemoryForm({ memoryId, onClose, onChange, onUndoEntry }:
       })
       .catch((err) => console.error('Failed to load template:', err))
   }, [])
+
+  // R9-tag-autocomplete: compute current token and matching tag suggestions
+  const currentTagToken = (() => {
+    const parts = tags.split(',')
+    return (parts[parts.length - 1] || '').trim()
+  })()
+
+  const tagSuggestions = (() => {
+    if (!currentTagToken) return []
+    const q = currentTagToken.toLowerCase()
+    return allTags
+      .filter((t) => t.toLowerCase().startsWith(q) && t.toLowerCase() !== q)
+      .slice(0, 8)
+  })()
 
   // Validation
   const validate = useCallback((): string | null => {
@@ -523,13 +550,92 @@ export default function MemoryForm({ memoryId, onClose, onChange, onUndoEntry }:
 
             {/* Tags */}
             <Field label="Tags (comma-separated)">
-              <input
-                type="text"
-                value={tags}
-                onChange={(e) => setTags(e.target.value)}
-                placeholder="tag1, tag2, tag3"
-                style={inputStyle}
-              />
+              <div style={{ position: 'relative' }}>
+                <input
+                  ref={tagInputRef}
+                  type="text"
+                  value={tags}
+                  onChange={(e) => {
+                    setTags(e.target.value)
+                    setShowTagSuggestions(true)
+                    setHighlightedTagIndex(0)
+                  }}
+                  onFocus={() => {
+                    if (tagSuggestions.length > 0) setShowTagSuggestions(true)
+                  }}
+                  onBlur={() => {
+                    // Delay to allow click on suggestion
+                    setTimeout(() => setShowTagSuggestions(false), 150)
+                  }}
+                  onKeyDown={(e) => {
+                    if (!showTagSuggestions || tagSuggestions.length === 0) return
+                    if (e.key === 'ArrowDown') {
+                      e.preventDefault()
+                      setHighlightedTagIndex((i) => Math.min(i + 1, tagSuggestions.length - 1))
+                    } else if (e.key === 'ArrowUp') {
+                      e.preventDefault()
+                      setHighlightedTagIndex((i) => Math.max(i - 1, 0))
+                    } else if (e.key === 'Enter' || e.key === 'Tab') {
+                      e.preventDefault()
+                      const selected = tagSuggestions[highlightedTagIndex]
+                      if (selected) {
+                        const parts = tags.split(',')
+                        parts[parts.length - 1] = ' ' + selected
+                        setTags(parts.join(',').replace(/^ /, ''))
+                        setShowTagSuggestions(false)
+                      }
+                    } else if (e.key === 'Escape') {
+                      setShowTagSuggestions(false)
+                    }
+                  }}
+                  placeholder="tag1, tag2, tag3"
+                  style={inputStyle}
+                />
+                {showTagSuggestions && tagSuggestions.length > 0 && (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      top: '100%',
+                      left: 0,
+                      right: 0,
+                      backgroundColor: 'var(--cm-bg-surface)',
+                      border: '1px solid var(--cm-border)',
+                      borderRadius: 2,
+                      maxHeight: 180,
+                      overflowY: 'auto',
+                      zIndex: 10,
+                      boxShadow: '0 2px 8px rgba(28,25,23,0.08)',
+                      marginTop: 2,
+                    }}
+                  >
+                    {tagSuggestions.map((tag, i) => (
+                      <div
+                        key={tag}
+                        onMouseDown={(e) => {
+                          e.preventDefault()
+                          const parts = tags.split(',')
+                          parts[parts.length - 1] = ' ' + tag
+                          setTags(parts.join(',').replace(/^ /, ''))
+                          setShowTagSuggestions(false)
+                          tagInputRef.current?.focus()
+                        }}
+                        style={{
+                          padding: '6px 10px',
+                          cursor: 'pointer',
+                          fontSize: 12,
+                          fontFamily: 'Raleway, sans-serif',
+                          color: 'var(--cm-text-primary)',
+                          backgroundColor: i === highlightedTagIndex ? 'var(--cm-bg-hover)' : 'transparent',
+                          borderBottom: '1px solid var(--cm-bg-subtle)',
+                        }}
+                        onMouseEnter={() => setHighlightedTagIndex(i)}
+                      >
+                        {tag}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </Field>
 
             {/* Imports (PL1-9) */}

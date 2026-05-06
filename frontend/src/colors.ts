@@ -30,9 +30,28 @@ export const DIRECTORY_TINTS: Record<string, string> = {
   'schemas': '#FDFBF5',
 }
 
+/** Dark-mode fill/tint colors — lighter and more saturated than uniform-darkening
+ * output so nodes from different directories remain visually distinguishable.
+ * Each value preserves the semantic identity of its light-mode counterpart. */
+export const DIRECTORY_TINTS_DARK: Record<string, string> = {
+  'user/facts': '#2D2A28',
+  'user/observations': '#363330',
+  'user/preferences': '#3D3528',
+  'user/decisions': '#3D2828',
+  'user/feelings': '#3D3020',
+  'user/people': '#322A3D',
+  'user/beliefs': '#1A2E21',
+  'user/moments': '#3D2E28',
+  'user/snapshots': '#2E2D2C',
+  'api': '#1E2D3D',
+  'schemas': '#2D2A28',
+}
+
 /** Default color for directories not in the known palette */
 export const DEFAULT_COLOR = '#57534E'
 export const DEFAULT_TINT = '#FDFBF5'
+/** Default dark-mode tint — darker than the uniform 82%-black blend */
+export const DEFAULT_TINT_DARK = '#2D2A28'
 
 /** Fallback colors cycled through for unknown directories */
 export const FALLBACK_COLORS = [

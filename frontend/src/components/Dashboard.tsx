@@ -8,9 +8,11 @@ interface Props {
   onNavigateToFilter?: (filter: string, type: 'tag' | 'maturity') => void
   refreshTrigger?: number
   onCreateMemory?: () => void
+  /** Called when an operation fails, to display user-visible error feedback */
+  onError?: (message: string) => void
 }
 
-export default function Dashboard({ onSelectMemory, onNavigateToFilter, refreshTrigger, onCreateMemory }: Props) {
+export default function Dashboard({ onSelectMemory, onNavigateToFilter, refreshTrigger, onCreateMemory, onError }: Props) {
   const [stats, setStats] = useState<StatsResponse | null>(null)
   const [wanderResult, setWanderResult] = useState<WanderResponse | null>(null)
   const [validateResult, setValidateResult] = useState<ValidateResponse | null>(null)
@@ -25,7 +27,7 @@ export default function Dashboard({ onSelectMemory, onNavigateToFilter, refreshT
     setLoading(true)
     fetchStats()
       .then(setStats)
-      .catch(console.error)
+      .catch((err) => onError?.(err instanceof Error ? err.message : 'Failed to load stats'))
       .finally(() => setLoading(false))
   }, [])
 
@@ -44,7 +46,7 @@ export default function Dashboard({ onSelectMemory, onNavigateToFilter, refreshT
         setWanderResult(result)
         setWanderOpen(true)
       })
-      .catch(console.error)
+      .catch((err) => onError?.(err instanceof Error ? err.message : 'Wander failed'))
       .finally(() => setWandering(false))
   }, [])
 
@@ -55,7 +57,7 @@ export default function Dashboard({ onSelectMemory, onNavigateToFilter, refreshT
         setValidateResult(result)
         setValidateOpen(true)
       })
-      .catch(console.error)
+      .catch((err) => onError?.(err instanceof Error ? err.message : 'Validate failed'))
       .finally(() => setValidating(false))
   }, [])
 
@@ -63,7 +65,7 @@ export default function Dashboard({ onSelectMemory, onNavigateToFilter, refreshT
     setReindexing(true)
     fetchReindex()
       .then(() => loadData())
-      .catch(console.error)
+      .catch((err) => onError?.(err instanceof Error ? err.message : 'Reindex failed'))
       .finally(() => setReindexing(false))
   }, [loadData])
 
@@ -188,11 +190,7 @@ export default function Dashboard({ onSelectMemory, onNavigateToFilter, refreshT
         </div>
       </div>
 
-      {loading && (
-        <p style={{ color: 'var(--cm-text-tertiary)', fontFamily: 'Raleway, sans-serif', fontSize: 14 }}>
-          Loading...
-        </p>
-      )}
+      {loading && <DashboardSkeleton />}
 
       {stats && !loading && stats.total === 0 && (
         <EmptyState
@@ -579,7 +577,7 @@ export default function Dashboard({ onSelectMemory, onNavigateToFilter, refreshT
                   .then((result) => {
                     setWanderResult(result)
                   })
-                  .catch(console.error)
+                  .catch((err) => onError?.(err instanceof Error ? err.message : 'Wander failed'))
                   .finally(() => setWandering(false))
               }}
               style={{
@@ -702,24 +700,7 @@ export default function Dashboard({ onSelectMemory, onNavigateToFilter, refreshT
               <h3 style={{ fontSize: 14, fontFamily: 'Raleway, sans-serif', fontWeight: 600, color: 'var(--cm-error)', marginBottom: 8 }}>
                 Errors ({validateResult.errors.length})
               </h3>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                {validateResult.errors.map((err, i) => (
-                  <div
-                    key={i}
-                    style={{
-                      padding: '6px 10px',
-                      backgroundColor: 'var(--cm-bg-error-subtle)',
-                      borderLeft: '3px solid var(--cm-error)',
-                      borderRadius: 2,
-                      fontSize: 12,
-                      fontFamily: 'Raleway, sans-serif',
-                      color: 'var(--cm-text-primary)',
-                    }}
-                  >
-                    {err.message}
-                  </div>
-                ))}
-              </div>
+              {renderGroupedIssues(validateResult.errors, 'error', onSelectMemory)}
             </div>
           )}
 
@@ -728,27 +709,7 @@ export default function Dashboard({ onSelectMemory, onNavigateToFilter, refreshT
               <h3 style={{ fontSize: 14, fontFamily: 'Raleway, sans-serif', fontWeight: 600, color: 'var(--cm-warning)', marginBottom: 8 }}>
                 Warnings ({validateResult.warnings.length})
               </h3>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                {validateResult.warnings.map((warn, i) => (
-                  <div
-                    key={i}
-                    style={{
-                      padding: '6px 10px',
-                      backgroundColor: 'var(--cm-bg-warning-subtle)',
-                      borderLeft: '3px solid var(--cm-warning)',
-                      borderRadius: 2,
-                      fontSize: 12,
-                      fontFamily: 'Raleway, sans-serif',
-                      color: 'var(--cm-text-primary)',
-                    }}
-                  >
-                    <span style={{ fontSize: 10, color: 'var(--cm-text-tertiary)', marginRight: 6 }}>
-                      [{warn.type}]
-                    </span>
-                    {warn.message}
-                  </div>
-                ))}
-              </div>
+              {renderGroupedIssues(validateResult.warnings, 'warning', onSelectMemory)}
             </div>
           )}
 
@@ -852,6 +813,129 @@ function _daysAgo(isoDate: string): number {
   return Math.max(0, Math.floor((now - then) / (1000 * 60 * 60 * 24)))
 }
 
+// R9-validate-drilldown: Regex for memory IDs like "user/facts/name", "api/endpoint", "schemas/template"
+const MEMORY_ID_RE = /\b([a-zA-Z][a-zA-Z0-9_-]*(?:\/[a-zA-Z][a-zA-Z0-9_-]*)+\b)/g
+
+/** Split a validate message into text segments and memory-ID segments for clickable rendering */
+function parseMessageLinks(message: string): Array<{ text: string; isId: boolean }> {
+  const parts: Array<{ text: string; isId: boolean }> = []
+  let lastIndex = 0
+  const re = new RegExp(MEMORY_ID_RE.source, 'g')
+  let match: RegExpExecArray | null
+
+  while ((match = re.exec(message)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push({ text: message.slice(lastIndex, match.index), isId: false })
+    }
+    parts.push({ text: match[1], isId: true })
+    lastIndex = match.index + match[1].length
+  }
+
+  if (lastIndex < message.length) {
+    parts.push({ text: message.slice(lastIndex), isId: false })
+  }
+
+  return parts.length > 0 ? parts : [{ text: message, isId: false }]
+}
+
+/** Return a human-readable label for a validate issue type */
+function getIssueTypeLabel(type: string): string {
+  switch (type) {
+    case 'broken_link': return 'Broken Link'
+    case 'schema_compliance': return 'Schema Compliance'
+    case 'error': return 'Error'
+    case 'warning': return 'Circular Dependency'
+    case 'maturity': return 'Maturity Stale'
+    case 'decay': return 'Decay Risk'
+    default: return type
+  }
+}
+
+/** Type color by issue category */
+function issueTypeColor(type: string): string {
+  if (type === 'broken_link' || type === 'schema_compliance' || type === 'error') return 'var(--cm-error)'
+  if (type === 'maturity') return 'var(--cm-info)'
+  if (type === 'decay') return 'var(--cm-warning)'
+  return 'var(--cm-warning)'
+}
+
+interface ValidateResultItem {
+  type: string
+  message: string
+}
+
+/** Group issues by type, render each group with a label and clickable memory IDs */
+function renderGroupedIssues(
+  items: ValidateResultItem[],
+  _category: string,
+  onSelectMemory: (id: string) => void,
+) {
+  const grouped = new Map<string, ValidateResultItem[]>()
+  for (const item of items) {
+    const key = item.type
+    if (!grouped.has(key)) grouped.set(key, [])
+    grouped.get(key)!.push(item)
+  }
+
+  return Array.from(grouped.entries()).map(([type, groupItems]) => (
+    <div key={type} style={{ marginBottom: 14 }}>
+      <div style={{
+        fontSize: 10,
+        fontWeight: 600,
+        fontFamily: 'Raleway, sans-serif',
+        textTransform: 'uppercase',
+        letterSpacing: '0.08em',
+        color: issueTypeColor(type),
+        marginBottom: 6,
+        paddingLeft: 2,
+      }}>
+        {getIssueTypeLabel(type)} ({groupItems.length})
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        {groupItems.map((item, i) => (
+          <div
+            key={i}
+            style={{
+              padding: '6px 10px',
+              backgroundColor: type.includes('error') || type === 'broken_link' || type === 'schema_compliance'
+                ? 'var(--cm-bg-error-subtle)'
+                : 'var(--cm-bg-warning-subtle)',
+              borderLeft: `3px solid ${issueTypeColor(type)}`,
+              borderRadius: 2,
+              fontSize: 12,
+              fontFamily: 'Raleway, sans-serif',
+              color: 'var(--cm-text-primary)',
+              lineHeight: 1.5,
+            }}
+          >
+            {parseMessageLinks(item.message).map((part, j) =>
+              part.isId ? (
+                <span
+                  key={j}
+                  onClick={(e) => { e.stopPropagation(); onSelectMemory(part.text) }}
+                  title={`View ${part.text}`}
+                  style={{
+                    fontFamily: 'JetBrains Mono, monospace',
+                    fontSize: 11,
+                    color: 'var(--cm-accent)',
+                    cursor: 'pointer',
+                    textDecoration: 'underline',
+                    textUnderlineOffset: '2px',
+                  }}
+                >
+                  {part.text}
+                </span>
+              ) : (
+                <span key={j}>{part.text}</span>
+              ),
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  ))
+}
+
 function Modal({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
   return (
     <>
@@ -885,5 +969,91 @@ function Modal({ children, onClose }: { children: React.ReactNode; onClose: () =
         {children}
       </div>
     </>
+  )
+}
+
+// ── R9-loading-skeletons: Dashboard skeleton ─────────────────────────
+
+function DashboardSkeleton() {
+  const cardSkeleton = (height: number) => ({
+    padding: '20px 24px',
+    backgroundColor: 'var(--cm-bg-surface)',
+    borderRadius: 2,
+    border: '1px solid var(--cm-bg-subtle)',
+    height,
+  })
+
+  return (
+    <div style={{ padding: '32px', backgroundColor: 'var(--cm-bg-primary)' }}>
+      {/* Header row */}
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: 32,
+      }}>
+        <div className="skeleton-shimmer" style={{ width: 180, height: 32, borderRadius: 2 }} />
+        <div style={{ display: 'flex', gap: 12 }}>
+          <div className="skeleton-shimmer" style={{ width: 100, height: 40, borderRadius: 2 }} />
+          <div className="skeleton-shimmer" style={{ width: 100, height: 40, borderRadius: 2 }} />
+          <div className="skeleton-shimmer" style={{ width: 100, height: 40, borderRadius: 2 }} />
+        </div>
+      </div>
+
+      {/* Stat cards row */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+        gap: 16,
+        marginBottom: 32,
+      }}>
+        {[1, 2, 3, 4].map((i) => (
+          <div key={i} style={cardSkeleton(80)}>
+            <div className="skeleton-shimmer" style={{ width: '60%', height: 12, borderRadius: 2, marginBottom: 10 }} />
+            <div className="skeleton-shimmer" style={{ width: 50, height: 32, borderRadius: 2 }} />
+          </div>
+        ))}
+      </div>
+
+      {/* Two-column layout */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: '1fr 1fr',
+        gap: 24,
+        marginBottom: 32,
+      }}>
+        {/* Maturity Distribution skeleton */}
+        <div style={cardSkeleton(180)}>
+          <div className="skeleton-shimmer" style={{ width: 140, height: 14, borderRadius: 2, marginBottom: 16 }} />
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
+              <div className="skeleton-shimmer" style={{ width: 80, height: 12, borderRadius: 2 }} />
+              <div className="skeleton-shimmer" style={{ flex: 1, height: 8, borderRadius: 2 }} />
+              <div className="skeleton-shimmer" style={{ width: 24, height: 12, borderRadius: 2 }} />
+            </div>
+          ))}
+        </div>
+
+        {/* Top Tags skeleton */}
+        <div style={cardSkeleton(180)}>
+          <div className="skeleton-shimmer" style={{ width: 100, height: 14, borderRadius: 2, marginBottom: 16 }} />
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+            {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
+              <div key={i} className="skeleton-shimmer" style={{ width: 70 + (i * 10), height: 26, borderRadius: 2 }} />
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Status distribution skeleton */}
+      <div style={cardSkeleton(80)}>
+        <div className="skeleton-shimmer" style={{ width: 140, height: 14, borderRadius: 2, marginBottom: 12 }} />
+        <div style={{ display: 'flex', gap: 16 }}>
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="skeleton-shimmer" style={{ width: 120, height: 40, borderRadius: 2 }} />
+          ))}
+        </div>
+      </div>
+    </div>
   )
 }

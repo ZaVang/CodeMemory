@@ -83,6 +83,7 @@
   --cm-warning: #CA8A04;
   --cm-error: #991B1B;
   --cm-info: #1E40AF;
+  --cm-schema: #7C3AED;
   --cm-overlay: rgba(28, 25, 23, 0.08);
   --cm-overlay-modal: rgba(28, 25, 23, 0.15);
   --cm-shadow-subtle: 0 1px 2px rgba(28, 25, 23, 0.04);
@@ -122,6 +123,7 @@
   --cm-warning: #EAB308;
   --cm-error: #EF4444;
   --cm-info: #60A5FA;
+  --cm-schema: #A78BFA;
   --cm-overlay: rgba(0, 0, 0, 0.25);
   --cm-overlay-modal: rgba(0, 0, 0, 0.45);
   --cm-shadow-subtle: 0 1px 2px rgba(0, 0, 0, 0.2);
@@ -182,6 +184,24 @@ code, pre {
 
 .undo-toast {
   animation: undo-toast-enter 200ms ease-out;
+}
+
+/* R9-loading-skeletons: shimmer animation */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.skeleton-shimmer {
+  background: linear-gradient(
+    90deg,
+    var(--cm-bg-subtle) 25%,
+    var(--cm-bg-surface) 50%,
+    var(--cm-bg-subtle) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite ease-in-out;
+  border-radius: 2px;
 }
 
 /* Prose styling for react-markdown rendered content */

@@ -121,11 +121,7 @@ export default function MemoryList({ onSelectMemory, refreshTrigger, initialFilt
   }
 
   if (loading) {
-    return (
-      <div style={{ padding: 32, color: 'var(--cm-text-tertiary)', fontFamily: 'Raleway, sans-serif', fontSize: 14, backgroundColor: 'var(--cm-bg-primary)', height: '100%' }}>
-        Loading...
-      </div>
-    )
+    return <ListSkeleton />
   }
 
   return (
@@ -222,7 +218,7 @@ export default function MemoryList({ onSelectMemory, refreshTrigger, initialFilt
                     fontFamily: 'Raleway, sans-serif',
                     fontWeight: 600,
                     textTransform: 'uppercase',
-                    color: mem.type === 'schema' ? '#7C3AED' : 'var(--cm-text-secondary)',
+                    color: mem.type === 'schema' ? 'var(--cm-schema)' : 'var(--cm-text-secondary)',
                   }}>
                     {mem.type}
                   </span>
@@ -336,4 +332,70 @@ const pageBtnStyle: React.CSSProperties = {
   textTransform: 'uppercase',
   letterSpacing: '0.06em',
   borderRadius: 2,
+}
+
+// ── R9-loading-skeletons: List skeleton ──────────────────────────────
+
+const shimmerBlock = (width: string | number, height: number): React.CSSProperties => ({
+  width,
+  height,
+  borderRadius: 2,
+})
+
+function ListSkeleton() {
+  const COLUMNS = [
+    '30%', // ID
+    '28%', // Summary
+    '10%', // Type
+    '12%', // Maturity
+    '10%', // Status
+    '10%', // Tags
+  ]
+
+  return (
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', backgroundColor: 'var(--cm-bg-primary)' }}>
+      {/* Filter bar skeleton */}
+      <div style={{ padding: '16px 24px', borderBottom: '1px solid var(--cm-border)', display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
+        <div className="skeleton-shimmer" style={shimmerBlock(260, 30)} />
+        <div className="skeleton-shimmer" style={shimmerBlock(100, 16)} />
+      </div>
+
+      {/* Table skeleton */}
+      <div style={{ flex: 1, overflow: 'hidden', padding: '0 24px' }}>
+        {/* Header row */}
+        <div style={{ display: 'flex', gap: 12, padding: '12px 0', borderBottom: '2px solid var(--cm-border)' }}>
+          {COLUMNS.map((w, i) => (
+            <div key={i} className="skeleton-shimmer" style={shimmerBlock(w, 14)} />
+          ))}
+        </div>
+
+        {/* Data rows */}
+        {Array.from({ length: 12 }).map((_, rowIdx) => (
+          <div
+            key={rowIdx}
+            style={{
+              display: 'flex',
+              gap: 12,
+              padding: '12px 0',
+              borderBottom: '1px solid var(--cm-bg-subtle)',
+            }}
+          >
+            {COLUMNS.map((w, colIdx) => (
+              <div
+                key={colIdx}
+                className="skeleton-shimmer"
+                style={shimmerBlock(
+                  // Vary row widths slightly for realism
+                  colIdx === 1
+                    ? `${30 + Math.sin(rowIdx * 1.7) * 12}%`
+                    : w,
+                  colIdx === 1 ? 16 : 14,
+                )}
+              />
+            ))}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
 }

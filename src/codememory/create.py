@@ -80,7 +80,10 @@ def create(
         "\n"
     )
 
-    frontmatter["summary_hash"] = compute_body_hash(body_template)
+    # Use stripped body for hash so it matches what _parse_frontmatter returns.
+    # Without strip(), the leading \n in body_template causes a permanent stale
+    # false positive because the stale-check parses with .strip().
+    frontmatter["summary_hash"] = compute_body_hash(body_template.strip())
 
     yaml_str = yaml.dump(frontmatter, allow_unicode=True, sort_keys=False)
     content = f"---\n{yaml_str}---\n{body_template}"

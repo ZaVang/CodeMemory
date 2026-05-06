@@ -19,6 +19,7 @@ import zipfile
 from datetime import date, datetime
 from pathlib import Path
 from typing import Any
+from urllib.parse import unquote
 
 import yaml
 from fastapi import FastAPI, HTTPException
@@ -33,6 +34,7 @@ if str(_CODEMEMORY_SRC) not in sys.path:
 
 from codememory.handlers import handle_create, handle_resolve, handle_update, handle_wander  # noqa: E402
 from codememory.index import load_index, reindex  # noqa: E402
+from codememory.models import IndexData, MemoryEntry  # noqa: E402
 from codememory.validate import validate  # noqa: E402
 
 # ---------------------------------------------------------------------------
@@ -41,13 +43,39 @@ from codememory.validate import validate  # noqa: E402
 
 _EXAMPLES_DIR = Path(__file__).resolve().parent.parent / "examples"
 
-MEMORY_ROOT = Path(
-    os.environ.get("CODEMEMORY_ROOT", _EXAMPLES_DIR / "investment")
-).resolve()
+_DEFAULT_DATASET = os.environ.get("CODEMEMORY_DEFAULT_DATASET", "investment")
+_DEFAULT_ROOT = (_EXAMPLES_DIR / _DEFAULT_DATASET).resolve()
+
+# Per-request dataset root via context variable (replaces the old module-level
+# global _get_root() which was thread-unsafe under concurrent access).
+from contextvars import ContextVar  # noqa: E402
+
+_current_dataset: ContextVar[str] = ContextVar("current_dataset", default=_DEFAULT_DATASET)
+# Legacy alias — retained for the __main__ entry point only.
+# All endpoint code MUST use _get_root() which reads the per-request context.
+_MEMORY_ROOT = _DEFAULT_ROOT
 
 
-def _get_index_path() -> Path:
-    return MEMORY_ROOT / ".codememory" / "index.json"
+def _get_root() -> Path:
+    """Return the memory root for the current request context.
+
+    Reads from the per-request ContextVar set by the middleware from the
+    X-Codememory-Dataset header.  Falls back to the default dataset.
+    """
+    return _resolve_root(_current_dataset.get())
+
+
+def _resolve_root(dataset_name: str) -> Path:
+    """Resolve a dataset name to its absolute root path."""
+    if not dataset_name or not dataset_name.strip():
+        dataset_name = _DEFAULT_DATASET
+    return (_EXAMPLES_DIR / dataset_name).resolve()
+
+
+def _get_index_path(root: Path | None = None) -> Path:
+    if root is None:
+        root = _resolve_root(_current_dataset.get())
+    return root / ".codememory" / "index.json"
 
 
 def _get_available_datasets() -> list[dict[str, str]]:
@@ -71,8 +99,23 @@ def _get_available_datasets() -> list[dict[str, str]]:
     return datasets
 
 
-# Remove the stale INDEX_PATH constant — use _get_index_path() instead
-INDEX_PATH = _get_index_path()  # kept for backward compat, but callers should use _get_index_path()
+# Per-request dependency: extract the dataset from the X-Codememory-Dataset
+# header (set by the frontend per-tab), falling back to the default.
+from fastapi import Request  # noqa: E402
+
+
+def _get_request_root(request: Request) -> Path:
+    """Return the memory root for the current request.
+
+    Reads the X-Codememory-Dataset header to determine which dataset the
+    calling browser tab is viewing.  Falls back to the default dataset
+    (from CODEMEMORY_DEFAULT_DATASET env var, or "investment").
+    """
+    dataset = request.headers.get("X-Codememory-Dataset", "")
+    if not dataset or not dataset.strip():
+        dataset = _DEFAULT_DATASET
+    _current_dataset.set(dataset)
+    return _resolve_root(dataset)
 
 app = FastAPI(title="CodeMemory API", version="0.1.0")
 
@@ -83,6 +126,24 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# Middleware: set the per-request dataset context from the X-Codememory-Dataset
+# header before each request is processed.  This replaces the old global
+# _get_root() and allows concurrent tabs to view different datasets.
+from starlette.middleware.base import BaseHTTPMiddleware  # noqa: E402
+
+
+class _DatasetContextMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request, call_next):
+        dataset = request.headers.get("X-Codememory-Dataset", "")
+        if dataset and dataset.strip():
+            _current_dataset.set(dataset)
+        response = await call_next(request)
+        return response
+
+
+app.add_middleware(_DatasetContextMiddleware)
 
 
 # ---------------------------------------------------------------------------
@@ -98,13 +159,18 @@ class DateEncoder(json.JSONEncoder):
         return super().default(obj)
 
 
-def _load_index() -> dict[str, Any]:
-    """Load index.json as a plain dict."""
-    ip = _get_index_path()
-    if not ip.exists():
-        return {"memories": {}}
-    with open(ip, "r", encoding="utf-8") as f:
-        return json.load(f)
+def _load_index() -> IndexData:
+    """Load index.json using the standardized codememory loader.
+
+    Returns Pydantic IndexData (not raw dict). This is the single loading
+    path — all endpoints use this function instead of calling load_index()
+    or json.load() directly.
+
+    Uses the context-variable dataset so concurrent requests to different
+    datasets return correct results.
+    """
+    root = _resolve_root(_current_dataset.get())
+    return load_index(root)
 
 
 def _parse_frontmatter(filepath: Path) -> tuple[dict[str, Any], str]:
@@ -153,8 +219,11 @@ def _serialize(obj: Any) -> Any:
     return obj
 
 
-def _stale_check(memory_id: str, entry: Any) -> bool:
+def _stale_check(memory_id: str, entry: Any, root: Path | None = None) -> bool:
     """Return True if the stored summary_hash does not match the actual body."""
+    if root is None:
+        root = _resolve_root(_current_dataset.get())
+
     if hasattr(entry, "path"):
         rel_path = entry.path
     elif isinstance(entry, dict):
@@ -162,7 +231,7 @@ def _stale_check(memory_id: str, entry: Any) -> bool:
     else:
         return False
 
-    file_path = MEMORY_ROOT / rel_path
+    file_path = root / rel_path
     if not file_path.exists():
         return False
 
@@ -196,7 +265,7 @@ def root():
 def get_memories(offset: int = 0, limit: int = 100):
     """Return summary list of all indexed memories with pagination support."""
     index = _load_index()
-    memories = index.get("memories", {})
+    memories = index.memories
     result = []
     for mem_id, entry in memories.items():
         # entry could be dict or Pydantic model (pitfall: handle both)
@@ -242,7 +311,7 @@ def get_memories(offset: int = 0, limit: int = 100):
 def get_backlinks(memory_id: str):
     """Return a list of memories that import (reference) the given memory ID."""
     index = _load_index()
-    memories = index.get("memories", {})
+    memories = index.memories
 
     backlinks: list[dict[str, str]] = []
 
@@ -288,8 +357,9 @@ def get_backlinks(memory_id: str):
 @app.get("/api/memories/{memory_id:path}")
 def get_memory(memory_id: str):
     """Return full content of a single memory (frontmatter + body)."""
+    memory_id = unquote(memory_id)  # decode %2F -> / etc.
     index = _load_index()
-    memories = index.get("memories", {})
+    memories = index.memories
 
     entry = memories.get(memory_id)
     if not entry:
@@ -307,7 +377,7 @@ def get_memory(memory_id: str):
         # Fallback: construct path from ID
         rel_path = f"{memory_id}.md"
 
-    filepath = MEMORY_ROOT / rel_path
+    filepath = _get_root() / rel_path
     if not filepath.exists():
         raise HTTPException(status_code=404, detail=f"Memory file not found: {rel_path}")
 
@@ -387,7 +457,7 @@ def post_create_memory(req: CreateMemoryRequest):
     created memory's full data."""
     # Delegate to handlers.py for business logic
     file_path_str = handle_create(
-        root=MEMORY_ROOT,
+        root=_get_root(),
         memory_type=req.type,
         memory_id=req.memory_id,
         schema=req.schema,
@@ -420,7 +490,7 @@ def post_create_memory(req: CreateMemoryRequest):
     filepath.write_text(new_content, encoding="utf-8")
 
     # Reindex to pick up the new memory
-    reindex(MEMORY_ROOT)
+    reindex(_get_root())
 
     # Return the created memory as structured data
     meta, body = _parse_frontmatter(filepath)
@@ -447,18 +517,19 @@ class UpdateMemoryRequest(BaseModel):
 def put_update_memory(memory_id: str, req: UpdateMemoryRequest):
     """Update an existing memory. Delegates to handle_update for core fields,
     directly edits frontmatter for tags/intensity, then reindexes."""
+    memory_id = unquote(memory_id)  # decode %2F -> / etc.
     index = _load_index()
-    memories = index.get("memories", {})
+    memories = index.memories
     entry = memories.get(memory_id)
     if not entry:
         raise HTTPException(status_code=404, detail=f"Memory '{memory_id}' not found")
 
     if hasattr(entry, "path"):
-        filepath = MEMORY_ROOT / entry.path
+        filepath = _get_root() / entry.path
     elif isinstance(entry, dict):
-        filepath = MEMORY_ROOT / entry.get("path", f"{memory_id}.md")
+        filepath = _get_root() / entry.get("path", f"{memory_id}.md")
     else:
-        filepath = MEMORY_ROOT / f"{memory_id}.md"
+        filepath = _get_root() / f"{memory_id}.md"
 
     if not filepath.exists():
         raise HTTPException(status_code=404, detail="Memory file not found on disk")
@@ -481,7 +552,7 @@ def put_update_memory(memory_id: str, req: UpdateMemoryRequest):
     if has_core_update:
         change_note = req.change_note or "API update"
         handle_update(
-            root=MEMORY_ROOT,
+            root=_get_root(),
             memory_id=memory_id,
             body=req.body,
             summary=req.summary,
@@ -503,7 +574,7 @@ def put_update_memory(memory_id: str, req: UpdateMemoryRequest):
         _update_frontmatter_fields(filepath, meta_updates)
 
     # Reindex to pick up changes
-    reindex(MEMORY_ROOT)
+    reindex(_get_root())
 
     # Return updated memory
     meta, body = _parse_frontmatter(filepath)
@@ -520,7 +591,7 @@ def get_stats():
     """Return memory statistics: total count, maturity distribution, stale
     count, and tag frequencies."""
     index = _load_index()
-    memories = index.get("memories", {})
+    memories = index.memories
 
     total = 0
     maturity_counts: dict[str, int] = {}
@@ -590,7 +661,7 @@ def post_wander(req: WanderRequest = WanderRequest()):
     """
     # Use handle_wander for the core wander logic (delegates to handlers.py)
     wander_text = handle_wander(
-        root=MEMORY_ROOT,
+        root=_get_root(),
         tags=req.tags,
         mode=req.mode,
     )
@@ -598,7 +669,7 @@ def post_wander(req: WanderRequest = WanderRequest()):
     # Parse the wander output to extract the memory ID and structured info.
     # handle_wander returns formatted text; we also load the index to get
     # structured data for the API response.
-    index = load_index(MEMORY_ROOT)
+    index = load_index(_get_root())
     memories = index.memories
 
     # Extract the selected memory ID from the wander text
@@ -666,7 +737,7 @@ def post_validate(req: ValidateRequest = ValidateRequest()):
     # Capture stdout from validate() which prints diagnostics
     captured = io.StringIO()
     with contextlib.redirect_stdout(captured):
-        error_count, warning_count = validate(MEMORY_ROOT)
+        error_count, warning_count = validate(_get_root())
 
     output = captured.getvalue()
 
@@ -679,9 +750,16 @@ def post_validate(req: ValidateRequest = ValidateRequest()):
         if not line:
             continue
         if line.startswith("[ERROR]"):
+            msg = line.removeprefix("[ERROR]").strip()
+            if "imports non-existent memory" in msg:
+                etype = "broken_link"
+            elif "schema compliance" in msg:
+                etype = "schema_compliance"
+            else:
+                etype = "error"
             errors.append({
-                "type": "error",
-                "message": line.removeprefix("[ERROR]").strip(),
+                "type": etype,
+                "message": msg,
             })
         elif line.startswith("[WARNING]"):
             warnings.append({
@@ -701,7 +779,7 @@ def post_validate(req: ValidateRequest = ValidateRequest()):
 
     # Count how many memories were actually scanned
     index = _load_index()
-    validated_count = len(index.get("memories", {}))
+    validated_count = len(index.memories)
 
     return _serialize({
         "validated_count": validated_count,
@@ -721,7 +799,7 @@ def post_validate(req: ValidateRequest = ValidateRequest()):
 def get_graph():
     """Build cytoscape-compatible nodes + edges from index.json."""
     index = _load_index()
-    memories = index.get("memories", {})
+    memories = index.memories
 
     nodes = []
     edges = []
@@ -814,12 +892,12 @@ def post_resolve(req: ResolveRequest):
     """
     # B3: check that the target ID exists in the index before resolving
     index = _load_index()
-    memories = index.get("memories", {})
+    memories = index.memories
     if req.memory_id not in memories:
         raise HTTPException(status_code=404, detail=f"Memory '{req.memory_id}' not found in index")
 
     text = handle_resolve(
-        root=MEMORY_ROOT,
+        root=_get_root(),
         memory_id=req.memory_id,
         depth=req.depth,
         budget=req.budget,
@@ -978,7 +1056,7 @@ def post_search(req: SearchRequest):
         return _serialize({"results": [], "count": 0, "total": 0, "query": req.query, "limit": req.limit})
 
     index = _load_index()
-    memories = index.get("memories", {})
+    memories = index.memories
 
     # Collect candidates with match info
     exact_matches: list[dict] = []
@@ -1016,7 +1094,7 @@ def post_search(req: SearchRequest):
         elif isinstance(entry, dict):
             rel_path = entry.get("path", "")
         if rel_path:
-            filepath = MEMORY_ROOT / rel_path
+            filepath = _get_root() / rel_path
             if filepath.exists():
                 _, body = _parse_frontmatter(filepath)
 
@@ -1136,9 +1214,9 @@ def _extract_snippet(body: str, query: str) -> str:
 def post_reindex():
     """Rebuild the index from all .md files on disk."""
     try:
-        reindex(MEMORY_ROOT)
+        reindex(_get_root())
         idx = _load_index()
-        return {"status": "ok", "count": len(idx.get("memories", {}))}
+        return {"status": "ok", "count": len(idx.memories)}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -1152,7 +1230,7 @@ def post_reindex():
 def get_export():
     """Export all memories as a .zip archive containing all .md files and index.json."""
     index = _load_index()
-    memories = index.get("memories", {})
+    memories = index.memories
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
         # Add index.json
@@ -1169,7 +1247,7 @@ def get_export():
                 continue
             if not rel_path:
                 continue
-            filepath = MEMORY_ROOT / rel_path
+            filepath = _get_root() / rel_path
             if filepath.exists():
                 # Use the relative path inside the zip so directory structure is preserved
                 zf.write(filepath, rel_path)
@@ -1179,7 +1257,7 @@ def get_export():
         readme = (
             f"CodeMemory Export\n"
             f"==================\n"
-            f"Dataset: {MEMORY_ROOT.name}\n"
+            f"Dataset: {_get_root().name}\n"
             f"Memories: {len(memories)}\n"
             f"\n"
             f"This archive contains all memory .md files and the index.json.\n"
@@ -1190,7 +1268,7 @@ def get_export():
         )
         zf.writestr("README.txt", readme)
     buf.seek(0)
-    filename = f"codememory-{MEMORY_ROOT.name}-export.zip"
+    filename = f"codememory-{_get_root().name}-export.zip"
     return StreamingResponse(
         buf,
         media_type="application/zip",
@@ -1205,7 +1283,7 @@ def get_export():
 @app.get("/api/datasets")
 def get_datasets():
     """List available datasets found in examples/ directory."""
-    current = MEMORY_ROOT.resolve()
+    current = _get_root().resolve()
     datasets = _get_available_datasets()
     return _serialize({
         "datasets": datasets,
@@ -1220,9 +1298,10 @@ class SwitchDatasetRequest(BaseModel):
 
 @app.post("/api/datasets/switch")
 def post_switch_dataset(req: SwitchDatasetRequest):
-    """Switch the active dataset and reindex automatically."""
-    global MEMORY_ROOT
-
+    """Validate and reindex the requested dataset.  The frontend is responsible
+    for sending the X-Codememory-Dataset header on subsequent requests (set
+    via setCurrentDataset() in api.ts).  Each browser tab tracks its own
+    dataset independently — no shared global state."""
     new_root = (_EXAMPLES_DIR / req.name).resolve()
     if not new_root.exists():
         raise HTTPException(status_code=404, detail=f"Dataset '{req.name}' not found in examples/")
@@ -1230,10 +1309,11 @@ def post_switch_dataset(req: SwitchDatasetRequest):
     if not idx.exists():
         raise HTTPException(status_code=404, detail=f"Dataset '{req.name}' has no .codememory/index.json")
 
-    MEMORY_ROOT = new_root
+    # Reindex the new dataset (scoped to the requested name, not the header)
+    reindex(new_root)
 
-    # Reindex the new dataset
-    reindex(MEMORY_ROOT)
+    # Set the context for this request so get_stats() uses the new dataset
+    _current_dataset.set(req.name)
 
     # Return stats for the new dataset
     return get_stats()
@@ -1246,6 +1326,7 @@ def post_switch_dataset(req: SwitchDatasetRequest):
 if __name__ == "__main__":
     import uvicorn
 
+    default_root = _resolve_root(_DEFAULT_DATASET)
     print(f"CodeMemory API starting on http://localhost:8000")
-    print(f"Memory root: {MEMORY_ROOT}")
+    print(f"Default dataset: {_DEFAULT_DATASET} ({default_root})")
     uvicorn.run(app, host="0.0.0.0", port=8000)

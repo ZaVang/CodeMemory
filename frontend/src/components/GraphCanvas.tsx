@@ -3,7 +3,7 @@ import cytoscape, { type Core } from 'cytoscape'
 import dagre from 'dagre'
 import type { GraphData, GraphNode, GraphEdge, ResolveResponse } from '../types'
 import { fetchGraph } from '../api'
-import { DIRECTORY_COLORS, DIRECTORY_TINTS, DEFAULT_COLOR, DEFAULT_TINT } from '../colors'
+import { DIRECTORY_COLORS, DIRECTORY_TINTS, DIRECTORY_TINTS_DARK, DEFAULT_COLOR, DEFAULT_TINT, DEFAULT_TINT_DARK } from '../colors'
 import EmptyState from './EmptyState'
 
 interface Props {
@@ -28,24 +28,6 @@ function cssVar(name: string): string {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim()
 }
 
-/** Darken a hex color by blending with black at given alpha */
-function darkenHex(hex: string, alpha: number): string {
-  const r = parseInt(hex.slice(1, 3), 16)
-  const g = parseInt(hex.slice(3, 5), 16)
-  const b = parseInt(hex.slice(5, 7), 16)
-  const nr = Math.round(r * (1 - alpha))
-  const ng = Math.round(g * (1 - alpha))
-  const nb = Math.round(b * (1 - alpha))
-  return `#${nr.toString(16).padStart(2, '0')}${ng.toString(16).padStart(2, '0')}${nb.toString(16).padStart(2, '0')}`
-}
-
-/** Get theme-aware node tint — darkens tints for dark mode */
-function themeTint(dirTint: string, isDark: boolean): string {
-  if (!isDark) return dirTint
-  // Dark mode: darken light tints so nodes aren't jarringly bright
-  return darkenHex(dirTint, 0.82)
-}
-
 function shortId(id: string): string {
   const parts = id.split('/')
   return parts[parts.length - 1]
@@ -59,12 +41,14 @@ function getNodeColor(node: GraphNode): string {
   return DEFAULT_COLOR
 }
 
-function getNodeTint(node: GraphNode): string {
+function getNodeTint(node: GraphNode, isDark: boolean = false): string {
   const dir = node.data.directory || node.data.group || ''
-  for (const [key, tint] of Object.entries(DIRECTORY_TINTS)) {
+  const palette = isDark ? DIRECTORY_TINTS_DARK : DIRECTORY_TINTS
+  const fallback = isDark ? DEFAULT_TINT_DARK : DEFAULT_TINT
+  for (const [key, tint] of Object.entries(palette)) {
     if (dir === key || dir.startsWith(key)) return tint
   }
-  return DEFAULT_TINT
+  return fallback
 }
 
 function intensityToRadius(intensity: number): number {
@@ -75,6 +59,8 @@ const GraphCanvas = forwardRef<GraphCanvasHandle, Props>(function GraphCanvas({ 
   const containerRef = useRef<HTMLDivElement>(null)
   const cyRef = useRef<Core | null>(null)
   const [graphData, setGraphData] = useState<GraphData | null>(null)
+  // R9-graph-viewport: preserve zoom/pan across theme-switch instance rebuilds
+  const savedViewportRef = useRef<{ zoom: number; pan: { x: number; y: number } } | null>(null)
   // Tooltip state (R5-graph-node-tooltips)
   const tooltipRef = useRef<HTMLDivElement | null>(null)
   const tooltipTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -119,8 +105,14 @@ const GraphCanvas = forwardRef<GraphCanvasHandle, Props>(function GraphCanvas({ 
   useEffect(() => {
     if (!graphData || !containerRef.current) return
 
-    // Clean up previous instance
+    // Save viewport before destroying the old instance (R9-graph-viewport)
     if (cyRef.current) {
+      try {
+        savedViewportRef.current = {
+          zoom: cyRef.current.zoom(),
+          pan: { ...cyRef.current.pan() },
+        }
+      } catch { /* ignore errors from a potentially broken instance */ }
       cyRef.current.destroy()
     }
 
@@ -145,8 +137,8 @@ const GraphCanvas = forwardRef<GraphCanvasHandle, Props>(function GraphCanvas({ 
           style: {
             'background-color': (el) => {
               const n = graphData.nodes.find((no) => no.data.id === el.id())
-              const tint = n ? getNodeTint(n) : DEFAULT_TINT
-              return themeTint(tint, activeTheme === 'dark')
+              const isDark = activeTheme === 'dark'
+              return n ? getNodeTint(n, isDark) : (isDark ? DEFAULT_TINT_DARK : DEFAULT_TINT)
             },
             'width': (el) => {
               const n = graphData.nodes.find((no) => no.data.id === el.id())
@@ -344,13 +336,28 @@ const GraphCanvas = forwardRef<GraphCanvasHandle, Props>(function GraphCanvas({ 
     // Clear tooltip on graph pan/zoom
     cy.on('pan zoom', () => setTooltip(null))
 
-    // Apply initial zoom from prop (after layout renders)
+    // Apply initial zoom/pan after layout renders.  If a saved viewport exists
+    // (from a theme-switch rebuild), restore it instead of using defaults.
+    const saved = savedViewportRef.current
     setTimeout(() => {
-      cy.zoom(zoomLevel)
-      cy.center()
-    }, 150)
+      if (saved && saved.zoom > 0) {
+        cy.zoom(saved.zoom)
+        cy.pan(saved.pan)
+        savedViewportRef.current = null
+      } else {
+        cy.zoom(zoomLevel)
+        cy.center()
+      }
+    }, 250)
 
     return () => {
+      // Save viewport on unmount too (in case parent stops rendering GraphCanvas)
+      try {
+        savedViewportRef.current = {
+          zoom: cy.zoom(),
+          pan: { ...cy.pan() },
+        }
+      } catch { /* ignore */ }
       cy.destroy()
       cyRef.current = null
     }

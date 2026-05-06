@@ -2,16 +2,34 @@ import type { MemorySummary, PaginatedMemoriesResponse, MemoryDetail, GraphData,
 
 const BASE = '/api'
 
+// Per-tab dataset tracker — set via setCurrentDataset() before requests.
+// This replaces the backend global MEMORY_ROOT, enabling concurrent tabs
+// to view different datasets independently.
+let _currentDataset: string = ''
+
+/** Inform the API layer which dataset to scope subsequent requests to. */
+export function setCurrentDataset(name: string) {
+  _currentDataset = name
+}
+
 function _emitNetworkError(message: string) {
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent('codememory:network-error', { detail: message }))
   }
 }
 
+function _headers(extra?: Record<string, string>): Record<string, string> {
+  const h: Record<string, string> = { ...extra }
+  if (_currentDataset) {
+    h['X-Codememory-Dataset'] = _currentDataset
+  }
+  return h
+}
+
 async function fetcher<T>(url: string, init?: RequestInit): Promise<T> {
   let res: Response
   try {
-    res = await fetch(url, init)
+    res = await fetch(url, { ...init, headers: _headers(init?.headers as Record<string, string> | undefined) })
   } catch {
     // Network failure (server unreachable, DNS, etc.)
     _emitNetworkError('Cannot reach server. Check your connection and try again.')
@@ -49,8 +67,13 @@ export async function fetchAllMemories(): Promise<MemorySummary[]> {
   return res.memories
 }
 
+/** Encode a memory ID for use in a URL path, preserving / separators. */
+function encodePathId(id: string): string {
+  return id.split('/').map(encodeURIComponent).join('/')
+}
+
 export async function fetchMemory(id: string): Promise<MemoryDetail> {
-  return fetcher<MemoryDetail>(`${BASE}/memories/${encodeURIComponent(id)}`)
+  return fetcher<MemoryDetail>(`${BASE}/memories/${encodePathId(id)}`)
 }
 
 export async function fetchGraph(): Promise<GraphData> {
@@ -94,7 +117,7 @@ export async function createMemory(req: CreateMemoryRequest): Promise<Record<str
 }
 
 export async function updateMemory(id: string, req: UpdateMemoryRequest): Promise<Record<string, unknown>> {
-  return fetcher(`${BASE}/memories/${encodeURIComponent(id)}`, {
+  return fetcher(`${BASE}/memories/${encodePathId(id)}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(req),

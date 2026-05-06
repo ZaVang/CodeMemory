@@ -6,7 +6,7 @@ import sys
 from datetime import date, datetime
 from pathlib import Path
 
-from .core import parse_frontmatter
+from .core import compute_body_hash, parse_frontmatter
 from .models import IndexData, MemoryEntry
 
 _logger = logging.getLogger("codememory")
@@ -107,8 +107,9 @@ def reindex(root_dir: Path) -> int:
                     entry.schema = meta["schema"]
                 if "imports" in meta:
                     entry.imports = meta["imports"]
-                if "summary_hash" in meta:
-                    entry.summary_hash = meta["summary_hash"]
+                # summary_hash is recomputed from actual body to prevent stale
+                # false positives caused by create-time normalization bugs.
+                entry.summary_hash = compute_body_hash(_body.strip())
                 if meta.get("protected") is True:
                     entry.protected = True
                 if "source" in meta:

@@ -538,3 +538,69 @@ PYTHONPATH=src python tests/integration_test.py
   - 目标：将 MemoryList 文本过滤产生零结果时的空可滚动区域替换为共享 EmptyState 组件。EmptyState 显示合适的图标、"0 of N memories match your filter" 消息和 "Clear Filter" 操作按钮。零记忆状态也使用 EmptyState（已在用但需补充 actions prop）。
   - 验收：MemoryList 零过滤结果展示 EmptyState（非空可滚动 div）；EmptyState 含过滤相关的特定消息和 "Clear Filter" 按钮；MemoryList 零总记忆也使用 EmptyState；视觉风格与 Graph 和 Dashboard 空状态一致
   - 来源：体验官 Nice-to-have #9（最后一个视图特定的空状态不一致——MemoryList 未使用 EmptyState）
+
+## 第 9 轮追加任务（基于体验官 + 进化策略师审计 — 2026-05-06）
+
+> **背景**: 体验官 8.5/10（从 7.5 上升），仅剩 cosmetic issues。进化策略师 6.5/10（从 5.0 上升），发现 3 个 Critical 数据完整性 bug。
+> **优先级**: 🔴 第一梯队 = 修复 3 个 Critical bug + MemoryList hex；🟡 第二梯队 = 高价值改进；🟢 第三梯队 = 至少一项 polish。
+
+### 第一梯队（🔴 Critical 修复 — 本轮必须完成）
+
+- [x] R9-B1: 修复 Memory ID lookup — GET /api/memories/{id} 对所有有效 ID 返回 404
+  - 目标：修复 `GET /api/memories/{id}` 端点，使其能正确检索 index 中已存在的记忆。统一所有端点的 index 加载路径为单一方法，消除 `_load_index()`（raw dict）与 `load_index()`（Pydantic 模型）两种不兼容加载方式。确保 `{memory_id:path}` FastAPI 路由参数正确捕获并匹配含 `/` 分隔符的记忆 ID。
+  - 验收：对所有 companion 数据集 10 条记忆，GET /api/memories/{id} 均返回 200；对所有 investment 数据集 10 条记忆，均返回 200；对所有 software-architecture 数据集 11 条记忆，均返回 200；GET /api/memories/{id}/backlinks 返回正确的反向引用数据（非空数组）；MemoryDetail 面板点击任意图节点正常打开；MemoryForm 编辑模式预填正确；GET /api/memories 分页列表无退化；后端 57+24 测试通过
+  - 来源：进化策略师 Critical #1 + #5（产品看起来坏了——任何点击记忆的用户都看到 404）
+
+- [x] R9-B2: 修复 Stale 检测 — 100% 误报率
+  - 目标：修复 `_stale_check()`，使 `summary_hash` 比对正确匹配 body 内容哈希。定位并对齐 reindex 时（计算 `summary_hash` 并存储）与 check 时（对 `_parse_frontmatter()` 解析的 body 调用 `compute_body_hash()`）之间的 body 文本规范化差异——可能是尾部空白处理、编码规范化（utf-8 vs utf-8-sig）或 body 内容修剪差异。
+  - 验收：companion 数据集（10 条）：reindex 后 stale_count = 0；investment 数据集（10 条）：reindex 后 stale_count = 0；software-architecture 数据集（11 条）：reindex 后 stale_count = 0；人为修改某条记忆 body 后 stale_count 正确增加到 1；reindex 后修改过的记忆 stale_count 恢复到 0；Dashboard stale 列表反映准确的 stale 状态；`_stale_check()` 对 Pydantic 模型和 raw dict 均返回正确结果
+  - 来源：进化策略师 Critical #2（Dashboard 健康指标完全无意义——用户学会忽略警告）
+
+- [x] R9-B3: 修复全局 MEMORY_ROOT 线程不安全
+  - 目标：用 FastAPI 依赖注入或 `request.state` 替换模块级 global `MEMORY_ROOT` 变量。所有当前直接读取 `MEMORY_ROOT` 的函数（`_get_index_path()`、`_stale_check()`、`get_memory()`、文件路径构建等）必须通过依赖接收 root 路径。数据集切换端点必须通过依赖机制更新活跃数据集，而非修改共享全局变量。
+  - 验收：server.py 中无 `global MEMORY_ROOT` 语句；所有函数通过参数传递或依赖注入接收 memory root 路径；两个并发请求访问不同数据集（如 graph 查 investment + stats 查 companion）返回正确且数据集一致的结果；POST /api/datasets/switch 正确更新活跃数据集；多个浏览器 tab 可独立查看不同数据集而互不污染；全部 16 个 API 端点重构后功能正常；后端 57+24 测试通过
+  - 来源：进化策略师 Critical #4（并发访问下数据不一致——测试中已观测到）
+
+- [x] R9-hex: 替换 MemoryList.tsx 中最后一个硬编码 hex
+  - 目标：将 `MemoryList.tsx` 第 225 行的 `'#7C3AED'` 替换为 CSS 变量。该值（紫色）用于 schema 类型文字颜色。替换为 `'var(--cm-info)'`（因为 `--cm-info` 已在 index.css 两个主题中定义，紫色为现有 info 色），或添加专用 `--cm-schema` CSS 变量（亮色模式值 `#7C3AED`，深色模式变体 `#A78BFA` 或 `#C4B5FD`）。
+  - 验收：MemoryList.tsx 第 225 行不再含 `'#7C3AED'` 硬编码字符串；schema 类型文字使用主题感知的 CSS 变量；亮色模式下 schema 文字颜色与当前状态视觉一致；深色模式下 schema 文字可见且颜色恰当；所有 .tsx 组件中无其他硬编码 hex 值（通过 grep `'#[0-9A-Fa-f]{6}'` 和 `"#[0-9A-Fa-f]{6}"` 确认）；TypeScript 零错误，前端构建通过
+  - 来源：体验官 Critical（98.7% → 100% 迁移完成——5 分钟修复，整个 backlog 中 ROI 最高）
+
+### 第二梯队（🟡 高价值改进 — 本轮尽量完成）
+
+- [x] R9-darkmode-colors: 改进深色模式节点颜色区分度
+  - 目标：用目录颜色到深色模式调色板映射替换 GraphCanvas.tsx 中统一的 `themeTint()` 变暗方式。每个目录颜色（如 preferences 的金色 `#B8860B`、feelings 的琥珀色 `#D97706`、beliefs 的绿色 `#166534`）应有更亮、更饱和的深色模式变体，保留颜色语义（如金色变为 `#D4A017` 亮金，而非 `#2E2C2A` 深灰）。深色调色板定义在 `colors.ts` 中与亮色调色板并列（单一真相来源）。`themeTint()` 函数应替换或扩展为对已知目录查色、仅对未知/回退颜色回退到统一变暗。
+  - 验收：深色模式下不同目录节点颜色可视觉区分（非全部近似深灰）；每个目录颜色有可感知更亮更饱和的深色模式变体；深色调色板定义在 `colors.ts` 与亮色调色板并列；未知/回退颜色仍走安全变暗（统一方式兜底）；亮色模式节点颜色视觉不变；动态 Legend 在深色模式下正确显示深色颜色；主题切换（亮 ↔ 暗）更新图中节点颜色
+  - 来源：体验官 High #2（深色模式最后一个有意义的审美缺口——目录视觉分类丢失）
+
+- [x] R9-graph-viewport: 主题切换时保留图视口位置
+  - 目标：在主题变更销毁 cytoscape 实例前存储当前视口状态（缩放级别 `cy.zoom()` 和平移位置 `cy.pan()`），在新实例初始化并完成布局后恢复。这需要读取销毁前的值，并在新实例 `layoutstop` 事件后调用 `cy.zoom(zoom)` 和 `cy.pan(pan)`。
+  - 验收：切换主题（亮 ↔ 暗）保留当前缩放级别（误差在 0.01 内）；切换主题保留当前平移位置（x, y，误差在 5px 内）；切换后图以正确主题颜色重新渲染；切换前用户在查看某特定子图区域，切换后看到同一区域；图渲染、布局、交互无退化
+  - 来源：体验官 High #3（主题切换丢失空间上下文——令人迷失方向）
+
+- [x] R9-error-feedback: 为 CRUD 操作添加用户可见的错误反馈
+  - 目标：为 create、update、reindex、validate 操作失败时添加用户可见的错误反馈。当前错误仅记录到 `console.error`——用户看不到任何提示。修复应复用已建立的网络错误 banner 模式（顶部红色横幅）或扩展现有 toast 系统覆盖操作失败。错误消息必须人类可读（非原始 HTTP 状态码文本）。
+  - 验收：创建失败（如无效 ID 格式、后端错误）向用户显示可见错误信息；更新失败显示可见错误信息；reindex 失败（API 返回 500）在 Dashboard 中显示可见错误信息；validate 失败显示可见错误信息；错误消息人类可读（非 "API error: 422"）；错误消息使用已有主题错误 banner 模式（或等效一致机制）；错误 banner 合理超时后自动消失或可通过 X 关闭；成功操作不显示错误反馈
+  - 来源：进化策略师 Important #8（静默失败侵蚀信任——仅 2 条错误反馈路径）
+
+- [x] R9-tag-autocomplete: 在 MemoryForm 和 SearchBar 中添加标签自动补全
+  - 目标：在创建/编辑表单或搜索栏中输入标签时，建议当前数据集 index 中已存在的标签。自动补全在输入框下方以下拉菜单形式显示匹配标签（前缀匹配或模糊匹配）。选择建议后插入该标签。标签列表应来源于当前数据集实际使用的标签（通过 `/api/stats` 获取或从记忆列表中提取）。
+  - 验收：在标签输入框中输入文字显示当前数据集已有匹配标签的下拉菜单；选择建议将标签插入当前输入；建议随用户继续输入过滤（前缀匹配）；标签列表来源于当前数据集实际使用（非硬编码）；创建和编辑表单中均可用；搜索栏标签筛选器（如已暴露）或搜索输入本身可用；62 条 quant_operators 数据集上无性能退化
+  - 来源：进化策略师 Important #6（标签不一致破坏过滤和搜索——无自动补全几乎不可能保持一致性）
+
+- [x] R9-validate-drilldown: 使验证结果在 Dashboard 中可操作
+  - 目标：Dashboard 的 validate 区域当前仅显示通过/失败计数（如 "0 errors, 0 warnings"）。后端 `/api/validate` 端点返回含具体消息、记忆 ID 和类型的结构化数组（errors 和 warnings）。在 Dashboard 中展示这些详情：显示每条 error/warning 消息，将每个问题关联到对应记忆 ID（可点击打开详情面板），按类型分组（如 "Circular dependency"、"Broken link"、"Maturity decay"）。
+  - 验收：Dashboard validate 区域展示具体 error/warning 消息（非仅计数）；每条 error/warning 包含受影响的记忆 ID，可点击打开详情面板；错误和警告按类型分组并含类型标签；顶部仍可见通过/失败汇总；0 错误 0 警告时显示 "All checks passed" 消息；Reindex 按钮在扩展的 validate 展示旁仍正常工作
+  - 来源：进化策略师 Nice-to-have #13（后端返回结构化数据——UI 仅显示 pass/fail 计数）
+
+### 第三梯队（🟢 打磨 — 本轮至少完成一项）
+
+- [x] R9-empty-search: 为搜索添加"无结果"状态
+  - 目标：当搜索查询返回零结果时，在搜索下拉菜单中显示用户可见的提示，而非什么都不显示。提示应有用且可操作："No memories found matching 'xyz'. Try different keywords." 当前行为（下拉菜单根本不出现）让用户无法确定搜索是否崩溃、仍在加载或确实无结果。
+  - 验收：输入匹配零条记忆的查询后搜索下拉菜单显示 "No memories found matching [query]"；提示包含可操作指引（"Try different keywords" 或等效文字）；下拉菜单出现（含提示）而非根本不出现；用户清除查询时下拉菜单正常消失；有结果时正常显示结果列表（无退化）；空结果消息使用恰当样式（非 error，信息性语气）
+  - 来源：进化策略师 Nice-to-have #22（最明显的剩余空状态缺口——下拉菜单直接消失）
+
+- [x] R9-loading-skeletons: 为 List 和 Dashboard 添加加载骨架屏
+  - 目标：用骨架屏占位组件替换 List 视图和 Dashboard 数据加载期间的空白/闪烁状态。骨架屏应模拟实际内容的布局（如 List 的行状矩形、Dashboard stat card 的卡片状矩形），带微妙的脉冲/shimmer 动画。提供即时视觉反馈表示内容正在加载而非损坏。
+  - 验收：List 视图在初始数据加载期间显示骨架行（匹配表格布局）；Dashboard 在初始数据加载期间显示骨架卡片（匹配 stat card 布局）；骨架有微妙的脉冲或 shimmer 动画；数据到达后骨架被实际内容替换；数据加载失败时骨架被适当错误状态替换（非一直挂起）；已有缓存/客户端数据时不出现骨架屏（即时过渡）
+  - 来源：进化策略师 Nice-to-have #19（低投入高感知性能改进——空白闪烁被误读为损坏状态）
