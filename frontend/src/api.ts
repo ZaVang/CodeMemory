@@ -81,3 +81,56 @@ export async function updateMemory(id: string, req: UpdateMemoryRequest): Promis
     body: JSON.stringify(req),
   })
 }
+
+export interface DatasetInfo {
+  name: string
+  path: string
+  memory_count: number
+}
+
+export interface DatasetsResponse {
+  datasets: DatasetInfo[]
+  current: string
+  current_name: string
+}
+
+export async function fetchDatasets(): Promise<DatasetsResponse> {
+  return fetcher<DatasetsResponse>(`${BASE}/datasets`)
+}
+
+export async function switchDataset(name: string): Promise<Record<string, unknown>> {
+  return fetcher(`${BASE}/datasets/switch`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name }),
+  })
+}
+
+export async function fetchReindex(): Promise<Record<string, unknown>> {
+  return fetcher(`${BASE}/reindex`, { method: 'POST' })
+}
+
+export interface SearchResultItem {
+  id: string
+  summary: string
+  type: string
+  tags: string[]
+  intensity: number
+  maturity: string
+  status: string
+  snippet: string
+}
+
+export interface SearchResultsResponse {
+  results: SearchResultItem[]
+  count: number
+  query: string
+}
+
+export async function fetchSearch(query: string): Promise<SearchResultsResponse> {
+  return fetcher<SearchResultsResponse>(`${BASE}/search`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ query }),
+  })
+}

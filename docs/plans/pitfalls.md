@@ -77,3 +77,6 @@ handle_create/handle_update 不原生支持 imports 参数。server.py 通过在
 
 ## [Sprint 13 PL1] 空 body 的 summary_hash 是确定性的
 `compute_body_hash("")` 返回 `"e3b0c44"`（SHA-256 空字符串的前 7 位十六进制）。任何未来对 body hash 计算的更改必须为空白正文记忆保留此不变量。
+
+## [Sprint 13 PL3] 英文数据集 summary_hash 占位值触发 stale 警告
+新创建的记忆文件使用占位 summary_hash 值（如 `b2c3d4e`）会导致 resolve 输出中出现 `[NOTICE] summary may be stale` 警告。这继承了 Sprint 4 记录的 summary_hash 初始值陷阱。修复方式：使用 `codememory update` 批量重新计算正确的 hash，或通过 `codememory create` 命令创建记忆（它会自动计算正确的 hash）。当前 `examples/software-architecture/` 中有 3 条记忆含占位 hash。

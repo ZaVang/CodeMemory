@@ -1,0 +1,331 @@
+{
+  "version": 1,
+  "updated": "2026-05-06T10:01:01.908679",
+  "memories": {
+    "user/beliefs/correctness-over-speed": {
+      "type": "atom",
+      "id": "user/beliefs/correctness-over-speed",
+      "summary": "We believe that correctness is more valuable than development speed in the core domain; bugs in orders and payments are far more costly than a delayed release",
+      "status": "active",
+      "tags": [
+        "engineering-culture",
+        "quality",
+        "values"
+      ],
+      "intensity": 9,
+      "version": 1,
+      "path": "user/beliefs/correctness-over-speed.md",
+      "access_count": 0,
+      "last_access": null,
+      "created": "2025-05-01",
+      "updated": "",
+      "imports": {},
+      "schema": null,
+      "summary_hash": "7d8cdec",
+      "protected": null,
+      "change_note": null,
+      "change_log": [],
+      "source": null,
+      "maturity": "proven",
+      "evidence": null
+    },
+    "user/decisions/adopt-microservices": {
+      "type": "atom",
+      "id": "user/decisions/adopt-microservices",
+      "summary": "Decided to adopt a microservices architecture for the core platform",
+      "status": "active",
+      "tags": [
+        "architecture",
+        "microservices"
+      ],
+      "intensity": 9,
+      "version": 1,
+      "path": "user/decisions/adopt-microservices.md",
+      "access_count": 6,
+      "last_access": "2026-05-06T09:41:27.657812",
+      "created": "2025-06-15",
+      "updated": "",
+      "imports": {
+        "recommended": [
+          "user/facts/microservices-overhead",
+          "user/observations/team-distributed"
+        ],
+        "related": [
+          "user/preferences/simplicity-first"
+        ]
+      },
+      "schema": "schemas/architectural-decision",
+      "summary_hash": "7ff61a1",
+      "protected": null,
+      "change_note": null,
+      "change_log": [],
+      "source": null,
+      "maturity": "proven",
+      "evidence": null
+    },
+    "user/decisions/choose-postgres": {
+      "type": "atom",
+      "id": "user/decisions/choose-postgres",
+      "summary": "PostgreSQL selected as the primary relational database",
+      "status": "active",
+      "tags": [
+        "database",
+        "infrastructure"
+      ],
+      "intensity": 7,
+      "version": 1,
+      "path": "user/decisions/choose-postgres.md",
+      "access_count": 0,
+      "last_access": null,
+      "created": "2025-06-01",
+      "updated": "",
+      "imports": {
+        "recommended": [
+          "user/decisions/event-sourcing"
+        ]
+      },
+      "schema": "schemas/architectural-decision",
+      "summary_hash": "bbed85a",
+      "protected": null,
+      "change_note": null,
+      "change_log": [],
+      "source": null,
+      "maturity": "proven",
+      "evidence": null
+    },
+    "user/decisions/event-sourcing": {
+      "type": "atom",
+      "id": "user/decisions/event-sourcing",
+      "summary": "Adopted event sourcing for the core domain (orders and payments)",
+      "status": "active",
+      "tags": [
+        "architecture",
+        "event-sourcing",
+        "data"
+      ],
+      "intensity": 8,
+      "version": 1,
+      "path": "user/decisions/event-sourcing.md",
+      "access_count": 0,
+      "last_access": null,
+      "created": "2025-08-01",
+      "updated": "",
+      "imports": {
+        "required": [
+          "user/facts/event-sourcing-consistency",
+          "user/decisions/adopt-microservices"
+        ]
+      },
+      "schema": "schemas/architectural-decision",
+      "summary_hash": "f2fc23e",
+      "protected": null,
+      "change_note": null,
+      "change_log": [],
+      "source": null,
+      "maturity": "verified",
+      "evidence": null
+    },
+    "user/decisions/use-graphql": {
+      "type": "atom",
+      "id": "user/decisions/use-graphql",
+      "summary": "Selected GraphQL as the primary API layer between frontend and backend services",
+      "status": "active",
+      "tags": [
+        "api",
+        "graphql",
+        "frontend"
+      ],
+      "intensity": 8,
+      "version": 1,
+      "path": "user/decisions/use-graphql.md",
+      "access_count": 0,
+      "last_access": null,
+      "created": "2025-07-01",
+      "updated": "",
+      "imports": {
+        "required": [
+          "user/facts/graphql-n-plus-one"
+        ],
+        "recommended": [
+          "user/decisions/adopt-microservices"
+        ]
+      },
+      "schema": "schemas/architectural-decision",
+      "summary_hash": "8986cb4",
+      "protected": null,
+      "change_note": null,
+      "change_log": [],
+      "source": null,
+      "maturity": "verified",
+      "evidence": null
+    },
+    "user/facts/event-sourcing-consistency": {
+      "type": "atom",
+      "id": "user/facts/event-sourcing-consistency",
+      "summary": "Event sourcing systems are eventually consistent by nature; read models lag behind the event log",
+      "status": "active",
+      "tags": [
+        "event-sourcing",
+        "consistency",
+        "data"
+      ],
+      "intensity": 7,
+      "version": 1,
+      "path": "user/facts/event-sourcing-consistency.md",
+      "access_count": 0,
+      "last_access": null,
+      "created": "2025-07-15",
+      "updated": "",
+      "imports": {},
+      "schema": null,
+      "summary_hash": "85cd8e9",
+      "protected": null,
+      "change_note": null,
+      "change_log": [],
+      "source": null,
+      "maturity": "proven",
+      "evidence": null
+    },
+    "user/facts/graphql-n-plus-one": {
+      "type": "atom",
+      "id": "user/facts/graphql-n-plus-one",
+      "summary": "GraphQL resolvers are susceptible to the N+1 query problem, requiring explicit mitigation with DataLoader or similar batching strategies",
+      "status": "active",
+      "tags": [
+        "graphql",
+        "performance",
+        "backend"
+      ],
+      "intensity": 8,
+      "version": 1,
+      "path": "user/facts/graphql-n-plus-one.md",
+      "access_count": 0,
+      "last_access": null,
+      "created": "2025-06-20",
+      "updated": "",
+      "imports": {},
+      "schema": null,
+      "summary_hash": "d79afec",
+      "protected": null,
+      "change_note": null,
+      "change_log": [],
+      "source": null,
+      "maturity": "proven",
+      "evidence": null
+    },
+    "user/facts/microservices-overhead": {
+      "type": "atom",
+      "id": "user/facts/microservices-overhead",
+      "summary": "Microservices introduce significant operational overhead that must be accounted for in planning",
+      "status": "active",
+      "tags": [
+        "architecture",
+        "microservices",
+        "operations"
+      ],
+      "intensity": 8,
+      "version": 1,
+      "path": "user/facts/microservices-overhead.md",
+      "access_count": 2,
+      "last_access": "2026-04-30T17:22:09.007252",
+      "created": "2025-06-10",
+      "updated": "",
+      "imports": {
+        "related": [
+          "user/preferences/simplicity-first"
+        ]
+      },
+      "schema": null,
+      "summary_hash": "a6b9b79",
+      "protected": null,
+      "change_note": null,
+      "change_log": [],
+      "source": null,
+      "maturity": "proven",
+      "evidence": null
+    },
+    "user/observations/team-distributed": {
+      "type": "atom",
+      "id": "user/observations/team-distributed",
+      "summary": "The engineering team is distributed across three time zones (UTC-8, UTC+1, UTC+8), making asynchronous communication the default",
+      "status": "active",
+      "tags": [
+        "team",
+        "communication",
+        "process"
+      ],
+      "intensity": 7,
+      "version": 1,
+      "path": "user/observations/team-distributed.md",
+      "access_count": 2,
+      "last_access": "2026-04-30T17:22:09.007252",
+      "created": "2025-05-15",
+      "updated": "",
+      "imports": {},
+      "schema": null,
+      "summary_hash": "1173d89",
+      "protected": null,
+      "change_note": null,
+      "change_log": [],
+      "source": null,
+      "maturity": "verified",
+      "evidence": null
+    },
+    "user/preferences/simplicity-first": {
+      "type": "atom",
+      "id": "user/preferences/simplicity-first",
+      "summary": "Prefer the simplest solution that meets requirements, deferring complexity until it is demonstrably necessary",
+      "status": "active",
+      "tags": [
+        "engineering-culture",
+        "decision-making"
+      ],
+      "intensity": 9,
+      "version": 1,
+      "path": "user/preferences/simplicity-first.md",
+      "access_count": 0,
+      "last_access": null,
+      "created": "2025-05-01",
+      "updated": "",
+      "imports": {
+        "related": [
+          "user/beliefs/correctness-over-speed"
+        ]
+      },
+      "schema": null,
+      "summary_hash": "4d5fe7c",
+      "protected": null,
+      "change_note": null,
+      "change_log": [],
+      "source": null,
+      "maturity": "proven",
+      "evidence": null
+    },
+    "schemas/architectural-decision": {
+      "type": "schema",
+      "id": "schemas/architectural-decision",
+      "summary": "A structured record of a significant architectural decision",
+      "status": "active",
+      "tags": [
+        "architecture",
+        "decision-making"
+      ],
+      "intensity": 9,
+      "version": 1,
+      "path": "schemas/architectural-decision.md",
+      "access_count": 0,
+      "last_access": null,
+      "created": "2025-06-01",
+      "updated": "",
+      "imports": {},
+      "schema": null,
+      "summary_hash": "fdf5861",
+      "protected": null,
+      "change_note": null,
+      "change_log": [],
+      "source": null,
+      "maturity": "proven",
+      "evidence": null
+    }
+  }
+}

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { fetchStats, fetchWander, fetchValidate } from '../api'
+import { fetchStats, fetchWander, fetchValidate, fetchReindex } from '../api'
 import type { StatsResponse, WanderResponse, ValidateResponse } from '../types'
 
 interface Props {
@@ -16,6 +16,7 @@ export default function Dashboard({ onSelectMemory, refreshTrigger }: Props) {
   const [validateOpen, setValidateOpen] = useState(false)
   const [wandering, setWandering] = useState(false)
   const [validating, setValidating] = useState(false)
+  const [reindexing, setReindexing] = useState(false)
   const [wanderMode, setWanderMode] = useState<'cool' | 'random'>('cool')
 
   const loadData = useCallback(() => {
@@ -55,6 +56,14 @@ export default function Dashboard({ onSelectMemory, refreshTrigger }: Props) {
       .catch(console.error)
       .finally(() => setValidating(false))
   }, [])
+
+  const handleReindex = useCallback(() => {
+    setReindexing(true)
+    fetchReindex()
+      .then(() => loadData())
+      .catch(console.error)
+      .finally(() => setReindexing(false))
+  }, [loadData])
 
   // --- Render ---
 
@@ -198,6 +207,25 @@ export default function Dashboard({ onSelectMemory, refreshTrigger }: Props) {
             }}
           >
             Refresh
+          </button>
+          <button
+            onClick={handleReindex}
+            disabled={reindexing}
+            style={{
+              padding: '10px 24px',
+              border: '1px solid #CA8A04',
+              background: 'transparent',
+              color: '#CA8A04',
+              cursor: 'pointer',
+              fontSize: 12,
+              fontWeight: 600,
+              fontFamily: 'Raleway, sans-serif',
+              textTransform: 'uppercase',
+              letterSpacing: '0.08em',
+              borderRadius: 2,
+            }}
+          >
+            {reindexing ? 'Reindexing...' : 'Reindex'}
           </button>
         </div>
       </div>

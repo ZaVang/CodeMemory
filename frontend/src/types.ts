@@ -153,6 +153,7 @@ export interface UpdateMemoryRequest {
   tags?: string[] | null
   intensity?: number | null
   status?: string | null
+  maturity?: string | null
   change_note?: string | null
   imports?: Record<string, string[]> | null
 }

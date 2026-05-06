@@ -10,9 +10,11 @@ interface Props {
   onChange: () => void
   /** Called when user clicks "View in Graph" after editing */
   onSelectMemory?: (id: string) => void
+  /** Called with undo entry after a successful operation */
+  onUndoEntry?: (entry: { type: 'create' | 'update' | 'archive'; memoryId: string; previousState?: Record<string, unknown> }) => void
 }
 
-export default function MemoryForm({ memoryId, onClose, onChange, onSelectMemory }: Props) {
+export default function MemoryForm({ memoryId, onClose, onChange, onSelectMemory, onUndoEntry }: Props) {
   const isEdit = memoryId !== null
 
   // Form fields
@@ -22,6 +24,7 @@ export default function MemoryForm({ memoryId, onClose, onChange, onSelectMemory
   const [intensity, setIntensity] = useState(5)
   const [body, setBody] = useState('')
   const [status, setStatus] = useState('active')
+  const [maturity, setMaturity] = useState('draft')
   const [changeNote, setChangeNote] = useState('')
   // Imports (PL1-9): comma-separated IDs with strength selection
   const [importsText, setImportsText] = useState('')
@@ -34,6 +37,7 @@ export default function MemoryForm({ memoryId, onClose, onChange, onSelectMemory
   const [error, setError] = useState<string | null>(null)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [visible, setVisible] = useState(false)
+  const previousStateRef = useRef<Record<string, unknown> | null>(null)
 
   // Load existing data in edit mode
   useEffect(() => {
@@ -44,6 +48,7 @@ export default function MemoryForm({ memoryId, onClose, onChange, onSelectMemory
       setIntensity(5)
       setBody('')
       setStatus('active')
+      setMaturity('draft')
       setChangeNote('')
       setVisible(true)
       return
@@ -55,12 +60,22 @@ export default function MemoryForm({ memoryId, onClose, onChange, onSelectMemory
 
     fetchMemory(memoryId)
       .then((mem) => {
+        // Store previous state for undo
+        previousStateRef.current = {
+          body: mem.body ?? '',
+          summary: mem.summary ?? '',
+          tags: mem.tags ?? [],
+          intensity: mem.intensity ?? 5,
+          status: mem.status ?? 'active',
+          maturity: mem.maturity ?? 'draft',
+        }
         setId(mem.id)
         setSummary(mem.summary || '')
         setTags((mem.tags || []).join(', '))
         setIntensity(mem.intensity || 5)
         setBody(mem.body || '')
         setStatus(mem.status || 'active')
+        setMaturity(mem.maturity || 'draft')
         setChangeNote('')
         // PL1-9: populate imports from existing memory
         if (mem.imports) {
@@ -140,10 +155,12 @@ export default function MemoryForm({ memoryId, onClose, onChange, onSelectMemory
         tags: tagList.length > 0 ? tagList : undefined,
         intensity,
         body: body || undefined,
+        maturity: maturity || undefined,
         ...(hasImports ? { imports } : {}),
       })
 
       onChange()
+      if (onUndoEntry) onUndoEntry({ type: 'create', memoryId: id.trim() })
       onClose()
     } catch (err) {
       console.error('Create failed:', err)
@@ -151,7 +168,7 @@ export default function MemoryForm({ memoryId, onClose, onChange, onSelectMemory
     } finally {
       setSaving(false)
     }
-  }, [id, summary, tags, intensity, body, validate, onChange, onClose])
+  }, [id, summary, tags, intensity, body, maturity, importsText, importStrengths, validate, onChange, onClose, onUndoEntry])
 
   // Handle update
   const handleUpdate = useCallback(async () => {
@@ -190,11 +207,19 @@ export default function MemoryForm({ memoryId, onClose, onChange, onSelectMemory
         tags: tagList.length > 0 ? tagList : undefined,
         intensity,
         status: status || undefined,
+        maturity: maturity || undefined,
         change_note: changeNote.trim() || 'UI update',
         ...(hasImports ? { imports } : {}),
       })
 
       onChange()
+      if (onUndoEntry && memoryId) {
+        onUndoEntry({
+          type: 'update',
+          memoryId,
+          previousState: previousStateRef.current ?? undefined,
+        })
+      }
       onClose()
     } catch (err) {
       console.error('Update failed:', err)
@@ -202,7 +227,7 @@ export default function MemoryForm({ memoryId, onClose, onChange, onSelectMemory
     } finally {
       setSaving(false)
     }
-  }, [memoryId, body, summary, tags, intensity, status, changeNote, validate, onChange, onClose])
+  }, [memoryId, body, summary, tags, intensity, status, maturity, changeNote, importsText, importStrengths, validate, onChange, onClose, onUndoEntry])
 
   // Handle delete
   const handleDelete = useCallback(async () => {
@@ -212,15 +237,21 @@ export default function MemoryForm({ memoryId, onClose, onChange, onSelectMemory
     setError(null)
 
     try {
-      // Delete by marking as archived (no hard delete endpoint available)
-      // Actually, let's use update to archive or we need a DELETE endpoint
-      // For now, we archive the memory and update status
+      // Store current status for undo (if it was active, undo should restore active)
+      const prevStatus = status
       await updateMemory(memoryId, {
         status: 'archived',
         change_note: 'Archived via UI',
       })
 
       onChange()
+      if (onUndoEntry && memoryId) {
+        onUndoEntry({
+          type: 'archive',
+          memoryId,
+          previousState: { status: prevStatus },
+        })
+      }
       onClose()
     } catch (err) {
       console.error('Delete failed:', err)
@@ -487,6 +518,20 @@ export default function MemoryForm({ memoryId, onClose, onChange, onSelectMemory
                   {intensity}
                 </span>
               </div>
+            </Field>
+
+            {/* Maturity (PL3-7: exposed in both create and edit) */}
+            <Field label="Maturity">
+              <select
+                value={maturity}
+                onChange={(e) => setMaturity(e.target.value)}
+                style={inputStyle}
+              >
+                <option value="draft">Draft</option>
+                <option value="verified">Verified</option>
+                <option value="proven">Proven</option>
+                <option value="superseded">Superseded</option>
+              </select>
             </Field>
 
             {/* Status (edit only) */}

@@ -8,11 +8,11 @@ interface Props {
   searchText: string
   onNodeClick: (id: string) => void
   onNodeContextMenu?: (id: string, position: { x: number; y: number }) => void
-  layoutMode: 'dagre' | 'force'
   resolveData: ResolveResponse | null
   isResolving: boolean
   refreshTrigger?: number  // increment to reload graph data
   zoomLevel?: number  // 0.15 to 2.0, default 0.5
+  onGraphDataLoaded?: (data: GraphData) => void
 }
 
 // LuxCart directory colors — border color for nodes
@@ -70,14 +70,17 @@ function intensityToRadius(intensity: number): number {
   return Math.max(18, Math.min(50, 14 + intensity * 4))
 }
 
-export default function GraphCanvas({ searchText, onNodeClick, onNodeContextMenu, layoutMode, resolveData, isResolving, refreshTrigger, zoomLevel = 0.5 }: Props) {
+export default function GraphCanvas({ searchText, onNodeClick, onNodeContextMenu, resolveData, isResolving, refreshTrigger, zoomLevel = 0.5, onGraphDataLoaded }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const cyRef = useRef<Core | null>(null)
   const [graphData, setGraphData] = useState<GraphData | null>(null)
 
   // Load graph data
   useEffect(() => {
-    fetchGraph().then(setGraphData).catch(console.error)
+    fetchGraph().then((data) => {
+      setGraphData(data)
+      if (onGraphDataLoaded) onGraphDataLoaded(data)
+    }).catch(console.error)
   }, [refreshTrigger])
 
   // Run dagre layout on node positions
@@ -151,7 +154,7 @@ export default function GraphCanvas({ searchText, onNodeClick, onNodeContextMenu
             'text-wrap': 'ellipsis',
             'text-max-width': '80px',
             'font-size': '11px',
-            'font-family': 'Inter, sans-serif',
+            'font-family': 'Raleway, sans-serif',
             'font-weight': '500',
             'color': '#1C1917',
             'text-valign': 'center',
@@ -287,12 +290,8 @@ export default function GraphCanvas({ searchText, onNodeClick, onNodeContextMenu
 
     cyRef.current = cy
 
-    // Apply initial layout
-    if (layoutMode === 'dagre') {
-      runDagreLayout(cy)
-    } else {
-      cy.layout({ name: 'cose', animate: true, nodeRepulsion: () => 4000 }).run()
-    }
+    // Apply dagre layout (the only layout)
+    runDagreLayout(cy)
 
     // Click handler
     cy.on('tap', 'node', (evt) => {
@@ -332,19 +331,6 @@ export default function GraphCanvas({ searchText, onNodeClick, onNodeContextMenu
     cy.center()
   }, [zoomLevel])
 
-  // Handle layout mode changes without full re-init
-  useEffect(() => {
-    const cy = cyRef.current
-    if (!cy) return
-
-    if (layoutMode === 'dagre') {
-      runDagreLayout(cy)
-      cy.fit(undefined, 50)
-    } else {
-      cy.layout({ name: 'cose', animate: true, nodeRepulsion: () => 4000 }).run()
-    }
-  }, [layoutMode, runDagreLayout])
-
   // Handle search filtering
   useEffect(() => {
     const cy = cyRef.current
@@ -373,10 +359,19 @@ export default function GraphCanvas({ searchText, onNodeClick, onNodeContextMenu
     })
   }, [searchText])
 
-  // Handle resolve: dim non-path nodes + apply trim. No animation.
+  // Animation timer ref (for cleanup)
+  const animTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Handle resolve: animate topology then apply trim (PL3-3)
   useEffect(() => {
     const cy = cyRef.current
     if (!cy) return
+
+    // Clean up any running animation timer
+    if (animTimerRef.current) {
+      clearTimeout(animTimerRef.current)
+      animTimerRef.current = null
+    }
 
     // Clear previous resolve classes
     cy.nodes().removeClass('resolve-highlight trim-summary trim-skipped off-path')
@@ -393,14 +388,10 @@ export default function GraphCanvas({ searchText, onNodeClick, onNodeContextMenu
       trimMap.set(n.id, n.trim)
     }
 
-    // Dim off-path, apply trim to on-path
+    // Immediately dim off-path nodes and edges
     cy.nodes().forEach((node) => {
       if (!pathIds.has(node.id())) {
         node.addClass('off-path')
-      } else {
-        const trim = trimMap.get(node.id())
-        if (trim === 'summary') node.addClass('trim-summary')
-        else if (trim === 'skipped') node.addClass('trim-skipped')
       }
     })
     cy.edges().forEach((edge) => {
@@ -409,6 +400,37 @@ export default function GraphCanvas({ searchText, onNodeClick, onNodeContextMenu
       }
     })
 
+    // Sort resolve nodes by topological index for animation
+    const sortedNodes = [...resolveData.nodes].sort((a, b) => a.index - b.index)
+    const cyNodes = sortedNodes
+      .map((n) => cy.getElementById(n.id))
+      .filter((node) => node.length > 0)
+
+    if (cyNodes.length === 0) return
+
+    const STEP_MS = 300
+
+    // Animate: highlight nodes sequentially in topological order
+    cyNodes.forEach((node, i) => {
+      animTimerRef.current = setTimeout(() => {
+        node.addClass('resolve-highlight')
+        // After pulse, apply trim style
+        setTimeout(() => {
+          node.removeClass('resolve-highlight')
+          const nodeId = node.id()
+          const trim = trimMap.get(nodeId)
+          if (trim === 'summary') node.addClass('trim-summary')
+          else if (trim === 'skipped') node.addClass('trim-skipped')
+        }, STEP_MS)
+      }, i * STEP_MS)
+    })
+
+    return () => {
+      if (animTimerRef.current) {
+        clearTimeout(animTimerRef.current)
+        animTimerRef.current = null
+      }
+    }
   }, [resolveData, isResolving])
 
   // PL1-7: Empty state when no memories exist

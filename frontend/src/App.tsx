@@ -6,10 +6,13 @@ import Dashboard from './components/Dashboard'
 import HelpPanel from './components/HelpPanel'
 import SearchBar from './components/SearchBar'
 import Legend from './components/Legend'
-import { fetchResolve, updateMemory } from './api'
-import type { ResolveResponse } from './types'
+import Onboarding from './components/Onboarding'
+import { fetchResolve, updateMemory, createMemory, fetchGraph, fetchDatasets, switchDataset, fetchMemory } from './api'
+import type { ResolveResponse, GraphData } from './types'
+import type { DatasetInfo } from './api'
 
-type LayoutMode = 'dagre' | 'force'
+const ONBOARDING_KEY = 'codememory-onboarded'
+
 type ViewMode = 'graph' | 'dashboard'
 
 const BUDGET_MIN = 200
@@ -26,7 +29,6 @@ export default function App() {
   const [viewMode, setViewMode] = useState<ViewMode>('graph')
   const [selectedNode, setSelectedNode] = useState<string | null>(null)
   const [searchText, setSearchText] = useState('')
-  const [layoutMode, setLayoutMode] = useState<LayoutMode>('dagre')
 
   // Zoom level for the graph view
   const [zoomLevel, setZoomLevel] = useState(0.5)
@@ -42,11 +44,79 @@ export default function App() {
   const [formMemoryId, setFormMemoryId] = useState<string | null>(null) // null = create mode
   const [showCreateForm, setShowCreateForm] = useState(false)
 
+  // Onboarding state — check localStorage on first render
+  const [showOnboarding, setShowOnboarding] = useState(() => {
+    return localStorage.getItem(ONBOARDING_KEY) !== '1'
+  })
+
   // Help panel state
   const [showHelp, setShowHelp] = useState(false)
 
   // Context menu state
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null)
+
+  // Undo state
+  interface UndoEntry {
+    type: 'create' | 'update' | 'archive'
+    memoryId: string
+    previousState?: Record<string, unknown>  // for updates: the pre-update memory data
+  }
+  const [undoEntry, setUndoEntry] = useState<UndoEntry | null>(null)
+  const undoToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const showUndo = useCallback((entry: UndoEntry) => {
+    setUndoEntry(entry)
+    if (undoToastTimerRef.current) clearTimeout(undoToastTimerRef.current)
+    undoToastTimerRef.current = setTimeout(() => setUndoEntry(null), 5000)
+  }, [])
+
+  const handleUndo = useCallback(async () => {
+    if (!undoEntry) return
+    const entry = undoEntry
+    setUndoEntry(null)
+    if (undoToastTimerRef.current) {
+      clearTimeout(undoToastTimerRef.current)
+      undoToastTimerRef.current = null
+    }
+
+    try {
+      if (entry.type === 'create') {
+        // Undo create: archive the newly created memory
+        await updateMemory(entry.memoryId, {
+          status: 'archived',
+          change_note: 'Undo create',
+        })
+      } else if (entry.type === 'update' && entry.previousState) {
+        // Undo edit: restore previous state
+        const prev = entry.previousState
+        await updateMemory(entry.memoryId, {
+          body: (prev.body as string) ?? undefined,
+          summary: (prev.summary as string) ?? undefined,
+          tags: (prev.tags as string[]) ?? undefined,
+          intensity: (prev.intensity as number) ?? undefined,
+          status: (prev.status as string) ?? undefined,
+          maturity: (prev.maturity as string) ?? undefined,
+          change_note: 'Undo edit',
+        })
+      } else if (entry.type === 'archive') {
+        // Undo archive: restore to active
+        await updateMemory(entry.memoryId, {
+          status: 'active',
+          change_note: 'Undo archive',
+        })
+      }
+      setRefreshTrigger((prev) => prev + 1)
+    } catch (err) {
+      console.error('Undo failed:', err)
+    }
+  }, [undoEntry])
+
+  // Clean up undo timer on unmount
+  useEffect(() => {
+    return () => {
+      if (undoToastTimerRef.current) clearTimeout(undoToastTimerRef.current)
+    }
+  }, [])
 
   // Archive confirmation state
   const [archiveConfirmId, setArchiveConfirmId] = useState<string | null>(null)
@@ -55,15 +125,58 @@ export default function App() {
   // Budget no-op feedback (PL1-8)
   const [allNodesFit, setAllNodesFit] = useState(false)
 
+  // Dataset state
+  const [datasets, setDatasets] = useState<DatasetInfo[]>([])
+  const [currentDataset, setCurrentDataset] = useState('')
+  const [switchingDataset, setSwitchingDataset] = useState(false)
+
+  // Graph data (loaded once, shared with Legend)
+  const [graphData, setGraphData] = useState<GraphData | null>(null)
+
   // Graph refresh trigger (increment to reload)
   const [refreshTrigger, setRefreshTrigger] = useState(0)
+
+  // Load available datasets on mount
+  useEffect(() => {
+    fetchDatasets()
+      .then((res) => {
+        setDatasets(res.datasets)
+        setCurrentDataset(res.current_name)
+      })
+      .catch(console.error)
+  }, [])
+
+  // Load graph data
+  useEffect(() => {
+    fetchGraph().then(setGraphData).catch(console.error)
+  }, [refreshTrigger])
+
+  // Handle dataset switching
+  const handleSwitchDataset = useCallback(
+    (name: string) => {
+      if (name === currentDataset) return
+      setSwitchingDataset(true)
+      switchDataset(name)
+        .then(() => {
+          setCurrentDataset(name)
+          setRefreshTrigger((prev) => prev + 1)
+          setSelectedNode(null)
+          setResolveData(null)
+          setResolveError(null)
+          setAllNodesFit(false)
+        })
+        .catch(console.error)
+        .finally(() => setSwitchingDataset(false))
+    },
+    [currentDataset],
+  )
 
   const doResolve = useCallback(
     (nodeId: string, budgetValue: number) => {
       setIsResolving(true)
       setResolveError(null)
       setAllNodesFit(false)
-      fetchResolve({ id: nodeId, depth: 'required', budget: budgetValue })
+      fetchResolve({ id: nodeId, depth: 'recommended', budget: budgetValue })
         .then((data) => {
           setResolveData(data)
           setIsResolving(false)
@@ -121,6 +234,14 @@ export default function App() {
     setSelectedNode(null)
     setResolveData(null)
     setResolveError(null)
+    setAllNodesFit(false)
+  }, [])
+
+  // Clear resolve state without closing panel (PL3-5)
+  const handleClearResolve = useCallback(() => {
+    setResolveData(null)
+    setResolveError(null)
+    setAllNodesFit(false)
   }, [])
 
   // When a memory is selected from Dashboard, switch to graph view and select node
@@ -189,6 +310,7 @@ export default function App() {
         status: 'archived',
         change_note: 'Archived via UI',
       })
+      showUndo({ type: 'archive', memoryId: archiveConfirmId })
       handleMemoryChange()
     } catch (err) {
       console.error('Archive failed:', err)
@@ -196,7 +318,7 @@ export default function App() {
       setArchiving(false)
       setArchiveConfirmId(null)
     }
-  }, [archiveConfirmId, handleMemoryChange])
+  }, [archiveConfirmId, handleMemoryChange, showUndo])
 
   // Close context menu on any click outside or Escape key
   useEffect(() => {
@@ -319,8 +441,50 @@ export default function App() {
           </button>
         </div>
 
+        {/* Dataset switcher */}
+        {datasets.length > 1 && (
+          <select
+            value={currentDataset}
+            onChange={(e) => handleSwitchDataset(e.target.value)}
+            disabled={switchingDataset}
+            style={{
+              padding: '4px 8px',
+              border: '1px solid #D4D4D8',
+              borderRadius: 2,
+              fontSize: 11,
+              fontWeight: 600,
+              fontFamily: 'Raleway, sans-serif',
+              color: '#1C1917',
+              backgroundColor: switchingDataset ? '#F5F5F4' : '#FFFFFF',
+              cursor: 'pointer',
+              flexShrink: 0,
+              outline: 'none',
+            }}
+          >
+            {datasets.map((ds) => (
+              <option key={ds.name} value={ds.name}>
+                {ds.name} ({ds.memory_count})
+              </option>
+            ))}
+          </select>
+        )}
+        {switchingDataset && (
+          <span style={{ fontSize: 11, color: '#A8A29E', fontFamily: 'Raleway, sans-serif' }}>
+            Switching...
+          </span>
+        )}
+
         <div style={{ flex: 1 }}>
-          {viewMode === 'graph' && <SearchBar value={searchText} onChange={setSearchText} />}
+          {viewMode === 'graph' && (
+            <SearchBar
+              value={searchText}
+              onChange={setSearchText}
+              onNavigate={(id) => {
+                setSelectedNode(id)
+                setViewMode('graph')
+              }}
+            />
+          )}
         </div>
 
         {/* Token Budget + Node Size + Layout toggle — only in graph view */}
@@ -409,51 +573,6 @@ export default function App() {
               </span>
             </div>
 
-            {/* Layout toggle */}
-            <div
-              style={{
-                display: 'flex',
-                borderRadius: 2,
-                border: '1px solid #D4D4D8',
-                overflow: 'hidden',
-                flexShrink: 0,
-              }}
-            >
-              <button
-                onClick={() => setLayoutMode('dagre')}
-                style={{
-                  padding: '6px 16px',
-                  border: 'none',
-                  cursor: 'pointer',
-                  fontSize: 11,
-                  fontFamily: 'Raleway, sans-serif',
-                  fontWeight: 600,
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.08em',
-                  backgroundColor: layoutMode === 'dagre' ? '#1C1917' : 'transparent',
-                  color: layoutMode === 'dagre' ? '#FFFBEB' : '#57534E',
-                }}
-              >
-                Dagre
-              </button>
-              <button
-                onClick={() => setLayoutMode('force')}
-                style={{
-                  padding: '6px 16px',
-                  border: 'none',
-                  cursor: 'pointer',
-                  fontSize: 11,
-                  fontFamily: 'Raleway, sans-serif',
-                  fontWeight: 600,
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.08em',
-                  backgroundColor: layoutMode === 'force' ? '#1C1917' : 'transparent',
-                  color: layoutMode === 'force' ? '#FFFBEB' : '#57534E',
-                }}
-              >
-                Force
-              </button>
-            </div>
           </>
         )}
 
@@ -497,13 +616,13 @@ export default function App() {
             searchText={searchText}
             onNodeClick={setSelectedNode}
             onNodeContextMenu={handleContextMenu}
-            layoutMode={layoutMode}
             resolveData={resolveData}
             isResolving={isResolving}
             refreshTrigger={refreshTrigger}
             zoomLevel={zoomLevel}
+            onGraphDataLoaded={setGraphData}
           />
-          <Legend />
+          <Legend graphData={graphData} />
 
           {/* Resolve error toast */}
           {resolveError && (
@@ -582,6 +701,7 @@ export default function App() {
             memoryId={selectedNode}
             onClose={handleClosePanel}
             onResolve={handleResolve}
+            onClearResolve={handleClearResolve}
             onNavigateMemory={(targetId: string) => {
               setSelectedNode(targetId)
               setResolveData(null)
@@ -589,6 +709,23 @@ export default function App() {
               setAllNodesFit(false)
             }}
             resolveData={resolveData}
+            backlinks={(() => {
+              if (!graphData || !selectedNode) return []
+              // Compute reverse references: which nodes import selectedNode?
+              const refs: { id: string; strength: string }[] = []
+              for (const edge of graphData.edges) {
+                if (edge.data.target === selectedNode) {
+                  refs.push({ id: edge.data.source, strength: edge.data.strength })
+                }
+              }
+              // Deduplicate by ID
+              const seen = new Set<string>()
+              return refs.filter((r) => {
+                if (seen.has(r.id)) return false
+                seen.add(r.id)
+                return true
+              })
+            })()}
           />
         )}
       </div>
@@ -599,11 +736,22 @@ export default function App() {
           memoryId={formMemoryId}
           onClose={handleCloseForm}
           onChange={handleMemoryChange}
+          onUndoEntry={showUndo}
         />
       )}
 
       {/* Help panel */}
       {showHelp && <HelpPanel onClose={() => setShowHelp(false)} />}
+
+      {/* Onboarding */}
+      {showOnboarding && (
+        <Onboarding
+          onComplete={() => {
+            localStorage.setItem(ONBOARDING_KEY, '1')
+            setShowOnboarding(false)
+          }}
+        />
+      )}
 
       {/* Context menu for right-click on graph nodes */}
       {contextMenu && (
@@ -651,6 +799,67 @@ export default function App() {
             <ContextMenuItem label="Archive" onClick={handleArchiveFromContext} />
           </div>
         </>
+      )}
+
+      {/* Undo toast */}
+      {undoEntry && (
+        <div
+          style={{
+            position: 'fixed',
+            bottom: 24,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            backgroundColor: '#1C1917',
+            color: '#FFFBEB',
+            padding: '10px 20px',
+            borderRadius: 2,
+            boxShadow: '0 2px 12px rgba(28,25,23,0.15)',
+            zIndex: 200,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 16,
+            fontSize: 13,
+            fontFamily: 'Raleway, sans-serif',
+          }}
+        >
+          <span>
+            {undoEntry.type === 'create' && 'Memory created.'}
+            {undoEntry.type === 'update' && 'Memory updated.'}
+            {undoEntry.type === 'archive' && 'Memory archived.'}
+          </span>
+          <button
+            onClick={handleUndo}
+            style={{
+              padding: '4px 14px',
+              backgroundColor: '#B8860B',
+              color: '#FFFBEB',
+              border: 'none',
+              cursor: 'pointer',
+              fontSize: 12,
+              fontWeight: 600,
+              fontFamily: 'Raleway, sans-serif',
+              textTransform: 'uppercase',
+              letterSpacing: '0.06em',
+              borderRadius: 2,
+            }}
+          >
+            Undo
+          </button>
+          <button
+            onClick={() => { setUndoEntry(null); if (undoToastTimerRef.current) clearTimeout(undoToastTimerRef.current) }}
+            style={{
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              color: '#A8A29E',
+              fontSize: 16,
+              padding: '0 4px',
+              lineHeight: 1,
+            }}
+          >
+            x
+          </button>
+        </div>
       )}
 
       {/* Archive confirmation modal (non-destructive styling — PL1-5) */}
@@ -775,6 +984,7 @@ function ContextMenuItem({ label, onClick }: { label: string; onClick: () => voi
         fontSize: 13,
         fontFamily: 'Raleway, sans-serif',
         color: '#1C1917',
+        transition: 'background-color 100ms ease',
       }}
       onMouseEnter={(e) => {
         (e.currentTarget as HTMLButtonElement).style.backgroundColor = '#F5F5F4'

@@ -35,8 +35,40 @@ from codememory.validate import validate  # noqa: E402
 # Configuration
 # ---------------------------------------------------------------------------
 
-MEMORY_ROOT = Path(os.environ.get("CODEMEMORY_ROOT", Path(__file__).resolve().parent.parent / "examples" / "investment")).resolve()
-INDEX_PATH = MEMORY_ROOT / ".codememory" / "index.json"
+_EXAMPLES_DIR = Path(__file__).resolve().parent.parent / "examples"
+
+MEMORY_ROOT = Path(
+    os.environ.get("CODEMEMORY_ROOT", _EXAMPLES_DIR / "investment")
+).resolve()
+
+
+def _get_index_path() -> Path:
+    return MEMORY_ROOT / ".codememory" / "index.json"
+
+
+def _get_available_datasets() -> list[dict[str, str]]:
+    """Scan examples/ directory for valid datasets (directories with .codememory/index.json)."""
+    datasets: list[dict[str, str]] = []
+    if not _EXAMPLES_DIR.exists():
+        return datasets
+    for entry in sorted(_EXAMPLES_DIR.iterdir()):
+        if not entry.is_dir():
+            continue
+        idx = entry / ".codememory" / "index.json"
+        if idx.exists():
+            # Try to read memory count from index
+            try:
+                with open(idx, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                count = len(data.get("memories", {}))
+            except Exception:
+                count = 0
+            datasets.append({"name": entry.name, "path": str(entry.resolve()), "memory_count": count})
+    return datasets
+
+
+# Remove the stale INDEX_PATH constant — use _get_index_path() instead
+INDEX_PATH = _get_index_path()  # kept for backward compat, but callers should use _get_index_path()
 
 app = FastAPI(title="CodeMemory API", version="0.1.0")
 
@@ -64,9 +96,10 @@ class DateEncoder(json.JSONEncoder):
 
 def _load_index() -> dict[str, Any]:
     """Load index.json as a plain dict."""
-    if not INDEX_PATH.exists():
+    ip = _get_index_path()
+    if not ip.exists():
         return {"memories": {}}
-    with open(INDEX_PATH, "r", encoding="utf-8") as f:
+    with open(ip, "r", encoding="utf-8") as f:
         return json.load(f)
 
 
@@ -337,6 +370,7 @@ class UpdateMemoryRequest(BaseModel):
     tags: list[str] | None = None
     intensity: int | None = Field(default=None, ge=1, le=10)
     status: str | None = None
+    maturity: str | None = None
     change_note: str | None = None
     imports: dict[str, list[str]] | None = None
 
@@ -372,6 +406,7 @@ def put_update_memory(memory_id: str, req: UpdateMemoryRequest):
         req.tags is not None,
         req.intensity is not None,
         req.imports is not None,
+        req.maturity is not None,
     ])
 
     # Use handle_update for core fields (version tracking, change_log, etc.)
@@ -395,6 +430,8 @@ def put_update_memory(memory_id: str, req: UpdateMemoryRequest):
             meta_updates["intensity"] = req.intensity
         if req.imports is not None:
             meta_updates["imports"] = req.imports
+        if req.maturity is not None:
+            meta_updates["maturity"] = req.maturity
         _update_frontmatter_fields(filepath, meta_updates)
 
     # Reindex to pick up changes
@@ -691,7 +728,7 @@ def get_graph():
 
 class ResolveRequest(BaseModel):
     id: str = Field(description="Target memory ID to resolve from")
-    depth: str = Field(default="required", description="required | recommended | full")
+    depth: str = Field(default="recommended", description="required | recommended | full")
     budget: int = Field(default=2000, description="Token budget in characters", ge=200, le=5000)
 
 
@@ -783,6 +820,188 @@ def post_resolve(req: ResolveRequest):
         "full_text": text,
         "notices": notices,
     }
+
+
+# ---------------------------------------------------------------------------
+# Search endpoint (R4-search-ui)
+# ---------------------------------------------------------------------------
+
+class SearchRequest(BaseModel):
+    query: str = Field(default="", description="Free-text search query for body and summary")
+    tags: list[str] | None = None
+    type_: str | None = Field(default=None, alias="type")
+    status: str | None = None
+    maturity: str | None = None
+
+
+@app.post("/api/search")
+def post_search(req: SearchRequest):
+    """Full-text search across memory body content and metadata.
+    Returns ranked results with ID, summary, and matching body snippet.
+    """
+    from codememory.search import search
+
+    results = search(
+        MEMORY_ROOT,
+        query=req.query if req.query else None,
+        tags=req.tags,
+        type_=req.type_,
+        status=req.status,
+        maturity=req.maturity,
+    )
+
+    # Enrich results with a body snippet showing the match context
+    enriched = []
+    for r in results:
+        mem_id = r.get("id", "")
+        snippet = ""
+        # Try to extract a body snippet containing the query
+        if req.query and mem_id:
+            index = _load_index()
+            memories = index.get("memories", {})
+            entry = memories.get(mem_id)
+            if entry:
+                if hasattr(entry, "path"):
+                    rel_path = entry.path
+                elif isinstance(entry, dict):
+                    rel_path = entry.get("path", "")
+                else:
+                    rel_path = ""
+                if rel_path:
+                    filepath = MEMORY_ROOT / rel_path
+                    if filepath.exists():
+                        _, body = _parse_frontmatter(filepath)
+                        if body:
+                            q_lower = req.query.lower()
+                            body_lower = body.lower()
+                            idx = body_lower.find(q_lower)
+                            if idx >= 0:
+                                start = max(0, idx - 40)
+                                end = min(len(body), idx + len(req.query) + 60)
+                                prefix = "..." if start > 0 else ""
+                                suffix = "..." if end < len(body) else ""
+                                snippet = prefix + body[start:end].replace("\n", " ") + suffix
+                            else:
+                                snippet = body[:120].replace("\n", " ") + ("..." if len(body) > 120 else "")
+        enriched.append({
+            "id": mem_id,
+            "summary": r.get("summary", ""),
+            "type": r.get("type", "atom"),
+            "tags": r.get("tags", []),
+            "intensity": r.get("intensity", 5),
+            "maturity": r.get("maturity", "draft"),
+            "status": r.get("status", "active"),
+            "snippet": snippet,
+        })
+
+    return _serialize({"results": enriched, "count": len(enriched), "query": req.query})
+
+
+# ---------------------------------------------------------------------------
+# Reindex endpoint (R4-reindex-ui)
+# ---------------------------------------------------------------------------
+
+@app.post("/api/reindex")
+def post_reindex():
+    """Rebuild the index from all .md files on disk."""
+    try:
+        reindex(MEMORY_ROOT)
+        idx = _load_index()
+        return {"status": "ok", "count": len(idx.get("memories", {}))}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ---------------------------------------------------------------------------
+# Dataset switching endpoints (R4-backend-default)
+# ---------------------------------------------------------------------------
+
+@app.get("/api/datasets")
+def get_datasets():
+    """List available datasets found in examples/ directory."""
+    current = MEMORY_ROOT.resolve()
+    datasets = _get_available_datasets()
+    return _serialize({
+        "datasets": datasets,
+        "current": str(current),
+        "current_name": current.name,
+    })
+
+
+class SwitchDatasetRequest(BaseModel):
+    name: str = Field(description="Dataset name (e.g. 'investment' or 'software-architecture')")
+
+
+@app.post("/api/datasets/switch")
+def post_switch_dataset(req: SwitchDatasetRequest):
+    """Switch the active dataset and reindex automatically."""
+    global MEMORY_ROOT
+
+    new_root = (_EXAMPLES_DIR / req.name).resolve()
+    if not new_root.exists():
+        raise HTTPException(status_code=404, detail=f"Dataset '{req.name}' not found in examples/")
+    idx = new_root / ".codememory" / "index.json"
+    if not idx.exists():
+        raise HTTPException(status_code=404, detail=f"Dataset '{req.name}' has no .codememory/index.json")
+
+    MEMORY_ROOT = new_root
+
+    # Reindex the new dataset
+    reindex(MEMORY_ROOT)
+
+    # Return stats for the new dataset
+    return get_stats()
+
+
+# ---------------------------------------------------------------------------
+# Backlinks endpoint — show which memories reference a given memory
+# ---------------------------------------------------------------------------
+
+@app.get("/api/memories/{memory_id:path}/backlinks")
+def get_backlinks(memory_id: str):
+    """Return a list of memories that import (reference) the given memory ID."""
+    index = _load_index()
+    memories = index.get("memories", {})
+
+    backlinks: list[dict[str, str]] = []
+
+    for other_id, entry in memories.items():
+        if other_id == memory_id:
+            continue
+
+        # Extract imports from entry
+        if hasattr(entry, "model_dump"):
+            d = entry.model_dump(mode="json")
+        elif isinstance(entry, dict):
+            d = entry
+        else:
+            continue
+
+        imports = d.get("imports", {})
+        if not imports:
+            continue
+
+        # Check each strength level
+        for strength in ("required", "recommended", "related"):
+            deps = imports.get(strength, [])
+            if not deps:
+                continue
+            dep_ids: list[str] = []
+            for dep in deps:
+                if isinstance(dep, dict):
+                    dep_ids.append(dep.get("id", ""))
+                else:
+                    dep_ids.append(str(dep))
+
+            if memory_id in dep_ids:
+                backlinks.append({
+                    "id": other_id,
+                    "strength": strength,
+                    "summary": d.get("summary", ""),
+                })
+                break  # only add once per memory
+
+    return _serialize(backlinks)
 
 
 # ---------------------------------------------------------------------------

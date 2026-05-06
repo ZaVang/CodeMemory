@@ -204,3 +204,95 @@ PYTHONPATH=src python tests/integration_test.py
 - [x] PL2-10: 在 resolve 输出中突出展示 pinned 版本提示
   - 目标：resolve 返回的 pinned 版本过时通知（"[NOTICE] pinned version v1 of ... is behind current version v2"）在 MemoryDetail 面板的 Resolve 区域有醒目展示，而非埋在 raw text 末尾
   - 验收：resolve 一条含有 pinned 版本依赖的记忆后，版本落后通知出现在 Detail 面板的可见区域（非正文片段末尾）
+
+## 第 3 轮追加任务（基于体验官审计 — 2026-04-30）
+
+### 第一梯队（体验一致性与可用性 — 本轮必须完成）
+
+- [x] PL3-1: 修复搜索栏占位文本截断
+  - 目标：搜索输入框的 placeholder 文本完整显示，不再被输入框宽度裁剪
+  - 验收：搜索栏占位文本完整显示 "Search by tag, directory, or keyword..."；在不同窗口宽度下不出现截断
+
+- [x] PL3-2: 统一图节点字体为 Raleway
+  - 目标：消除 GraphCanvas 中 Cytoscape 节点标签使用 Inter 的字体不一致，统一为 Raleway
+  - 验收：图上所有节点标签使用 Raleway 字体；产品中不再出现 Inter 字体引用
+
+- [x] PL3-3: 实现 Resolve 拓扑动画
+  - 目标：Resolve 完成后节点按依赖拓扑顺序依次高亮（300ms/步金色脉冲），以动画展示 DAG 组装过程
+  - 验收：点击 Resolve 后，节点从源到目标依次出现金色高亮动画；动画完成后所有节点显示 trim-level 样式
+
+- [x] PL3-4: 上下文菜单 hover 添加过渡动画
+  - 目标：右键菜单项在 hover 时有平滑的背景色过渡（而非瞬间切换）
+  - 验收：鼠标划过菜单项时背景色在约 100ms 内平滑过渡；动画自然不突兀
+
+- [x] PL3-5: 添加 Clear Resolve 按钮
+  - 目标：用户可通过显式按钮重置 Resolve 状态（恢复节点透明度），无需关闭再打开详情面板
+  - 验收：Resolve 区域标题旁出现 Clear 按钮；点击后所有节点恢复原始样式；详情面板无需关闭
+
+- [x] PL3-6: 放宽 imports 依赖展示上限
+  - 目标：MemoryDetail 面板中展示更多依赖项（当前限制 5 条），减少信息截断
+  - 验收：展示全部 imports 依赖或至少 10 条；超出合理数量时提供展开/折叠切换
+
+### 第二梯队（生命周期与操作改进 — 本轮尽量完成）
+
+- [x] PL3-7: 在创建/编辑表单中暴露 maturity 字段
+  - 目标：用户可在创建和编辑记忆时设置 maturity 值（draft/verified/proven/superseded），与 status 字段形成完整生命周期管理
+  - 验收：创建和编辑表单中均出现 maturity 下拉选择器；新建记忆可指定 maturity；编辑可修改
+
+- [x] PL3-8: 隐藏 Force 布局模式
+  - 目标：将 Force 布局从主要布局选项降级，默认仅显示 Dagre 布局
+  - 验收：Graph 视图默认布局为 Dagre；Force 布局不再作为平级选项出现在主界面；若保留则隐藏在 Advanced 折叠区域内
+
+### 第三梯队（战略资产 — 本轮至少完成一项）
+
+- [x] PL3-9: 创建英文示例数据集
+  - 目标：提供一套英文记忆数据作为备选默认数据集（软件架构决策或产品设计理由等通用技术领域），使非中文评估者可体验产品的核心价值主张
+  - 验收：存在可切换的英文示例数据集（8-12 条记忆，含 meaningful 依赖关系）；通过环境变量或配置标记可切换；英文数据集同样通过 validate 检查
+
+## 第 4 轮追加任务（基于体验官 + 进化策略师审计 — 2026-04-30）
+
+### 第一梯队（Critical 回归修复 + 竞争性短板 — 本轮必须完成）
+
+- [x] R4-force-hide: 彻底移除 Force 布局按钮
+  - 目标：Force 布局按钮不再出现在 Graph 视图头部（上一轮 PL3-8 的修复仅添加了代码注释，未真正隐藏 UI 元素——体验官现场审计时按钮仍可见）
+  - 验收：Graph 视图头部仅显示 Dagre 布局（或仅一种布局时完全不显示布局切换控件）；Force 布局按钮不在 DOM 中渲染
+
+- [x] R4-legend: 使 Legend 组件动态化
+  - 目标：Legend 展示的目录-颜色映射来源于实际加载的数据集图数据，而非硬编码的投资目录（当前无论加载哪个数据集，Legend 始终显示 10 个中文投资目录——体验官证实 Round 3 曾称赞 Legend "truthful"，现在退化为误导性信息）
+  - 验收：切换到不同数据集后 Legend 目录条目随之变化；Legend 仅显示实际包含节点的目录；对于不在已知颜色映射中的目录显示合理的回退颜色说明
+
+- [x] R4-stale-fix: 修复英文数据集 body hash staleness
+  - 目标：英文软件架构数据集 11 条记忆中所有 summary_hash 值与实际 body 内容一致，不再出现全量 stale 状态
+  - 验收：在英文数据集上执行 reindex，Dashboard stale_count 为 0；resolve 输出中不再出现占位哈希导致的 stale 通知
+
+- [x] R4-backlinks: 为 MemoryDetail 面板添加 "Referenced By"（被引用）区域
+  - 目标：查看一条记忆时展示哪些其他记忆通过 imports 依赖了它（进化策略师认定的首要竞争性缺失——所有主要竞品均具备此功能，且入度数据已存在于图结构中）
+  - 验收：MemoryDetail 面板中在 imports 区域下方（或对称位置）显示 "Referenced By" 区域，列出可点击的记忆 ID；无反向引用时显示对应空状态提示
+
+### 第二梯队（重要功能缺口 — 本轮尽量完成）
+
+- [x] R4-default-depth: 将 resolve 默认深度从 required 改为 recommended
+  - 目标：让 Resolve 在默认情况下实际遍历依赖边，展示产品的核心价值主张（当前默认 depth=required 导致示例数据集的 resolve 从不遍历任何依赖——所有边都是 recommended 强度，用户看不到 DAG 解析的真正能力）
+  - 验收：在 UI 中点击 Resolve（不做任何深度调整），对存在 recommended 依赖的记忆能遍历并展示其依赖链；后端 /api/resolve 端点默认行为同步变更
+
+- [x] R4-backend-default: 使 Backend 支持数据集切换（不再硬编码 investment 目录）
+  - 目标：用户无需重启后端或手动设置环境变量即可在不同数据集之间切换（当前 server.py 硬编码 examples/investment，英文数据集仅能通过 CODEMEMORY_ROOT 环境变量访问——体验官发现的三大关键问题之一）
+  - 验收：Backend 提供数据集切换机制；英文数据集可通过正常启动流程访问；Dashboard 和 Graph 在切换后自动刷新
+
+- [x] R4-reindex-ui: 为 Dashboard 添加 Reindex 按钮
+  - 目标：用户可通过 UI 触发重建索引，无需使用 CLI（当前 reindex 为 CLI-only，创建/编辑/归档后图自动刷新但索引重建需手动执行命令）
+  - 验收：Dashboard 可见 Reindex 按钮；点击后触发后端 reindex 并刷新所有面板数据；操作有加载状态反馈
+
+- [x] R4-undo: 为记忆操作添加撤销能力
+  - 目标：创建、编辑、归档操作后出现有时限的撤销提示，让用户可以回滚误操作（进化策略师认定这是 2026 年产品的基本期望——当前任何操作不可逆）
+  - 验收：创建/编辑/归档操作后出现含 "Undo" 按钮的提示条；点击 Undo 能回滚操作；提示条在约 5 秒后自动消失
+
+### 第三梯队（引导与体验 — 本轮至少完成一项）
+
+- [x] R4-onboarding: 首次使用引导
+  - 目标：新用户首次打开产品时看到结构化引导，了解 CodeMemory 的核心概念和操作方式（进化策略师指出当前用户看到 11 个彩色圆圈，完全不知道产品解决什么问题或如何使用）
+  - 验收：首次访问时展示引导流程（通过浏览器存储检测）；引导至少覆盖 Graph 视图、Resolve 操作、创建记忆三个核心概念；引导可跳过且不重复出现；Help 按钮在引导期间有视觉提示
+
+- [x] R4-search-ui: 在 UI 中暴露全文搜索能力
+  - 目标：搜索栏支持跨记忆正文内容的搜索，并展示排名搜索结果列表（当前搜索仅做标签/ID/目录的子串匹配并高亮节点——CLI 的 `codememory search --query` 能力未在 UI 中暴露）
+  - 验收：搜索时返回包含正文匹配的排名结果列表；结果展示记忆 ID、summary 及匹配片段预览；点击结果导航到对应记忆详情

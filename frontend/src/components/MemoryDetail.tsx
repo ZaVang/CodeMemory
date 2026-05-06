@@ -8,8 +8,10 @@ interface Props {
   memoryId: string | null
   onClose: () => void
   onResolve: (id: string) => void
+  onClearResolve?: () => void
   onNavigateMemory?: (id: string) => void
   resolveData?: ResolveResponse | null
+  backlinks?: { id: string; strength: string }[]
 }
 
 function StatusBadge({ status }: { status: string }) {
@@ -71,10 +73,13 @@ function MaturityBadge({ maturity }: { maturity: string }) {
   )
 }
 
-export default function MemoryDetail({ memoryId, onClose, onResolve, onNavigateMemory, resolveData }: Props) {
+export default function MemoryDetail({ memoryId, onClose, onResolve, onClearResolve, onNavigateMemory, resolveData, backlinks }: Props) {
   const [memory, setMemory] = useState<MemoryDetailType | null>(null)
   const [loading, setLoading] = useState(false)
   const [visible, setVisible] = useState(false)
+  // PL3-6: track which strength groups are fully expanded
+  const [expandedImports, setExpandedImports] = useState<Record<string, boolean>>({})
+  const IMPORT_PREVIEW_LIMIT = 10
 
   useEffect(() => {
     if (!memoryId) {
@@ -308,10 +313,14 @@ export default function MemoryDetail({ memoryId, onClose, onResolve, onNavigateM
                 <div style={{ fontSize: 11, fontWeight: 600, color: '#57534E', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4, fontFamily: 'Raleway, sans-serif' }}>
                   Imports
                 </div>
-                {Object.entries(memory.imports).map(([strength, deps]) => (
+                {Object.entries(memory.imports).map(([strength, deps]) => {
+                  const depList = Array.isArray(deps) ? deps : []
+                  const expanded = expandedImports[strength] || depList.length <= IMPORT_PREVIEW_LIMIT
+                  const visibleDeps = expanded ? depList : depList.slice(0, IMPORT_PREVIEW_LIMIT)
+                  return (
                   <div key={strength} style={{ marginBottom: 2 }}>
                     <span style={{ fontSize: 11, color: '#A8A29E', fontStyle: 'italic' }}>{strength}:</span>
-                    {(Array.isArray(deps) ? deps : []).slice(0, 5).map((dep) => {
+                    {visibleDeps.map((dep) => {
                       const depId = typeof dep === 'string' ? dep : (dep as Record<string, unknown>).id as string || ''
                       return (
                         <div
@@ -334,15 +343,65 @@ export default function MemoryDetail({ memoryId, onClose, onResolve, onNavigateM
                         </div>
                       )
                     })}
-                    {Array.isArray(deps) && deps.length > 5 && (
-                      <div style={{ fontSize: 11, color: '#A8A29E', paddingLeft: 12, fontFamily: 'Raleway, sans-serif' }}>
-                        ...and {deps.length - 5} more
+                    {depList.length > IMPORT_PREVIEW_LIMIT && (
+                      <div
+                        onClick={() =>
+                          setExpandedImports((prev) => ({ ...prev, [strength]: !prev[strength] }))
+                        }
+                        style={{
+                          fontSize: 11,
+                          color: '#B8860B',
+                          paddingLeft: 12,
+                          fontFamily: 'Raleway, sans-serif',
+                          cursor: 'pointer',
+                          fontWeight: 500,
+                        }}
+                      >
+                        {expanded ? `Show less` : `Show all ${depList.length} (${depList.length - IMPORT_PREVIEW_LIMIT} more)`}
                       </div>
                     )}
                   </div>
-                ))}
+                  )
+                })}
               </div>
             )}
+
+            {/* Referenced By (backlinks) */}
+            <div style={{ marginTop: 12 }}>
+              <div style={{ fontSize: 11, fontWeight: 600, color: '#57534E', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4, fontFamily: 'Raleway, sans-serif' }}>
+                Referenced By
+              </div>
+              {backlinks && backlinks.length > 0 ? (
+                backlinks.map((ref) => (
+                  <div
+                    key={ref.id}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      if (onNavigateMemory) onNavigateMemory(ref.id)
+                    }}
+                    title={`Navigate to ${ref.id}`}
+                    style={{
+                      fontSize: 11,
+                      color: '#1E40AF',
+                      paddingLeft: 12,
+                      fontFamily: 'Raleway, sans-serif',
+                      cursor: 'pointer',
+                      textDecoration: 'underline',
+                      marginBottom: 2,
+                    }}
+                  >
+                    {ref.id}
+                    <span style={{ color: '#A8A29E', fontStyle: 'italic', marginLeft: 6, textDecoration: 'none' }}>
+                      ({ref.strength})
+                    </span>
+                  </div>
+                ))
+              ) : (
+                <div style={{ fontSize: 11, color: '#A8A29E', fontFamily: 'Raleway, sans-serif', paddingLeft: 12, fontStyle: 'italic' }}>
+                  No other memories reference this one.
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Resolve results */}
@@ -382,20 +441,48 @@ export default function MemoryDetail({ memoryId, onClose, onResolve, onNavigateM
 
               <div
                 style={{
-                  fontSize: 11,
-                  fontWeight: 600,
-                  fontFamily: 'Raleway, sans-serif',
-                  color: '#57534E',
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.08em',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
                   marginBottom: 8,
                 }}
               >
-                Resolve — {resolveData.nodes.length} nodes
-                {resolveData.budget && (
-                  <span style={{ color: '#A8A29E', fontWeight: 400, textTransform: 'none', letterSpacing: '0' }}>
-                    {' '}· budget {resolveData.budget} · depth {resolveData.depth}
-                  </span>
+                <div
+                  style={{
+                    fontSize: 11,
+                    fontWeight: 600,
+                    fontFamily: 'Raleway, sans-serif',
+                    color: '#57534E',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.08em',
+                  }}
+                >
+                  Resolve — {resolveData.nodes.length} nodes
+                  {resolveData.budget && (
+                    <span style={{ color: '#A8A29E', fontWeight: 400, textTransform: 'none', letterSpacing: '0' }}>
+                      {' '}· budget {resolveData.budget} · depth {resolveData.depth}
+                    </span>
+                  )}
+                </div>
+                {onClearResolve && (
+                  <button
+                    onClick={onClearResolve}
+                    style={{
+                      border: '1px solid #D4D4D8',
+                      background: 'transparent',
+                      cursor: 'pointer',
+                      fontSize: 10,
+                      fontWeight: 600,
+                      fontFamily: 'Raleway, sans-serif',
+                      color: '#57534E',
+                      padding: '2px 8px',
+                      borderRadius: 2,
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.06em',
+                    }}
+                  >
+                    Clear
+                  </button>
                 )}
               </div>
               {[...resolveData.nodes]
