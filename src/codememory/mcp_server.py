@@ -1,0 +1,371 @@
+"""MCP (Model Context Protocol) server for CodeMemory.
+
+Exposes CodeMemory's five Layer 0 cognitive primitives — resolve, overview,
+wander, focus, snapshot — as callable MCP tools.  Each tool delegates to the
+same handlers.py functions used by the CLI and backend API (no logic duplication).
+
+Transport: stdio (JSON-RPC 2.0), compatible with Claude Code, Cursor, Windsurf,
+and any other MCP-compliant client.
+
+Configuration (standard MCP JSON)::
+
+    {
+        "codememory": {
+            "command": "python",
+            "args": ["-m", "codememory.mcp_server"]
+        }
+    }
+
+Environment::
+
+    CODEMEMORY_ROOT — path to the memory dataset directory (required)
+"""
+
+from __future__ import annotations
+
+import json
+import logging
+import os
+import sys
+from pathlib import Path
+
+# Ensure codememory package is importable when run as `python -m codememory.mcp_server`
+_SRC = Path(__file__).resolve().parent.parent
+if str(_SRC) not in sys.path:
+    sys.path.insert(0, str(_SRC))
+
+from codememory.handlers import (
+    handle_focus,
+    handle_overview,
+    handle_resolve,
+    handle_snapshot,
+    handle_wander,
+)
+
+_logger = logging.getLogger("codememory.mcp_server")
+
+# ---------------------------------------------------------------------------
+# MCP protocol constants
+# ---------------------------------------------------------------------------
+
+MCP_VERSION = "2024-11-05"
+SERVER_NAME = "codememory-mcp"
+SERVER_VERSION = "0.1.0"
+
+TOOLS = [
+    {
+        "name": "resolve_memory",
+        "description": (
+            "Resolve a memory context via DAG traversal. "
+            "Performs topological sort of explicit imports-based dependencies "
+            "with token-budgeted context assembly. Returns topologically-sorted "
+            "context with trim-level annotations (full/summary/skipped) and "
+            "token count. This is CodeMemory's core differentiator: deterministic "
+            "dependency resolution, not probabilistic similarity."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "string",
+                    "description": "Target memory ID to resolve (e.g. 'user/investment/context')",
+                },
+                "depth": {
+                    "type": "string",
+                    "enum": ["required", "recommended", "full"],
+                    "default": "recommended",
+                    "description": "Dependency traversal depth",
+                },
+                "budget": {
+                    "type": "integer",
+                    "default": 2000,
+                    "minimum": 200,
+                    "maximum": 5000,
+                    "description": "Token budget in characters",
+                },
+            },
+            "required": ["id"],
+        },
+    },
+    {
+        "name": "overview",
+        "description": (
+            "Get top 5 related memory summaries for injection into an AI system prompt. "
+            "Returns memories ranked by heat score (dependents * 10 + access_count) "
+            "with stale detection and status markers. "
+            "Use this at the start of a conversation to preload relevant context."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "tags": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Filter by tags (optional)",
+                },
+                "min_maturity": {
+                    "type": "string",
+                    "enum": ["draft", "verified", "proven"],
+                    "description": "Minimum maturity level (optional, defaults to no filter)",
+                },
+                "format": {
+                    "type": "string",
+                    "enum": ["default", "inject"],
+                    "default": "inject",
+                    "description": "Output format: 'inject' for system-prompt-ready, 'default' for human-readable",
+                },
+            },
+        },
+    },
+    {
+        "name": "wander",
+        "description": (
+            "Serendipitous recall of a cold memory. Returns a memory with low "
+            "access_count weighted by intensity, encouraging re-discovery of "
+            "neglected knowledge. Use this when you need fresh perspectives "
+            "or want to surface forgotten context."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "mode": {
+                    "type": "string",
+                    "enum": ["cool", "random"],
+                    "default": "cool",
+                    "description": "Selection mode: 'cool' (low-access weighted) or 'random'",
+                },
+            },
+        },
+    },
+    {
+        "name": "focus",
+        "description": (
+            "Focus on a specific memory with adjustable resolution. "
+            "At 'summary' level returns only the summary line; at 'full' level "
+            "returns the complete body text. Use this to dynamically adjust "
+            "the resolution of a specific memory in context."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "string",
+                    "description": "Memory ID to focus on",
+                },
+                "level": {
+                    "type": "string",
+                    "enum": ["full", "summary"],
+                    "default": "full",
+                    "description": "Resolution level",
+                },
+            },
+            "required": ["id"],
+        },
+    },
+    {
+        "name": "snapshot",
+        "description": (
+            "Persist a resolved memory context as a snapshot file in the dataset. "
+            "Saves the DAG-resolved context for future reference or sharing. "
+            "The snapshot is saved as a markdown file and auto-reindexed."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "string",
+                    "description": "Snapshot identifier (e.g. 'session-001')",
+                },
+                "target": {
+                    "type": "string",
+                    "description": "Optional: resolve a specific memory and snapshot its context",
+                },
+            },
+            "required": ["id"],
+        },
+    },
+]
+
+
+# ---------------------------------------------------------------------------
+# Tool dispatcher
+# ---------------------------------------------------------------------------
+
+def _call_tool(name: str, arguments: dict) -> list[dict]:
+    """Dispatch a tool call to the appropriate handler. Returns MCP content blocks."""
+    root = _get_root_from_env()
+
+    if name == "resolve_memory":
+        memory_id = arguments.get("id", "")
+        if not memory_id:
+            return [{"type": "text", "text": "Error: 'id' parameter is required for resolve_memory"}]
+        depth = arguments.get("depth", "recommended")
+        budget = arguments.get("budget", 2000)
+        result = handle_resolve(root=root, memory_id=memory_id, depth=depth, budget=budget)
+        return [{"type": "text", "text": result}]
+
+    elif name == "overview":
+        tags = arguments.get("tags")
+        format_mode = arguments.get("format", "inject")
+        # min_maturity filtering is done client-side via tags for now
+        result = handle_overview(root=root, tags=tags, format_mode=format_mode)
+        return [{"type": "text", "text": result}]
+
+    elif name == "wander":
+        mode = arguments.get("mode", "cool")
+        result = handle_wander(root=root, mode=mode)
+        return [{"type": "text", "text": result}]
+
+    elif name == "focus":
+        memory_id = arguments.get("id", "")
+        if not memory_id:
+            return [{"type": "text", "text": "Error: 'id' parameter is required for focus"}]
+        level = arguments.get("level", "full")
+        result = handle_focus(root=root, memory_id=memory_id, level=level)
+        return [{"type": "text", "text": result}]
+
+    elif name == "snapshot":
+        snapshot_id = arguments.get("id", "")
+        if not snapshot_id:
+            return [{"type": "text", "text": "Error: 'id' parameter is required for snapshot"}]
+        target = arguments.get("target")
+        result = handle_snapshot(root=root, snapshot_id=snapshot_id, target=target)
+        return [{"type": "text", "text": result}]
+
+    else:
+        return [{"type": "text", "text": f"Unknown tool: {name}"}]
+
+
+# ---------------------------------------------------------------------------
+# Root path resolution
+# ---------------------------------------------------------------------------
+
+def _get_root_from_env() -> Path:
+    """Resolve the memory root from CODEMEMORY_ROOT environment variable."""
+    root = os.environ.get("CODEMEMORY_ROOT", "")
+    if not root:
+        # Try default relative to the project root
+        default = Path(__file__).resolve().parent.parent.parent / "examples" / "companion"
+        if default.exists():
+            return default
+        raise RuntimeError(
+            "CODEMEMORY_ROOT environment variable is required. "
+            "Set it to a dataset path, e.g. 'examples/companion'"
+        )
+    p = Path(root)
+    if not p.exists():
+        raise RuntimeError(f"CODEMEMORY_ROOT path does not exist: {root}")
+    return p
+
+
+# ---------------------------------------------------------------------------
+# JSON-RPC 2.0 over stdio
+# ---------------------------------------------------------------------------
+
+def _send_response(response_id: str | int, result: dict) -> None:
+    """Write a JSON-RPC success response to stdout."""
+    msg = json.dumps({"jsonrpc": "2.0", "id": response_id, "result": result})
+    sys.stdout.write(msg + "\n")
+    sys.stdout.flush()
+
+
+def _send_error(response_id: str | int | None, code: int, message: str) -> None:
+    """Write a JSON-RPC error response to stdout."""
+    msg = json.dumps({
+        "jsonrpc": "2.0",
+        "id": response_id,
+        "error": {"code": code, "message": message},
+    })
+    sys.stdout.write(msg + "\n")
+    sys.stdout.flush()
+
+
+def _send_notification(method: str, params: dict | None = None) -> None:
+    """Write a JSON-RPC notification (no id) to stdout."""
+    msg = json.dumps({"jsonrpc": "2.0", "method": method, "params": params or {}})
+    sys.stdout.write(msg + "\n")
+    sys.stdout.flush()
+
+
+def _handle_request(request: dict) -> None:
+    """Process a single JSON-RPC request."""
+    req_id = request.get("id")
+    method = request.get("method", "")
+    params = request.get("params", {})
+
+    if method == "initialize":
+        _send_response(req_id, {
+            "protocolVersion": MCP_VERSION,
+            "capabilities": {
+                "tools": {},
+            },
+            "serverInfo": {
+                "name": SERVER_NAME,
+                "version": SERVER_VERSION,
+            },
+        })
+        # Send initialized notification after initialize response
+        _send_notification("notifications/initialized")
+
+    elif method == "notifications/initialized":
+        # Client confirmation — ack silently
+        pass
+
+    elif method == "tools/list":
+        _send_response(req_id, {"tools": TOOLS})
+
+    elif method == "tools/call":
+        tool_name = params.get("name", "")
+        tool_args = params.get("arguments", {})
+        try:
+            content = _call_tool(tool_name, tool_args)
+            _send_response(req_id, {"content": content})
+        except Exception as exc:
+            _logger.exception("Tool call failed: %s", tool_name)
+            _send_response(req_id, {
+                "content": [{"type": "text", "text": f"Error calling '{tool_name}': {exc}"}],
+                "isError": True,
+            })
+
+    elif method == "ping":
+        _send_response(req_id, {})
+
+    else:
+        _send_error(req_id, -32601, f"Method not found: {method}")
+
+
+def main() -> None:
+    """Run the MCP server on stdio (stdin/stdout JSON-RPC transport)."""
+    # Silence logging to stderr — MCP transport uses stderr for logging
+    logging.basicConfig(level=logging.WARNING, stream=sys.stderr, format="%(levelname)s: %(message)s")
+
+    _logger.info("CodeMemory MCP server starting on stdio")
+
+    # Pre-validate root so we fail fast
+    try:
+        root = _get_root_from_env()
+        _logger.info("Memory root: %s", root)
+    except RuntimeError as exc:
+        _logger.error("Startup error: %s", exc)
+        sys.exit(1)
+
+    # JSON-RPC loop: read one line at a time from stdin
+    for line in sys.stdin:
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            request = json.loads(line)
+        except json.JSONDecodeError:
+            _send_error(None, -32700, "Parse error")
+            continue
+
+        try:
+            _handle_request(request)
+        except Exception as exc:
+            _logger.exception("Unhandled error processing request")
+            _send_error(request.get("id"), -32603, f"Internal error: {exc}")
+
+
+if __name__ == "__main__":
+    main()

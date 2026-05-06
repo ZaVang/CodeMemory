@@ -111,15 +111,33 @@ export default function App() {
   const [undoEntry, setUndoEntry] = useState<UndoEntry | null>(null)
   const undoToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // Operation error state (R9-error-feedback) — must be defined BEFORE handleUndo
-  // because handleUndo's catch block references showOperationError.
-  const [operationError, setOperationError] = useState<string | null>(null)
-  const operationErrorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // R10-error-queue: stacked dismissable toast queue replacing single error banner
+  // MUST be defined BEFORE handleUndo (which references showOperationError)
+  interface OperationError {
+    id: number
+    message: string
+  }
+  const [operationErrors, setOperationErrors] = useState<OperationError[]>([])
+  const errorIdRef = useRef(0)
+  const errorTimersRef = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map())
 
   const showOperationError = useCallback((msg: string) => {
-    setOperationError(msg)
-    if (operationErrorTimerRef.current) clearTimeout(operationErrorTimerRef.current)
-    operationErrorTimerRef.current = setTimeout(() => setOperationError(null), 6000)
+    const id = ++errorIdRef.current
+    const entry: OperationError = { id, message: msg }
+    setOperationErrors((prev) => [...prev, entry])
+    const timer = setTimeout(() => {
+      dismissOperationError(id)
+    }, 6000)
+    errorTimersRef.current.set(id, timer)
+  }, [])
+
+  const dismissOperationError = useCallback((id: number) => {
+    setOperationErrors((prev) => prev.filter((e) => e.id !== id))
+    const timer = errorTimersRef.current.get(id)
+    if (timer) {
+      clearTimeout(timer)
+      errorTimersRef.current.delete(id)
+    }
   }, [])
 
   // Network error banner (R6-network-error-feedback)
@@ -966,41 +984,59 @@ export default function App() {
         </div>
       )}
 
-      {/* Operation error banner (R9-error-feedback) */}
-      {operationError && (
+      {/* R10-error-queue: stacked operation error toasts */}
+      {operationErrors.length > 0 && (
         <div
           style={{
-            margin: 0,
-            padding: '10px 24px',
-            backgroundColor: 'var(--cm-error)',
-            color: 'var(--cm-bg-surface)',
-            fontSize: 13,
-            fontFamily: 'Raleway, sans-serif',
-            textAlign: 'center',
-            fontWeight: 500,
-            flexShrink: 0,
-            position: 'relative',
+            position: 'fixed',
+            bottom: 24,
+            right: 24,
+            zIndex: 201,
+            display: 'flex',
+            flexDirection: 'column-reverse',
+            gap: 8,
+            maxWidth: 420,
           }}
         >
-          {operationError}
-          <button
-            onClick={() => { setOperationError(null); if (operationErrorTimerRef.current) clearTimeout(operationErrorTimerRef.current) }}
-            style={{
-              position: 'absolute',
-              right: 16,
-              top: '50%',
-              transform: 'translateY(-50%)',
-              background: 'none',
-              border: 'none',
-              color: 'var(--cm-bg-surface)',
-              cursor: 'pointer',
-              fontSize: 14,
-              padding: '0 4px',
-              opacity: 0.7,
-            }}
-          >
-            x
-          </button>
+          {operationErrors.map((err) => (
+            <div
+              key={err.id}
+              className="error-toast-enter"
+              style={{
+                padding: '10px 36px 10px 16px',
+                backgroundColor: 'var(--cm-error)',
+                color: 'var(--cm-bg-surface)',
+                fontSize: 13,
+                fontFamily: 'Raleway, sans-serif',
+                fontWeight: 500,
+                borderRadius: 2,
+                position: 'relative',
+                boxShadow: '0 2px 12px rgba(28,25,23,0.15)',
+                animation: 'toastSlideIn 200ms ease-out',
+              }}
+            >
+              {err.message}
+              <button
+                onClick={() => dismissOperationError(err.id)}
+                style={{
+                  position: 'absolute',
+                  right: 10,
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  background: 'none',
+                  border: 'none',
+                  color: 'var(--cm-bg-surface)',
+                  cursor: 'pointer',
+                  fontSize: 14,
+                  padding: '0 4px',
+                  opacity: 0.7,
+                  lineHeight: 1,
+                }}
+              >
+                x
+              </button>
+            </div>
+          ))}
         </div>
       )}
 

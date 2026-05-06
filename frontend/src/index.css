@@ -186,6 +186,12 @@ code, pre {
   animation: undo-toast-enter 200ms ease-out;
 }
 
+/* R10-error-queue: toast slide-in + fade-in animation */
+@keyframes toastSlideIn {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 /* R9-loading-skeletons: shimmer animation */
 @keyframes shimmer {
   0% { background-position: -200% 0; }

@@ -30,7 +30,7 @@ export default function SearchBar({ value, onChange, onNavigate }: Props) {
     if (!value.trim()) return []
     const q = value.trim().toLowerCase()
     return allTags
-      .filter((t) => t.toLowerCase().includes(q) && t.toLowerCase() !== q)
+      .filter((t) => t.toLowerCase().startsWith(q) && t.toLowerCase() !== q)
       .slice(0, 5)
   })()
 

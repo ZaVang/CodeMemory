@@ -59,6 +59,7 @@ const GraphCanvas = forwardRef<GraphCanvasHandle, Props>(function GraphCanvas({ 
   const containerRef = useRef<HTMLDivElement>(null)
   const cyRef = useRef<Core | null>(null)
   const [graphData, setGraphData] = useState<GraphData | null>(null)
+  const [loading, setLoading] = useState(true)
   // R9-graph-viewport: preserve zoom/pan across theme-switch instance rebuilds
   const savedViewportRef = useRef<{ zoom: number; pan: { x: number; y: number } } | null>(null)
   // Tooltip state (R5-graph-node-tooltips)
@@ -68,10 +69,13 @@ const GraphCanvas = forwardRef<GraphCanvasHandle, Props>(function GraphCanvas({ 
 
   // Load graph data
   useEffect(() => {
+    setLoading(true)
     fetchGraph().then((data) => {
       setGraphData(data)
       if (onGraphDataLoaded) onGraphDataLoaded(data)
-    }).catch(console.error)
+    }).catch((err) => {
+      console.error('Graph load failed:', err)
+    }).finally(() => setLoading(false))
   }, [refreshTrigger])
 
   // Run dagre layout on node positions
@@ -524,6 +528,11 @@ const GraphCanvas = forwardRef<GraphCanvasHandle, Props>(function GraphCanvas({ 
   // Expose exportPng to parent via ref
   useImperativeHandle(ref, () => ({ exportPng: handleExportPng }), [handleExportPng])
 
+  // R10-loading-skeletons: show skeleton while graph data loads
+  if (loading && !graphData) {
+    return <GraphSkeleton />
+  }
+
   // R7-N5: Unified EmptyState — shown when no memories exist
   if (graphData && graphData.nodes.length === 0) {
     return (
@@ -603,5 +612,109 @@ const GraphCanvas = forwardRef<GraphCanvasHandle, Props>(function GraphCanvas({ 
     </div>
   )
 })
+
+// ── R10-loading-skeletons: Graph skeleton ─────────────────────────────
+
+function GraphSkeleton() {
+  // Placeholder node circles arranged in a DAG-like layout
+  const nodePositions = [
+    { x: '50%', y: '20%', r: 24 },
+    { x: '30%', y: '38%', r: 18 },
+    { x: '70%', y: '38%', r: 18 },
+    { x: '20%', y: '56%', r: 20 },
+    { x: '45%', y: '56%', r: 22 },
+    { x: '65%', y: '56%', r: 16 },
+    { x: '80%', y: '56%', r: 18 },
+    { x: '30%', y: '74%', r: 20 },
+    { x: '55%', y: '74%', r: 18 },
+    { x: '70%', y: '74%', r: 20 },
+  ]
+
+  // Edge lines connecting some node pairs
+  const edges = [
+    { x1: '50%', y1: '20%', x2: '30%', y2: '38%' },
+    { x1: '50%', y1: '20%', x2: '70%', y2: '38%' },
+    { x1: '30%', y1: '38%', x2: '20%', y2: '56%' },
+    { x1: '30%', y1: '38%', x2: '45%', y2: '56%' },
+    { x1: '70%', y1: '38%', x2: '65%', y2: '56%' },
+    { x1: '70%', y1: '38%', x2: '80%', y2: '56%' },
+    { x1: '20%', y1: '56%', x2: '30%', y2: '74%' },
+    { x1: '45%', y1: '56%', x2: '55%', y2: '74%' },
+    { x1: '65%', y1: '56%', x2: '55%', y2: '74%' },
+    { x1: '80%', y1: '56%', x2: '70%', y2: '74%' },
+  ]
+
+  return (
+    <div style={{
+      width: '100%',
+      height: '100%',
+      backgroundColor: 'var(--cm-bg-primary)',
+      position: 'relative',
+      overflow: 'hidden',
+    }}>
+      {/* Edge placeholder lines */}
+      <svg style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}>
+        <defs>
+          <linearGradient id="edge-shimmer">
+            <stop offset="0%" stopColor="var(--cm-border)" />
+            <stop offset="50%" stopColor="var(--cm-border-cool)" />
+            <stop offset="100%" stopColor="var(--cm-border)" />
+            <animateTransform
+              attributeName="gradientTransform"
+              type="translate"
+              from="-2 0"
+              to="2 0"
+              dur="1.5s"
+              repeatCount="indefinite"
+            />
+          </linearGradient>
+        </defs>
+        {edges.map((e, i) => (
+          <line
+            key={`edge-${i}`}
+            x1={e.x1}
+            y1={e.y1}
+            x2={e.x2}
+            y2={e.y2}
+            stroke="var(--cm-border)"
+            strokeWidth={1.5}
+            opacity={0.5}
+          />
+        ))}
+      </svg>
+
+      {/* Placeholder node circles */}
+      {nodePositions.map((n, i) => (
+        <div
+          key={`node-${i}`}
+          className="skeleton-shimmer"
+          style={{
+            position: 'absolute',
+            left: `calc(${n.x} - ${n.r}px)`,
+            top: `calc(${n.y} - ${n.r}px)`,
+            width: n.r * 2,
+            height: n.r * 2,
+            borderRadius: '50%',
+          }}
+        />
+      ))}
+
+      {/* Center label */}
+      <div style={{
+        position: 'absolute',
+        top: '50%',
+        left: '50%',
+        transform: 'translate(-50%, -50%)',
+        fontSize: 11,
+        fontFamily: 'Raleway, sans-serif',
+        color: 'var(--cm-text-tertiary)',
+        textTransform: 'uppercase',
+        letterSpacing: '0.06em',
+      }}>
+        Loading graph...
+      </div>
+    </div>
+  )
+}
 
 export default GraphCanvas

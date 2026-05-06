@@ -604,3 +604,60 @@ PYTHONPATH=src python tests/integration_test.py
   - 目标：用骨架屏占位组件替换 List 视图和 Dashboard 数据加载期间的空白/闪烁状态。骨架屏应模拟实际内容的布局（如 List 的行状矩形、Dashboard stat card 的卡片状矩形），带微妙的脉冲/shimmer 动画。提供即时视觉反馈表示内容正在加载而非损坏。
   - 验收：List 视图在初始数据加载期间显示骨架行（匹配表格布局）；Dashboard 在初始数据加载期间显示骨架卡片（匹配 stat card 布局）；骨架有微妙的脉冲或 shimmer 动画；数据到达后骨架被实际内容替换；数据加载失败时骨架被适当错误状态替换（非一直挂起）；已有缓存/客户端数据时不出现骨架屏（即时过渡）
   - 来源：进化策略师 Nice-to-have #19（低投入高感知性能改进——空白闪烁被误读为损坏状态）
+
+## 第 10 轮追加任务（基于体验官 + 进化策略师审计 — 2026-05-06）
+
+> **背景**: 体验官 8.0/10，3 个 Critical bug 已确认修复，TDZ 扫描清洁，9/9 功能验证通过，仅剩 cosmetic issues。进化策略师 7.0/10（从 6.5 上升），3 个 Critical bug 已确认修复，MCP server 从 Feature Idea 升级为 Important #5，startup auto-reindex 缺失导致首次访问者看到 stale_count=10。
+> **优先级**: 🔴 第一梯队 = MCP server（最高杠杆战略特性）+ startup auto-reindex；🟡 第二梯队 = 高价值改进；🟢 第三梯队 = 至少两项 polish。
+> **TDZ 警告**: Generator 实现时必须严格遵守 "变量声明必须在引用之前" + "useCallback 必须在其 useEffect 之前定义" 的规则。
+
+### 第一梯队（🔴 战略基础设施 — 本轮必须完成）
+
+- [x] R10-MCP-server: 构建 MCP server，将 Layer 0 认知原语暴露为 MCP 工具
+  - 目标：构建一个 MCP server，将 CodeMemory 的五个 Layer 0 认知原语——resolve、overview、wander、focus、snapshot——作为可调用的 MCP 工具暴露。server 包装现有的 `handlers.py` 函数（与 CLI 使用相同的代码路径），因此 resolve/overview/wander 的 DAG 遍历逻辑是共享的而非重复的。MCP 工具保留 CodeMemory 的独特差异化：确定性依赖解析（非概率相似度）、基于显式 `imports` 的 DAG 遍历、以及带 token 预算裁剪级别的上下文组装。server 通过 `pyproject.toml` entry point 安装，可作为标准 MCP server 在 Claude Code、Cursor、Windsurf 等工具中配置使用。
+  - 验收：MCP server 注册工具 `resolve_memory`（id, depth, budget）、`overview`（tags, min_maturity）、`wander`（mode）、`focus`（id, level）、`snapshot`（id）；每个工具委托 CLI 使用的同一 `handlers.py` 函数（无逻辑重复）；server 可通过标准 MCP JSON 配置 `{"codememory": {"command": "python", "args": ["-m", "codememory.mcp_server"]}}`；`pyproject.toml` 在 `[project.scripts]` 下包含 `"mcp-server"` entry point；`resolve_memory` 返回带裁剪级别标注和 token 计数的拓扑排序上下文；`overview` 返回 top 5 相关记忆摘要供注入 AI system prompt；`wander` 返回一条冷记忆含 access_count 和 last_access；server 通过 `CODEMEMORY_ROOT` 环境变量获取数据集路径；现有 CLI 和后端 API 继续不变；后端 57+24 测试通过
+  - 来源：进化策略师 Important #5（从 Feature Idea 升级——2026 年 5 月所有新出记忆系统都 MCP-first，CodeMemory 的 DAG 解析引擎架构优于竞品但缺少 MCP 集成）
+
+- [x] R10-auto-reindex: 后端启动时自动执行 reindex
+  - 目标：在后端启动或首次加载数据集时触发完整 reindex，使 `stale_count` 和 `summary_hash` 值从第一个请求开始就是准确的。当前行为——显示 `stale_count: 10` 直到用户手动点击 Reindex 按钮——是一个破坏性的第一印象。reindex 逻辑是正确的（Iteration 9 修复了哈希计算），但工作流要求一个不必要的手动步骤。
+  - 验收：后端启动后自动在 `_load_index()` 之后运行 `reindex()`；服务器启动后首次 `GET /api/stats` 返回 `stale_count: 0`（对所有 4 个数据集，假设没有实际 stale 记忆）；Dashboard 中的手动 Reindex 按钮仍可工作（且在自动 reindex 后是幂等的）；数据集切换（`POST /api/datasets/switch`）也对新选择的数据集触发自动 reindex；启动时间对 62 条记忆的 quant_operators 数据集增加不超过 500ms；现有 API 行为无退化；后端 57+24 测试通过
+  - 来源：进化策略师 Critical #1（当前 stale count 在用户手动点击 Reindex 前是错误的——这是每轮会话的坏第一印象）
+
+### 第二梯队（🟡 高价值改进 — 本轮尽量完成）
+
+- [x] R10-loading-skeletons: 为 Graph 和 List 视图添加加载骨架屏
+  - 目标：将现有的骨架屏模式（DashboardSkeleton 带 shimmer 动画）扩展到 Graph 和 List 视图。Graph 骨架应在居中布局中显示占位节点圆圈和连接线，替换 Cytoscape 初始化前短暂出现的空白画布。List 骨架应显示匹配表格列布局（ID、Summary、Type、Maturity、Tags、Status）的骨架行，宽度有变化以显得真实。
+  - 验收：Graph 视图在 Cytoscape 初始化期间显示居中骨架含占位节点圆圈和连接线；List 视图在初始数据加载期间显示骨架行匹配表格布局（ID/Summary/Type/Maturity/Tags/Status 列）；两个骨架均使用现有 `skeleton-shimmer` CSS 动画（1.5s ease-in-out 渐变滑动）；数据到达后骨架被实际内容替换；数据加载失败时骨架被适当错误状态替换（非一直挂起）；已有缓存数据时不出现骨架（即时过渡）；图渲染、列表排序、过滤、分页无退化
+  - 来源：体验官 Medium #4（Graph 加载骨架） + 进化策略师 Nice-to-have #18（List 和 Graph 骨架——目前仅 Dashboard 有骨架）
+
+- [x] R10-error-queue: 将单条错误 banner 替换为排队 toast 系统
+  - 目标：将当前的单条操作错误 banner 替换为堆叠 toast 队列。当前 `showOperationError()` 设置单个 `operationError` 状态字符串——如果第二条错误在第一条自动消失（6 秒）之前触发，第一条错误会静默丢失。修复应允许多条错误消息堆叠（最新的在底部），每条独立可关闭，每条有自己的自动消失计时器。视觉模式应遵循现有 toast 惯例（滑入动画，位于右下角或右上角）。
+  - 验收：多条同时发生的操作错误各显示为独立 toast（最新的在底部）；每条 toast 有自己独立的 6 秒自动消失计时器；每条 toast 可通过 X 按钮独立关闭；toast 有滑入 + 淡入入场动画（与现有 Undo toast 200ms 模式一致）；所有 toast 关闭后 DOM 中无残留 toast 容器；网络错误 banner（顶部红色条）与操作 toast 保持分离（服务不同目的）；App.tsx、Dashboard.tsx 及其他组件中现有的 `showOperationError()` 调用点继续与新排队系统兼容
+  - 来源：体验官 High #1（如果两个操作快速连续失败，只有第二个错误被显示——消息队列或非替换式 toast 模式会更加健壮）
+
+- [x] R10-search-filter-fix: 支持无查询字符串的标签/类型/状态/成熟度过滤
+  - 目标：修复 `POST /api/search` 端点使其在 `query` 为空时不短路。当前 server.py 约第 1055 行在 query 为空或仅含空白时立即返回 `{"results": [], "count": 0}`。这破坏了如"显示所有标签为 'investment' 的记忆"或"显示所有 proven 记忆"的使用场景——用户必须输入一个无意义的查询字符来绕过短路。修复应允许标签、类型、状态和成熟度过滤独立于查询文本工作，并应支持组合多个过滤维度。
+  - 验收：`POST /api/search` 使用 `{"tags": ["investment"]}`（无 query）返回所有带该标签的记忆；`{"maturity": "proven"}` 返回所有 proven 记忆；`{"status": "archived"}` 返回所有归档记忆；`{"type": "schema"}` 返回所有 schema 记忆；组合过滤有效 `{"tags": ["ai"], "maturity": "verified"}` 返回交集；无过滤的空查询仍返回空结果（对真正空请求行为不变）；现有搜索行为（query + 过滤组合）不变；分页仍对仅过滤查询有效（offset/limit）；后端 57+24 测试通过
+  - 来源：进化策略师 Critical #3（用户应该能够浏览"所有标签为 investment 的记忆"或"所有 proven 记忆"而无需输入查询字符串）
+
+- [x] R10-dark-tints-widen: 扩展深色模式目录色彩调色板以提高扫视区分度
+  - 目标：扩展 `colors.ts` 中的 `DIRECTORY_TINTS_DARK` 调色板，使深色模式目录颜色跨越更宽的亮度范围（约 `#1A`–`#4A` 而非当前的 `#2D`–`#3D` 簇）。对关键目录略微增加饱和度，同时保持深色美学。目标是保留语义标识（金色表示偏好，绿色表示信念，紫色表示人物），同时使颜色无需细读标签即可扫视区分。
+  - 验收：深色模式目录色彩至少跨越 `#15`–`#4A` 亮度范围（按大致亮度测量）；每个目录的深色色彩保留其语义标识（偏好的暖金色、信念的绿色、人物的紫色等）；相邻色调无需仔细检查即可视觉区分；亮色模式目录颜色不变；动态 Legend 正确显示扩展后的深色调色板；主题切换正确更新图节点颜色；TypeScript 零错误，前端构建通过
+  - 来源：体验官 High #2（深色色彩在狭窄范围内——大多数在 #2D 到 #3D 之间——因此区分需要注意力。略大的差距将提高扫视性）
+
+- [x] R10-require-dataset-header: 要求 X-Codememory-Dataset 请求头，缺失时返回 400
+  - 目标：使 `X-Codememory-Dataset` 请求头对所有 API 请求变为必需。当前，无请求头的请求静默默认为 "investment" 数据集。这是一个正确性陷阱：忘记请求头的新 API 消费者会获得无错误提示的错误数据。修复应在请求头缺失或为空时返回 400 Bad Request 并附清晰的错误消息，并应在帮助面板和 API 响应中记录请求头要求。
+  - 验收：无 `X-Codememory-Dataset` 请求头的 API 请求返回 HTTP 400，消息如 "X-Codememory-Dataset header is required. Available datasets: companion, investment, software-architecture, quant_operators"；`GET /api/datasets` 端点无需请求头仍可访问（它是发现机制）；`GET /` 根端点无需请求头仍可访问（服务发现）；前端 `api.ts` 已对每个请求发送该请求头（Iteration 9 添加）——无需前端更改；帮助面板记录请求头要求；带有效请求头的现有 API 行为不变；后端 57+24 测试通过
+  - 来源：体验官 High #3（并行请求依赖请求头规范。如果新 API 消费者忘记请求头，请求会静默默认为 "investment"——更健壮的方式是要求请求头并在缺失时返回 400）
+
+### 第三梯队（🟢 打磨 — 本轮至少完成两项）
+
+- [x] R10-search-prefix-match: 将搜索栏标签自动补全统一为前缀匹配
+  - 目标：将 SearchBar 的标签自动补全匹配方式从 `includes`（任意位置子串匹配）改为 `startsWith`（前缀匹配），与 MemoryForm 的自动补全行为一致。当前，SearchBar 显示任何包含查询字符串的标签（如输入 "a" 匹配 "habit"、"math"、"career"），而 MemoryForm 使用 `startsWith` 获得更可预测的结果。将两者统一为 `startsWith` 使搜索自动补全可预测且一致。
+  - 验收：SearchBar 标签自动补全仅显示以输入查询开头的标签（前缀匹配）；MemoryForm 标签自动补全继续使用前缀匹配（不变）；两处自动补全行为现在一致；标签建议仍出现在输入框下方的下拉菜单中；键盘导航（ArrowDown/ArrowUp/Enter/Escape）继续有效；标签列表仍来源于 `fetchStats()`（当前数据集实际使用的标签）
+  - 来源：体验官 Medium #5（搜索栏使用 `includes` 进行标签匹配——显示任何包含查询的标签——而表单使用 `startsWith`。`startsWith` 对搜索来说更可预测。将两者统一为 `startsWith`）
+
+- [x] R10-api-smoke-tests: 添加最少 5 个 API 冒烟测试（FastAPI TestClient）
+  - 目标：使用 FastAPI 的 `TestClient` 添加 5 个覆盖最常用端点的 API 级冒烟测试。测试应验证基本正确性：`GET /api/memories` 返回分页结果，`GET /api/memories/{id}` 返回特定记忆，`POST /api/search` 返回匹配结果，`POST /api/resolve` 返回 DAG 解析上下文，`GET /api/stats` 返回聚合统计。这些是冒烟测试——验证 API 端到端与真实数据一起工作，而非穷尽测试每个边界情况。
+  - 验收：`tests/test_api.py` 存在，至少包含 5 个使用 FastAPI `TestClient` 的测试函数；Test 1：`GET /api/memories` 返回结构正确的分页结果；Test 2：`GET /api/memories/{id}` 返回包含所有预期字段的特定记忆；Test 3：`POST /api/search` 带查询返回带匹配元数据的排名结果；Test 4：`POST /api/resolve` 带有效 ID 返回拓扑排序上下文；Test 5：`GET /api/stats` 返回 total_count、stale_count、maturity 分布、标签频次；测试基于真实 examples/ 数据（非 mock）使用 companion 数据集；测试可通过 `PYTHONPATH=src python -m pytest tests/test_api.py -v` 运行；现有 57+24 测试继续通过
+  - 来源：进化策略师 Critical #4（零 API 测试意味着回归风险随每次端点变更而增加——Iteration 9 的 3 个关键 bug 本可以被基本 API 集成测试捕获）

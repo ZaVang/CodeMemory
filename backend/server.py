@@ -136,9 +136,26 @@ from starlette.middleware.base import BaseHTTPMiddleware  # noqa: E402
 
 class _DatasetContextMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request, call_next):
+        path = request.url.path
+        # Exempt discovery endpoints from the header requirement
+        is_exempt = path == "/" or path == "/api/datasets"
         dataset = request.headers.get("X-Codememory-Dataset", "")
         if dataset and dataset.strip():
             _current_dataset.set(dataset)
+        elif not is_exempt and path.startswith("/api/"):
+            # R10-require-dataset-header: return 400 if header missing on API routes
+            from fastapi.responses import JSONResponse
+            datasets = _get_available_datasets()
+            names = [d["name"] for d in datasets]
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "detail": (
+                        "X-Codememory-Dataset header is required. "
+                        f"Available datasets: {', '.join(names) if names else 'none found'}"
+                    ),
+                },
+            )
         response = await call_next(request)
         return response
 
@@ -1051,8 +1068,10 @@ def post_search(req: SearchRequest):
     for typo-tolerant search. Exact matches ranked above fuzzy matches.
     Returns ranked results with match_quality indicator.
     """
-    # B5: empty query means "no search performed" — short-circuit immediately
-    if not req.query or not req.query.strip():
+    # R10: only short-circuit when both query and filters are empty
+    has_query = bool(req.query and req.query.strip())
+    has_filters = bool(req.tags or req.type_ or req.status or req.maturity)
+    if not has_query and not has_filters:
         return _serialize({"results": [], "count": 0, "total": 0, "query": req.query, "limit": req.limit})
 
     index = _load_index()
@@ -1098,52 +1117,70 @@ def post_search(req: SearchRequest):
             if filepath.exists():
                 _, body = _parse_frontmatter(filepath)
 
-        # Score matching against id, summary, tags, and body
-        scores: list[tuple[float, str]] = []
-        id_score = _fuzzy_match_score(req.query, mem_id)
-        if id_score > 0:
-            scores.append((id_score, "id"))
-        summary_score = _fuzzy_match_score(req.query, summary)
-        if summary_score > 0:
-            scores.append((summary_score, "summary"))
-        for tag in tags:
-            tag_score = _fuzzy_match_score(req.query, tag)
-            if tag_score > 0:
-                scores.append((tag_score, "tag"))
-        if body:
-            body_score = _fuzzy_match_score(req.query, body)
-            if body_score > 0:
-                scores.append((body_score, "body"))
+        # R10: if there's a query, score against id, summary, tags, and body.
+        # If only filters (no query), include all matching memories directly.
+        if has_query:
+            scores: list[tuple[float, str]] = []
+            id_score = _fuzzy_match_score(req.query, mem_id)
+            if id_score > 0:
+                scores.append((id_score, "id"))
+            summary_score = _fuzzy_match_score(req.query, summary)
+            if summary_score > 0:
+                scores.append((summary_score, "summary"))
+            for tag in tags:
+                tag_score = _fuzzy_match_score(req.query, tag)
+                if tag_score > 0:
+                    scores.append((tag_score, "tag"))
+            if body:
+                body_score = _fuzzy_match_score(req.query, body)
+                if body_score > 0:
+                    scores.append((body_score, "body"))
 
-        if not scores:
-            continue
+            if not scores:
+                continue
 
-        best_score = max(s[0] for s in scores)
-        match_fields = list(set(s[1] for s in scores))
-        is_exact = any(s[0] >= 1.0 for s in scores)
-        match_quality_tag = "exact" if is_exact else "fuzzy"
+            best_score = max(s[0] for s in scores)
+            match_fields = list(set(s[1] for s in scores))
+            is_exact = any(s[0] >= 1.0 for s in scores)
+            match_quality_tag = "exact" if is_exact else "fuzzy"
 
-        # Extract body snippet for preview
-        snippet = _extract_snippet(body, req.query) if body else ""
+            # Extract body snippet for preview
+            snippet = _extract_snippet(body, req.query) if body else ""
 
-        match_entry = {
-            "id": mem_id,
-            "summary": summary,
-            "type": d.get("type", "atom"),
-            "tags": d.get("tags", []),
-            "intensity": d.get("intensity", 5),
-            "maturity": d.get("maturity", "draft"),
-            "status": d.get("status", "active"),
-            "snippet": snippet,
-            "match_quality": match_quality_tag,
-            "match_score": round(best_score, 2),
-            "match_fields": match_fields,
-        }
+            match_entry = {
+                "id": mem_id,
+                "summary": summary,
+                "type": d.get("type", "atom"),
+                "tags": d.get("tags", []),
+                "intensity": d.get("intensity", 5),
+                "maturity": d.get("maturity", "draft"),
+                "status": d.get("status", "active"),
+                "snippet": snippet,
+                "match_quality": match_quality_tag,
+                "match_score": round(best_score, 2),
+                "match_fields": match_fields,
+            }
 
-        if is_exact:
+            if is_exact:
+                exact_matches.append(match_entry)
+            elif best_score >= _FUZZY_THRESHOLD:
+                fuzzy_matches.append(match_entry)
+        else:
+            # Filter-only (no text query): include all matches
+            match_entry = {
+                "id": mem_id,
+                "summary": summary,
+                "type": d.get("type", "atom"),
+                "tags": d.get("tags", []),
+                "intensity": d.get("intensity", 5),
+                "maturity": d.get("maturity", "draft"),
+                "status": d.get("status", "active"),
+                "snippet": "",
+                "match_quality": "filter",
+                "match_score": 1.0,
+                "match_fields": [],
+            }
             exact_matches.append(match_entry)
-        elif best_score >= _FUZZY_THRESHOLD:
-            fuzzy_matches.append(match_entry)
 
     # Sort each group: higher score first, then by id
     def _sort_key(m: dict) -> tuple:
@@ -1327,6 +1364,14 @@ if __name__ == "__main__":
     import uvicorn
 
     default_root = _resolve_root(_DEFAULT_DATASET)
+    # R10-auto-reindex: ensure index hashes are accurate from the first request
     print(f"CodeMemory API starting on http://localhost:8000")
     print(f"Default dataset: {_DEFAULT_DATASET} ({default_root})")
+    print(f"Reindexing {_DEFAULT_DATASET} on startup...")
+    reindex(default_root)
+    # Also reindex any other available datasets so stale_count is 0 everywhere
+    for ds in _get_available_datasets():
+        if ds["name"] != _DEFAULT_DATASET:
+            print(f"Reindexing {ds['name']} on startup...")
+            reindex(Path(ds["path"]))
     uvicorn.run(app, host="0.0.0.0", port=8000)
