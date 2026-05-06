@@ -8,6 +8,7 @@ interface Props {
   onSelectMemory: (id: string) => void
   refreshTrigger?: number
   initialFilter?: string  // pre-fill filter from dashboard navigation
+  onCreateMemory?: () => void
 }
 
 type SortField = 'id' | 'summary' | 'type' | 'maturity' | 'status'
@@ -15,7 +16,7 @@ type SortDir = 'asc' | 'desc'
 
 const PAGE_SIZE = 20
 
-export default function MemoryList({ onSelectMemory, refreshTrigger, initialFilter }: Props) {
+export default function MemoryList({ onSelectMemory, refreshTrigger, initialFilter, onCreateMemory }: Props) {
   const [allMemories, setAllMemories] = useState<MemorySummary[]>([])
   const [loading, setLoading] = useState(true)
   const [filterText, setFilterText] = useState('')
@@ -100,7 +101,7 @@ export default function MemoryList({ onSelectMemory, refreshTrigger, initialFilt
     textTransform: 'uppercase',
     letterSpacing: '0.08em',
     color: 'var(--cm-text-secondary)',
-    borderBottom: '2px solid #E7E5E4',
+    borderBottom: '2px solid var(--cm-border)',
     cursor: 'pointer',
     whiteSpace: 'nowrap',
     userSelect: 'none',
@@ -115,7 +116,7 @@ export default function MemoryList({ onSelectMemory, refreshTrigger, initialFilt
     fontSize: 12,
     fontFamily: 'Raleway, sans-serif',
     color: 'var(--cm-text-primary)',
-    borderBottom: '1px solid #F5F5F4',
+    borderBottom: '1px solid var(--cm-bg-subtle)',
     verticalAlign: 'middle',
   }
 
@@ -130,13 +131,13 @@ export default function MemoryList({ onSelectMemory, refreshTrigger, initialFilt
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', backgroundColor: 'var(--cm-bg-primary)' }}>
       {/* Filter bar */}
-      <div style={{ padding: '16px 24px', borderBottom: '1px solid #E7E5E4', display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
+      <div style={{ padding: '16px 24px', borderBottom: '1px solid var(--cm-border)', display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
         <div style={{
           display: 'flex',
           alignItems: 'center',
           gap: 8,
           backgroundColor: 'var(--cm-bg-surface)',
-          border: '1px solid #E7E5E4',
+          border: '1px solid var(--cm-border)',
           borderRadius: 2,
           padding: '4px 8px',
           flex: 1,
@@ -255,41 +256,18 @@ export default function MemoryList({ onSelectMemory, refreshTrigger, initialFilt
                 <td colSpan={6} style={{ padding: 0 }}>
                   {allMemories.length === 0 ? (
                     <EmptyState
+                      icon="*"
                       title="No memories yet"
                       description="Create your first memory to get started."
+                      actions={onCreateMemory ? [{ label: 'Create Memory', onClick: onCreateMemory, variant: 'primary' }] : undefined}
                     />
                   ) : (
-                    <div style={{
-                      padding: '48px 16px',
-                      textAlign: 'center',
-                    }}>
-                      <p style={{
-                        color: 'var(--cm-text-tertiary)',
-                        fontFamily: 'Raleway, sans-serif',
-                        fontSize: 13,
-                        marginBottom: 16,
-                      }}>
-                        No matching memories &mdash; try clearing the filter.
-                      </p>
-                      <button
-                        onClick={() => { setFilterText(''); setPage(0) }}
-                        style={{
-                          padding: '8px 20px',
-                          border: '1px solid var(--cm-border-cool)',
-                          background: 'transparent',
-                          color: 'var(--cm-text-secondary)',
-                          cursor: 'pointer',
-                          fontSize: 11,
-                          fontWeight: 600,
-                          fontFamily: 'Raleway, sans-serif',
-                          textTransform: 'uppercase',
-                          letterSpacing: '0.08em',
-                          borderRadius: 2,
-                        }}
-                      >
-                        Clear Filter
-                      </button>
-                    </div>
+                    <EmptyState
+                      icon="*"
+                      title="No matching memories"
+                      description={`0 of ${allMemories.length} memories match your filter.`}
+                      actions={[{ label: 'Clear Filter', onClick: () => { setFilterText(''); setPage(0) }, variant: 'secondary' }]}
+                    />
                   )}
                 </td>
               </tr>
@@ -302,7 +280,7 @@ export default function MemoryList({ onSelectMemory, refreshTrigger, initialFilt
       {totalPages > 1 && (
         <div style={{
           padding: '12px 24px',
-          borderTop: '1px solid #E7E5E4',
+          borderTop: '1px solid var(--cm-border)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
@@ -348,7 +326,7 @@ export default function MemoryList({ onSelectMemory, refreshTrigger, initialFilt
 
 const pageBtnStyle: React.CSSProperties = {
   padding: '4px 12px',
-  border: '1px solid #D4D4D8',
+  border: '1px solid var(--cm-border-cool)',
   background: 'transparent',
   color: 'var(--cm-text-secondary)',
   cursor: 'pointer',

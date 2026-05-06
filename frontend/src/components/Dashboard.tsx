@@ -7,9 +7,10 @@ interface Props {
   onSelectMemory: (id: string) => void
   onNavigateToFilter?: (filter: string, type: 'tag' | 'maturity') => void
   refreshTrigger?: number
+  onCreateMemory?: () => void
 }
 
-export default function Dashboard({ onSelectMemory, onNavigateToFilter, refreshTrigger }: Props) {
+export default function Dashboard({ onSelectMemory, onNavigateToFilter, refreshTrigger, onCreateMemory }: Props) {
   const [stats, setStats] = useState<StatsResponse | null>(null)
   const [wanderResult, setWanderResult] = useState<WanderResponse | null>(null)
   const [validateResult, setValidateResult] = useState<ValidateResponse | null>(null)
@@ -133,7 +134,7 @@ export default function Dashboard({ onSelectMemory, onNavigateToFilter, refreshT
             disabled={validating}
             style={{
               padding: '10px 24px',
-              border: '1px solid #1E40AF',
+              border: '1px solid var(--cm-info)',
               background: 'transparent',
               color: 'var(--cm-info)',
               cursor: 'pointer',
@@ -151,7 +152,7 @@ export default function Dashboard({ onSelectMemory, onNavigateToFilter, refreshT
             onClick={loadData}
             style={{
               padding: '10px 24px',
-              border: '1px solid #D4D4D8',
+              border: '1px solid var(--cm-border-cool)',
               background: 'transparent',
               color: 'var(--cm-text-secondary)',
               cursor: 'pointer',
@@ -170,7 +171,7 @@ export default function Dashboard({ onSelectMemory, onNavigateToFilter, refreshT
             disabled={reindexing}
             style={{
               padding: '10px 24px',
-              border: '1px solid #CA8A04',
+              border: '1px solid var(--cm-warning)',
               background: 'transparent',
               color: 'var(--cm-warning)',
               cursor: 'pointer',
@@ -197,6 +198,7 @@ export default function Dashboard({ onSelectMemory, onNavigateToFilter, refreshT
         <EmptyState
           title="No memories yet"
           description="Create your first memory to get started."
+          actions={onCreateMemory ? [{ label: 'Create Memory', onClick: onCreateMemory, variant: 'primary' }] : undefined}
         />
       )}
 
@@ -351,8 +353,8 @@ export default function Dashboard({ onSelectMemory, onNavigateToFilter, refreshT
                       padding: '8px 12px',
                       borderRadius: 2,
                       cursor: 'pointer',
-                      backgroundColor: '#991B1B08',
-                      borderLeft: '3px solid #991B1B',
+                      backgroundColor: 'var(--cm-bg-error-subtle)',
+                      borderLeft: '3px solid var(--cm-error)',
                     }}
                   >
                     <div>
@@ -382,7 +384,7 @@ export default function Dashboard({ onSelectMemory, onNavigateToFilter, refreshT
                         style={{
                           padding: '2px 8px',
                           borderRadius: 2,
-                          backgroundColor: '#991B1B15',
+                          backgroundColor: 'var(--cm-bg-error-subtle)',
                           color: 'var(--cm-error)',
                           fontSize: 10,
                           fontWeight: 600,
@@ -408,7 +410,7 @@ export default function Dashboard({ onSelectMemory, onNavigateToFilter, refreshT
                   style={{
                     padding: '8px 16px',
                     borderRadius: 2,
-                    backgroundColor: status === 'active' ? '#16653415' : status === 'archived' ? 'var(--cm-bg-subtle)' : 'var(--cm-bg-subtle)',
+                    backgroundColor: status === 'active' ? 'var(--cm-bg-success-subtle)' : status === 'archived' ? 'var(--cm-bg-subtle)' : 'var(--cm-bg-subtle)',
                     borderLeft: `3px solid ${status === 'active' ? 'var(--cm-success)' : status === 'archived' ? 'var(--cm-text-tertiary)' : 'var(--cm-text-secondary)'}`,
                   }}
                 >
@@ -471,7 +473,7 @@ export default function Dashboard({ onSelectMemory, onNavigateToFilter, refreshT
             padding: '12px 16px',
             backgroundColor: 'var(--cm-bg-surface)',
             borderRadius: 2,
-            border: '1px solid #F5F5F4',
+            border: '1px solid var(--cm-bg-subtle)',
           }}>
             <div style={{
               fontSize: 10,
@@ -571,6 +573,32 @@ export default function Dashboard({ onSelectMemory, onNavigateToFilter, refreshT
               View Details
             </button>
             <button
+              onClick={() => {
+                setWandering(true)
+                fetchWander('cool')
+                  .then((result) => {
+                    setWanderResult(result)
+                  })
+                  .catch(console.error)
+                  .finally(() => setWandering(false))
+              }}
+              style={{
+                padding: '8px 20px',
+                border: '1px solid var(--cm-accent)',
+                background: 'transparent',
+                color: 'var(--cm-accent)',
+                cursor: 'pointer',
+                fontSize: 11,
+                fontWeight: 600,
+                fontFamily: 'Raleway, sans-serif',
+                textTransform: 'uppercase',
+                letterSpacing: '0.08em',
+                borderRadius: 2,
+              }}
+            >
+              Wander Again
+            </button>
+            <button
               onClick={() => setWanderOpen(false)}
               style={{
                 padding: '8px 20px',
@@ -611,8 +639,8 @@ export default function Dashboard({ onSelectMemory, onNavigateToFilter, refreshT
               style={{
                 padding: '8px 16px',
                 borderRadius: 2,
-                backgroundColor: '#16653415',
-                borderLeft: '3px solid #166534',
+                backgroundColor: 'var(--cm-bg-success-subtle)',
+                borderLeft: '3px solid var(--cm-success)',
               }}
             >
               <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--cm-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.08em', fontFamily: 'Raleway, sans-serif' }}>
@@ -626,7 +654,7 @@ export default function Dashboard({ onSelectMemory, onNavigateToFilter, refreshT
               style={{
                 padding: '8px 16px',
                 borderRadius: 2,
-                backgroundColor: validateResult.error_count > 0 ? '#991B1B15' : '#16653415',
+                backgroundColor: validateResult.error_count > 0 ? 'var(--cm-bg-error-subtle)' : 'var(--cm-bg-success-subtle)',
                 borderLeft: `3px solid ${validateResult.error_count > 0 ? 'var(--cm-error)' : 'var(--cm-success)'}`,
               }}
             >
@@ -641,7 +669,7 @@ export default function Dashboard({ onSelectMemory, onNavigateToFilter, refreshT
               style={{
                 padding: '8px 16px',
                 borderRadius: 2,
-                backgroundColor: validateResult.warning_count > 0 ? '#CA8A0415' : '#16653415',
+                backgroundColor: validateResult.warning_count > 0 ? 'var(--cm-bg-warning-subtle)' : 'var(--cm-bg-success-subtle)',
                 borderLeft: `3px solid ${validateResult.warning_count > 0 ? 'var(--cm-warning)' : 'var(--cm-success)'}`,
               }}
             >
@@ -658,7 +686,7 @@ export default function Dashboard({ onSelectMemory, onNavigateToFilter, refreshT
             <div
               style={{
                 padding: '16px',
-                backgroundColor: '#16653410',
+                backgroundColor: 'var(--cm-bg-success-subtle)',
                 borderRadius: 2,
                 color: 'var(--cm-success)',
                 fontSize: 14,
@@ -680,8 +708,8 @@ export default function Dashboard({ onSelectMemory, onNavigateToFilter, refreshT
                     key={i}
                     style={{
                       padding: '6px 10px',
-                      backgroundColor: '#991B1B0A',
-                      borderLeft: '3px solid #991B1B',
+                      backgroundColor: 'var(--cm-bg-error-subtle)',
+                      borderLeft: '3px solid var(--cm-error)',
                       borderRadius: 2,
                       fontSize: 12,
                       fontFamily: 'Raleway, sans-serif',
@@ -706,8 +734,8 @@ export default function Dashboard({ onSelectMemory, onNavigateToFilter, refreshT
                     key={i}
                     style={{
                       padding: '6px 10px',
-                      backgroundColor: '#CA8A040A',
-                      borderLeft: '3px solid #CA8A04',
+                      backgroundColor: 'var(--cm-bg-warning-subtle)',
+                      borderLeft: '3px solid var(--cm-warning)',
                       borderRadius: 2,
                       fontSize: 12,
                       fontFamily: 'Raleway, sans-serif',
@@ -728,7 +756,7 @@ export default function Dashboard({ onSelectMemory, onNavigateToFilter, refreshT
             onClick={() => setValidateOpen(false)}
             style={{
               padding: '8px 20px',
-              border: '1px solid #D4D4D8',
+              border: '1px solid var(--cm-border-cool)',
               background: 'transparent',
               color: 'var(--cm-text-secondary)',
               cursor: 'pointer',
@@ -757,7 +785,7 @@ function StatCard({ label, value, color }: { label: string; value: number; color
         padding: '20px 24px',
         backgroundColor: 'var(--cm-bg-surface)',
         borderRadius: 2,
-        border: '1px solid #F5F5F4',
+        border: '1px solid var(--cm-bg-subtle)',
         boxShadow: '0 1px 2px rgba(28,25,23,0.04)',
       }}
     >
@@ -796,7 +824,7 @@ function SectionCard({ title, children }: { title: string; children: React.React
         padding: '20px 24px',
         backgroundColor: 'var(--cm-bg-surface)',
         borderRadius: 2,
-        border: '1px solid #F5F5F4',
+        border: '1px solid var(--cm-bg-subtle)',
         boxShadow: '0 1px 2px rgba(28,25,23,0.04)',
       }}
     >
@@ -843,7 +871,7 @@ function Modal({ children, onClose }: { children: React.ReactNode; onClose: () =
           left: '50%',
           transform: 'translate(-50%, -50%)',
           backgroundColor: 'var(--cm-bg-primary)',
-          border: '1px solid #E7E5E4',
+          border: '1px solid var(--cm-border)',
           borderRadius: 2,
           padding: 28,
           maxWidth: 560,

@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
 import GraphCanvas from './components/GraphCanvas'
+import type { GraphCanvasHandle } from './components/GraphCanvas'
 import MemoryDetail from './components/MemoryDetail'
 import MemoryForm from './components/MemoryForm'
 import Dashboard from './components/Dashboard'
@@ -196,6 +197,9 @@ export default function App() {
 
   // Graph data (loaded once, shared with Legend)
   const [graphData, setGraphData] = useState<GraphData | null>(null)
+
+  // GraphCanvas ref for PNG export
+  const graphCanvasRef = useRef<GraphCanvasHandle>(null)
 
   // Graph refresh trigger (increment to reload)
   const [refreshTrigger, setRefreshTrigger] = useState(0)
@@ -494,6 +498,15 @@ export default function App() {
         return
       }
 
+      // Ctrl+Shift+D — toggle dark mode
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'D') {
+        e.preventDefault()
+        const next = activeTheme === 'dark' ? 'light' : 'dark'
+        setThemeMode(next)
+        setSettings((prev) => { const u = { ...prev, theme: next }; saveSettings(u); return u })
+        return
+      }
+
       // ? — show keyboard shortcuts overlay (only when not in input)
       if (e.key === '?' && !isInput) {
         e.preventDefault()
@@ -522,7 +535,7 @@ export default function App() {
         style={{
           padding: '16px 24px',
           backgroundColor: 'var(--cm-bg-primary)',
-          borderBottom: '1px solid #E7E5E4',
+          borderBottom: '1px solid var(--cm-border)',
           display: 'flex',
           alignItems: 'center',
           gap: 16,
@@ -570,7 +583,7 @@ export default function App() {
           style={{
             display: 'flex',
             borderRadius: 2,
-            border: '1px solid #D4D4D8',
+            border: '1px solid var(--cm-border-cool)',
             overflow: 'hidden',
             flexShrink: 0,
           }}
@@ -636,7 +649,7 @@ export default function App() {
             disabled={switchingDataset}
             style={{
               padding: '4px 8px',
-              border: '1px solid #D4D4D8',
+              border: '1px solid var(--cm-border-cool)',
               borderRadius: 2,
               fontSize: 11,
               fontWeight: 600,
@@ -661,9 +674,24 @@ export default function App() {
           </span>
         )}
         {/* R7-N1: dataset disclaimer — operations are scoped to current dataset */}
-        {datasets.length > 1 && !switchingDataset && (
+        {datasets.length > 1 && !switchingDataset && currentDataset !== 'quant_operators' && (
           <span style={{ fontSize: 10, color: 'var(--cm-text-tertiary)', fontFamily: 'Raleway, sans-serif', fontStyle: 'italic' }}>
             Stats, validation, and reindex apply to the selected dataset.
+          </span>
+        )}
+        {/* R8-quant-disclaimer: informational message for quant_operators dataset */}
+        {currentDataset === 'quant_operators' && !switchingDataset && (
+          <span style={{
+            fontSize: 10,
+            color: 'var(--cm-text-secondary)',
+            fontFamily: 'Raleway, sans-serif',
+            fontStyle: 'italic',
+            backgroundColor: 'var(--cm-bg-info-subtle)',
+            padding: '2px 10px',
+            borderRadius: 2,
+            whiteSpace: 'nowrap',
+          }}>
+            Auto-generated API documentation. Dependency graph reflects algorithmic inference, not human-authored links.
           </span>
         )}
 
@@ -791,6 +819,31 @@ export default function App() {
           {activeTheme === 'dark' ? '☀' : '☽'}
         </button>
 
+        {/* Export PNG button (R8-png-export-ui) — only in graph view */}
+        {viewMode === 'graph' && (
+          <button
+            onClick={() => graphCanvasRef.current?.exportPng()}
+            title="Export graph as PNG image"
+            style={{
+              padding: '6px 14px',
+              backgroundColor: 'transparent',
+              color: 'var(--cm-text-secondary)',
+              border: '1px solid var(--cm-border-cool)',
+              cursor: 'pointer',
+              fontSize: 11,
+              fontWeight: 600,
+              fontFamily: 'Raleway, sans-serif',
+              textTransform: 'uppercase',
+              letterSpacing: '0.08em',
+              borderRadius: 2,
+              whiteSpace: 'nowrap',
+              flexShrink: 0,
+            }}
+          >
+            PNG
+          </button>
+        )}
+
         {/* Export button (R7-export) */}
         <button
           onClick={downloadExport}
@@ -909,6 +962,7 @@ export default function App() {
           }}
         >
           <GraphCanvas
+            ref={graphCanvasRef}
             searchText={searchText}
             onNodeClick={setSelectedNode}
             onNodeContextMenu={handleContextMenu}
@@ -917,6 +971,8 @@ export default function App() {
             refreshTrigger={refreshTrigger}
             zoomLevel={zoomLevel}
             onGraphDataLoaded={setGraphData}
+            activeTheme={activeTheme}
+            onCreateMemory={handleOpenCreate}
           />
           <Legend graphData={graphData} />
 
@@ -987,14 +1043,14 @@ export default function App() {
         {/* List view — shown when viewMode === 'list' */}
         {viewMode === 'list' && (
           <div style={{ flex: 1, overflow: 'hidden' }}>
-            <MemoryList onSelectMemory={handleDashSelect} refreshTrigger={refreshTrigger} initialFilter={listFilter} />
+            <MemoryList onSelectMemory={handleDashSelect} refreshTrigger={refreshTrigger} initialFilter={listFilter} onCreateMemory={handleOpenCreate} />
           </div>
         )}
 
         {/* Dashboard view — shown when viewMode === 'dashboard' */}
         {viewMode === 'dashboard' && (
           <div style={{ flex: 1, overflow: 'hidden' }}>
-            <Dashboard onSelectMemory={handleDashSelect} onNavigateToFilter={handleNavigateToFilter} refreshTrigger={refreshTrigger} />
+            <Dashboard onSelectMemory={handleDashSelect} onNavigateToFilter={handleNavigateToFilter} refreshTrigger={refreshTrigger} onCreateMemory={handleOpenCreate} />
           </div>
         )}
 
@@ -1086,7 +1142,7 @@ export default function App() {
               top: contextMenu.y,
               zIndex: 100,
               backgroundColor: 'var(--cm-bg-surface)',
-              border: '1px solid #E7E5E4',
+              border: '1px solid var(--cm-border)',
               borderRadius: 2,
               boxShadow: '0 4px 16px rgba(28,25,23,0.12)',
               padding: '4px 0',
@@ -1187,7 +1243,7 @@ export default function App() {
               left: '50%',
               transform: 'translate(-50%, -50%)',
               backgroundColor: 'var(--cm-bg-primary)',
-              border: '1px solid #E7E5E4',
+              border: '1px solid var(--cm-border)',
               borderRadius: 2,
               padding: 28,
               maxWidth: 420,
@@ -1234,7 +1290,7 @@ export default function App() {
                 onClick={() => setArchiveConfirmId(null)}
                 style={{
                   padding: '8px 20px',
-                  border: '1px solid #D4D4D8',
+                  border: '1px solid var(--cm-border-cool)',
                   background: 'transparent',
                   color: 'var(--cm-text-secondary)',
                   cursor: 'pointer',
@@ -1291,7 +1347,7 @@ export default function App() {
               left: '50%',
               transform: 'translate(-50%, -50%)',
               backgroundColor: 'var(--cm-bg-primary)',
-              border: '1px solid #E7E5E4',
+              border: '1px solid var(--cm-border)',
               borderRadius: 2,
               padding: 28,
               maxWidth: 420,
@@ -1314,6 +1370,7 @@ export default function App() {
                 { keys: 'Ctrl + K', desc: 'Focus search bar' },
                 { keys: 'Ctrl + N', desc: 'Open new memory form' },
                 { keys: 'Ctrl + Z', desc: 'Undo last action' },
+                { keys: 'Ctrl + Shift + D', desc: 'Toggle dark mode' },
                 { keys: 'Escape', desc: 'Close open panel / menu' },
                 { keys: '?', desc: 'Show this help overlay' },
               ].map(({ keys, desc }) => (
@@ -1341,7 +1398,7 @@ export default function App() {
               style={{
                 marginTop: 16,
                 padding: '8px 20px',
-                border: '1px solid #D4D4D8',
+                border: '1px solid var(--cm-border-cool)',
                 background: 'transparent',
                 color: 'var(--cm-text-secondary)',
                 cursor: 'pointer',

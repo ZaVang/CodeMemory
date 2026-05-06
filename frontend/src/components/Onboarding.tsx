@@ -79,7 +79,7 @@ export default function Onboarding({ onComplete }: Props) {
               height: 56,
               borderRadius: '50%',
               backgroundColor: 'var(--cm-bg-hover)',
-              border: '2px solid #B8860B',
+              border: '2px solid var(--cm-accent)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -162,7 +162,7 @@ export default function Onboarding({ onComplete }: Props) {
               onClick={onComplete}
               style={{
                 padding: '10px 24px',
-                border: '1px solid #D4D4D8',
+                border: '1px solid var(--cm-border-cool)',
                 background: 'transparent',
                 color: 'var(--cm-text-secondary)',
                 cursor: 'pointer',

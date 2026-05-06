@@ -142,7 +142,7 @@ export default function MemoryDetail({ memoryId, onClose, onResolve, onClearReso
           minWidth: 360,
           maxWidth: 520,
           backgroundColor: 'var(--cm-bg-primary)',
-          borderLeft: '1px solid #E7E5E4',
+          borderLeft: '1px solid var(--cm-border)',
           display: 'flex',
           flexDirection: 'column',
           overflow: 'hidden',
@@ -159,7 +159,7 @@ export default function MemoryDetail({ memoryId, onClose, onResolve, onClearReso
             alignItems: 'center',
             justifyContent: 'space-between',
             padding: '16px 24px',
-            borderBottom: '1px solid #E7E5E4',
+            borderBottom: '1px solid var(--cm-border)',
             flexShrink: 0,
           }}
         >
@@ -184,7 +184,7 @@ export default function MemoryDetail({ memoryId, onClose, onResolve, onClearReso
             onClick={() => onResolve(memoryId!)}
             title="Resolve dependency DAG from this node"
             style={{
-              border: '1px solid #B8860B',
+              border: '1px solid var(--cm-accent)',
               background: 'transparent',
               cursor: 'pointer',
               fontSize: 11,
@@ -257,7 +257,7 @@ export default function MemoryDetail({ memoryId, onClose, onResolve, onClearReso
             <div
               style={{
                 padding: '20px 24px',
-                borderBottom: '1px solid #E7E5E4',
+                borderBottom: '1px solid var(--cm-border)',
                 flexShrink: 0,
               }}
             >
@@ -421,15 +421,15 @@ export default function MemoryDetail({ memoryId, onClose, onResolve, onClearReso
             <div
               style={{
                 padding: '14px 24px',
-                borderBottom: '1px solid #E7E5E4',
+                borderBottom: '1px solid var(--cm-border)',
                 flexShrink: 0,
               }}
             >
               <div
                 style={{
                   padding: '8px 12px',
-                  backgroundColor: '#991B1B0A',
-                  borderLeft: '3px solid #991B1B',
+                  backgroundColor: 'var(--cm-bg-error-subtle)',
+                  borderLeft: '3px solid var(--cm-error)',
                   borderRadius: 2,
                   fontSize: 12,
                   fontFamily: 'Raleway, sans-serif',
@@ -447,7 +447,7 @@ export default function MemoryDetail({ memoryId, onClose, onResolve, onClearReso
             <div
               style={{
                 padding: '16px 24px',
-                borderBottom: '1px solid #E7E5E4',
+                borderBottom: '1px solid var(--cm-border)',
                 flexShrink: 0,
                 maxHeight: 260,
                 overflowY: 'auto',
@@ -461,8 +461,8 @@ export default function MemoryDetail({ memoryId, onClose, onResolve, onClearReso
                       key={i}
                       style={{
                         padding: '6px 10px',
-                        backgroundColor: '#CA8A0415',
-                        borderLeft: '3px solid #CA8A04',
+                        backgroundColor: 'var(--cm-bg-warning-subtle)',
+                        borderLeft: '3px solid var(--cm-warning)',
                         borderRadius: 2,
                         fontSize: 11,
                         fontFamily: 'Raleway, sans-serif',
@@ -506,8 +506,8 @@ export default function MemoryDetail({ memoryId, onClose, onResolve, onClearReso
                   <button
                     onClick={handleCopyPrompt}
                     style={{
-                      border: '1px solid #166534',
-                      background: copyLabel === 'Copied!' ? '#16653415' : 'transparent',
+                      border: '1px solid var(--cm-success)',
+                      background: copyLabel === 'Copied!' ? 'var(--cm-bg-success-subtle)' : 'transparent',
                       cursor: 'pointer',
                       fontSize: 10,
                       fontWeight: 600,
@@ -525,7 +525,7 @@ export default function MemoryDetail({ memoryId, onClose, onResolve, onClearReso
                     <button
                       onClick={onClearResolve}
                       style={{
-                        border: '1px solid #D4D4D8',
+                        border: '1px solid var(--cm-border-cool)',
                         background: 'transparent',
                         cursor: 'pointer',
                         fontSize: 10,

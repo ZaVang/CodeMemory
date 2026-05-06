@@ -386,7 +386,7 @@ export default function MemoryForm({ memoryId, onClose, onChange, onUndoEntry }:
           minWidth: 400,
           maxWidth: 560,
           backgroundColor: 'var(--cm-bg-primary)',
-          borderLeft: '1px solid #E7E5E4',
+          borderLeft: '1px solid var(--cm-border)',
           display: 'flex',
           flexDirection: 'column',
           overflow: 'hidden',
@@ -401,7 +401,7 @@ export default function MemoryForm({ memoryId, onClose, onChange, onUndoEntry }:
             alignItems: 'center',
             justifyContent: 'space-between',
             padding: '18px 24px',
-            borderBottom: '1px solid #E7E5E4',
+            borderBottom: '1px solid var(--cm-border)',
             flexShrink: 0,
           }}
         >
@@ -440,8 +440,8 @@ export default function MemoryForm({ memoryId, onClose, onChange, onUndoEntry }:
             style={{
               margin: '12px 24px 0',
               padding: '8px 12px',
-              backgroundColor: '#991B1B0A',
-              borderLeft: '3px solid #991B1B',
+              backgroundColor: 'var(--cm-bg-error-subtle)',
+              borderLeft: '3px solid var(--cm-error)',
               borderRadius: 2,
               fontSize: 12,
               fontFamily: 'Raleway, sans-serif',
@@ -693,7 +693,7 @@ export default function MemoryForm({ memoryId, onClose, onChange, onUndoEntry }:
         <div
           style={{
             padding: '16px 24px',
-            borderTop: '1px solid #E7E5E4',
+            borderTop: '1px solid var(--cm-border)',
             display: 'flex',
             alignItems: 'center',
             gap: 12,
@@ -706,7 +706,7 @@ export default function MemoryForm({ memoryId, onClose, onChange, onUndoEntry }:
               disabled={saving || deleting}
               style={{
                 padding: '10px 20px',
-                border: '1px solid #A8A29E',
+                border: '1px solid var(--cm-text-tertiary)',
                 background: 'transparent',
                 color: 'var(--cm-text-secondary)',
                 cursor: 'pointer',
@@ -728,7 +728,7 @@ export default function MemoryForm({ memoryId, onClose, onChange, onUndoEntry }:
             onClick={() => requestClose()}
             style={{
               padding: '10px 20px',
-              border: '1px solid #D4D4D8',
+              border: '1px solid var(--cm-border-cool)',
               background: 'transparent',
               color: 'var(--cm-text-secondary)',
               cursor: 'pointer',
@@ -784,7 +784,7 @@ export default function MemoryForm({ memoryId, onClose, onChange, onUndoEntry }:
               left: '50%',
               transform: 'translate(-50%, -50%)',
               backgroundColor: 'var(--cm-bg-primary)',
-              border: '1px solid #E7E5E4',
+              border: '1px solid var(--cm-border)',
               borderRadius: 2,
               padding: 28,
               maxWidth: 400,
@@ -820,7 +820,7 @@ export default function MemoryForm({ memoryId, onClose, onChange, onUndoEntry }:
                 onClick={cancelDiscard}
                 style={{
                   padding: '8px 20px',
-                  border: '1px solid #D4D4D8',
+                  border: '1px solid var(--cm-border-cool)',
                   background: 'transparent',
                   color: 'var(--cm-text-secondary)',
                   cursor: 'pointer',
@@ -876,7 +876,7 @@ export default function MemoryForm({ memoryId, onClose, onChange, onUndoEntry }:
               left: '50%',
               transform: 'translate(-50%, -50%)',
               backgroundColor: 'var(--cm-bg-primary)',
-              border: '1px solid #E7E5E4',
+              border: '1px solid var(--cm-border)',
               borderRadius: 2,
               padding: 28,
               maxWidth: 420,
@@ -923,7 +923,7 @@ export default function MemoryForm({ memoryId, onClose, onChange, onUndoEntry }:
                 onClick={() => setShowDeleteConfirm(false)}
                 style={{
                   padding: '8px 20px',
-                  border: '1px solid #D4D4D8',
+                  border: '1px solid var(--cm-border-cool)',
                   background: 'transparent',
                   color: 'var(--cm-text-secondary)',
                   cursor: 'pointer',
@@ -1004,7 +1004,7 @@ function Field({
 const inputStyle: React.CSSProperties = {
   width: '100%',
   padding: '8px 12px',
-  border: '1px solid #D4D4D8',
+  border: '1px solid var(--cm-border-cool)',
   borderRadius: 2,
   fontSize: 13,
   fontFamily: 'Raleway, sans-serif',

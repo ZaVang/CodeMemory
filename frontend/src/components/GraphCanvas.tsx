@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from 'react'
+import { useEffect, useRef, useState, useCallback, useImperativeHandle, forwardRef } from 'react'
 import cytoscape, { type Core } from 'cytoscape'
 import dagre from 'dagre'
 import type { GraphData, GraphNode, GraphEdge, ResolveResponse } from '../types'
@@ -15,6 +15,35 @@ interface Props {
   refreshTrigger?: number  // increment to reload graph data
   zoomLevel?: number  // 0.15 to 2.0, default 0.5
   onGraphDataLoaded?: (data: GraphData) => void
+  activeTheme?: 'light' | 'dark'
+  onCreateMemory?: () => void
+}
+
+export interface GraphCanvasHandle {
+  exportPng: () => void
+}
+
+/** Read a CSS custom property value from the document root */
+function cssVar(name: string): string {
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim()
+}
+
+/** Darken a hex color by blending with black at given alpha */
+function darkenHex(hex: string, alpha: number): string {
+  const r = parseInt(hex.slice(1, 3), 16)
+  const g = parseInt(hex.slice(3, 5), 16)
+  const b = parseInt(hex.slice(5, 7), 16)
+  const nr = Math.round(r * (1 - alpha))
+  const ng = Math.round(g * (1 - alpha))
+  const nb = Math.round(b * (1 - alpha))
+  return `#${nr.toString(16).padStart(2, '0')}${ng.toString(16).padStart(2, '0')}${nb.toString(16).padStart(2, '0')}`
+}
+
+/** Get theme-aware node tint — darkens tints for dark mode */
+function themeTint(dirTint: string, isDark: boolean): string {
+  if (!isDark) return dirTint
+  // Dark mode: darken light tints so nodes aren't jarringly bright
+  return darkenHex(dirTint, 0.82)
 }
 
 function shortId(id: string): string {
@@ -42,7 +71,7 @@ function intensityToRadius(intensity: number): number {
   return Math.max(18, Math.min(50, 14 + intensity * 4))
 }
 
-export default function GraphCanvas({ searchText, onNodeClick, onNodeContextMenu, resolveData, isResolving, refreshTrigger, zoomLevel = 0.5, onGraphDataLoaded }: Props) {
+const GraphCanvas = forwardRef<GraphCanvasHandle, Props>(function GraphCanvas({ searchText, onNodeClick, onNodeContextMenu, resolveData, isResolving, refreshTrigger, zoomLevel = 0.5, onGraphDataLoaded, activeTheme = 'light', onCreateMemory }, ref) {
   const containerRef = useRef<HTMLDivElement>(null)
   const cyRef = useRef<Core | null>(null)
   const [graphData, setGraphData] = useState<GraphData | null>(null)
@@ -116,7 +145,8 @@ export default function GraphCanvas({ searchText, onNodeClick, onNodeContextMenu
           style: {
             'background-color': (el) => {
               const n = graphData.nodes.find((no) => no.data.id === el.id())
-              return n ? getNodeTint(n) : '#FDFBF5'
+              const tint = n ? getNodeTint(n) : DEFAULT_TINT
+              return themeTint(tint, activeTheme === 'dark')
             },
             'width': (el) => {
               const n = graphData.nodes.find((no) => no.data.id === el.id())
@@ -132,13 +162,13 @@ export default function GraphCanvas({ searchText, onNodeClick, onNodeContextMenu
             'font-size': '11px',
             'font-family': 'Raleway, sans-serif',
             'font-weight': '500',
-            'color': '#1C1917',
+            'color': cssVar('--cm-text-primary'),
             'text-valign': 'center',
             'text-halign': 'center',
             'border-width': 2,
             'border-color': (el) => {
               const n = graphData.nodes.find((no) => no.data.id === el.id())
-              return n ? getNodeColor(n) : '#87867f'
+              return n ? getNodeColor(n) : cssVar('--cm-text-tertiary')
             },
           },
         },
@@ -147,9 +177,9 @@ export default function GraphCanvas({ searchText, onNodeClick, onNodeContextMenu
           selector: 'node.schema',
           style: {
             'shape': 'diamond',
-            'background-color': '#faf9f5',
+            'background-color': cssVar('--cm-bg-subtle'),
             'border-style': 'dashed',
-            'border-color': '#141413',
+            'border-color': cssVar('--cm-text-primary'),
           },
         },
         // Intensity 10 — permanent memories get ring shadow
@@ -164,9 +194,9 @@ export default function GraphCanvas({ searchText, onNodeClick, onNodeContextMenu
           selector: 'edge.required',
           style: {
             'width': 2,
-            'line-color': '#1C1917',
+            'line-color': cssVar('--cm-text-primary'),
             'line-style': 'solid',
-            'target-arrow-color': '#1C1917',
+            'target-arrow-color': cssVar('--cm-text-primary'),
             'target-arrow-shape': 'triangle',
             'arrow-scale': 1,
             'opacity': 0.85,
@@ -176,9 +206,9 @@ export default function GraphCanvas({ searchText, onNodeClick, onNodeContextMenu
           selector: 'edge.recommended',
           style: {
             'width': 1.5,
-            'line-color': '#57534E',
+            'line-color': cssVar('--cm-text-secondary'),
             'line-style': 'dashed',
-            'target-arrow-color': '#57534E',
+            'target-arrow-color': cssVar('--cm-text-secondary'),
             'target-arrow-shape': 'triangle',
             'arrow-scale': 0.9,
             'opacity': 0.65,
@@ -188,9 +218,9 @@ export default function GraphCanvas({ searchText, onNodeClick, onNodeContextMenu
           selector: 'edge.related',
           style: {
             'width': 1,
-            'line-color': '#D4D4D8',
+            'line-color': cssVar('--cm-border-cool'),
             'line-style': 'dotted',
-            'target-arrow-color': '#D4D4D8',
+            'target-arrow-color': cssVar('--cm-border-cool'),
             'target-arrow-shape': 'triangle',
             'arrow-scale': 0.7,
             'opacity': 0.45,
@@ -199,18 +229,18 @@ export default function GraphCanvas({ searchText, onNodeClick, onNodeContextMenu
         // Match highlight
         {
           selector: 'node.dimmed',
-          style: { 'opacity': 0.1, 'color': '#D4D4D8' },
+          style: { 'opacity': 0.1, 'color': cssVar('--cm-text-tertiary') },
         },
         {
           selector: 'node.highlighted',
-          style: { 'border-width': 3, 'border-color': '#B8860B', 'opacity': 1 },
+          style: { 'border-width': 3, 'border-color': cssVar('--cm-accent'), 'opacity': 1 },
         },
         // Selected node
         {
           selector: 'node:selected',
           style: {
             'border-width': 2,
-            'border-color': '#B8860B',
+            'border-color': cssVar('--cm-accent'),
             'overlay-opacity': 0,
           },
         },
@@ -228,8 +258,8 @@ export default function GraphCanvas({ searchText, onNodeClick, onNodeContextMenu
           selector: 'node.resolve-highlight',
           style: {
             'border-width': 3,
-            'border-color': 'var(--cm-accent)',
-            'background-color': '#FDF6E8',
+            'border-color': cssVar('--cm-accent'),
+            'background-color': cssVar('--cm-bg-hover'),
             'opacity': 1,
             'z-index': 10,
           },
@@ -256,7 +286,7 @@ export default function GraphCanvas({ searchText, onNodeClick, onNodeContextMenu
             'width': (el) => intensityToRadius(el.data('intensity') || 5) * 1.1,
             'height': (el) => intensityToRadius(el.data('intensity') || 5) * 1.1,
             'font-size': '8px',
-            'color': '#A8A29E',
+            'color': cssVar('--cm-text-tertiary'),
           },
         },
       ],
@@ -324,7 +354,7 @@ export default function GraphCanvas({ searchText, onNodeClick, onNodeContextMenu
       cy.destroy()
       cyRef.current = null
     }
-  }, [graphData]) // Only re-init when graph data changes
+  }, [graphData, activeTheme]) // Re-init when graph data or theme changes
 
   // Handle zoom level changes
   useEffect(() => {
@@ -474,14 +504,18 @@ export default function GraphCanvas({ searchText, onNodeClick, onNodeContextMenu
   const handleExportPng = useCallback(() => {
     const cy = cyRef.current
     if (!cy) return
-    const pngDataUrl = cy.png({ full: true, scale: 2, bg: '#ffffff' })
+    const bgColor = cssVar('--cm-bg-primary')
+    const pngDataUrl = cy.png({ full: true, scale: 2, bg: bgColor })
     const a = document.createElement('a')
     a.href = pngDataUrl
     a.download = 'codememory-graph.png'
     document.body.appendChild(a)
     a.click()
     document.body.removeChild(a)
-  }, [])
+  }, [activeTheme])
+
+  // Expose exportPng to parent via ref
+  useImperativeHandle(ref, () => ({ exportPng: handleExportPng }), [handleExportPng])
 
   // R7-N5: Unified EmptyState — shown when no memories exist
   if (graphData && graphData.nodes.length === 0) {
@@ -490,6 +524,7 @@ export default function GraphCanvas({ searchText, onNodeClick, onNodeContextMenu
         <EmptyState
           title="No memories yet"
           description="Click + New to add your first memory."
+          actions={onCreateMemory ? [{ label: '+ New', onClick: onCreateMemory, variant: 'primary' }] : undefined}
         />
       </div>
     )
@@ -560,4 +595,6 @@ export default function GraphCanvas({ searchText, onNodeClick, onNodeContextMenu
       )}
     </div>
   )
-}
+})
+
+export default GraphCanvas

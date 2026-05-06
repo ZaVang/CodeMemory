@@ -2,13 +2,13 @@
 
 const MaturityStyles: Record<string, { bg: string; color: string }> = {
   draft:        { bg: 'var(--cm-bg-subtle)',  color: 'var(--cm-text-secondary)' },
-  verified:     { bg: '#1E40AF15', color: 'var(--cm-info)' },
-  proven:       { bg: '#16653415', color: 'var(--cm-success)' },
+  verified:     { bg: 'var(--cm-bg-info-subtle)', color: 'var(--cm-info)' },
+  proven:       { bg: 'var(--cm-bg-success-subtle)', color: 'var(--cm-success)' },
   superseded:   { bg: 'var(--cm-bg-subtle)',  color: 'var(--cm-text-tertiary)' },
 }
 
 const StatusStyles: Record<string, { bg: string; color: string; label: string }> = {
-  active:   { bg: '#16653420', color: 'var(--cm-success)', label: 'active' },
+  active:   { bg: 'var(--cm-bg-success-subtle)', color: 'var(--cm-success)', label: 'active' },
   draft:    { bg: 'var(--cm-bg-subtle)',  color: 'var(--cm-text-secondary)', label: 'draft' },
   archived: { bg: 'var(--cm-bg-subtle)',  color: 'var(--cm-text-tertiary)', label: 'archived' },
 }

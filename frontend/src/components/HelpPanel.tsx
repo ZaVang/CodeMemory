@@ -168,7 +168,7 @@ export default function HelpPanel({ onClose }: Props) {
           minWidth: 460,
           maxWidth: 680,
           backgroundColor: 'var(--cm-bg-primary)',
-          borderLeft: '1px solid #E7E5E4',
+          borderLeft: '1px solid var(--cm-border)',
           display: 'flex',
           flexDirection: 'column',
           overflow: 'hidden',
@@ -183,7 +183,7 @@ export default function HelpPanel({ onClose }: Props) {
             alignItems: 'center',
             justifyContent: 'space-between',
             padding: '20px 24px',
-            borderBottom: '1px solid #E7E5E4',
+            borderBottom: '1px solid var(--cm-border)',
             flexShrink: 0,
           }}
         >
@@ -243,7 +243,7 @@ export default function HelpPanel({ onClose }: Props) {
                   margin: '0 0 8px 0',
                   textTransform: 'uppercase',
                   letterSpacing: '0.06em',
-                  borderBottom: '1px solid #E7E5E4',
+                  borderBottom: '1px solid var(--cm-border)',
                   paddingBottom: 6,
                 }}
               >
@@ -305,7 +305,7 @@ export default function HelpPanel({ onClose }: Props) {
               style={{
                 marginBottom: 10,
                 paddingBottom: 10,
-                borderBottom: '1px solid #F5F5F4',
+                borderBottom: '1px solid var(--cm-bg-subtle)',
               }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
@@ -389,7 +389,7 @@ export default function HelpPanel({ onClose }: Props) {
               style={{
                 marginBottom: 8,
                 paddingBottom: 8,
-                borderBottom: '1px solid #F5F5F4',
+                borderBottom: '1px solid var(--cm-bg-subtle)',
                 display: 'flex',
                 alignItems: 'flex-start',
                 gap: 10,
@@ -405,7 +405,7 @@ export default function HelpPanel({ onClose }: Props) {
                   fontFamily: 'JetBrains Mono, monospace',
                   textTransform: 'uppercase',
                   color: ep.method === 'GET' ? 'var(--cm-success)' : ep.method === 'POST' ? 'var(--cm-info)' : 'var(--cm-warning)',
-                  backgroundColor: ep.method === 'GET' ? '#16653415' : ep.method === 'POST' ? '#1E40AF15' : '#CA8A0415',
+                  backgroundColor: ep.method === 'GET' ? 'var(--cm-bg-success-subtle)' : ep.method === 'POST' ? 'var(--cm-bg-info-subtle)' : 'var(--cm-bg-warning-subtle)',
                   minWidth: 36,
                   textAlign: 'center',
                   flexShrink: 0,

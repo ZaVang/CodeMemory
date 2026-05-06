@@ -480,3 +480,61 @@ PYTHONPATH=src python tests/integration_test.py
   - 目标：移除 Cool/Random 模式切换（默认使用 cool 行为——按反向访问次数加权）；添加"为什么是这条记忆？"的说明（显示访问次数、intensity、上次访问时间）；添加 Wander 价值主张的一行说明
   - 验收：Wander 按钮为单一操作（无模式选择 toggle）；弹窗中显示记忆被选中的原因（访问次数、intensity、上次访问时间）；Wander 界面包含一句话价值说明（如 "Surfaces a memory you haven't revisited recently"）；从 Wander 弹窗仍可点击导航到记忆详情
   - 来源：进化策略师建议（Wander simplification）
+
+## 第 8 轮追加任务（基于体验官 + 进化策略师审计 — 2026-05-06）
+
+### 第一梯队（🔴 Critical 修复 — 本轮必须完成）
+
+- [x] R8-darkmode-graph: 修复深色模式图渲染
+  - 目标：将 GraphCanvas.tsx 中 Cytoscape 样式表的所有硬编码 hex 颜色值替换为主题感知的颜色值。节点标签颜色、边线颜色（required/recommended/related）、schema 节点背景和边框、dimmed 节点颜色必须响应活动主题。主题切换时 cytoscape 实例须重新渲染更新后的颜色。
+  - 验收：深色模式下所有图节点标签在深色背景上可见；三种强度的边线均可见；schema 节点使用适当的深色背景（非亮色 #faf9f5）；trimmed/dimmed 节点在深色模式下可区分；亮色/深色切换时图实时更新且无需页面刷新；亮色模式图渲染与当前状态视觉一致；系统主题变更（OS 或 DevTools）时图跟随更新
+  - 来源：体验官 Critical（深色模式评分 5.5/10，图是产品主视图却被遗漏）+ R7 Eval 遗漏（code review 通过但未实测深色模式图渲染）
+
+- [x] R8-css-border-migration: 迁移所有硬编码 border 颜色到 CSS 变量
+  - 目标：将整个前端中所有硬编码的 border 颜色值替换为对应的 CSS 变量。映射关系：#E7E5E4 → var(--cm-border)，#D4D4D8 → var(--cm-border-cool)，#F5F5F4 → var(--cm-bg-subtle)，强调色边框（#B8860B/#CA8A04/#1E40AF）→ var(--cm-accent)。覆盖文件：App.tsx（header/view switcher/dataset select/context menu/archive modal/shortcuts modal 边框）、SearchBar.tsx（input 边框/results dropdown 边框）、Dashboard.tsx（Validate/Refresh/Reindex 按钮边框）、MemoryDetail.tsx（panel 边框/metadata card 边框/resolve 按钮边框）、Legend.tsx（容器边框/边线样式指示器边框）。共约 15 处。
+  - 验收：任何 .tsx 组件中不存在硬编码 hex border 颜色值；所有 border 均使用 CSS 变量；深色模式下 border 渲染为深色适配色；亮色模式下 border 渲染与当前状态视觉一致；TypeScript 零错误，前端构建通过
+  - 来源：体验官 High（约 40% 的 border 实例为硬编码，深色模式下产生视觉不一致）
+
+### 第二梯队（🟡 高价值改进 — 本轮尽量完成）
+
+- [x] R8-empty-state-cta: 完成 R7-N5 — 为 EmptyState 添加 CTA 按钮 + 统一 List 过滤空状态
+  - 目标：三处修复：(a) Graph 视图 EmptyState 添加 `actions` prop 含 "+ New" 按钮；(b) Dashboard EmptyState 添加 `actions` prop 含 "Create Memory" 按钮；(c) 将 List 视图过滤后无结果时的内联 `<div>`（自定义 padding、无图标、不同排版）替换为共享 EmptyState 组件，含适当 icon/title/description 及 "Clear Filter" 操作按钮。
+  - 验收：Graph 空状态含 "+ New" 按钮可打开创建表单；Dashboard 空状态含 "Create Memory" 按钮可打开创建表单；List 过滤空状态使用共享 EmptyState 组件（非自定义 div）；List 过滤空状态含 "Clear Filter" 操作按钮；三种空状态视觉风格（图标、排版、间距）一致；零记忆状态与零过滤结果状态通过文案/图标区分
+  - 来源：R7 Eval PARTIAL PASS（组件存在但未传 actions prop；List 过滤空状态绕过共享组件）
+
+- [x] R8-quant-disclaimer: 完成 R7-N1 — 添加 quant_operators 数据集说明
+  - 目标：在 `currentDataset === 'quant_operators'` 时，于数据集切换器区域显示条件性说明信息。说明该数据集为自动生成的 API 文档、非手动策划，依赖图为算法推断而非人工语义链接。信息性而非警告性语气。切换到其他数据集时说明消失。
+  - 验收：切换到 quant_operators 数据集时显示可见的 disclaimer 信息；信息说明该数据集为自动生成文档；语气为信息性（非 error/warning）；切换到其他数据集（investment/software-architecture/companion）时 disclaimer 移除；disclaimer 不干扰正常数据操作（搜索/resolve 等）
+  - 来源：R7 Eval PARTIAL PASS（suggest-deps 成功推断 imports，但条件性数据集 disclaimer 从未实现）
+
+- [x] R8-png-export-ui: 在 Graph 视图工具栏添加 PNG 导出按钮
+  - 目标：在 Graph 视图工具栏添加可见的 "Export PNG"（或 "Save as PNG"）按钮。按钮触发 GraphCanvas.tsx 中已存在的 `handleExportPng` 函数（调用 `cy.png()`）。按钮样式与现有工具栏控件一致，渲染期间有短暂的加载反馈。
+  - 验收：Graph 视图工具栏含可见的 "Export PNG" 按钮；点击按钮触发当前图视图的 PNG 下载；按钮与现有工具栏按钮样式一致；渲染期间有简短反馈（如按钮文字变为 "Rendering..."）
+  - 来源：体验官 High #3（PNG 导出已实现但前端 UI 不可见——功能存在但无法使用）
+
+- [x] R8-wander-dismiss: Wander 结果可不导航直接关闭/重试
+  - 目标：在 Wander 弹窗中 "View Details" 按钮旁添加 "Wander Again" 次要操作按钮。点击后发起新的 wander 请求并更新弹窗内容。用户无需打开详情面板即可循环浏览冷记忆。
+  - 验收：Wander 弹窗含次要操作按钮（"Wander Again"）；点击后发起新 wander 请求并更新弹窗内容；"View Details" 按钮保持原行为；弹窗仍可通过 X 按钮或 Escape 关闭
+  - 来源：体验官 High #4（wander 仅有一个操作 "View in Graph"——用户无法跳过当前结果）
+
+- [x] R8-search-match-quality: 为所有搜索结果一致展示匹配质量
+  - 目标：为每条搜索结果添加始终可见（非条件性）的匹配质量指示器。精确匹配显示绿色 "exact" 标识/勾选；模糊匹配显示琥珀色分数标识（如 "~82%"）。指示器位于每条结果行右侧，位置统一。移除当前仅在有模糊结果时才显示质量指示的条件性行为。
+  - 验收：每条搜索结果均显示匹配质量指示器（不依赖是否存在模糊结果）；精确匹配显示绿色指示器；模糊匹配显示琥珀色指示器 + 分数百分比；指示器在结果间位置一致；搜索结果渲染和点击导航行为无退化
+  - 来源：体验官 Medium #5（当前 UI 不一致地显示匹配质量——仅在模糊结果存在时才显示匹配标识）
+
+### 第三梯队（🟢 打磨 — 本轮至少完成一项）
+
+- [x] R8-darkmode-shortcut: 添加深色模式切换键盘快捷键
+  - 目标：添加 Ctrl+Shift+D 作为亮色/深色主题切换的键盘快捷键。切换为二元操作（light ↔ dark），system 模式通过 Settings 设置。在 Help 面板的快捷键覆盖层（? 键触发）中记录该快捷键。
+  - 验收：Ctrl+Shift+D 切换亮色/深色主题；切换为二元操作（light ↔ dark）；快捷键记录在 Help 面板覆盖层中；现有快捷键（Ctrl+K/Ctrl+N/Ctrl+Z/?）继续工作；切换与 Settings 面板和 header 按钮使用相同的持久化机制
+  - 来源：体验官 Medium #6（15 分钟打磨项，power user 预期行为）
+
+- [x] R8-search-match-fields: 在搜索结果中显示匹配字段指示
+  - 目标：为每条搜索结果展示哪些字段匹配了查询（如 "matched: id, summary" 或小型字段标签指示器）。使用后端 API 已返回的 `match_fields` 数组。以小型、微妙文字或标签形式呈现在结果摘要下方——不作为主导视觉元素。
+  - 验收：每条搜索结果展示匹配了哪些字段；字段指示器为微妙样式（小文字或紧凑标签，非主导元素）；常见字段（id/summary/body/tag）使用人类可读标签；无 match_fields 数据的结果优雅降级；不破坏搜索布局或点击导航行为
+  - 来源：体验官 Nice-to-have #7（API 已返回 match_fields 但前端从未展示）
+
+- [x] R8-memorylist-empty: MemoryList 零过滤结果使用 EmptyState
+  - 目标：将 MemoryList 文本过滤产生零结果时的空可滚动区域替换为共享 EmptyState 组件。EmptyState 显示合适的图标、"0 of N memories match your filter" 消息和 "Clear Filter" 操作按钮。零记忆状态也使用 EmptyState（已在用但需补充 actions prop）。
+  - 验收：MemoryList 零过滤结果展示 EmptyState（非空可滚动 div）；EmptyState 含过滤相关的特定消息和 "Clear Filter" 按钮；MemoryList 零总记忆也使用 EmptyState；视觉风格与 Graph 和 Dashboard 空状态一致
+  - 来源：体验官 Nice-to-have #9（最后一个视图特定的空状态不一致——MemoryList 未使用 EmptyState）

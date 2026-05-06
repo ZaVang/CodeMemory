@@ -91,7 +91,7 @@ export default function SearchBar({ value, onChange, onNavigate }: Props) {
           alignItems: 'center',
           gap: 8,
           backgroundColor: 'var(--cm-bg-surface)',
-          border: showResults ? '1px solid #B8860B' : '1px solid #E7E5E4',
+          border: showResults ? '1px solid var(--cm-accent)' : '1px solid var(--cm-border)',
           borderRadius: 2,
           padding: '4px 8px',
         }}
@@ -166,7 +166,7 @@ export default function SearchBar({ value, onChange, onNavigate }: Props) {
             left: 0,
             right: 0,
             backgroundColor: 'var(--cm-bg-surface)',
-            border: '1px solid #E7E5E4',
+            border: '1px solid var(--cm-border)',
             borderRadius: 2,
             maxHeight: 320,
             overflowY: 'auto',
@@ -184,7 +184,7 @@ export default function SearchBar({ value, onChange, onNavigate }: Props) {
               letterSpacing: '0.08em',
               color: 'var(--cm-text-tertiary)',
               padding: '6px 12px',
-              borderBottom: '1px solid #F5F5F4',
+              borderBottom: '1px solid var(--cm-bg-subtle)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
@@ -204,7 +204,7 @@ export default function SearchBar({ value, onChange, onNavigate }: Props) {
               style={{
                 padding: '8px 12px',
                 cursor: 'pointer',
-                borderBottom: '1px solid #F5F5F4',
+                borderBottom: '1px solid var(--cm-bg-subtle)',
                 opacity: item.match_quality === 'fuzzy' ? 0.85 : 1,
               }}
               onMouseEnter={(e) => {
@@ -220,37 +220,32 @@ export default function SearchBar({ value, onChange, onNavigate }: Props) {
                     fontSize: 11,
                     fontFamily: 'JetBrains Mono, monospace',
                     color: 'var(--cm-text-primary)',
+                    flex: 1,
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
                   }}
                 >
                   {item.id}
                 </div>
-                {item.match_quality === 'fuzzy' && (
-                  <span style={{
-                    fontSize: 9,
-                    fontWeight: 600,
-                    fontFamily: 'Raleway, sans-serif',
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.04em',
-                    color: 'var(--cm-warning)',
-                    backgroundColor: '#CA8A0415',
-                    padding: '1px 5px',
-                    borderRadius: 2,
-                  }}>
-                    ~{item.match_score ? Math.round(item.match_score * 100) + '%' : 'fuzzy'}
-                  </span>
-                )}
-                {item.match_quality === 'exact' && results.some((r) => r.match_quality === 'fuzzy') && (
-                  <span style={{
-                    fontSize: 9,
-                    fontWeight: 600,
-                    fontFamily: 'Raleway, sans-serif',
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.04em',
-                    color: 'var(--cm-success)',
-                  }}>
-                    exact
-                  </span>
-                )}
+                {/* Match quality indicator — always visible */}
+                <span style={{
+                  fontSize: 9,
+                  fontWeight: 600,
+                  fontFamily: 'Raleway, sans-serif',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.04em',
+                  color: item.match_quality === 'fuzzy' ? 'var(--cm-warning)' : 'var(--cm-success)',
+                  backgroundColor: item.match_quality === 'fuzzy' ? 'var(--cm-bg-warning-subtle)' : 'var(--cm-bg-success-subtle)',
+                  padding: '1px 6px',
+                  borderRadius: 2,
+                  flexShrink: 0,
+                  whiteSpace: 'nowrap',
+                }}>
+                  {item.match_quality === 'fuzzy'
+                    ? `~${item.match_score ? Math.round(item.match_score * 100) + '%' : 'fuzzy'}`
+                    : 'exact'}
+                </span>
               </div>
               {item.summary && (
                 <div
@@ -258,11 +253,23 @@ export default function SearchBar({ value, onChange, onNavigate }: Props) {
                     fontSize: 12,
                     fontFamily: 'Raleway, sans-serif',
                     color: 'var(--cm-text-secondary)',
-                    marginBottom: item.snippet ? 4 : 0,
+                    marginBottom: (item.snippet || (item.match_fields && item.match_fields.length > 0)) ? 4 : 0,
                     fontWeight: 500,
                   }}
                 >
                   {item.summary}
+                </div>
+              )}
+              {/* Match fields — subtle display of which fields matched */}
+              {item.match_fields && item.match_fields.length > 0 && (
+                <div style={{
+                  fontSize: 10,
+                  fontFamily: 'Raleway, sans-serif',
+                  color: 'var(--cm-text-tertiary)',
+                  marginBottom: item.snippet ? 4 : 0,
+                  fontStyle: 'italic',
+                }}>
+                  matched: {item.match_fields.map((f) => f.charAt(0).toUpperCase() + f.slice(1)).join(', ')}
                 </div>
               )}
               {item.snippet && (

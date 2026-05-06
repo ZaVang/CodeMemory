@@ -6,9 +6,9 @@ interface Props {
 }
 
 const EDGE_STYLES = [
-  { strength: 'required', label: 'Required', style: 'solid 2px #1C1917' },
-  { strength: 'recommended', label: 'Recommended', style: 'dashed 1.5px #57534E' },
-  { strength: 'related', label: 'Related', style: 'dotted 1px #D4D4D8' },
+  { strength: 'required', label: 'Required', style: 'solid 2px var(--cm-text-primary)' },
+  { strength: 'recommended', label: 'Recommended', style: 'dashed 1.5px var(--cm-text-secondary)' },
+  { strength: 'related', label: 'Related', style: 'dotted 1px var(--cm-border-cool)' },
 ]
 
 export default function Legend({ graphData }: Props) {
@@ -48,7 +48,7 @@ export default function Legend({ graphData }: Props) {
         borderRadius: 4,
         padding: '12px 16px',
         boxShadow: '0 2px 8px rgba(28,25,23,0.06)',
-        border: '1px solid #F5F5F4',
+        border: '1px solid var(--cm-bg-subtle)',
         fontSize: 12,
         fontFamily: 'Raleway, sans-serif',
         zIndex: 10,
