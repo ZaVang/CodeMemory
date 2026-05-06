@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import { fetchAllMemories } from '../api'
 import type { MemorySummary } from '../types'
 import { StatusBadge, MaturityBadge } from './Badges'
+import EmptyState from './EmptyState'
 
 interface Props {
   onSelectMemory: (id: string) => void
@@ -98,12 +99,12 @@ export default function MemoryList({ onSelectMemory, refreshTrigger, initialFilt
     fontFamily: 'Raleway, sans-serif',
     textTransform: 'uppercase',
     letterSpacing: '0.08em',
-    color: '#57534E',
+    color: 'var(--cm-text-secondary)',
     borderBottom: '2px solid #E7E5E4',
     cursor: 'pointer',
     whiteSpace: 'nowrap',
     userSelect: 'none',
-    backgroundColor: '#FFFBEB',
+    backgroundColor: 'var(--cm-bg-primary)',
     position: 'sticky',
     top: 0,
     zIndex: 1,
@@ -113,35 +114,35 @@ export default function MemoryList({ onSelectMemory, refreshTrigger, initialFilt
     padding: '8px 12px',
     fontSize: 12,
     fontFamily: 'Raleway, sans-serif',
-    color: '#1C1917',
+    color: 'var(--cm-text-primary)',
     borderBottom: '1px solid #F5F5F4',
     verticalAlign: 'middle',
   }
 
   if (loading) {
     return (
-      <div style={{ padding: 32, color: '#A8A29E', fontFamily: 'Raleway, sans-serif', fontSize: 14, backgroundColor: '#FFFBEB', height: '100%' }}>
+      <div style={{ padding: 32, color: 'var(--cm-text-tertiary)', fontFamily: 'Raleway, sans-serif', fontSize: 14, backgroundColor: 'var(--cm-bg-primary)', height: '100%' }}>
         Loading...
       </div>
     )
   }
 
   return (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', backgroundColor: '#FFFBEB' }}>
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', backgroundColor: 'var(--cm-bg-primary)' }}>
       {/* Filter bar */}
       <div style={{ padding: '16px 24px', borderBottom: '1px solid #E7E5E4', display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
         <div style={{
           display: 'flex',
           alignItems: 'center',
           gap: 8,
-          backgroundColor: '#FFFFFF',
+          backgroundColor: 'var(--cm-bg-surface)',
           border: '1px solid #E7E5E4',
           borderRadius: 2,
           padding: '4px 8px',
           flex: 1,
           maxWidth: 400,
         }}>
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" style={{ color: '#A8A29E', flexShrink: 0 }}>
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" style={{ color: 'var(--cm-text-tertiary)', flexShrink: 0 }}>
             <circle cx="7" cy="7" r="5" stroke="currentColor" strokeWidth="1.5" />
             <line x1="11" y1="11" x2="14" y2="14" stroke="currentColor" strokeWidth="1.5" />
           </svg>
@@ -157,19 +158,19 @@ export default function MemoryList({ onSelectMemory, refreshTrigger, initialFilt
               backgroundColor: 'transparent',
               fontSize: 12,
               fontFamily: 'Raleway, sans-serif',
-              color: '#1C1917',
+              color: 'var(--cm-text-primary)',
             }}
           />
           {filterText && (
             <button
               onClick={() => { setFilterText(''); setPage(0) }}
-              style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#A8A29E', fontSize: 12, padding: '2px 4px', fontFamily: 'Raleway, sans-serif' }}
+              style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--cm-text-tertiary)', fontSize: 12, padding: '2px 4px', fontFamily: 'Raleway, sans-serif' }}
             >
               x
             </button>
           )}
         </div>
-        <span style={{ fontSize: 11, color: '#A8A29E', fontFamily: 'Raleway, sans-serif', whiteSpace: 'nowrap' }}>
+        <span style={{ fontSize: 11, color: 'var(--cm-text-tertiary)', fontFamily: 'Raleway, sans-serif', whiteSpace: 'nowrap' }}>
           {filtered.length} of {allMemories.length} memories
         </span>
       </div>
@@ -205,7 +206,7 @@ export default function MemoryList({ onSelectMemory, refreshTrigger, initialFilt
                 key={mem.id}
                 onClick={() => onSelectMemory(mem.id)}
                 style={{ cursor: 'pointer' }}
-                onMouseEnter={(e) => { (e.currentTarget as HTMLTableRowElement).style.backgroundColor = '#FDF6E8' }}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLTableRowElement).style.backgroundColor = 'var(--cm-bg-hover)' }}
                 onMouseLeave={(e) => { (e.currentTarget as HTMLTableRowElement).style.backgroundColor = 'transparent' }}
               >
                 <td style={{ ...tdStyle, fontFamily: 'JetBrains Mono, monospace', fontSize: 11, wordBreak: 'break-all' }}>
@@ -220,7 +221,7 @@ export default function MemoryList({ onSelectMemory, refreshTrigger, initialFilt
                     fontFamily: 'Raleway, sans-serif',
                     fontWeight: 600,
                     textTransform: 'uppercase',
-                    color: mem.type === 'schema' ? '#7C3AED' : '#57534E',
+                    color: mem.type === 'schema' ? '#7C3AED' : 'var(--cm-text-secondary)',
                   }}>
                     {mem.type}
                   </span>
@@ -235,15 +236,15 @@ export default function MemoryList({ onSelectMemory, refreshTrigger, initialFilt
                         fontFamily: 'Raleway, sans-serif',
                         padding: '1px 6px',
                         borderRadius: 2,
-                        backgroundColor: '#F5F5F4',
-                        color: '#57534E',
+                        backgroundColor: 'var(--cm-bg-subtle)',
+                        color: 'var(--cm-text-secondary)',
                         whiteSpace: 'nowrap',
                       }}>
                         {t}
                       </span>
                     ))}
                     {mem.tags.length > 4 && (
-                      <span style={{ fontSize: 10, color: '#A8A29E' }}>+{mem.tags.length - 4}</span>
+                      <span style={{ fontSize: 10, color: 'var(--cm-text-tertiary)' }}>+{mem.tags.length - 4}</span>
                     )}
                   </div>
                 </td>
@@ -251,8 +252,45 @@ export default function MemoryList({ onSelectMemory, refreshTrigger, initialFilt
             ))}
             {paginated.length === 0 && (
               <tr>
-                <td colSpan={6} style={{ padding: '48px 16px', textAlign: 'center', color: '#A8A29E', fontFamily: 'Raleway, sans-serif', fontSize: 13 }}>
-                  {allMemories.length === 0 ? 'No memories found. Create your first memory to get started.' : 'No memories match the current filter.'}
+                <td colSpan={6} style={{ padding: 0 }}>
+                  {allMemories.length === 0 ? (
+                    <EmptyState
+                      title="No memories yet"
+                      description="Create your first memory to get started."
+                    />
+                  ) : (
+                    <div style={{
+                      padding: '48px 16px',
+                      textAlign: 'center',
+                    }}>
+                      <p style={{
+                        color: 'var(--cm-text-tertiary)',
+                        fontFamily: 'Raleway, sans-serif',
+                        fontSize: 13,
+                        marginBottom: 16,
+                      }}>
+                        No matching memories &mdash; try clearing the filter.
+                      </p>
+                      <button
+                        onClick={() => { setFilterText(''); setPage(0) }}
+                        style={{
+                          padding: '8px 20px',
+                          border: '1px solid var(--cm-border-cool)',
+                          background: 'transparent',
+                          color: 'var(--cm-text-secondary)',
+                          cursor: 'pointer',
+                          fontSize: 11,
+                          fontWeight: 600,
+                          fontFamily: 'Raleway, sans-serif',
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.08em',
+                          borderRadius: 2,
+                        }}
+                      >
+                        Clear Filter
+                      </button>
+                    </div>
+                  )}
                 </td>
               </tr>
             )}
@@ -285,7 +323,7 @@ export default function MemoryList({ onSelectMemory, refreshTrigger, initialFilt
           >
             Prev
           </button>
-          <span style={{ fontSize: 12, fontFamily: 'JetBrains Mono, monospace', color: '#57534E', padding: '0 8px' }}>
+          <span style={{ fontSize: 12, fontFamily: 'JetBrains Mono, monospace', color: 'var(--cm-text-secondary)', padding: '0 8px' }}>
             {effectivePage + 1} / {totalPages}
           </span>
           <button
@@ -312,7 +350,7 @@ const pageBtnStyle: React.CSSProperties = {
   padding: '4px 12px',
   border: '1px solid #D4D4D8',
   background: 'transparent',
-  color: '#57534E',
+  color: 'var(--cm-text-secondary)',
   cursor: 'pointer',
   fontSize: 11,
   fontWeight: 600,

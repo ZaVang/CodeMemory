@@ -8,7 +8,10 @@ import HelpPanel from './components/HelpPanel'
 import SearchBar from './components/SearchBar'
 import Legend from './components/Legend'
 import Onboarding from './components/Onboarding'
-import { fetchResolve, updateMemory, createMemory, fetchGraph, fetchDatasets, switchDataset, fetchMemory } from './api'
+import Settings from './components/Settings'
+import { loadSettings, saveSettings } from './components/Settings'
+import type { UserSettings } from './components/Settings'
+import { fetchResolve, updateMemory, createMemory, fetchGraph, fetchDatasets, switchDataset, fetchMemory, downloadExport } from './api'
 import type { ResolveResponse, GraphData } from './types'
 import type { DatasetInfo } from './api'
 
@@ -18,7 +21,6 @@ type ViewMode = 'graph' | 'list' | 'dashboard'
 
 const BUDGET_MIN = 200
 const BUDGET_MAX = 5000
-const BUDGET_DEFAULT = 2000
 
 interface ContextMenuState {
   nodeId: string
@@ -27,6 +29,9 @@ interface ContextMenuState {
 }
 
 export default function App() {
+  // Load persisted settings
+  const [settings, setSettings] = useState<UserSettings>(loadSettings)
+
   const [viewMode, setViewMode] = useState<ViewMode>('graph')
   const [selectedNode, setSelectedNode] = useState<string | null>(null)
   const [searchText, setSearchText] = useState('')
@@ -39,7 +44,7 @@ export default function App() {
 
   // Resolve state
   const [resolveData, setResolveData] = useState<ResolveResponse | null>(null)
-  const [budget, setBudget] = useState(BUDGET_DEFAULT)
+  const [budget, setBudget] = useState(settings.defaultBudget)
   const [isResolving, setIsResolving] = useState(false)
   const [resolveError, setResolveError] = useState<string | null>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -55,6 +60,43 @@ export default function App() {
 
   // Help panel state
   const [showHelp, setShowHelp] = useState(false)
+
+  // Settings panel state (R7-settings)
+  const [showSettings, setShowSettings] = useState(false)
+
+  // Theme state (R7-dark-mode)
+  type ThemeMode = 'light' | 'dark' | 'system'
+  const [themeMode, setThemeMode] = useState<ThemeMode>(settings.theme)
+  const [activeTheme, setActiveTheme] = useState<'light' | 'dark'>('light')
+
+  // Apply theme to document
+  const applyTheme = useCallback((mode: ThemeMode) => {
+    if (mode === 'system') {
+      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
+      document.documentElement.setAttribute('data-theme', prefersDark ? 'dark' : 'light')
+      setActiveTheme(prefersDark ? 'dark' : 'light')
+    } else {
+      document.documentElement.setAttribute('data-theme', mode)
+      setActiveTheme(mode)
+    }
+  }, [])
+
+  // Apply theme on mount and when settings change
+  useEffect(() => {
+    applyTheme(themeMode)
+  }, [themeMode, applyTheme])
+
+  // Listen for system preference changes
+  useEffect(() => {
+    if (themeMode !== 'system') return
+    const mq = window.matchMedia('(prefers-color-scheme: dark)')
+    const handler = (e: MediaQueryListEvent) => {
+      document.documentElement.setAttribute('data-theme', e.matches ? 'dark' : 'light')
+      setActiveTheme(e.matches ? 'dark' : 'light')
+    }
+    mq.addEventListener('change', handler)
+    return () => mq.removeEventListener('change', handler)
+  }, [themeMode])
 
   // Context menu state
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null)
@@ -172,6 +214,56 @@ export default function App() {
   useEffect(() => {
     fetchGraph().then(setGraphData).catch(console.error)
   }, [refreshTrigger])
+
+  // R7-settings: auto-load default dataset on first datasets load
+  const defaultDatasetApplied = useRef(false)
+  useEffect(() => {
+    if (defaultDatasetApplied.current) return
+    if (datasets.length > 0 && settings.defaultDataset) {
+      const ds = datasets.find((d) => d.name === settings.defaultDataset)
+      if (ds && ds.name !== currentDataset) {
+        defaultDatasetApplied.current = true
+        handleSwitchDataset(ds.name)
+      }
+    }
+  }, [datasets, currentDataset, settings.defaultDataset, handleSwitchDataset])
+
+  // R7-settings: update budget when settings change
+  useEffect(() => {
+    setBudget(settings.defaultBudget)
+  }, [settings.defaultBudget])
+
+  // R7-dark-mode / R7-settings: handle theme change from settings
+  const handleThemeChangeFromSettings = useCallback((theme: 'light' | 'dark' | 'system') => {
+    setThemeMode(theme)
+    setSettings((prev) => {
+      const updated = { ...prev, theme }
+      saveSettings(updated)
+      return updated
+    })
+  }, [])
+
+  // R7-settings: handle budget change from settings
+  const handleBudgetChangeFromSettings = useCallback((newBudget: number) => {
+    setBudget(newBudget)
+    setSettings((prev) => {
+      const updated = { ...prev, defaultBudget: newBudget }
+      saveSettings(updated)
+      return updated
+    })
+  }, [])
+
+  // R7-settings: handle default dataset change from settings
+  const handleDatasetChangeFromSettings = useCallback((name: string) => {
+    setSettings((prev) => {
+      const updated = { ...prev, defaultDataset: name }
+      saveSettings(updated)
+      return updated
+    })
+    if (name && name !== currentDataset) {
+      handleSwitchDataset(name)
+    }
+  }, [currentDataset, handleSwitchDataset])
 
   // Handle dataset switching
   const handleSwitchDataset = useCallback(
@@ -421,7 +513,7 @@ export default function App() {
         height: '100vh',
         width: '100vw',
         overflow: 'hidden',
-        backgroundColor: '#FFFBEB',
+        backgroundColor: 'var(--cm-bg-primary)',
         fontFamily: 'Raleway, sans-serif',
       }}
     >
@@ -429,7 +521,7 @@ export default function App() {
       <header
         style={{
           padding: '16px 24px',
-          backgroundColor: '#FFFBEB',
+          backgroundColor: 'var(--cm-bg-primary)',
           borderBottom: '1px solid #E7E5E4',
           display: 'flex',
           alignItems: 'center',
@@ -442,7 +534,7 @@ export default function App() {
             fontSize: 24,
             fontFamily: "'Cormorant Garamond', serif",
             fontWeight: 500,
-            color: '#1C1917',
+            color: 'var(--cm-text-primary)',
             margin: 0,
             whiteSpace: 'nowrap',
             letterSpacing: '0.01em',
@@ -456,8 +548,8 @@ export default function App() {
           onClick={handleOpenCreate}
           style={{
             padding: '6px 18px',
-            backgroundColor: '#B8860B',
-            color: '#FFFBEB',
+            backgroundColor: 'var(--cm-accent)',
+            color: 'var(--cm-text-inverse)',
             border: 'none',
             cursor: 'pointer',
             fontSize: 11,
@@ -494,8 +586,8 @@ export default function App() {
               fontWeight: 600,
               textTransform: 'uppercase',
               letterSpacing: '0.08em',
-              backgroundColor: viewMode === 'graph' ? '#1C1917' : 'transparent',
-              color: viewMode === 'graph' ? '#FFFBEB' : '#57534E',
+              backgroundColor: viewMode === 'graph' ? 'var(--cm-text-primary)' : 'transparent',
+              color: viewMode === 'graph' ? 'var(--cm-text-inverse)' : 'var(--cm-text-secondary)',
             }}
           >
             Graph
@@ -511,8 +603,8 @@ export default function App() {
               fontWeight: 600,
               textTransform: 'uppercase',
               letterSpacing: '0.08em',
-              backgroundColor: viewMode === 'list' ? '#1C1917' : 'transparent',
-              color: viewMode === 'list' ? '#FFFBEB' : '#57534E',
+              backgroundColor: viewMode === 'list' ? 'var(--cm-text-primary)' : 'transparent',
+              color: viewMode === 'list' ? 'var(--cm-text-inverse)' : 'var(--cm-text-secondary)',
             }}
           >
             List
@@ -528,8 +620,8 @@ export default function App() {
               fontWeight: 600,
               textTransform: 'uppercase',
               letterSpacing: '0.08em',
-              backgroundColor: viewMode === 'dashboard' ? '#1C1917' : 'transparent',
-              color: viewMode === 'dashboard' ? '#FFFBEB' : '#57534E',
+              backgroundColor: viewMode === 'dashboard' ? 'var(--cm-text-primary)' : 'transparent',
+              color: viewMode === 'dashboard' ? 'var(--cm-text-inverse)' : 'var(--cm-text-secondary)',
             }}
           >
             Dashboard
@@ -549,8 +641,8 @@ export default function App() {
               fontSize: 11,
               fontWeight: 600,
               fontFamily: 'Raleway, sans-serif',
-              color: '#1C1917',
-              backgroundColor: switchingDataset ? '#F5F5F4' : '#FFFFFF',
+              color: 'var(--cm-text-primary)',
+              backgroundColor: switchingDataset ? 'var(--cm-bg-subtle)' : 'var(--cm-bg-surface)',
               cursor: 'pointer',
               flexShrink: 0,
               outline: 'none',
@@ -564,8 +656,14 @@ export default function App() {
           </select>
         )}
         {switchingDataset && (
-          <span style={{ fontSize: 11, color: '#A8A29E', fontFamily: 'Raleway, sans-serif' }}>
+          <span style={{ fontSize: 11, color: 'var(--cm-text-tertiary)', fontFamily: 'Raleway, sans-serif' }}>
             Switching...
+          </span>
+        )}
+        {/* R7-N1: dataset disclaimer — operations are scoped to current dataset */}
+        {datasets.length > 1 && !switchingDataset && (
+          <span style={{ fontSize: 10, color: 'var(--cm-text-tertiary)', fontFamily: 'Raleway, sans-serif', fontStyle: 'italic' }}>
+            Stats, validation, and reindex apply to the selected dataset.
           </span>
         )}
 
@@ -598,7 +696,7 @@ export default function App() {
                   fontSize: 11,
                   fontWeight: 600,
                   fontFamily: 'Raleway, sans-serif',
-                  color: '#57534E',
+                  color: 'var(--cm-text-secondary)',
                   textTransform: 'uppercase',
                   letterSpacing: '0.08em',
                   whiteSpace: 'nowrap',
@@ -615,7 +713,7 @@ export default function App() {
                 onChange={(e) => setZoomLevel(Number(e.target.value))}
                 style={{
                   width: 100,
-                  accentColor: '#B8860B',
+                  accentColor: 'var(--cm-accent)',
                   cursor: 'pointer',
                 }}
               />
@@ -634,7 +732,7 @@ export default function App() {
                   fontSize: 11,
                   fontWeight: 600,
                   fontFamily: 'Raleway, sans-serif',
-                  color: '#57534E',
+                  color: 'var(--cm-text-secondary)',
                   textTransform: 'uppercase',
                   letterSpacing: '0.08em',
                   whiteSpace: 'nowrap',
@@ -651,7 +749,7 @@ export default function App() {
                 onChange={(e) => handleBudgetChange(Number(e.target.value))}
                 style={{
                   width: 120,
-                  accentColor: '#B8860B',
+                  accentColor: 'var(--cm-accent)',
                   cursor: 'pointer',
                 }}
               />
@@ -659,7 +757,7 @@ export default function App() {
                 style={{
                   fontSize: 12,
                   fontFamily: 'JetBrains Mono, monospace',
-                  color: '#1C1917',
+                  color: 'var(--cm-text-primary)',
                   minWidth: 40,
                   textAlign: 'right',
                 }}
@@ -671,14 +769,80 @@ export default function App() {
           </>
         )}
 
+        {/* Theme toggle button (R7-dark-mode) */}
+        <button
+          onClick={() => handleThemeChangeFromSettings(activeTheme === 'dark' ? 'light' : 'dark')}
+          title={`Current: ${activeTheme}. Click to toggle.`}
+          style={{
+            padding: '6px 10px',
+            backgroundColor: 'transparent',
+            color: 'var(--cm-text-secondary)',
+            border: '1px solid var(--cm-border-cool)',
+            cursor: 'pointer',
+            fontSize: 16,
+            fontFamily: 'Raleway, sans-serif',
+            borderRadius: 2,
+            whiteSpace: 'nowrap',
+            flexShrink: 0,
+            lineHeight: 1,
+            marginLeft: 'auto',
+          }}
+        >
+          {activeTheme === 'dark' ? '☀' : '☽'}
+        </button>
+
+        {/* Export button (R7-export) */}
+        <button
+          onClick={downloadExport}
+          title="Export all memories as .zip"
+          style={{
+            padding: '6px 14px',
+            backgroundColor: 'transparent',
+            color: 'var(--cm-text-secondary)',
+            border: '1px solid var(--cm-border-cool)',
+            cursor: 'pointer',
+            fontSize: 11,
+            fontWeight: 600,
+            fontFamily: 'Raleway, sans-serif',
+            textTransform: 'uppercase',
+            letterSpacing: '0.08em',
+            borderRadius: 2,
+            whiteSpace: 'nowrap',
+            flexShrink: 0,
+          }}
+        >
+          Export
+        </button>
+
+        {/* Settings button (R7-settings) */}
+        <button
+          onClick={() => setShowSettings(true)}
+          title="Settings"
+          style={{
+            padding: '6px 12px',
+            backgroundColor: 'transparent',
+            color: 'var(--cm-text-secondary)',
+            border: '1px solid var(--cm-border-cool)',
+            cursor: 'pointer',
+            fontSize: 18,
+            fontFamily: 'Raleway, sans-serif',
+            borderRadius: 2,
+            whiteSpace: 'nowrap',
+            flexShrink: 0,
+            lineHeight: 1,
+          }}
+        >
+          &#9881;
+        </button>
+
         {/* Help button */}
         <button
           onClick={() => setShowHelp(true)}
           title="Help"
           style={{
             padding: '6px 18px',
-            backgroundColor: '#B8860B',
-            color: '#FFFBEB',
+            backgroundColor: 'var(--cm-accent)',
+            color: 'var(--cm-text-inverse)',
             border: 'none',
             cursor: 'pointer',
             fontSize: 11,
@@ -689,7 +853,6 @@ export default function App() {
             borderRadius: 2,
             whiteSpace: 'nowrap',
             flexShrink: 0,
-            marginLeft: 'auto',
           }}
         >
           Help
@@ -702,8 +865,8 @@ export default function App() {
           style={{
             margin: 0,
             padding: '10px 24px',
-            backgroundColor: '#991B1B',
-            color: '#FFFFFF',
+            backgroundColor: 'var(--cm-error)',
+            color: 'var(--cm-bg-surface)',
             fontSize: 13,
             fontFamily: 'Raleway, sans-serif',
             textAlign: 'center',
@@ -722,7 +885,7 @@ export default function App() {
               transform: 'translateY(-50%)',
               background: 'none',
               border: 'none',
-              color: '#FFFFFF',
+              color: 'var(--cm-bg-surface)',
               cursor: 'pointer',
               fontSize: 14,
               padding: '0 4px',
@@ -764,8 +927,8 @@ export default function App() {
                 position: 'absolute',
                 top: 16,
                 right: 16,
-                backgroundColor: '#991B1B',
-                color: '#FFFFFF',
+                backgroundColor: 'var(--cm-error)',
+                color: 'var(--cm-bg-surface)',
                 padding: '8px 16px',
                 borderRadius: 2,
                 fontSize: 12,
@@ -785,8 +948,8 @@ export default function App() {
                 position: 'absolute',
                 top: 16,
                 left: 16,
-                backgroundColor: '#1C1917',
-                color: '#FFFBEB',
+                backgroundColor: 'var(--cm-text-primary)',
+                color: 'var(--cm-text-inverse)',
                 padding: '6px 14px',
                 borderRadius: 2,
                 fontSize: 12,
@@ -806,8 +969,8 @@ export default function App() {
                 position: 'absolute',
                 top: 16,
                 left: 16,
-                backgroundColor: '#166534',
-                color: '#FFFFFF',
+                backgroundColor: 'var(--cm-success)',
+                color: 'var(--cm-bg-surface)',
                 padding: '6px 14px',
                 borderRadius: 2,
                 fontSize: 12,
@@ -884,6 +1047,21 @@ export default function App() {
       {/* Help panel */}
       {showHelp && <HelpPanel onClose={() => setShowHelp(false)} />}
 
+      {/* Settings panel (R7-settings) */}
+      {showSettings && (
+        <Settings
+          open={showSettings}
+          onClose={() => setShowSettings(false)}
+          datasets={datasets}
+          currentDataset={currentDataset}
+          onSwitchDataset={handleDatasetChangeFromSettings}
+          currentBudget={budget}
+          onBudgetChange={handleBudgetChangeFromSettings}
+          currentTheme={themeMode}
+          onThemeChange={handleThemeChangeFromSettings}
+        />
+      )}
+
       {/* Onboarding */}
       {showOnboarding && (
         <Onboarding
@@ -907,7 +1085,7 @@ export default function App() {
               left: contextMenu.x,
               top: contextMenu.y,
               zIndex: 100,
-              backgroundColor: '#FFFFFF',
+              backgroundColor: 'var(--cm-bg-surface)',
               border: '1px solid #E7E5E4',
               borderRadius: 2,
               boxShadow: '0 4px 16px rgba(28,25,23,0.12)',
@@ -922,7 +1100,7 @@ export default function App() {
                 fontFamily: 'Raleway, sans-serif',
                 textTransform: 'uppercase',
                 letterSpacing: '0.08em',
-                color: '#A8A29E',
+                color: 'var(--cm-text-tertiary)',
                 padding: '6px 14px 4px',
               }}
             >
@@ -933,7 +1111,7 @@ export default function App() {
             <div
               style={{
                 height: 1,
-                backgroundColor: '#E7E5E4',
+                backgroundColor: 'var(--cm-border)',
                 margin: '4px 0',
               }}
             />
@@ -951,8 +1129,8 @@ export default function App() {
             bottom: 24,
             left: '50%',
             transform: 'translateX(-50%)',
-            backgroundColor: '#1C1917',
-            color: '#FFFBEB',
+            backgroundColor: 'var(--cm-text-primary)',
+            color: 'var(--cm-text-inverse)',
             padding: '10px 20px',
             borderRadius: 2,
             boxShadow: '0 2px 12px rgba(28,25,23,0.15)',
@@ -973,8 +1151,8 @@ export default function App() {
             onClick={handleUndo}
             style={{
               padding: '4px 14px',
-              backgroundColor: '#B8860B',
-              color: '#FFFBEB',
+              backgroundColor: 'var(--cm-accent)',
+              color: 'var(--cm-text-inverse)',
               border: 'none',
               cursor: 'pointer',
               fontSize: 12,
@@ -1008,7 +1186,7 @@ export default function App() {
               top: '50%',
               left: '50%',
               transform: 'translate(-50%, -50%)',
-              backgroundColor: '#FFFBEB',
+              backgroundColor: 'var(--cm-bg-primary)',
               border: '1px solid #E7E5E4',
               borderRadius: 2,
               padding: 28,
@@ -1023,7 +1201,7 @@ export default function App() {
                 fontSize: 18,
                 fontFamily: "'Cormorant Garamond', serif",
                 fontWeight: 500,
-                color: '#1C1917',
+                color: 'var(--cm-text-primary)',
                 margin: '0 0 12px 0',
               }}
             >
@@ -1033,7 +1211,7 @@ export default function App() {
               style={{
                 fontSize: 14,
                 fontFamily: 'Raleway, sans-serif',
-                color: '#57534E',
+                color: 'var(--cm-text-secondary)',
                 lineHeight: 1.6,
                 margin: '0 0 8px 0',
               }}
@@ -1045,7 +1223,7 @@ export default function App() {
               style={{
                 fontSize: 12,
                 fontFamily: 'JetBrains Mono, monospace',
-                color: '#A8A29E',
+                color: 'var(--cm-text-tertiary)',
                 margin: '0 0 20px 0',
               }}
             >
@@ -1058,7 +1236,7 @@ export default function App() {
                   padding: '8px 20px',
                   border: '1px solid #D4D4D8',
                   background: 'transparent',
-                  color: '#57534E',
+                  color: 'var(--cm-text-secondary)',
                   cursor: 'pointer',
                   fontSize: 11,
                   fontWeight: 600,
@@ -1075,8 +1253,8 @@ export default function App() {
                 disabled={archiving}
                 style={{
                   padding: '8px 20px',
-                  backgroundColor: '#57534E',
-                  color: '#FFFFFF',
+                  backgroundColor: 'var(--cm-text-secondary)',
+                  color: 'var(--cm-bg-surface)',
                   border: 'none',
                   cursor: 'pointer',
                   fontSize: 11,
@@ -1112,7 +1290,7 @@ export default function App() {
               top: '50%',
               left: '50%',
               transform: 'translate(-50%, -50%)',
-              backgroundColor: '#FFFBEB',
+              backgroundColor: 'var(--cm-bg-primary)',
               border: '1px solid #E7E5E4',
               borderRadius: 2,
               padding: 28,
@@ -1126,7 +1304,7 @@ export default function App() {
               fontSize: 18,
               fontFamily: "'Cormorant Garamond', serif",
               fontWeight: 500,
-              color: '#1C1917',
+              color: 'var(--cm-text-primary)',
               margin: '0 0 16px 0',
             }}>
               Keyboard Shortcuts
@@ -1143,16 +1321,16 @@ export default function App() {
                   <code style={{
                     fontFamily: 'JetBrains Mono, monospace',
                     fontSize: 11,
-                    backgroundColor: '#F5F5F4',
+                    backgroundColor: 'var(--cm-bg-subtle)',
                     padding: '2px 8px',
                     borderRadius: 2,
-                    color: '#1C1917',
+                    color: 'var(--cm-text-primary)',
                     minWidth: 80,
                     textAlign: 'center',
                   }}>
                     {keys}
                   </code>
-                  <span style={{ fontSize: 13, fontFamily: 'Raleway, sans-serif', color: '#57534E' }}>
+                  <span style={{ fontSize: 13, fontFamily: 'Raleway, sans-serif', color: 'var(--cm-text-secondary)' }}>
                     {desc}
                   </span>
                 </div>
@@ -1165,7 +1343,7 @@ export default function App() {
                 padding: '8px 20px',
                 border: '1px solid #D4D4D8',
                 background: 'transparent',
-                color: '#57534E',
+                color: 'var(--cm-text-secondary)',
                 cursor: 'pointer',
                 fontSize: 11,
                 fontWeight: 600,
@@ -1198,11 +1376,11 @@ function ContextMenuItem({ label, onClick }: { label: string; onClick: () => voi
         cursor: 'pointer',
         fontSize: 13,
         fontFamily: 'Raleway, sans-serif',
-        color: '#1C1917',
+        color: 'var(--cm-text-primary)',
         transition: 'background-color 100ms ease',
       }}
       onMouseEnter={(e) => {
-        (e.currentTarget as HTMLButtonElement).style.backgroundColor = '#F5F5F4'
+        (e.currentTarget as HTMLButtonElement).style.backgroundColor = 'var(--cm-bg-subtle)'
       }}
       onMouseLeave={(e) => {
         (e.currentTarget as HTMLButtonElement).style.backgroundColor = 'transparent'

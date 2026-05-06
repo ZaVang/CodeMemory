@@ -23,7 +23,21 @@ function buildPromptContent(resolveData: ResolveResponse): string {
 
   for (const node of nodes) {
     const trimLabel = node.trim === 'full' ? 'FULL' : node.trim === 'summary' ? 'SUMMARY' : 'SKIPPED'
-    lines.push(`### [${node.index}/${node.total}] ${node.id}  (${node.type}, ${trimLabel})`)
+
+    // R7-prompt-metadata: include maturity, status, and tags alongside node info
+    const metaParts: string[] = [node.type, trimLabel]
+    if (node.maturity && node.maturity !== 'draft') {
+      metaParts.push(`maturity:${node.maturity}`)
+    }
+    if (node.status && node.status !== 'active') {
+      metaParts.push(`status:${node.status}`)
+    }
+    if (node.tags && node.tags.length > 0) {
+      metaParts.push(`tags:${node.tags.join(',')}`)
+    }
+    const metaStr = metaParts.join(', ')
+
+    lines.push(`### [${node.index}/${node.total}] ${node.id}  (${metaStr})`)
     if (node.body) {
       lines.push('')
       lines.push(node.body)
@@ -31,15 +45,17 @@ function buildPromptContent(resolveData: ResolveResponse): string {
     }
   }
 
-  // Trailing instruction block
+  // Trailing instruction block — updated with maturity/status weighting guidance
   lines.push('---')
   lines.push('## Instructions')
   lines.push('')
   lines.push('1. Nodes marked FULL contain the complete memory content — prioritise these.')
   lines.push('2. Nodes marked SUMMARY contain only a summary — treat as background context.')
   lines.push('3. Nodes marked SKIPPED are listed for awareness but their content is omitted.')
-  lines.push('4. Use the context above to ground your responses. When citing, reference the memory ID.')
-  lines.push('5. If the context is insufficient, state what additional information you need.')
+  lines.push('4. **Weight by maturity**: proven > verified > draft. A proven memory has been validated through repeated use; a draft memory may be speculative.')
+  lines.push('5. **Note status**: active memories are current; archived memories may be outdated. Prefer active over archived.')
+  lines.push('6. Use the context above to ground your responses. When citing, reference the memory ID.')
+  lines.push('7. If the context is insufficient, state what additional information you need.')
 
   return lines.join('\n')
 }
@@ -125,7 +141,7 @@ export default function MemoryDetail({ memoryId, onClose, onResolve, onClearReso
           width: '30vw',
           minWidth: 360,
           maxWidth: 520,
-          backgroundColor: '#FFFBEB',
+          backgroundColor: 'var(--cm-bg-primary)',
           borderLeft: '1px solid #E7E5E4',
           display: 'flex',
           flexDirection: 'column',
@@ -152,7 +168,7 @@ export default function MemoryDetail({ memoryId, onClose, onResolve, onClearReso
               fontSize: 22,
               fontFamily: "'Cormorant Garamond', serif",
               fontWeight: 500,
-              color: '#1C1917',
+              color: 'var(--cm-text-primary)',
               margin: 0,
               lineHeight: 1.3,
               overflow: 'hidden',
@@ -174,7 +190,7 @@ export default function MemoryDetail({ memoryId, onClose, onResolve, onClearReso
               fontSize: 11,
               fontWeight: 600,
               fontFamily: 'Raleway, sans-serif',
-              color: '#B8860B',
+              color: 'var(--cm-accent)',
               padding: '4px 12px',
               borderRadius: 2,
               textTransform: 'uppercase',
@@ -191,7 +207,7 @@ export default function MemoryDetail({ memoryId, onClose, onResolve, onClearReso
               background: 'none',
               cursor: 'pointer',
               fontSize: 20,
-              color: '#57534E',
+              color: 'var(--cm-text-secondary)',
               padding: '4px 8px',
               borderRadius: 2,
               lineHeight: 1,
@@ -209,7 +225,7 @@ export default function MemoryDetail({ memoryId, onClose, onResolve, onClearReso
               alignItems: 'center',
               justifyContent: 'center',
               flex: 1,
-              color: '#A8A29E',
+              color: 'var(--cm-text-tertiary)',
               fontFamily: 'Raleway, sans-serif',
               fontSize: 14,
             }}
@@ -225,7 +241,7 @@ export default function MemoryDetail({ memoryId, onClose, onResolve, onClearReso
               alignItems: 'center',
               justifyContent: 'center',
               flex: 1,
-              color: '#991B1B',
+              color: 'var(--cm-error)',
               fontFamily: 'Raleway, sans-serif',
               fontSize: 14,
               padding: 24,
@@ -258,8 +274,8 @@ export default function MemoryDetail({ memoryId, onClose, onResolve, onClearReso
                   fontWeight: 600,
                   textTransform: 'uppercase',
                   letterSpacing: '0.06em',
-                  backgroundColor: '#F5F5F4',
-                  color: '#57534E',
+                  backgroundColor: 'var(--cm-bg-subtle)',
+                  color: 'var(--cm-text-secondary)',
                 }}
               >
                 {memory.type}
@@ -267,7 +283,7 @@ export default function MemoryDetail({ memoryId, onClose, onResolve, onClearReso
             </div>
 
             {/* Metadata rows */}
-            <div style={{ fontSize: 12, fontFamily: 'Raleway, sans-serif', color: '#57534E', lineHeight: 1.8 }}>
+            <div style={{ fontSize: 12, fontFamily: 'Raleway, sans-serif', color: 'var(--cm-text-secondary)', lineHeight: 1.8 }}>
               <div><strong>ID:</strong> {memory.id}</div>
               {memory.tags && memory.tags.length > 0 && (
                 <div>
@@ -279,7 +295,7 @@ export default function MemoryDetail({ memoryId, onClose, onResolve, onClearReso
                         display: 'inline-block',
                         padding: '0 8px',
                         borderRadius: 2,
-                        backgroundColor: '#F5F5F4',
+                        backgroundColor: 'var(--cm-bg-subtle)',
                         marginRight: 4,
                         marginBottom: 2,
                         fontSize: 11,
@@ -299,14 +315,14 @@ export default function MemoryDetail({ memoryId, onClose, onResolve, onClearReso
               {memory.updated && <div><strong>Updated:</strong> {memory.updated}</div>}
               {memory.schema && <div><strong>Schema:</strong> {memory.schema}</div>}
               {memory.protected && (
-                <div style={{ color: '#B8860B' }}>Protected memory</div>
+                <div style={{ color: 'var(--cm-accent)' }}>Protected memory</div>
               )}
             </div>
 
             {/* Imports */}
             {memory.imports && Object.keys(memory.imports).length > 0 && (
               <div style={{ marginTop: 12 }}>
-                <div style={{ fontSize: 11, fontWeight: 600, color: '#57534E', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4, fontFamily: 'Raleway, sans-serif' }}>
+                <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--cm-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4, fontFamily: 'Raleway, sans-serif' }}>
                   Imports
                 </div>
                 {Object.entries(memory.imports).map(([strength, deps]) => {
@@ -315,7 +331,7 @@ export default function MemoryDetail({ memoryId, onClose, onResolve, onClearReso
                   const visibleDeps = expanded ? depList : depList.slice(0, IMPORT_PREVIEW_LIMIT)
                   return (
                   <div key={strength} style={{ marginBottom: 2 }}>
-                    <span style={{ fontSize: 11, color: '#A8A29E', fontStyle: 'italic' }}>{strength}:</span>
+                    <span style={{ fontSize: 11, color: 'var(--cm-text-tertiary)', fontStyle: 'italic' }}>{strength}:</span>
                     {visibleDeps.map((dep) => {
                       const depId = typeof dep === 'string' ? dep : (dep as Record<string, unknown>).id as string || ''
                       return (
@@ -328,7 +344,7 @@ export default function MemoryDetail({ memoryId, onClose, onResolve, onClearReso
                           title={`Navigate to ${depId}`}
                           style={{
                             fontSize: 11,
-                            color: '#1E40AF',
+                            color: 'var(--cm-info)',
                             paddingLeft: 12,
                             fontFamily: 'Raleway, sans-serif',
                             cursor: 'pointer',
@@ -346,7 +362,7 @@ export default function MemoryDetail({ memoryId, onClose, onResolve, onClearReso
                         }
                         style={{
                           fontSize: 11,
-                          color: '#B8860B',
+                          color: 'var(--cm-accent)',
                           paddingLeft: 12,
                           fontFamily: 'Raleway, sans-serif',
                           cursor: 'pointer',
@@ -364,7 +380,7 @@ export default function MemoryDetail({ memoryId, onClose, onResolve, onClearReso
 
             {/* Referenced By (backlinks) */}
             <div style={{ marginTop: 12 }}>
-              <div style={{ fontSize: 11, fontWeight: 600, color: '#57534E', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4, fontFamily: 'Raleway, sans-serif' }}>
+              <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--cm-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4, fontFamily: 'Raleway, sans-serif' }}>
                 Referenced By
               </div>
               {backlinks && backlinks.length > 0 ? (
@@ -378,7 +394,7 @@ export default function MemoryDetail({ memoryId, onClose, onResolve, onClearReso
                     title={`Navigate to ${ref.id}`}
                     style={{
                       fontSize: 11,
-                      color: '#1E40AF',
+                      color: 'var(--cm-info)',
                       paddingLeft: 12,
                       fontFamily: 'Raleway, sans-serif',
                       cursor: 'pointer',
@@ -387,13 +403,13 @@ export default function MemoryDetail({ memoryId, onClose, onResolve, onClearReso
                     }}
                   >
                     {ref.id}
-                    <span style={{ color: '#A8A29E', fontStyle: 'italic', marginLeft: 6, textDecoration: 'none' }}>
+                    <span style={{ color: 'var(--cm-text-tertiary)', fontStyle: 'italic', marginLeft: 6, textDecoration: 'none' }}>
                       ({ref.strength})
                     </span>
                   </div>
                 ))
               ) : (
-                <div style={{ fontSize: 11, color: '#A8A29E', fontFamily: 'Raleway, sans-serif', paddingLeft: 12, fontStyle: 'italic' }}>
+                <div style={{ fontSize: 11, color: 'var(--cm-text-tertiary)', fontFamily: 'Raleway, sans-serif', paddingLeft: 12, fontStyle: 'italic' }}>
                   No other memories reference this one.
                 </div>
               )}
@@ -417,7 +433,7 @@ export default function MemoryDetail({ memoryId, onClose, onResolve, onClearReso
                   borderRadius: 2,
                   fontSize: 12,
                   fontFamily: 'Raleway, sans-serif',
-                  color: '#991B1B',
+                  color: 'var(--cm-error)',
                   lineHeight: 1.5,
                 }}
               >
@@ -450,7 +466,7 @@ export default function MemoryDetail({ memoryId, onClose, onResolve, onClearReso
                         borderRadius: 2,
                         fontSize: 11,
                         fontFamily: 'Raleway, sans-serif',
-                        color: '#CA8A04',
+                        color: 'var(--cm-warning)',
                         marginBottom: 4,
                         lineHeight: 1.5,
                       }}
@@ -474,14 +490,14 @@ export default function MemoryDetail({ memoryId, onClose, onResolve, onClearReso
                     fontSize: 11,
                     fontWeight: 600,
                     fontFamily: 'Raleway, sans-serif',
-                    color: '#57534E',
+                    color: 'var(--cm-text-secondary)',
                     textTransform: 'uppercase',
                     letterSpacing: '0.08em',
                   }}
                 >
                   Resolve — {resolveData.nodes.length} nodes
                   {resolveData.budget && (
-                    <span style={{ color: '#A8A29E', fontWeight: 400, textTransform: 'none', letterSpacing: '0' }}>
+                    <span style={{ color: 'var(--cm-text-tertiary)', fontWeight: 400, textTransform: 'none', letterSpacing: '0' }}>
                       {' '}· budget {resolveData.budget} · depth {resolveData.depth}
                     </span>
                   )}
@@ -496,7 +512,7 @@ export default function MemoryDetail({ memoryId, onClose, onResolve, onClearReso
                       fontSize: 10,
                       fontWeight: 600,
                       fontFamily: 'Raleway, sans-serif',
-                      color: copyLabel === 'Copied!' ? '#166534' : '#166534',
+                      color: copyLabel === 'Copied!' ? 'var(--cm-success)' : 'var(--cm-success)',
                       padding: '2px 8px',
                       borderRadius: 2,
                       textTransform: 'uppercase',
@@ -515,7 +531,7 @@ export default function MemoryDetail({ memoryId, onClose, onResolve, onClearReso
                         fontSize: 10,
                         fontWeight: 600,
                         fontFamily: 'Raleway, sans-serif',
-                        color: '#57534E',
+                        color: 'var(--cm-text-secondary)',
                         padding: '2px 8px',
                         borderRadius: 2,
                         textTransform: 'uppercase',
@@ -546,7 +562,7 @@ export default function MemoryDetail({ memoryId, onClose, onResolve, onClearReso
                       style={{
                         fontFamily: 'JetBrains Mono, monospace',
                         fontSize: 10,
-                        color: '#A8A29E',
+                        color: 'var(--cm-text-tertiary)',
                         minWidth: 24,
                       }}
                     >
@@ -558,15 +574,15 @@ export default function MemoryDetail({ memoryId, onClose, onResolve, onClearReso
                       height: 6,
                       borderRadius: 1,
                       backgroundColor:
-                        node.trim === 'full' ? '#166534' :
-                        node.trim === 'summary' ? '#CA8A04' : '#A8A29E',
+                        node.trim === 'full' ? 'var(--cm-success)' :
+                        node.trim === 'summary' ? 'var(--cm-warning)' : 'var(--cm-text-tertiary)',
                       flexShrink: 0,
                     }}/>
                     <code
                       style={{
                         fontFamily: 'JetBrains Mono, monospace',
                         fontSize: 10,
-                        color: '#1C1917',
+                        color: 'var(--cm-text-primary)',
                         flex: 1,
                         overflow: 'hidden',
                         textOverflow: 'ellipsis',
@@ -582,8 +598,8 @@ export default function MemoryDetail({ memoryId, onClose, onResolve, onClearReso
                         textTransform: 'uppercase',
                         letterSpacing: '0.04em',
                         color:
-                          node.trim === 'full' ? '#166534' :
-                          node.trim === 'summary' ? '#CA8A04' : '#A8A29E',
+                          node.trim === 'full' ? 'var(--cm-success)' :
+                          node.trim === 'summary' ? 'var(--cm-warning)' : 'var(--cm-text-tertiary)',
                       }}
                     >
                       {node.trim}
@@ -602,7 +618,7 @@ export default function MemoryDetail({ memoryId, onClose, onResolve, onClearReso
               padding: '24px',
               fontSize: 15,
               fontFamily: 'Raleway, sans-serif',
-              color: '#1C1917',
+              color: 'var(--cm-text-primary)',
               lineHeight: 1.7,
             }}
           >
@@ -611,7 +627,7 @@ export default function MemoryDetail({ memoryId, onClose, onResolve, onClearReso
                 {memory.body}
               </ReactMarkdown>
             ) : (
-              <p style={{ color: '#A8A29E', fontStyle: 'italic' }}>No content</p>
+              <p style={{ color: 'var(--cm-text-tertiary)', fontStyle: 'italic' }}>No content</p>
             )}
           </div>
         </>

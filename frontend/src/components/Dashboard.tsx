@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { fetchStats, fetchWander, fetchValidate, fetchReindex } from '../api'
 import type { StatsResponse, WanderResponse, ValidateResponse } from '../types'
+import EmptyState from './EmptyState'
 
 interface Props {
   onSelectMemory: (id: string) => void
@@ -18,7 +19,6 @@ export default function Dashboard({ onSelectMemory, onNavigateToFilter, refreshT
   const [wandering, setWandering] = useState(false)
   const [validating, setValidating] = useState(false)
   const [reindexing, setReindexing] = useState(false)
-  const [wanderMode, setWanderMode] = useState<'cool' | 'random'>('cool')
 
   const loadData = useCallback(() => {
     setLoading(true)
@@ -38,14 +38,14 @@ export default function Dashboard({ onSelectMemory, onNavigateToFilter, refreshT
 
   const handleWander = useCallback(() => {
     setWandering(true)
-    fetchWander(wanderMode)
+    fetchWander('cool')
       .then((result) => {
         setWanderResult(result)
         setWanderOpen(true)
       })
       .catch(console.error)
       .finally(() => setWandering(false))
-  }, [wanderMode])
+  }, [])
 
   const handleValidate = useCallback(() => {
     setValidating(true)
@@ -69,10 +69,10 @@ export default function Dashboard({ onSelectMemory, onNavigateToFilter, refreshT
   // --- Render ---
 
   const maturityColors: Record<string, string> = {
-    draft: '#57534E',
-    verified: '#1E40AF',
-    proven: '#166534',
-    superseded: '#A8A29E',
+    draft: 'var(--cm-text-secondary)',
+    verified: 'var(--cm-info)',
+    proven: 'var(--cm-success)',
+    superseded: 'var(--cm-text-tertiary)',
   }
 
   const maturityOrder = ['draft', 'verified', 'proven', 'superseded']
@@ -83,7 +83,7 @@ export default function Dashboard({ onSelectMemory, onNavigateToFilter, refreshT
         height: '100%',
         overflowY: 'auto',
         padding: '32px',
-        backgroundColor: '#FFFBEB',
+        backgroundColor: 'var(--cm-bg-primary)',
       }}
     >
       {/* Header row */}
@@ -100,7 +100,7 @@ export default function Dashboard({ onSelectMemory, onNavigateToFilter, refreshT
             fontSize: 32,
             fontFamily: "'Cormorant Garamond', serif",
             fontWeight: 500,
-            color: '#1C1917',
+            color: 'var(--cm-text-primary)',
             margin: 0,
             letterSpacing: '0.01em',
           }}
@@ -108,59 +108,15 @@ export default function Dashboard({ onSelectMemory, onNavigateToFilter, refreshT
           Dashboard
         </h1>
         <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-          {/* Wander mode toggle */}
-          <div
-            style={{
-              display: 'flex',
-              borderRadius: 2,
-              border: '1px solid #D4D4D8',
-              overflow: 'hidden',
-              flexShrink: 0,
-            }}
-          >
-            <button
-              onClick={() => setWanderMode('cool')}
-              style={{
-                padding: '6px 14px',
-                border: 'none',
-                cursor: 'pointer',
-                fontSize: 11,
-                fontFamily: 'Raleway, sans-serif',
-                fontWeight: 600,
-                textTransform: 'uppercase',
-                letterSpacing: '0.06em',
-                backgroundColor: wanderMode === 'cool' ? '#B8860B' : 'transparent',
-                color: wanderMode === 'cool' ? '#FFFBEB' : '#57534E',
-              }}
-            >
-              Cool
-            </button>
-            <button
-              onClick={() => setWanderMode('random')}
-              style={{
-                padding: '6px 14px',
-                border: 'none',
-                cursor: 'pointer',
-                fontSize: 11,
-                fontFamily: 'Raleway, sans-serif',
-                fontWeight: 600,
-                textTransform: 'uppercase',
-                letterSpacing: '0.06em',
-                backgroundColor: wanderMode === 'random' ? '#B8860B' : 'transparent',
-                color: wanderMode === 'random' ? '#FFFBEB' : '#57534E',
-              }}
-            >
-              Random
-            </button>
-          </div>
           <button
             onClick={handleWander}
             disabled={wandering}
+            title="Surfaces a memory you haven't revisited recently"
             style={{
               padding: '10px 24px',
-              border: '1px solid #B8860B',
+              border: '1px solid var(--cm-accent)',
               background: 'transparent',
-              color: '#B8860B',
+              color: 'var(--cm-accent)',
               cursor: 'pointer',
               fontSize: 12,
               fontWeight: 600,
@@ -179,7 +135,7 @@ export default function Dashboard({ onSelectMemory, onNavigateToFilter, refreshT
               padding: '10px 24px',
               border: '1px solid #1E40AF',
               background: 'transparent',
-              color: '#1E40AF',
+              color: 'var(--cm-info)',
               cursor: 'pointer',
               fontSize: 12,
               fontWeight: 600,
@@ -197,7 +153,7 @@ export default function Dashboard({ onSelectMemory, onNavigateToFilter, refreshT
               padding: '10px 24px',
               border: '1px solid #D4D4D8',
               background: 'transparent',
-              color: '#57534E',
+              color: 'var(--cm-text-secondary)',
               cursor: 'pointer',
               fontSize: 12,
               fontWeight: 600,
@@ -216,7 +172,7 @@ export default function Dashboard({ onSelectMemory, onNavigateToFilter, refreshT
               padding: '10px 24px',
               border: '1px solid #CA8A04',
               background: 'transparent',
-              color: '#CA8A04',
+              color: 'var(--cm-warning)',
               cursor: 'pointer',
               fontSize: 12,
               fontWeight: 600,
@@ -232,55 +188,16 @@ export default function Dashboard({ onSelectMemory, onNavigateToFilter, refreshT
       </div>
 
       {loading && (
-        <p style={{ color: '#A8A29E', fontFamily: 'Raleway, sans-serif', fontSize: 14 }}>
+        <p style={{ color: 'var(--cm-text-tertiary)', fontFamily: 'Raleway, sans-serif', fontSize: 14 }}>
           Loading...
         </p>
       )}
 
       {stats && !loading && stats.total === 0 && (
-        <div
-          style={{
-            textAlign: 'center',
-            padding: '64px 32px',
-            backgroundColor: '#FFFFFF',
-            borderRadius: 2,
-            border: '1px solid #F5F5F4',
-            boxShadow: '0 1px 2px rgba(28,25,23,0.04)',
-          }}
-        >
-          <div
-            style={{
-              fontSize: 48,
-              color: '#D4D4D8',
-              marginBottom: 16,
-              fontFamily: "'Cormorant Garamond', serif",
-            }}
-          >
-            +
-          </div>
-          <h3
-            style={{
-              fontSize: 18,
-              fontFamily: "'Cormorant Garamond', serif",
-              fontWeight: 500,
-              color: '#1C1917',
-              margin: '0 0 8px 0',
-            }}
-          >
-            No memories yet
-          </h3>
-          <p
-            style={{
-              fontSize: 14,
-              fontFamily: 'Raleway, sans-serif',
-              color: '#A8A29E',
-              margin: '0 0 24px 0',
-              lineHeight: 1.6,
-            }}
-          >
-            Create your first memory to get started.
-          </p>
-        </div>
+        <EmptyState
+          title="No memories yet"
+          description="Create your first memory to get started."
+        />
       )}
 
       {stats && !loading && stats.total > 0 && (
@@ -294,10 +211,10 @@ export default function Dashboard({ onSelectMemory, onNavigateToFilter, refreshT
               marginBottom: 32,
             }}
           >
-            <StatCard label="Total Memories" value={stats.total} color="#1C1917" />
-            <StatCard label="Stale" value={stats.stale_count} color="#991B1B" />
-            <StatCard label="Proven" value={stats.maturity?.proven ?? 0} color="#166534" />
-            <StatCard label="Draft" value={stats.maturity?.draft ?? 0} color="#57534E" />
+            <StatCard label="Total Memories" value={stats.total} color="var(--cm-text-primary)" />
+            <StatCard label="Stale" value={stats.stale_count} color="var(--cm-error)" />
+            <StatCard label="Proven" value={stats.maturity?.proven ?? 0} color="var(--cm-success)" />
+            <StatCard label="Draft" value={stats.maturity?.draft ?? 0} color="var(--cm-text-secondary)" />
           </div>
 
           {/* Two-column layout for maturity distribution + tags */}
@@ -331,7 +248,7 @@ export default function Dashboard({ onSelectMemory, onNavigateToFilter, refreshT
                           fontFamily: 'Raleway, sans-serif',
                           textTransform: 'uppercase',
                           letterSpacing: '0.06em',
-                          color: maturityColors[key] || '#57534E',
+                          color: maturityColors[key] || 'var(--cm-text-secondary)',
                           minWidth: 90,
                         }}
                       >
@@ -341,7 +258,7 @@ export default function Dashboard({ onSelectMemory, onNavigateToFilter, refreshT
                         style={{
                           flex: 1,
                           height: 8,
-                          backgroundColor: '#F5F5F4',
+                          backgroundColor: 'var(--cm-bg-subtle)',
                           borderRadius: 2,
                           overflow: 'hidden',
                         }}
@@ -350,7 +267,7 @@ export default function Dashboard({ onSelectMemory, onNavigateToFilter, refreshT
                           style={{
                             height: '100%',
                             width: `${pct}%`,
-                            backgroundColor: maturityColors[key] || '#57534E',
+                            backgroundColor: maturityColors[key] || 'var(--cm-text-secondary)',
                             borderRadius: 2,
                             transition: 'width 300ms ease',
                           }}
@@ -360,7 +277,7 @@ export default function Dashboard({ onSelectMemory, onNavigateToFilter, refreshT
                         style={{
                           fontSize: 12,
                           fontFamily: 'JetBrains Mono, monospace',
-                          color: '#57534E',
+                          color: 'var(--cm-text-secondary)',
                           minWidth: 24,
                           textAlign: 'right',
                         }}
@@ -387,22 +304,22 @@ export default function Dashboard({ onSelectMemory, onNavigateToFilter, refreshT
                       gap: 6,
                       padding: '4px 12px',
                       borderRadius: 2,
-                      backgroundColor: '#F5F5F4',
+                      backgroundColor: 'var(--cm-bg-subtle)',
                       fontSize: 12,
                       fontFamily: 'Raleway, sans-serif',
-                      color: '#1C1917',
+                      color: 'var(--cm-text-primary)',
                       fontWeight: 500,
                       cursor: 'pointer',
                       transition: 'background-color 100ms ease',
                     }}
-                    onMouseEnter={(e) => { (e.currentTarget as HTMLSpanElement).style.backgroundColor = '#E7E5E4' }}
-                    onMouseLeave={(e) => { (e.currentTarget as HTMLSpanElement).style.backgroundColor = '#F5F5F4' }}
+                    onMouseEnter={(e) => { (e.currentTarget as HTMLSpanElement).style.backgroundColor = 'var(--cm-border)' }}
+                    onMouseLeave={(e) => { (e.currentTarget as HTMLSpanElement).style.backgroundColor = 'var(--cm-bg-subtle)' }}
                   >
                     {tag}
                     <span
                       style={{
                         fontSize: 10,
-                        color: '#A8A29E',
+                        color: 'var(--cm-text-tertiary)',
                         fontFamily: 'JetBrains Mono, monospace',
                       }}
                     >
@@ -411,7 +328,7 @@ export default function Dashboard({ onSelectMemory, onNavigateToFilter, refreshT
                   </span>
                 ))}
                 {stats.tags.length === 0 && (
-                  <span style={{ fontSize: 12, color: '#A8A29E', fontFamily: 'Raleway, sans-serif' }}>
+                  <span style={{ fontSize: 12, color: 'var(--cm-text-tertiary)', fontFamily: 'Raleway, sans-serif' }}>
                     No tags found
                   </span>
                 )}
@@ -444,7 +361,7 @@ export default function Dashboard({ onSelectMemory, onNavigateToFilter, refreshT
                           fontSize: 13,
                           fontFamily: 'Raleway, sans-serif',
                           fontWeight: 600,
-                          color: '#1C1917',
+                          color: 'var(--cm-text-primary)',
                         }}
                       >
                         {memId}
@@ -453,7 +370,7 @@ export default function Dashboard({ onSelectMemory, onNavigateToFilter, refreshT
                         style={{
                           fontSize: 11,
                           fontFamily: 'JetBrains Mono, monospace',
-                          color: '#A8A29E',
+                          color: 'var(--cm-text-tertiary)',
                           marginTop: 2,
                         }}
                       >
@@ -466,7 +383,7 @@ export default function Dashboard({ onSelectMemory, onNavigateToFilter, refreshT
                           padding: '2px 8px',
                           borderRadius: 2,
                           backgroundColor: '#991B1B15',
-                          color: '#991B1B',
+                          color: 'var(--cm-error)',
                           fontSize: 10,
                           fontWeight: 600,
                           fontFamily: 'Raleway, sans-serif',
@@ -491,8 +408,8 @@ export default function Dashboard({ onSelectMemory, onNavigateToFilter, refreshT
                   style={{
                     padding: '8px 16px',
                     borderRadius: 2,
-                    backgroundColor: status === 'active' ? '#16653415' : status === 'archived' ? '#F5F5F4' : '#F5F5F4',
-                    borderLeft: `3px solid ${status === 'active' ? '#166534' : status === 'archived' ? '#A8A29E' : '#57534E'}`,
+                    backgroundColor: status === 'active' ? '#16653415' : status === 'archived' ? 'var(--cm-bg-subtle)' : 'var(--cm-bg-subtle)',
+                    borderLeft: `3px solid ${status === 'active' ? 'var(--cm-success)' : status === 'archived' ? 'var(--cm-text-tertiary)' : 'var(--cm-text-secondary)'}`,
                   }}
                 >
                   <div
@@ -502,7 +419,7 @@ export default function Dashboard({ onSelectMemory, onNavigateToFilter, refreshT
                       fontFamily: 'Raleway, sans-serif',
                       textTransform: 'uppercase',
                       letterSpacing: '0.06em',
-                      color: '#57534E',
+                      color: 'var(--cm-text-secondary)',
                     }}
                   >
                     {status}
@@ -511,7 +428,7 @@ export default function Dashboard({ onSelectMemory, onNavigateToFilter, refreshT
                     style={{
                       fontSize: 20,
                       fontFamily: "'Cormorant Garamond', serif",
-                      color: '#1C1917',
+                      color: 'var(--cm-text-primary)',
                     }}
                   >
                     {count}
@@ -531,23 +448,94 @@ export default function Dashboard({ onSelectMemory, onNavigateToFilter, refreshT
               fontSize: 20,
               fontFamily: "'Cormorant Garamond', serif",
               fontWeight: 500,
-              color: '#1C1917',
-              margin: '0 0 16px 0',
+              color: 'var(--cm-text-primary)',
+              margin: '0 0 4px 0',
             }}
           >
             Wander Recall
           </h2>
+          <p style={{
+            fontSize: 12,
+            fontFamily: 'Raleway, sans-serif',
+            color: 'var(--cm-text-tertiary)',
+            margin: '0 0 20px 0',
+            fontStyle: 'italic',
+            lineHeight: 1.5,
+          }}>
+            Surfaces a memory you haven&rsquo;t revisited recently.
+          </p>
+
+          {/* Why this memory? */}
+          <div style={{
+            marginBottom: 16,
+            padding: '12px 16px',
+            backgroundColor: 'var(--cm-bg-surface)',
+            borderRadius: 2,
+            border: '1px solid #F5F5F4',
+          }}>
+            <div style={{
+              fontSize: 10,
+              fontWeight: 600,
+              fontFamily: 'Raleway, sans-serif',
+              textTransform: 'uppercase',
+              letterSpacing: '0.08em',
+              color: 'var(--cm-text-secondary)',
+              marginBottom: 10,
+            }}>
+              Why this memory?
+            </div>
+            <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 8 }}>
+              <div>
+                <span style={{ fontSize: 10, color: 'var(--cm-text-tertiary)', fontFamily: 'Raleway, sans-serif' }}>Access Count: </span>
+                <span style={{ fontSize: 13, fontFamily: 'JetBrains Mono, monospace', color: 'var(--cm-text-primary)', fontWeight: 600 }}>
+                  {wanderResult.access_count}
+                  {wanderResult.access_count === 0 && (
+                    <span style={{ fontSize: 10, fontWeight: 400, color: 'var(--cm-text-tertiary)', marginLeft: 4 }}>(never accessed)</span>
+                  )}
+                </span>
+              </div>
+              <div>
+                <span style={{ fontSize: 10, color: 'var(--cm-text-tertiary)', fontFamily: 'Raleway, sans-serif' }}>Intensity: </span>
+                <span style={{ fontSize: 13, fontFamily: 'JetBrains Mono, monospace', color: 'var(--cm-text-primary)', fontWeight: 600 }}>
+                  {wanderResult.intensity}/10
+                  {wanderResult.intensity >= 8 && (
+                    <span style={{ fontSize: 10, fontWeight: 400, color: 'var(--cm-info)', marginLeft: 4 }}>(protected)</span>
+                  )}
+                </span>
+              </div>
+              <div>
+                <span style={{ fontSize: 10, color: 'var(--cm-text-tertiary)', fontFamily: 'Raleway, sans-serif' }}>Last Access: </span>
+                <span style={{ fontSize: 13, fontFamily: 'JetBrains Mono, monospace', color: 'var(--cm-text-primary)', fontWeight: 600 }}>
+                  {wanderResult.last_access ? new Date(wanderResult.last_access).toLocaleDateString() : 'never'}
+                </span>
+              </div>
+            </div>
+            <p style={{
+              fontSize: 11,
+              fontFamily: 'Raleway, sans-serif',
+              color: 'var(--cm-text-tertiary)',
+              margin: '4px 0 0 0',
+              lineHeight: 1.4,
+            }}>
+              {wanderResult.access_count === 0
+                ? 'This memory has never been accessed — it may contain overlooked insights.'
+                : wanderResult.last_access
+                  ? `Last accessed ${_daysAgo(wanderResult.last_access)} days ago. Revisiting cold memories prevents knowledge decay.`
+                  : 'Low-access memories are surfaced to prevent knowledge silos.'}
+            </p>
+          </div>
+
           <div style={{ marginBottom: 12 }}>
-            <div style={{ fontSize: 12, color: '#A8A29E', fontFamily: 'Raleway, sans-serif', marginBottom: 4 }}>
+            <div style={{ fontSize: 12, color: 'var(--cm-text-tertiary)', fontFamily: 'Raleway, sans-serif', marginBottom: 4 }}>
               Memory ID
             </div>
             <div
               style={{
                 fontSize: 13,
                 fontFamily: 'JetBrains Mono, monospace',
-                color: '#1C1917',
+                color: 'var(--cm-text-primary)',
                 padding: '8px 12px',
-                backgroundColor: '#F5F5F4',
+                backgroundColor: 'var(--cm-bg-subtle)',
                 borderRadius: 2,
                 wordBreak: 'break-all',
               }}
@@ -555,26 +543,21 @@ export default function Dashboard({ onSelectMemory, onNavigateToFilter, refreshT
               {wanderResult.id}
             </div>
           </div>
-          <div style={{ marginBottom: 12 }}>
-            <div style={{ fontSize: 12, color: '#A8A29E', fontFamily: 'Raleway, sans-serif', marginBottom: 4 }}>
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 12, color: 'var(--cm-text-tertiary)', fontFamily: 'Raleway, sans-serif', marginBottom: 4 }}>
               Summary
             </div>
-            <p style={{ fontSize: 14, color: '#1C1917', fontFamily: 'Raleway, sans-serif', lineHeight: 1.6, margin: 0 }}>
+            <p style={{ fontSize: 14, color: 'var(--cm-text-primary)', fontFamily: 'Raleway, sans-serif', lineHeight: 1.6, margin: 0 }}>
               {wanderResult.summary}
             </p>
-          </div>
-          <div style={{ display: 'flex', gap: 12, fontSize: 12, fontFamily: 'Raleway, sans-serif', color: '#57534E', marginBottom: 16 }}>
-            <span>Type: {wanderResult.type}</span>
-            <span>Intensity: {wanderResult.intensity}/10</span>
-            <span>Access: {wanderResult.access_count}</span>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
             <button
               onClick={() => onSelectMemory(wanderResult.id)}
               style={{
                 padding: '8px 20px',
-                backgroundColor: '#1C1917',
-                color: '#FFFBEB',
+                backgroundColor: 'var(--cm-text-primary)',
+                color: 'var(--cm-bg-primary)',
                 border: 'none',
                 cursor: 'pointer',
                 fontSize: 11,
@@ -591,9 +574,9 @@ export default function Dashboard({ onSelectMemory, onNavigateToFilter, refreshT
               onClick={() => setWanderOpen(false)}
               style={{
                 padding: '8px 20px',
-                border: '1px solid #D4D4D8',
+                border: '1px solid var(--cm-border-cool)',
                 background: 'transparent',
-                color: '#57534E',
+                color: 'var(--cm-text-secondary)',
                 cursor: 'pointer',
                 fontSize: 11,
                 fontWeight: 600,
@@ -617,7 +600,7 @@ export default function Dashboard({ onSelectMemory, onNavigateToFilter, refreshT
               fontSize: 20,
               fontFamily: "'Cormorant Garamond', serif",
               fontWeight: 500,
-              color: '#1C1917',
+              color: 'var(--cm-text-primary)',
               margin: '0 0 16px 0',
             }}
           >
@@ -632,10 +615,10 @@ export default function Dashboard({ onSelectMemory, onNavigateToFilter, refreshT
                 borderLeft: '3px solid #166534',
               }}
             >
-              <div style={{ fontSize: 10, fontWeight: 600, color: '#57534E', textTransform: 'uppercase', letterSpacing: '0.08em', fontFamily: 'Raleway, sans-serif' }}>
+              <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--cm-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.08em', fontFamily: 'Raleway, sans-serif' }}>
                 Checked
               </div>
-              <div style={{ fontSize: 22, fontFamily: "'Cormorant Garamond', serif", color: '#1C1917' }}>
+              <div style={{ fontSize: 22, fontFamily: "'Cormorant Garamond', serif", color: 'var(--cm-text-primary)' }}>
                 {validateResult.validated_count}
               </div>
             </div>
@@ -644,13 +627,13 @@ export default function Dashboard({ onSelectMemory, onNavigateToFilter, refreshT
                 padding: '8px 16px',
                 borderRadius: 2,
                 backgroundColor: validateResult.error_count > 0 ? '#991B1B15' : '#16653415',
-                borderLeft: `3px solid ${validateResult.error_count > 0 ? '#991B1B' : '#166534'}`,
+                borderLeft: `3px solid ${validateResult.error_count > 0 ? 'var(--cm-error)' : 'var(--cm-success)'}`,
               }}
             >
-              <div style={{ fontSize: 10, fontWeight: 600, color: '#57534E', textTransform: 'uppercase', letterSpacing: '0.08em', fontFamily: 'Raleway, sans-serif' }}>
+              <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--cm-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.08em', fontFamily: 'Raleway, sans-serif' }}>
                 Errors
               </div>
-              <div style={{ fontSize: 22, fontFamily: "'Cormorant Garamond', serif", color: '#1C1917' }}>
+              <div style={{ fontSize: 22, fontFamily: "'Cormorant Garamond', serif", color: 'var(--cm-text-primary)' }}>
                 {validateResult.error_count}
               </div>
             </div>
@@ -659,13 +642,13 @@ export default function Dashboard({ onSelectMemory, onNavigateToFilter, refreshT
                 padding: '8px 16px',
                 borderRadius: 2,
                 backgroundColor: validateResult.warning_count > 0 ? '#CA8A0415' : '#16653415',
-                borderLeft: `3px solid ${validateResult.warning_count > 0 ? '#CA8A04' : '#166534'}`,
+                borderLeft: `3px solid ${validateResult.warning_count > 0 ? 'var(--cm-warning)' : 'var(--cm-success)'}`,
               }}
             >
-              <div style={{ fontSize: 10, fontWeight: 600, color: '#57534E', textTransform: 'uppercase', letterSpacing: '0.08em', fontFamily: 'Raleway, sans-serif' }}>
+              <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--cm-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.08em', fontFamily: 'Raleway, sans-serif' }}>
                 Warnings
               </div>
-              <div style={{ fontSize: 22, fontFamily: "'Cormorant Garamond', serif", color: '#1C1917' }}>
+              <div style={{ fontSize: 22, fontFamily: "'Cormorant Garamond', serif", color: 'var(--cm-text-primary)' }}>
                 {validateResult.warning_count}
               </div>
             </div>
@@ -677,7 +660,7 @@ export default function Dashboard({ onSelectMemory, onNavigateToFilter, refreshT
                 padding: '16px',
                 backgroundColor: '#16653410',
                 borderRadius: 2,
-                color: '#166534',
+                color: 'var(--cm-success)',
                 fontSize: 14,
                 fontFamily: 'Raleway, sans-serif',
               }}
@@ -688,7 +671,7 @@ export default function Dashboard({ onSelectMemory, onNavigateToFilter, refreshT
 
           {validateResult.errors.length > 0 && (
             <div style={{ marginBottom: 16 }}>
-              <h3 style={{ fontSize: 14, fontFamily: 'Raleway, sans-serif', fontWeight: 600, color: '#991B1B', marginBottom: 8 }}>
+              <h3 style={{ fontSize: 14, fontFamily: 'Raleway, sans-serif', fontWeight: 600, color: 'var(--cm-error)', marginBottom: 8 }}>
                 Errors ({validateResult.errors.length})
               </h3>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -702,7 +685,7 @@ export default function Dashboard({ onSelectMemory, onNavigateToFilter, refreshT
                       borderRadius: 2,
                       fontSize: 12,
                       fontFamily: 'Raleway, sans-serif',
-                      color: '#1C1917',
+                      color: 'var(--cm-text-primary)',
                     }}
                   >
                     {err.message}
@@ -714,7 +697,7 @@ export default function Dashboard({ onSelectMemory, onNavigateToFilter, refreshT
 
           {validateResult.warnings.length > 0 && (
             <div style={{ marginBottom: 16 }}>
-              <h3 style={{ fontSize: 14, fontFamily: 'Raleway, sans-serif', fontWeight: 600, color: '#CA8A04', marginBottom: 8 }}>
+              <h3 style={{ fontSize: 14, fontFamily: 'Raleway, sans-serif', fontWeight: 600, color: 'var(--cm-warning)', marginBottom: 8 }}>
                 Warnings ({validateResult.warnings.length})
               </h3>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -728,10 +711,10 @@ export default function Dashboard({ onSelectMemory, onNavigateToFilter, refreshT
                       borderRadius: 2,
                       fontSize: 12,
                       fontFamily: 'Raleway, sans-serif',
-                      color: '#1C1917',
+                      color: 'var(--cm-text-primary)',
                     }}
                   >
-                    <span style={{ fontSize: 10, color: '#A8A29E', marginRight: 6 }}>
+                    <span style={{ fontSize: 10, color: 'var(--cm-text-tertiary)', marginRight: 6 }}>
                       [{warn.type}]
                     </span>
                     {warn.message}
@@ -747,7 +730,7 @@ export default function Dashboard({ onSelectMemory, onNavigateToFilter, refreshT
               padding: '8px 20px',
               border: '1px solid #D4D4D8',
               background: 'transparent',
-              color: '#57534E',
+              color: 'var(--cm-text-secondary)',
               cursor: 'pointer',
               fontSize: 11,
               fontWeight: 600,
@@ -772,7 +755,7 @@ function StatCard({ label, value, color }: { label: string; value: number; color
     <div
       style={{
         padding: '20px 24px',
-        backgroundColor: '#FFFFFF',
+        backgroundColor: 'var(--cm-bg-surface)',
         borderRadius: 2,
         border: '1px solid #F5F5F4',
         boxShadow: '0 1px 2px rgba(28,25,23,0.04)',
@@ -785,7 +768,7 @@ function StatCard({ label, value, color }: { label: string; value: number; color
           fontFamily: 'Raleway, sans-serif',
           textTransform: 'uppercase',
           letterSpacing: '0.08em',
-          color: '#A8A29E',
+          color: 'var(--cm-text-tertiary)',
           marginBottom: 8,
         }}
       >
@@ -811,7 +794,7 @@ function SectionCard({ title, children }: { title: string; children: React.React
     <div
       style={{
         padding: '20px 24px',
-        backgroundColor: '#FFFFFF',
+        backgroundColor: 'var(--cm-bg-surface)',
         borderRadius: 2,
         border: '1px solid #F5F5F4',
         boxShadow: '0 1px 2px rgba(28,25,23,0.04)',
@@ -824,7 +807,7 @@ function SectionCard({ title, children }: { title: string; children: React.React
           fontFamily: 'Raleway, sans-serif',
           textTransform: 'uppercase',
           letterSpacing: '0.08em',
-          color: '#57534E',
+          color: 'var(--cm-text-secondary)',
           margin: '0 0 16px 0',
         }}
       >
@@ -833,6 +816,12 @@ function SectionCard({ title, children }: { title: string; children: React.React
       {children}
     </div>
   )
+}
+
+function _daysAgo(isoDate: string): number {
+  const then = new Date(isoDate).getTime()
+  const now = Date.now()
+  return Math.max(0, Math.floor((now - then) / (1000 * 60 * 60 * 24)))
 }
 
 function Modal({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
@@ -853,7 +842,7 @@ function Modal({ children, onClose }: { children: React.ReactNode; onClose: () =
           top: '50%',
           left: '50%',
           transform: 'translate(-50%, -50%)',
-          backgroundColor: '#FFFBEB',
+          backgroundColor: 'var(--cm-bg-primary)',
           border: '1px solid #E7E5E4',
           borderRadius: 2,
           padding: 28,

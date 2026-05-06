@@ -4,6 +4,7 @@ import dagre from 'dagre'
 import type { GraphData, GraphNode, GraphEdge, ResolveResponse } from '../types'
 import { fetchGraph } from '../api'
 import { DIRECTORY_COLORS, DIRECTORY_TINTS, DEFAULT_COLOR, DEFAULT_TINT } from '../colors'
+import EmptyState from './EmptyState'
 
 interface Props {
   searchText: string
@@ -227,7 +228,7 @@ export default function GraphCanvas({ searchText, onNodeClick, onNodeContextMenu
           selector: 'node.resolve-highlight',
           style: {
             'border-width': 3,
-            'border-color': '#B8860B',
+            'border-color': 'var(--cm-accent)',
             'background-color': '#FDF6E8',
             'opacity': 1,
             'z-index': 10,
@@ -469,67 +470,71 @@ export default function GraphCanvas({ searchText, onNodeClick, onNodeContextMenu
     }
   }, [resolveData, isResolving])
 
-  // PL1-7: Empty state when no memories exist
+  // R7-export: Export graph as PNG
+  const handleExportPng = useCallback(() => {
+    const cy = cyRef.current
+    if (!cy) return
+    const pngDataUrl = cy.png({ full: true, scale: 2, bg: '#ffffff' })
+    const a = document.createElement('a')
+    a.href = pngDataUrl
+    a.download = 'codememory-graph.png'
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+  }, [])
+
+  // R7-N5: Unified EmptyState — shown when no memories exist
   if (graphData && graphData.nodes.length === 0) {
     return (
-      <div
-        style={{
-          width: '100%',
-          height: '100%',
-          backgroundColor: '#FFFBEB',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          padding: 32,
-        }}
-      >
-        <div
-          style={{
-            fontSize: 48,
-            color: '#D4D4D8',
-            marginBottom: 16,
-            fontFamily: "'Cormorant Garamond', serif",
-          }}
-        >
-          +
-        </div>
-        <h3
-          style={{
-            fontSize: 18,
-            fontFamily: "'Cormorant Garamond', serif",
-            fontWeight: 500,
-            color: '#1C1917',
-            margin: '0 0 8px 0',
-          }}
-        >
-          No memories yet
-        </h3>
-        <p
-          style={{
-            fontSize: 14,
-            fontFamily: 'Raleway, sans-serif',
-            color: '#A8A29E',
-            margin: '0 0 24px 0',
-            lineHeight: 1.6,
-          }}
-        >
-          Create your first memory to get started.
-        </p>
+      <div style={{ width: '100%', height: '100%', backgroundColor: 'var(--cm-bg-primary)' }}>
+        <EmptyState
+          title="No memories yet"
+          description="Click + New to add your first memory."
+        />
       </div>
     )
   }
 
   return (
-    <>
+    <div style={{ position: 'relative', width: '100%', height: '100%' }}>
       <div
         ref={containerRef}
         style={{
           width: '100%',
           height: '100%',
-          backgroundColor: '#FFFBEB',
+          backgroundColor: 'var(--cm-bg-primary)',
         }}
       />
+      {/* R7-export: Export PNG button */}
+      {graphData && graphData.nodes.length > 0 && (
+        <button
+          onClick={handleExportPng}
+          title="Export graph as PNG"
+          style={{
+            position: 'absolute',
+            bottom: 14,
+            right: 14,
+            padding: '5px 12px',
+            border: '1px solid var(--cm-border-cool)',
+            background: 'var(--cm-bg-surface)',
+            color: 'var(--cm-text-secondary)',
+            cursor: 'pointer',
+            fontSize: 10,
+            fontWeight: 600,
+            fontFamily: 'Raleway, sans-serif',
+            textTransform: 'uppercase',
+            letterSpacing: '0.06em',
+            borderRadius: 2,
+            zIndex: 5,
+            opacity: 0.7,
+          }}
+          onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.opacity = '1' }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.opacity = '0.7' }}
+        >
+          PNG
+        </button>
+      )}
+
       {/* R5-graph-node-tooltips: summary tooltip on hover */}
       {tooltip && (
         <div
@@ -537,8 +542,8 @@ export default function GraphCanvas({ searchText, onNodeClick, onNodeContextMenu
             position: 'fixed',
             left: tooltip.x + 12,
             top: tooltip.y + 12,
-            backgroundColor: '#1C1917',
-            color: '#FFFBEB',
+            backgroundColor: 'var(--cm-text-primary)',
+            color: 'var(--cm-bg-primary)',
             padding: '6px 12px',
             borderRadius: 2,
             fontSize: 12,
@@ -553,6 +558,6 @@ export default function GraphCanvas({ searchText, onNodeClick, onNodeContextMenu
           {tooltip.text}
         </div>
       )}
-    </>
+    </div>
   )
 }

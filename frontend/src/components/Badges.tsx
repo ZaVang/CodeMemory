@@ -1,16 +1,16 @@
 /** Shared badge components used across MemoryDetail, MemoryList, and other views. */
 
 const MaturityStyles: Record<string, { bg: string; color: string }> = {
-  draft:        { bg: '#F5F5F4',  color: '#57534E' },
-  verified:     { bg: '#1E40AF15', color: '#1E40AF' },
-  proven:       { bg: '#16653415', color: '#166534' },
-  superseded:   { bg: '#F5F5F4',  color: '#A8A29E' },
+  draft:        { bg: 'var(--cm-bg-subtle)',  color: 'var(--cm-text-secondary)' },
+  verified:     { bg: '#1E40AF15', color: 'var(--cm-info)' },
+  proven:       { bg: '#16653415', color: 'var(--cm-success)' },
+  superseded:   { bg: 'var(--cm-bg-subtle)',  color: 'var(--cm-text-tertiary)' },
 }
 
 const StatusStyles: Record<string, { bg: string; color: string; label: string }> = {
-  active:   { bg: '#16653420', color: '#166534', label: 'active' },
-  draft:    { bg: '#F5F5F4',  color: '#57534E', label: 'draft' },
-  archived: { bg: '#F5F5F4',  color: '#A8A29E', label: 'archived' },
+  active:   { bg: '#16653420', color: 'var(--cm-success)', label: 'active' },
+  draft:    { bg: 'var(--cm-bg-subtle)',  color: 'var(--cm-text-secondary)', label: 'draft' },
+  archived: { bg: 'var(--cm-bg-subtle)',  color: 'var(--cm-text-tertiary)', label: 'archived' },
 }
 
 interface BadgeBaseOptions {

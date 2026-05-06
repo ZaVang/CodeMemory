@@ -167,7 +167,7 @@ export default function HelpPanel({ onClose }: Props) {
           width: '42vw',
           minWidth: 460,
           maxWidth: 680,
-          backgroundColor: '#FFFBEB',
+          backgroundColor: 'var(--cm-bg-primary)',
           borderLeft: '1px solid #E7E5E4',
           display: 'flex',
           flexDirection: 'column',
@@ -192,7 +192,7 @@ export default function HelpPanel({ onClose }: Props) {
               fontSize: 24,
               fontFamily: "'Cormorant Garamond', serif",
               fontWeight: 500,
-              color: '#1C1917',
+              color: 'var(--cm-text-primary)',
               margin: 0,
             }}
           >
@@ -205,7 +205,7 @@ export default function HelpPanel({ onClose }: Props) {
               background: 'none',
               cursor: 'pointer',
               fontSize: 20,
-              color: '#57534E',
+              color: 'var(--cm-text-secondary)',
               padding: '4px 8px',
               borderRadius: 2,
               lineHeight: 1,
@@ -224,7 +224,7 @@ export default function HelpPanel({ onClose }: Props) {
               fontSize: 16,
               fontFamily: "'Cormorant Garamond', serif",
               fontWeight: 600,
-              color: '#B8860B',
+              color: 'var(--cm-accent)',
               marginBottom: 20,
               letterSpacing: '0.02em',
             }}
@@ -239,7 +239,7 @@ export default function HelpPanel({ onClose }: Props) {
                   fontSize: 13,
                   fontFamily: 'Raleway, sans-serif',
                   fontWeight: 600,
-                  color: '#1C1917',
+                  color: 'var(--cm-text-primary)',
                   margin: '0 0 8px 0',
                   textTransform: 'uppercase',
                   letterSpacing: '0.06em',
@@ -262,8 +262,8 @@ export default function HelpPanel({ onClose }: Props) {
                     style={{
                       fontFamily: 'JetBrains Mono, monospace',
                       fontSize: 11,
-                      color: '#1C1917',
-                      backgroundColor: '#F5F5F4',
+                      color: 'var(--cm-text-primary)',
+                      backgroundColor: 'var(--cm-bg-subtle)',
                       padding: '1px 6px',
                       borderRadius: 2,
                       marginRight: 8,
@@ -271,7 +271,7 @@ export default function HelpPanel({ onClose }: Props) {
                   >
                     {item.name}
                   </span>
-                  <span style={{ color: '#57534E', fontFamily: 'Raleway, sans-serif' }}>
+                  <span style={{ color: 'var(--cm-text-secondary)', fontFamily: 'Raleway, sans-serif' }}>
                     {item.desc}
                   </span>
                 </div>
@@ -285,7 +285,7 @@ export default function HelpPanel({ onClose }: Props) {
               fontSize: 16,
               fontFamily: "'Cormorant Garamond', serif",
               fontWeight: 600,
-              color: '#B8860B',
+              color: 'var(--cm-accent)',
               marginBottom: 20,
               marginTop: 32,
               letterSpacing: '0.02em',
@@ -294,8 +294,8 @@ export default function HelpPanel({ onClose }: Props) {
             CLI 命令参考
           </h3>
 
-          <div style={{ fontSize: 13, fontFamily: 'Raleway, sans-serif', color: '#57534E', marginBottom: 16 }}>
-            以下 15 个命令通过 <code style={{ backgroundColor: '#F5F5F4', padding: '1px 4px', borderRadius: 2, fontFamily: 'JetBrains Mono, monospace', fontSize: 11 }}>codememory &lt;command&gt;</code> 在终端中使用。
+          <div style={{ fontSize: 13, fontFamily: 'Raleway, sans-serif', color: 'var(--cm-text-secondary)', marginBottom: 16 }}>
+            以下 15 个命令通过 <code style={{ backgroundColor: 'var(--cm-bg-subtle)', padding: '1px 4px', borderRadius: 2, fontFamily: 'JetBrains Mono, monospace', fontSize: 11 }}>codememory &lt;command&gt;</code> 在终端中使用。
             其中的 10 个已封装为 REST API 供前端调用——见下方 API 参考。
           </div>
 
@@ -313,7 +313,7 @@ export default function HelpPanel({ onClose }: Props) {
                   style={{
                     fontFamily: 'JetBrains Mono, monospace',
                     fontSize: 12,
-                    color: '#1C1917',
+                    color: 'var(--cm-text-primary)',
                     fontWeight: 500,
                   }}
                 >
@@ -324,7 +324,7 @@ export default function HelpPanel({ onClose }: Props) {
                     style={{
                       fontFamily: 'JetBrains Mono, monospace',
                       fontSize: 10,
-                      color: '#A8A29E',
+                      color: 'var(--cm-text-tertiary)',
                     }}
                   >
                     {args}
@@ -337,8 +337,8 @@ export default function HelpPanel({ onClose }: Props) {
                     fontWeight: 600,
                     textTransform: 'uppercase',
                     letterSpacing: '0.06em',
-                    color: '#B8860B',
-                    backgroundColor: '#FDF6E8',
+                    color: 'var(--cm-accent)',
+                    backgroundColor: 'var(--cm-bg-hover)',
                     padding: '1px 6px',
                     borderRadius: 2,
                     marginLeft: 'auto',
@@ -348,7 +348,7 @@ export default function HelpPanel({ onClose }: Props) {
                   {layer}
                 </span>
               </div>
-              <div style={{ fontSize: 11, fontFamily: 'Raleway, sans-serif', color: '#57534E', lineHeight: 1.5 }}>
+              <div style={{ fontSize: 11, fontFamily: 'Raleway, sans-serif', color: 'var(--cm-text-secondary)', lineHeight: 1.5 }}>
                 {desc}
               </div>
             </div>
@@ -360,7 +360,7 @@ export default function HelpPanel({ onClose }: Props) {
               fontSize: 16,
               fontFamily: "'Cormorant Garamond', serif",
               fontWeight: 600,
-              color: '#B8860B',
+              color: 'var(--cm-accent)',
               marginBottom: 20,
               marginTop: 32,
               letterSpacing: '0.02em',
@@ -369,8 +369,8 @@ export default function HelpPanel({ onClose }: Props) {
             REST API 端点
           </h3>
 
-          <div style={{ fontSize: 13, fontFamily: 'Raleway, sans-serif', color: '#57534E', marginBottom: 16 }}>
-            前端通过以下端点与后端通信。所有端点委托 <code style={{ backgroundColor: '#F5F5F4', padding: '1px 4px', borderRadius: 2, fontFamily: 'JetBrains Mono, monospace', fontSize: 11 }}>src/codememory/handlers.py</code>，不重复实现业务逻辑。
+          <div style={{ fontSize: 13, fontFamily: 'Raleway, sans-serif', color: 'var(--cm-text-secondary)', marginBottom: 16 }}>
+            前端通过以下端点与后端通信。所有端点委托 <code style={{ backgroundColor: 'var(--cm-bg-subtle)', padding: '1px 4px', borderRadius: 2, fontFamily: 'JetBrains Mono, monospace', fontSize: 11 }}>src/codememory/handlers.py</code>，不重复实现业务逻辑。
           </div>
 
           {[
@@ -404,7 +404,7 @@ export default function HelpPanel({ onClose }: Props) {
                   fontWeight: 600,
                   fontFamily: 'JetBrains Mono, monospace',
                   textTransform: 'uppercase',
-                  color: ep.method === 'GET' ? '#166534' : ep.method === 'POST' ? '#1E40AF' : '#CA8A04',
+                  color: ep.method === 'GET' ? 'var(--cm-success)' : ep.method === 'POST' ? 'var(--cm-info)' : 'var(--cm-warning)',
                   backgroundColor: ep.method === 'GET' ? '#16653415' : ep.method === 'POST' ? '#1E40AF15' : '#CA8A0415',
                   minWidth: 36,
                   textAlign: 'center',
@@ -415,10 +415,10 @@ export default function HelpPanel({ onClose }: Props) {
                 {ep.method}
               </span>
               <div>
-                <code style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: '#1C1917' }}>
+                <code style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'var(--cm-text-primary)' }}>
                   {ep.path}
                 </code>
-                <div style={{ fontSize: 11, fontFamily: 'Raleway, sans-serif', color: '#57534E', lineHeight: 1.5, marginTop: 1 }}>
+                <div style={{ fontSize: 11, fontFamily: 'Raleway, sans-serif', color: 'var(--cm-text-secondary)', lineHeight: 1.5, marginTop: 1 }}>
                   {ep.desc}
                 </div>
               </div>

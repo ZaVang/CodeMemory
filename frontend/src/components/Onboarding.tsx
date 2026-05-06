@@ -63,7 +63,7 @@ export default function Onboarding({ onComplete }: Props) {
       >
         <div
           style={{
-            backgroundColor: '#FFFBEB',
+            backgroundColor: 'var(--cm-bg-primary)',
             borderRadius: 2,
             padding: 40,
             maxWidth: 520,
@@ -78,7 +78,7 @@ export default function Onboarding({ onComplete }: Props) {
               width: 56,
               height: 56,
               borderRadius: '50%',
-              backgroundColor: '#FDF6E8',
+              backgroundColor: 'var(--cm-bg-hover)',
               border: '2px solid #B8860B',
               display: 'flex',
               alignItems: 'center',
@@ -86,7 +86,7 @@ export default function Onboarding({ onComplete }: Props) {
               margin: '0 auto 24px',
               fontSize: 28,
               fontFamily: "'Cormorant Garamond', serif",
-              color: '#B8860B',
+              color: 'var(--cm-accent)',
               fontWeight: 500,
             }}
           >
@@ -99,7 +99,7 @@ export default function Onboarding({ onComplete }: Props) {
               fontSize: 24,
               fontFamily: "'Cormorant Garamond', serif",
               fontWeight: 500,
-              color: '#1C1917',
+              color: 'var(--cm-text-primary)',
               margin: '0 0 8px 0',
             }}
           >
@@ -112,7 +112,7 @@ export default function Onboarding({ onComplete }: Props) {
               fontSize: 16,
               fontFamily: 'Raleway, sans-serif',
               fontWeight: 600,
-              color: '#B8860B',
+              color: 'var(--cm-accent)',
               margin: '0 0 16px 0',
               lineHeight: 1.5,
             }}
@@ -125,7 +125,7 @@ export default function Onboarding({ onComplete }: Props) {
             style={{
               fontSize: 14,
               fontFamily: 'Raleway, sans-serif',
-              color: '#57534E',
+              color: 'var(--cm-text-secondary)',
               lineHeight: 1.7,
               margin: '0 0 28px 0',
             }}
@@ -149,7 +149,7 @@ export default function Onboarding({ onComplete }: Props) {
                   width: 8,
                   height: 8,
                   borderRadius: '50%',
-                  backgroundColor: i === step ? '#B8860B' : '#D4D4D8',
+                  backgroundColor: i === step ? 'var(--cm-accent)' : 'var(--cm-border-cool)',
                   transition: 'background-color 200ms ease',
                 }}
               />
@@ -164,7 +164,7 @@ export default function Onboarding({ onComplete }: Props) {
                 padding: '10px 24px',
                 border: '1px solid #D4D4D8',
                 background: 'transparent',
-                color: '#57534E',
+                color: 'var(--cm-text-secondary)',
                 cursor: 'pointer',
                 fontSize: 12,
                 fontWeight: 600,
@@ -181,8 +181,8 @@ export default function Onboarding({ onComplete }: Props) {
                 onClick={() => setStep((s) => s + 1)}
                 style={{
                   padding: '10px 24px',
-                  backgroundColor: '#1C1917',
-                  color: '#FFFBEB',
+                  backgroundColor: 'var(--cm-text-primary)',
+                  color: 'var(--cm-bg-primary)',
                   border: 'none',
                   cursor: 'pointer',
                   fontSize: 12,
@@ -200,8 +200,8 @@ export default function Onboarding({ onComplete }: Props) {
                 onClick={onComplete}
                 style={{
                   padding: '10px 24px',
-                  backgroundColor: '#B8860B',
-                  color: '#FFFBEB',
+                  backgroundColor: 'var(--cm-accent)',
+                  color: 'var(--cm-bg-primary)',
                   border: 'none',
                   cursor: 'pointer',
                   fontSize: 12,

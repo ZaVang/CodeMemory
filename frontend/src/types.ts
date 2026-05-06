@@ -86,6 +86,10 @@ export interface ResolveNode {
   index: number
   total: number
   body: string
+  summary?: string
+  maturity?: string
+  status?: string
+  tags?: string[]
 }
 
 /** Response from POST /api/resolve */
@@ -117,6 +121,7 @@ export interface WanderResponse {
   tags: string[]
   intensity: number
   access_count: number
+  last_access: string | null
   status: string
   maturity: string
 }

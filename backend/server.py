@@ -6,13 +6,16 @@ Does NOT modify src/codememory/ internal logic.
 
 from __future__ import annotations
 
+import difflib
 import contextlib
 import io
 import json
+import logging
 import os
 import random
 import re
 import sys
+import zipfile
 from datetime import date, datetime
 from pathlib import Path
 from typing import Any
@@ -20,6 +23,7 @@ from typing import Any
 import yaml
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, field_validator
 
 # Ensure codememory package is importable
@@ -349,7 +353,10 @@ def _update_frontmatter_fields(filepath: Path, updates: dict[str, Any]) -> None:
 # ---------------------------------------------------------------------------
 
 class CreateMemoryRequest(BaseModel):
-    id: str = Field(description="Memory identifier (e.g. 'user/ideas/thesis')")
+    memory_id: str = Field(
+        alias="id",
+        description="Memory identifier (e.g. 'user/ideas/thesis')",
+    )
     summary: str = Field(default="TODO: fill in summary")
     tags: list[str] = Field(default_factory=list)
     intensity: int = Field(default=5, ge=1, le=10)
@@ -362,7 +369,7 @@ class CreateMemoryRequest(BaseModel):
         description="Dependency map by strength: {'required': ['user/ideas/a'], 'recommended': ['user/facts/b']}",
     )
 
-    @field_validator("id")
+    @field_validator("memory_id")
     @classmethod
     def validate_id(cls, v: str) -> str:
         """Ensure memory ID has the required format: non-empty and contains at least one '/'."""
@@ -382,7 +389,7 @@ def post_create_memory(req: CreateMemoryRequest):
     file_path_str = handle_create(
         root=MEMORY_ROOT,
         memory_type=req.type,
-        memory_id=req.id,
+        memory_id=req.memory_id,
         schema=req.schema,
         intensity=req.intensity,
         tags=req.tags,
@@ -418,7 +425,7 @@ def post_create_memory(req: CreateMemoryRequest):
     # Return the created memory as structured data
     meta, body = _parse_frontmatter(filepath)
     result = {
-        "id": req.id,
+        "id": req.memory_id,
         "body": body,
         **{k: v for k, v in meta.items()},
     }
@@ -608,6 +615,7 @@ def post_wander(req: WanderRequest = WanderRequest()):
                 "tags": entry.tags,
                 "intensity": entry.intensity,
                 "access_count": entry.access_count,
+                "last_access": entry.last_access,
                 "status": entry.status,
                 "maturity": entry.maturity,
             })
@@ -638,6 +646,7 @@ def post_wander(req: WanderRequest = WanderRequest()):
         "tags": entry.tags,
         "intensity": entry.intensity,
         "access_count": entry.access_count,
+        "last_access": entry.last_access,
         "status": entry.status,
         "maturity": entry.maturity,
     })
@@ -788,7 +797,10 @@ def get_graph():
 # ---------------------------------------------------------------------------
 
 class ResolveRequest(BaseModel):
-    id: str = Field(description="Target memory ID to resolve from")
+    memory_id: str = Field(
+        alias="id",
+        description="Target memory ID to resolve from",
+    )
     depth: str = Field(default="recommended", description="required | recommended | full")
     budget: int = Field(default=2000, description="Token budget in characters", ge=200, le=5000)
 
@@ -803,12 +815,12 @@ def post_resolve(req: ResolveRequest):
     # B3: check that the target ID exists in the index before resolving
     index = _load_index()
     memories = index.get("memories", {})
-    if req.id not in memories:
-        raise HTTPException(status_code=404, detail=f"Memory '{req.id}' not found in index")
+    if req.memory_id not in memories:
+        raise HTTPException(status_code=404, detail=f"Memory '{req.memory_id}' not found in index")
 
     text = handle_resolve(
         root=MEMORY_ROOT,
-        memory_id=req.id,
+        memory_id=req.memory_id,
         depth=req.depth,
         budget=req.budget,
     )
@@ -862,14 +874,29 @@ def post_resolve(req: ResolveRequest):
 
         body_text = "\n".join(body_lines).strip()
 
-        nodes.append({
-            "id": node_id,
-            "type": node_type,
-            "trim": trim,
-            "index": node_index,
-            "total": node_total,
-            "body": body_text,
-        })
+        # R7-prompt-metadata: enrich with maturity/status/tags from index
+        node_meta = memories.get(node_id)
+        node_entry: dict[str, Any] = {"id": node_id, "type": node_type, "trim": trim,
+                                        "index": node_index, "total": node_total,
+                                        "body": body_text}
+        if node_meta is not None:
+            if hasattr(node_meta, "model_dump"):
+                md = node_meta.model_dump(mode="json")
+            elif isinstance(node_meta, dict):
+                md = node_meta
+            else:
+                md = {}
+            node_entry["summary"] = md.get("summary", "")
+            node_entry["maturity"] = md.get("maturity", "draft")
+            node_entry["status"] = md.get("status", "active")
+            node_entry["tags"] = md.get("tags", [])
+        else:
+            node_entry["summary"] = ""
+            node_entry["maturity"] = "draft"
+            node_entry["status"] = "active"
+            node_entry["tags"] = []
+
+        nodes.append(node_entry)
 
         # Skip the "---" separator and "Total Budget Used" line
         if i < len(lines) and lines[i].startswith("---"):
@@ -880,7 +907,7 @@ def post_resolve(req: ResolveRequest):
     notices = [ln.removeprefix("[NOTICE]").strip() for ln in notice_lines]
 
     return {
-        "target": req.id,
+        "target": req.memory_id,
         "depth": req.depth,
         "budget": req.budget,
         "nodes": nodes,
@@ -902,74 +929,203 @@ class SearchRequest(BaseModel):
     limit: int = Field(default=50, description="Maximum number of results to return", ge=1, le=500)
 
 
+_FUZZY_THRESHOLD = 0.6
+
+
+def _fuzzy_match_score(query: str, text: str) -> float:
+    """Return a match score 0.0-1.0 between query and text.
+
+    1.0 = exact substring match. 0.6-0.99 = fuzzy match via difflib.
+    0.0 = no match.
+    """
+    if not text or not query:
+        return 0.0
+    q_lower = query.lower().strip()
+    t_lower = text.lower()
+    # Exact substring match — highest score
+    if q_lower in t_lower:
+        return 1.0
+    # Check if query appears as a substring of any word (handles hyphenated)
+    for word in t_lower.split():
+        if q_lower in word:
+            return 1.0
+    # Fuzzy matching via difflib against sliding windows
+    best = 0.0
+    window_size = len(q_lower) + 2
+    for i in range(0, max(1, len(t_lower) - window_size + 1), max(1, len(q_lower) // 2)):
+        window = t_lower[i:i + window_size]
+        ratio = difflib.SequenceMatcher(None, q_lower, window).ratio()
+        if ratio > best:
+            best = ratio
+    # Also try direct comparison for short strings
+    if len(t_lower) < len(q_lower) * 3:
+        direct_ratio = difflib.SequenceMatcher(None, q_lower, t_lower).ratio()
+        if direct_ratio > best:
+            best = direct_ratio
+    return best
+
+
 @app.post("/api/search")
 def post_search(req: SearchRequest):
-    """Full-text search across memory body content and metadata.
-    Returns ranked results with ID, summary, and matching body snippet.
+    """Full-text search across memory id, summary, and body content.
+
+    Uses exact substring matching first, then difflib-based fuzzy matching
+    for typo-tolerant search. Exact matches ranked above fuzzy matches.
+    Returns ranked results with match_quality indicator.
     """
     # B5: empty query means "no search performed" — short-circuit immediately
     if not req.query or not req.query.strip():
         return _serialize({"results": [], "count": 0, "total": 0, "query": req.query, "limit": req.limit})
 
-    from codememory.search import search
+    index = _load_index()
+    memories = index.get("memories", {})
 
-    results = search(
-        MEMORY_ROOT,
-        query=req.query if req.query else None,
-        tags=req.tags,
-        type_=req.type_,
-        status=req.status,
-        maturity=req.maturity,
-    )
+    # Collect candidates with match info
+    exact_matches: list[dict] = []
+    fuzzy_matches: list[dict] = []
 
-    # Apply limit before enrichment (snippet extraction is expensive)
-    results = results[:req.limit]
+    for mem_id, entry in memories.items():
+        # Extract entry data
+        if hasattr(entry, "model_dump"):
+            d = entry.model_dump(mode="json")
+        elif isinstance(entry, dict):
+            d = entry
+        else:
+            continue
 
-    # Enrich results with a body snippet showing the match context
-    enriched = []
-    for r in results:
-        mem_id = r.get("id", "")
-        snippet = ""
-        # Try to extract a body snippet containing the query
-        if req.query and mem_id:
-            index = _load_index()
-            memories = index.get("memories", {})
-            entry = memories.get(mem_id)
-            if entry:
-                if hasattr(entry, "path"):
-                    rel_path = entry.path
-                elif isinstance(entry, dict):
-                    rel_path = entry.get("path", "")
-                else:
-                    rel_path = ""
-                if rel_path:
-                    filepath = MEMORY_ROOT / rel_path
-                    if filepath.exists():
-                        _, body = _parse_frontmatter(filepath)
-                        if body:
-                            q_lower = req.query.lower()
-                            body_lower = body.lower()
-                            idx = body_lower.find(q_lower)
-                            if idx >= 0:
-                                start = max(0, idx - 40)
-                                end = min(len(body), idx + len(req.query) + 60)
-                                prefix = "..." if start > 0 else ""
-                                suffix = "..." if end < len(body) else ""
-                                snippet = prefix + body[start:end].replace("\n", " ") + suffix
-                            else:
-                                snippet = body[:120].replace("\n", " ") + ("..." if len(body) > 120 else "")
-        enriched.append({
+        # Apply metadata filters
+        if req.type_ and d.get("type") != req.type_:
+            continue
+        if req.status and d.get("status") != req.status:
+            continue
+        if req.maturity and d.get("maturity") != req.maturity:
+            continue
+        if req.tags:
+            entry_tags = d.get("tags", [])
+            if not all(t in entry_tags for t in req.tags):
+                continue
+
+        summary = d.get("summary", "")
+        tags = d.get("tags", [])
+
+        # Read body for full-text matching
+        body = ""
+        rel_path = ""
+        if hasattr(entry, "path"):
+            rel_path = entry.path
+        elif isinstance(entry, dict):
+            rel_path = entry.get("path", "")
+        if rel_path:
+            filepath = MEMORY_ROOT / rel_path
+            if filepath.exists():
+                _, body = _parse_frontmatter(filepath)
+
+        # Score matching against id, summary, tags, and body
+        scores: list[tuple[float, str]] = []
+        id_score = _fuzzy_match_score(req.query, mem_id)
+        if id_score > 0:
+            scores.append((id_score, "id"))
+        summary_score = _fuzzy_match_score(req.query, summary)
+        if summary_score > 0:
+            scores.append((summary_score, "summary"))
+        for tag in tags:
+            tag_score = _fuzzy_match_score(req.query, tag)
+            if tag_score > 0:
+                scores.append((tag_score, "tag"))
+        if body:
+            body_score = _fuzzy_match_score(req.query, body)
+            if body_score > 0:
+                scores.append((body_score, "body"))
+
+        if not scores:
+            continue
+
+        best_score = max(s[0] for s in scores)
+        match_fields = list(set(s[1] for s in scores))
+        is_exact = any(s[0] >= 1.0 for s in scores)
+        match_quality_tag = "exact" if is_exact else "fuzzy"
+
+        # Extract body snippet for preview
+        snippet = _extract_snippet(body, req.query) if body else ""
+
+        match_entry = {
             "id": mem_id,
-            "summary": r.get("summary", ""),
-            "type": r.get("type", "atom"),
-            "tags": r.get("tags", []),
-            "intensity": r.get("intensity", 5),
-            "maturity": r.get("maturity", "draft"),
-            "status": r.get("status", "active"),
+            "summary": summary,
+            "type": d.get("type", "atom"),
+            "tags": d.get("tags", []),
+            "intensity": d.get("intensity", 5),
+            "maturity": d.get("maturity", "draft"),
+            "status": d.get("status", "active"),
             "snippet": snippet,
-        })
+            "match_quality": match_quality_tag,
+            "match_score": round(best_score, 2),
+            "match_fields": match_fields,
+        }
 
-    return _serialize({"results": enriched, "count": len(enriched), "total": len(enriched), "query": req.query, "limit": req.limit})
+        if is_exact:
+            exact_matches.append(match_entry)
+        elif best_score >= _FUZZY_THRESHOLD:
+            fuzzy_matches.append(match_entry)
+
+    # Sort each group: higher score first, then by id
+    def _sort_key(m: dict) -> tuple:
+        return (-m["match_score"], m["id"])
+
+    exact_matches.sort(key=_sort_key)
+    fuzzy_matches.sort(key=_sort_key)
+
+    # Combine: exact matches first, then fuzzy
+    all_matches = exact_matches + fuzzy_matches
+    total = len(all_matches)
+    all_matches = all_matches[:req.limit]
+
+    # R7-N3: Log warning if we truncated results (for debugging / auditing)
+    if total > req.limit:
+        logging.warning(
+            "Search for '%s' returned %d results, truncated to %d by limit",
+            req.query, total, req.limit,
+        )
+
+    return _serialize({
+        "results": all_matches,
+        "count": len(all_matches),
+        "total": total,
+        "query": req.query,
+        "limit": req.limit,
+    })
+
+
+def _extract_snippet(body: str, query: str) -> str:
+    """Extract a snippet from body text around the first query match."""
+    if not body or not query:
+        return ""
+    q_lower = query.lower()
+    body_lower = body.lower()
+    idx = body_lower.find(q_lower)
+    if idx >= 0:
+        start = max(0, idx - 40)
+        end = min(len(body), idx + len(query) + 60)
+        prefix = "..." if start > 0 else ""
+        suffix = "..." if end < len(body) else ""
+        return prefix + body[start:end].replace("\n", " ") + suffix
+    # For fuzzy matches, try to find a close window
+    best_idx = -1
+    best_ratio = 0.0
+    window_size = len(q_lower) + 2
+    for i in range(0, max(1, len(body_lower) - window_size + 1), max(1, len(q_lower) // 2)):
+        window = body_lower[i:i + window_size]
+        ratio = difflib.SequenceMatcher(None, q_lower, window).ratio()
+        if ratio > best_ratio:
+            best_ratio = ratio
+            best_idx = i
+    if best_idx >= 0 and best_ratio >= _FUZZY_THRESHOLD:
+        start = max(0, best_idx - 30)
+        end = min(len(body), best_idx + window_size + 50)
+        prefix = "..." if start > 0 else ""
+        suffix = "..." if end < len(body) else ""
+        return prefix + body[start:end].replace("\n", " ") + suffix
+    # Fallback: first 120 chars
+    return body[:120].replace("\n", " ") + ("..." if len(body) > 120 else "")
 
 
 # ---------------------------------------------------------------------------
@@ -985,6 +1141,61 @@ def post_reindex():
         return {"status": "ok", "count": len(idx.get("memories", {}))}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ---------------------------------------------------------------------------
+# Export endpoints (R7-export)
+# ---------------------------------------------------------------------------
+
+
+@app.get("/api/export")
+def get_export():
+    """Export all memories as a .zip archive containing all .md files and index.json."""
+    index = _load_index()
+    memories = index.get("memories", {})
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        # Add index.json
+        ip = _get_index_path()
+        if ip.exists():
+            zf.write(ip, "index.json")
+        # Add all .md memory files
+        for mem_id, entry in memories.items():
+            if hasattr(entry, "path"):
+                rel_path = entry.path
+            elif isinstance(entry, dict):
+                rel_path = entry.get("path", "")
+            else:
+                continue
+            if not rel_path:
+                continue
+            filepath = MEMORY_ROOT / rel_path
+            if filepath.exists():
+                # Use the relative path inside the zip so directory structure is preserved
+                zf.write(filepath, rel_path)
+            else:
+                logging.warning("Export: memory '%s' file not found at %s", mem_id, filepath)
+        # Add a README.txt explaining the export
+        readme = (
+            f"CodeMemory Export\n"
+            f"==================\n"
+            f"Dataset: {MEMORY_ROOT.name}\n"
+            f"Memories: {len(memories)}\n"
+            f"\n"
+            f"This archive contains all memory .md files and the index.json.\n"
+            f"To import into another CodeMemory instance, place these files in a\n"
+            f"directory under examples/ and run:\n"
+            f"\n"
+            f"    codememory reindex --root <directory>\n"
+        )
+        zf.writestr("README.txt", readme)
+    buf.seek(0)
+    filename = f"codememory-{MEMORY_ROOT.name}-export.zip"
+    return StreamingResponse(
+        buf,
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 # ---------------------------------------------------------------------------

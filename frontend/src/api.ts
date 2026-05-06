@@ -138,6 +138,9 @@ export interface SearchResultItem {
   maturity: string
   status: string
   snippet: string
+  match_quality?: 'exact' | 'fuzzy'
+  match_score?: number
+  match_fields?: string[]
 }
 
 export interface SearchResultsResponse {
@@ -154,4 +157,14 @@ export async function fetchSearch(query: string, limit = 20): Promise<SearchResu
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ query, limit }),
   })
+}
+
+/** Trigger a download of the memory .zip export. */
+export function downloadExport(): void {
+  const a = document.createElement('a')
+  a.href = `${BASE}/export`
+  a.download = 'codememory-export.zip'
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
 }

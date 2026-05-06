@@ -385,7 +385,7 @@ export default function MemoryForm({ memoryId, onClose, onChange, onUndoEntry }:
           width: '34vw',
           minWidth: 400,
           maxWidth: 560,
-          backgroundColor: '#FFFBEB',
+          backgroundColor: 'var(--cm-bg-primary)',
           borderLeft: '1px solid #E7E5E4',
           display: 'flex',
           flexDirection: 'column',
@@ -410,7 +410,7 @@ export default function MemoryForm({ memoryId, onClose, onChange, onUndoEntry }:
               fontSize: 22,
               fontFamily: "'Cormorant Garamond', serif",
               fontWeight: 500,
-              color: '#1C1917',
+              color: 'var(--cm-text-primary)',
               margin: 0,
             }}
           >
@@ -423,7 +423,7 @@ export default function MemoryForm({ memoryId, onClose, onChange, onUndoEntry }:
               background: 'none',
               cursor: 'pointer',
               fontSize: 20,
-              color: '#57534E',
+              color: 'var(--cm-text-secondary)',
               padding: '4px 8px',
               borderRadius: 2,
               lineHeight: 1,
@@ -445,7 +445,7 @@ export default function MemoryForm({ memoryId, onClose, onChange, onUndoEntry }:
               borderRadius: 2,
               fontSize: 12,
               fontFamily: 'Raleway, sans-serif',
-              color: '#991B1B',
+              color: 'var(--cm-error)',
             }}
           >
             {error}
@@ -460,7 +460,7 @@ export default function MemoryForm({ memoryId, onClose, onChange, onUndoEntry }:
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              color: '#A8A29E',
+              color: 'var(--cm-text-tertiary)',
               fontFamily: 'Raleway, sans-serif',
               fontSize: 14,
             }}
@@ -504,7 +504,7 @@ export default function MemoryForm({ memoryId, onClose, onChange, onUndoEntry }:
                 style={inputStyle}
               />
               {isEdit && (
-                <div style={{ fontSize: 10, color: '#A8A29E', fontFamily: 'Raleway, sans-serif', marginTop: 2 }}>
+                <div style={{ fontSize: 10, color: 'var(--cm-text-tertiary)', fontFamily: 'Raleway, sans-serif', marginTop: 2 }}>
                   ID cannot be changed after creation
                 </div>
               )}
@@ -573,7 +573,7 @@ export default function MemoryForm({ memoryId, onClose, onChange, onUndoEntry }:
                           gap: 8,
                           fontSize: 12,
                           fontFamily: 'JetBrains Mono, monospace',
-                          color: '#57534E',
+                          color: 'var(--cm-text-secondary)',
                         }}
                       >
                         <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -611,13 +611,13 @@ export default function MemoryForm({ memoryId, onClose, onChange, onUndoEntry }:
                   max={10}
                   value={intensity}
                   onChange={(e) => setIntensity(Number(e.target.value))}
-                  style={{ flex: 1, accentColor: '#B8860B', cursor: 'pointer' }}
+                  style={{ flex: 1, accentColor: 'var(--cm-accent)', cursor: 'pointer' }}
                 />
                 <span
                   style={{
                     fontSize: 14,
                     fontFamily: 'JetBrains Mono, monospace',
-                    color: '#1C1917',
+                    color: 'var(--cm-text-primary)',
                     minWidth: 20,
                     textAlign: 'center',
                   }}
@@ -708,7 +708,7 @@ export default function MemoryForm({ memoryId, onClose, onChange, onUndoEntry }:
                 padding: '10px 20px',
                 border: '1px solid #A8A29E',
                 background: 'transparent',
-                color: '#57534E',
+                color: 'var(--cm-text-secondary)',
                 cursor: 'pointer',
                 fontSize: 12,
                 fontWeight: 600,
@@ -730,7 +730,7 @@ export default function MemoryForm({ memoryId, onClose, onChange, onUndoEntry }:
               padding: '10px 20px',
               border: '1px solid #D4D4D8',
               background: 'transparent',
-              color: '#57534E',
+              color: 'var(--cm-text-secondary)',
               cursor: 'pointer',
               fontSize: 12,
               fontWeight: 600,
@@ -748,8 +748,8 @@ export default function MemoryForm({ memoryId, onClose, onChange, onUndoEntry }:
             disabled={saving || loading}
             style={{
               padding: '10px 24px',
-              backgroundColor: '#1C1917',
-              color: '#FFFBEB',
+              backgroundColor: 'var(--cm-text-primary)',
+              color: 'var(--cm-bg-primary)',
               border: 'none',
               cursor: 'pointer',
               fontSize: 12,
@@ -783,7 +783,7 @@ export default function MemoryForm({ memoryId, onClose, onChange, onUndoEntry }:
               top: '50%',
               left: '50%',
               transform: 'translate(-50%, -50%)',
-              backgroundColor: '#FFFBEB',
+              backgroundColor: 'var(--cm-bg-primary)',
               border: '1px solid #E7E5E4',
               borderRadius: 2,
               padding: 28,
@@ -798,7 +798,7 @@ export default function MemoryForm({ memoryId, onClose, onChange, onUndoEntry }:
                 fontSize: 18,
                 fontFamily: "'Cormorant Garamond', serif",
                 fontWeight: 500,
-                color: '#1C1917',
+                color: 'var(--cm-text-primary)',
                 margin: '0 0 12px 0',
               }}
             >
@@ -808,7 +808,7 @@ export default function MemoryForm({ memoryId, onClose, onChange, onUndoEntry }:
               style={{
                 fontSize: 14,
                 fontFamily: 'Raleway, sans-serif',
-                color: '#57534E',
+                color: 'var(--cm-text-secondary)',
                 lineHeight: 1.6,
                 margin: '0 0 20px 0',
               }}
@@ -822,7 +822,7 @@ export default function MemoryForm({ memoryId, onClose, onChange, onUndoEntry }:
                   padding: '8px 20px',
                   border: '1px solid #D4D4D8',
                   background: 'transparent',
-                  color: '#57534E',
+                  color: 'var(--cm-text-secondary)',
                   cursor: 'pointer',
                   fontSize: 11,
                   fontWeight: 600,
@@ -838,8 +838,8 @@ export default function MemoryForm({ memoryId, onClose, onChange, onUndoEntry }:
                 onClick={confirmDiscard}
                 style={{
                   padding: '8px 20px',
-                  backgroundColor: '#991B1B',
-                  color: '#FFFFFF',
+                  backgroundColor: 'var(--cm-error)',
+                  color: 'var(--cm-bg-surface)',
                   border: 'none',
                   cursor: 'pointer',
                   fontSize: 11,
@@ -875,7 +875,7 @@ export default function MemoryForm({ memoryId, onClose, onChange, onUndoEntry }:
               top: '50%',
               left: '50%',
               transform: 'translate(-50%, -50%)',
-              backgroundColor: '#FFFBEB',
+              backgroundColor: 'var(--cm-bg-primary)',
               border: '1px solid #E7E5E4',
               borderRadius: 2,
               padding: 28,
@@ -890,7 +890,7 @@ export default function MemoryForm({ memoryId, onClose, onChange, onUndoEntry }:
                 fontSize: 18,
                 fontFamily: "'Cormorant Garamond', serif",
                 fontWeight: 500,
-                color: '#1C1917',
+                color: 'var(--cm-text-primary)',
                 margin: '0 0 12px 0',
               }}
             >
@@ -900,7 +900,7 @@ export default function MemoryForm({ memoryId, onClose, onChange, onUndoEntry }:
               style={{
                 fontSize: 14,
                 fontFamily: 'Raleway, sans-serif',
-                color: '#57534E',
+                color: 'var(--cm-text-secondary)',
                 lineHeight: 1.6,
                 margin: '0 0 8px 0',
               }}
@@ -912,7 +912,7 @@ export default function MemoryForm({ memoryId, onClose, onChange, onUndoEntry }:
               style={{
                 fontSize: 12,
                 fontFamily: 'JetBrains Mono, monospace',
-                color: '#A8A29E',
+                color: 'var(--cm-text-tertiary)',
                 margin: '0 0 20px 0',
               }}
             >
@@ -925,7 +925,7 @@ export default function MemoryForm({ memoryId, onClose, onChange, onUndoEntry }:
                   padding: '8px 20px',
                   border: '1px solid #D4D4D8',
                   background: 'transparent',
-                  color: '#57534E',
+                  color: 'var(--cm-text-secondary)',
                   cursor: 'pointer',
                   fontSize: 11,
                   fontWeight: 600,
@@ -942,8 +942,8 @@ export default function MemoryForm({ memoryId, onClose, onChange, onUndoEntry }:
                 disabled={deleting}
                 style={{
                   padding: '8px 20px',
-                  backgroundColor: '#57534E',
-                  color: '#FFFFFF',
+                  backgroundColor: 'var(--cm-text-secondary)',
+                  color: 'var(--cm-bg-surface)',
                   border: 'none',
                   cursor: 'pointer',
                   fontSize: 11,
@@ -985,13 +985,13 @@ function Field({
           fontFamily: 'Raleway, sans-serif',
           textTransform: 'uppercase',
           letterSpacing: '0.08em',
-          color: '#57534E',
+          color: 'var(--cm-text-secondary)',
           marginBottom: 6,
         }}
       >
         {label}
         {required && (
-          <span style={{ color: '#991B1B', marginLeft: 4 }}>*</span>
+          <span style={{ color: 'var(--cm-error)', marginLeft: 4 }}>*</span>
         )}
       </label>
       {children}
@@ -1008,8 +1008,8 @@ const inputStyle: React.CSSProperties = {
   borderRadius: 2,
   fontSize: 13,
   fontFamily: 'Raleway, sans-serif',
-  color: '#1C1917',
-  backgroundColor: '#FFFFFF',
+  color: 'var(--cm-text-primary)',
+  backgroundColor: 'var(--cm-bg-surface)',
   outline: 'none',
   boxSizing: 'border-box',
 }

@@ -78,9 +78,9 @@ export default function SearchBar({ value, onChange, onNavigate }: Props) {
   }
 
   const trimStyle: Record<string, string> = {
-    required: '#1C1917',
-    recommended: '#57534E',
-    related: '#A8A29E',
+    required: 'var(--cm-text-primary)',
+    recommended: 'var(--cm-text-secondary)',
+    related: 'var(--cm-text-tertiary)',
   }
 
   return (
@@ -90,7 +90,7 @@ export default function SearchBar({ value, onChange, onNavigate }: Props) {
           display: 'flex',
           alignItems: 'center',
           gap: 8,
-          backgroundColor: '#FFFFFF',
+          backgroundColor: 'var(--cm-bg-surface)',
           border: showResults ? '1px solid #B8860B' : '1px solid #E7E5E4',
           borderRadius: 2,
           padding: '4px 8px',
@@ -102,7 +102,7 @@ export default function SearchBar({ value, onChange, onNavigate }: Props) {
           height="14"
           viewBox="0 0 16 16"
           fill="none"
-          style={{ color: '#A8A29E', flexShrink: 0 }}
+          style={{ color: 'var(--cm-text-tertiary)', flexShrink: 0 }}
         >
           <circle cx="7" cy="7" r="5" stroke="currentColor" strokeWidth="1.5" />
           <line x1="11" y1="11" x2="14" y2="14" stroke="currentColor" strokeWidth="1.5" />
@@ -124,12 +124,12 @@ export default function SearchBar({ value, onChange, onNavigate }: Props) {
             backgroundColor: 'transparent',
             fontSize: 13,
             fontFamily: 'Raleway, sans-serif',
-            color: '#1C1917',
+            color: 'var(--cm-text-primary)',
           }}
         />
 
         {searching && (
-          <span style={{ fontSize: 10, color: '#A8A29E', fontFamily: 'Raleway, sans-serif' }}>
+          <span style={{ fontSize: 10, color: 'var(--cm-text-tertiary)', fontFamily: 'Raleway, sans-serif' }}>
             ...
           </span>
         )}
@@ -145,7 +145,7 @@ export default function SearchBar({ value, onChange, onNavigate }: Props) {
               border: 'none',
               background: 'none',
               cursor: 'pointer',
-              color: '#A8A29E',
+              color: 'var(--cm-text-tertiary)',
               fontSize: 12,
               padding: '2px 4px',
               borderRadius: 2,
@@ -165,7 +165,7 @@ export default function SearchBar({ value, onChange, onNavigate }: Props) {
             top: '100%',
             left: 0,
             right: 0,
-            backgroundColor: '#FFFFFF',
+            backgroundColor: 'var(--cm-bg-surface)',
             border: '1px solid #E7E5E4',
             borderRadius: 2,
             maxHeight: 320,
@@ -182,12 +182,20 @@ export default function SearchBar({ value, onChange, onNavigate }: Props) {
               fontFamily: 'Raleway, sans-serif',
               textTransform: 'uppercase',
               letterSpacing: '0.08em',
-              color: '#A8A29E',
+              color: 'var(--cm-text-tertiary)',
               padding: '6px 12px',
               borderBottom: '1px solid #F5F5F4',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
             }}
           >
-            {results.length} result{results.length !== 1 ? 's' : ''}
+            <span>{results.length} result{results.length !== 1 ? 's' : ''}</span>
+            {results.some((r) => r.match_quality === 'fuzzy') && (
+              <span style={{ fontWeight: 400, textTransform: 'none', letterSpacing: '0', fontSize: 9 }}>
+                includes fuzzy matches
+              </span>
+            )}
           </div>
           {results.map((item) => (
             <div
@@ -197,30 +205,59 @@ export default function SearchBar({ value, onChange, onNavigate }: Props) {
                 padding: '8px 12px',
                 cursor: 'pointer',
                 borderBottom: '1px solid #F5F5F4',
+                opacity: item.match_quality === 'fuzzy' ? 0.85 : 1,
               }}
               onMouseEnter={(e) => {
-                (e.currentTarget as HTMLDivElement).style.backgroundColor = '#FDF6E8'
+                (e.currentTarget as HTMLDivElement).style.backgroundColor = 'var(--cm-bg-hover)'
               }}
               onMouseLeave={(e) => {
                 (e.currentTarget as HTMLDivElement).style.backgroundColor = 'transparent'
               }}
             >
-              <div
-                style={{
-                  fontSize: 11,
-                  fontFamily: 'JetBrains Mono, monospace',
-                  color: '#1C1917',
-                  marginBottom: 2,
-                }}
-              >
-                {item.id}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
+                <div
+                  style={{
+                    fontSize: 11,
+                    fontFamily: 'JetBrains Mono, monospace',
+                    color: 'var(--cm-text-primary)',
+                  }}
+                >
+                  {item.id}
+                </div>
+                {item.match_quality === 'fuzzy' && (
+                  <span style={{
+                    fontSize: 9,
+                    fontWeight: 600,
+                    fontFamily: 'Raleway, sans-serif',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.04em',
+                    color: 'var(--cm-warning)',
+                    backgroundColor: '#CA8A0415',
+                    padding: '1px 5px',
+                    borderRadius: 2,
+                  }}>
+                    ~{item.match_score ? Math.round(item.match_score * 100) + '%' : 'fuzzy'}
+                  </span>
+                )}
+                {item.match_quality === 'exact' && results.some((r) => r.match_quality === 'fuzzy') && (
+                  <span style={{
+                    fontSize: 9,
+                    fontWeight: 600,
+                    fontFamily: 'Raleway, sans-serif',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.04em',
+                    color: 'var(--cm-success)',
+                  }}>
+                    exact
+                  </span>
+                )}
               </div>
               {item.summary && (
                 <div
                   style={{
                     fontSize: 12,
                     fontFamily: 'Raleway, sans-serif',
-                    color: '#57534E',
+                    color: 'var(--cm-text-secondary)',
                     marginBottom: item.snippet ? 4 : 0,
                     fontWeight: 500,
                   }}
@@ -233,7 +270,7 @@ export default function SearchBar({ value, onChange, onNavigate }: Props) {
                   style={{
                     fontSize: 11,
                     fontFamily: 'Raleway, sans-serif',
-                    color: '#A8A29E',
+                    color: 'var(--cm-text-tertiary)',
                     lineHeight: 1.5,
                     fontStyle: 'italic',
                   }}

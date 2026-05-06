@@ -422,3 +422,61 @@ PYTHONPATH=src python tests/integration_test.py
   - 目标：(a) 在 `font-family` 链中添加系统字体回退（`Georgia, serif` / `system-ui, sans-serif`），防止 Google Fonts CDN 故障导致无字体；(b) 移除 undo toast 中的 "x" 关闭按钮（冗余于 5s 自动消失）；(c) 为 undo toast 添加 200ms fade-in + slide-up 入场动画
   - 验收：CSS 中 `font-family` 声明包含系统字体回退；undo toast 无 "x" 按钮；toast 出现时有可见的入场动画
   - 来源：体验官 Medium #10/#12/#13（polish items bundled into one task）
+
+## 第 7 轮追加任务（基于体验官 + 进化策略师审计 — 2026-05-06）
+
+### 第一梯队（🔴 Critical 修复 — 本轮必须完成）
+
+- [ ] R7-N2: 消除 Pydantic 模型中 `id` 字段名对 Python `id()` 内置的遮蔽
+  - 目标：将 `ResolveRequest` 和 `CreateMemoryRequest` 中的 `id` 字段重命名为 `memory_id`，通过 `Field(alias="id")` 保持 API wire format 不变，消除未来开发者使用 `vars(req)` 或 `hasattr` 时意外获取整数内存地址的风险
+  - 验收：API 请求仍使用 `"id"` 键（curl 命令不变）；代码内部字段为 `memory_id`；`grep "id: str" backend/server.py` 在 Pydantic 模型中不再出现原样未别名化的 `id` 字段；TypeScript 零错误，前端构建通过
+  - 来源：体验官 Critical N2
+
+- [ ] R7-N1: 处理 quant_operators 数据集的 62 条无 imports 记忆
+  - 目标：在数据集切换器中为 quant_operators 添加可见的免责声明说明该数据集为自动生成的 API 文档、不含手动策划的语义依赖；同时通过 `suggest-deps` 批量推断 imports 以恢复部分 DAG 连通性
+  - 验收：切换到 quant_operators 数据集时，UI 显示该数据集为生成文档而非手动策划的说明；至少有部分记忆获得了推断的 imports 依赖（不再全部是单节点 DAG）；切换回其他数据集时声明不残留
+  - 来源：体验官 High N1
+
+### 第二梯队（🟡 竞争性短板 + 一致性 — 本轮尽量完成）
+
+- [ ] R7-export: 添加记忆导出功能
+  - 目标：用户可将全部记忆导出为 .zip 文件（含全部 .md 文件 + index.json）；图视图支持导出为 SVG 和 PNG
+  - 验收：Dashboard 或设置中有 Export 按钮；点击后下载 .zip，解压后包含完整记忆文件与 index.json；图视图有导出 SVG/PNG 按钮，导出图片包含当前可见的图渲染结果（节点、边、Legend）；导出操作有加载状态反馈
+  - 来源：进化策略师 Critical #1
+
+- [ ] R7-dark-mode: 添加深色模式 / 主题支持
+  - 目标：系统感知的亮色/深色主题切换，通过 `data-theme` 属性 + CSS 自定义属性覆盖实现完整的深色配色方案；在头部或设置中提供手动切换开关
+  - 验收：切换后所有视图（Graph/List/Dashboard/Detail/Form/Modal/Onboarding）均有对应的深色配色；`prefers-color-scheme` 媒体查询正常工作；手动切换覆盖系统偏好并持久化；亮色模式视觉效果不退化
+  - 来源：进化策略师 Critical #2
+
+- [ ] R7-settings: 添加设置页面
+  - 目标：提供用户可配置的默认值：默认数据集（启动时自动加载）、默认 resolve budget（slider 初始值）、主题选择（light/dark/system）；通过滑出面板或 gear 图标访问；设置持久化到 localStorage
+  - 验收：用户可设置并持久化默认数据集（下次启动自动加载该数据集）；可设置默认 budget 值（resolve 面板初始值使用该默认而非硬编码值）；主题设置持久化并在启动时恢复；设置面板可通过 Escape 或点击遮罩关闭
+  - 来源：进化策略师 Critical #3
+
+- [ ] R7-semantic-search: 添加模糊文本搜索
+  - 目标：后端搜索支持 trigram 模糊匹配（Python stdlib `difflib`），使搜索 "risk" 能匹配 "risk-tolerance"，搜索含拼写错误的关键词仍能有合理容错；精确匹配结果排在模糊匹配结果之前；前端显示匹配质量指示
+  - 验收：搜索 "risk" 返回 `user/investment/risk-tolerance` 等匹配结果；搜索含拼写错误的关键词仍能有合理容错；精确匹配排在模糊匹配之前；前端结果展示区分精确匹配与模糊匹配（如 match_quality 标识）
+  - 来源：进化策略师 Critical #4
+
+- [ ] R7-N3: 修复搜索增强管道静默丢弃结果
+  - 目标：当搜索结果的主体文件路径无法解析时，记录警告并返回不含 snippet 的结果，而非静默排除该结果
+  - 验收：即使某些结果无 body 文件路径，搜索结果仍包含它们（snippet 字段为空或标注不可用）；后端日志中出现对应 WARNING；搜索结果计数与索引匹配数一致（不静默减少）
+  - 来源：体验官 Medium N3
+
+- [ ] R7-N5: 统一三视图空状态
+  - 目标：Graph/List/Dashboard 三视图在无记忆或无匹配结果时使用一致的 EmptyState 组件，提供情境化的引导文案和操作建议
+  - 验收：Graph 空状态显示引导（如 "No memories yet — Click + New to add your first memory"）及创建按钮；List 过滤后无结果时显示 "No matching memories — try clearing the filter" 及清除过滤的按钮；Dashboard 空状态显示欢迎信息及创建 CTA；三种空状态视觉风格（图标、排版、间距）一致
+  - 来源：体验官 High N5
+
+### 第三梯队（🟢 打磨 — 本轮至少完成一项）
+
+- [ ] R7-prompt-metadata: 为生成的 LLM prompt 添加记忆元数据
+  - 目标：Generate Prompt 输出中包含每条记忆的 maturity、status、tags，使 AI 能够根据记忆可信度（proven > verified > draft）和状态（active > archived）加权使用信息
+  - 验收：生成的 prompt 中每条记忆节点包含 maturity 和 status 标注；指令块说明了如何解释 maturity/status 差异以加权信息；元数据不影响 prompt 的 token 预算计算
+  - 来源：体验官建议（Phase 3 Product Imagination — Resolve-to-Prompt 改进）
+
+- [ ] R7-wander-improve: 改进 Wander 体验
+  - 目标：移除 Cool/Random 模式切换（默认使用 cool 行为——按反向访问次数加权）；添加"为什么是这条记忆？"的说明（显示访问次数、intensity、上次访问时间）；添加 Wander 价值主张的一行说明
+  - 验收：Wander 按钮为单一操作（无模式选择 toggle）；弹窗中显示记忆被选中的原因（访问次数、intensity、上次访问时间）；Wander 界面包含一句话价值说明（如 "Surfaces a memory you haven't revisited recently"）；从 Wander 弹窗仍可点击导航到记忆详情
+  - 来源：进化策略师建议（Wander simplification）
