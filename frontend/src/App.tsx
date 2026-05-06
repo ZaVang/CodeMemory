@@ -215,6 +215,26 @@ export default function App() {
     fetchGraph().then(setGraphData).catch(console.error)
   }, [refreshTrigger])
 
+  // Handle dataset switching (must be defined before R7-settings effects that reference it)
+  const handleSwitchDataset = useCallback(
+    (name: string) => {
+      if (name === currentDataset) return
+      setSwitchingDataset(true)
+      switchDataset(name)
+        .then(() => {
+          setCurrentDataset(name)
+          setRefreshTrigger((prev) => prev + 1)
+          setSelectedNode(null)
+          setResolveData(null)
+          setResolveError(null)
+          setAllNodesFit(false)
+        })
+        .catch(console.error)
+        .finally(() => setSwitchingDataset(false))
+    },
+    [currentDataset],
+  )
+
   // R7-settings: auto-load default dataset on first datasets load
   const defaultDatasetApplied = useRef(false)
   useEffect(() => {
@@ -264,26 +284,6 @@ export default function App() {
       handleSwitchDataset(name)
     }
   }, [currentDataset, handleSwitchDataset])
-
-  // Handle dataset switching
-  const handleSwitchDataset = useCallback(
-    (name: string) => {
-      if (name === currentDataset) return
-      setSwitchingDataset(true)
-      switchDataset(name)
-        .then(() => {
-          setCurrentDataset(name)
-          setRefreshTrigger((prev) => prev + 1)
-          setSelectedNode(null)
-          setResolveData(null)
-          setResolveError(null)
-          setAllNodesFit(false)
-        })
-        .catch(console.error)
-        .finally(() => setSwitchingDataset(false))
-    },
-    [currentDataset],
-  )
 
   const doResolve = useCallback(
     (nodeId: string, budgetValue: number) => {
