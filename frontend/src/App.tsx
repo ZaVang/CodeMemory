@@ -12,7 +12,7 @@ import Onboarding from './components/Onboarding'
 import Settings from './components/Settings'
 import { loadSettings, saveSettings } from './components/Settings'
 import type { UserSettings } from './components/Settings'
-import { fetchResolve, updateMemory, createMemory, fetchGraph, fetchDatasets, switchDataset, fetchMemory, downloadExport } from './api'
+import { fetchResolve, updateMemory, createMemory, fetchGraph, fetchDatasets, switchDataset, fetchMemory, downloadExport, setCurrentDataset as setApiDataset } from './api'
 import type { ResolveResponse, GraphData } from './types'
 import type { DatasetInfo } from './api'
 
@@ -111,6 +111,21 @@ export default function App() {
   const [undoEntry, setUndoEntry] = useState<UndoEntry | null>(null)
   const undoToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
+  // Operation error state (R9-error-feedback) — must be defined BEFORE handleUndo
+  // because handleUndo's catch block references showOperationError.
+  const [operationError, setOperationError] = useState<string | null>(null)
+  const operationErrorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const showOperationError = useCallback((msg: string) => {
+    setOperationError(msg)
+    if (operationErrorTimerRef.current) clearTimeout(operationErrorTimerRef.current)
+    operationErrorTimerRef.current = setTimeout(() => setOperationError(null), 6000)
+  }, [])
+
+  // Network error banner (R6-network-error-feedback)
+  const [networkError, setNetworkError] = useState<string | null>(null)
+  const networkErrorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
   const showUndo = useCallback((entry: UndoEntry) => {
     setUndoEntry(entry)
     if (undoToastTimerRef.current) clearTimeout(undoToastTimerRef.current)
@@ -128,13 +143,11 @@ export default function App() {
 
     try {
       if (entry.type === 'create') {
-        // Undo create: archive the newly created memory
         await updateMemory(entry.memoryId, {
           status: 'archived',
           change_note: 'Undo create',
         })
       } else if (entry.type === 'update' && entry.previousState) {
-        // Undo edit: restore previous state
         const prev = entry.previousState
         await updateMemory(entry.memoryId, {
           body: (prev.body as string) ?? undefined,
@@ -146,7 +159,6 @@ export default function App() {
           change_note: 'Undo edit',
         })
       } else if (entry.type === 'archive') {
-        // Undo archive: restore to active
         await updateMemory(entry.memoryId, {
           status: 'active',
           change_note: 'Undo archive',
@@ -154,13 +166,9 @@ export default function App() {
       }
       setRefreshTrigger((prev) => prev + 1)
     } catch (err) {
-      console.error('Undo failed:', err)
+      showOperationError(err instanceof Error ? err.message : 'Undo failed')
     }
-  }, [undoEntry])
-
-  // Network error banner (R6-network-error-feedback)
-  const [networkError, setNetworkError] = useState<string | null>(null)
-  const networkErrorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  }, [undoEntry, showOperationError])
 
   useEffect(() => {
     const handler = (e: Event) => {
@@ -211,12 +219,20 @@ export default function App() {
         setDatasets(res.datasets)
         setCurrentDataset(res.current_name)
       })
-      .catch(console.error)
+      .catch((err) => showOperationError(err instanceof Error ? err.message : 'Failed to load datasets'))
   }, [])
+
+  // Sync the API layer with the current dataset so all requests carry the
+  // X-Codememory-Dataset header (replaces the old backend global MEMORY_ROOT).
+  useEffect(() => {
+    if (currentDataset) {
+      setApiDataset(currentDataset)
+    }
+  }, [currentDataset])
 
   // Load graph data
   useEffect(() => {
-    fetchGraph().then(setGraphData).catch(console.error)
+    fetchGraph().then(setGraphData).catch((err) => showOperationError(err instanceof Error ? err.message : 'Failed to load graph'))
   }, [refreshTrigger])
 
   // Handle dataset switching (must be defined before R7-settings effects that reference it)
@@ -233,10 +249,10 @@ export default function App() {
           setResolveError(null)
           setAllNodesFit(false)
         })
-        .catch(console.error)
+        .catch((err) => showOperationError(err instanceof Error ? err.message : 'Failed to switch dataset'))
         .finally(() => setSwitchingDataset(false))
     },
-    [currentDataset],
+    [currentDataset, showOperationError],
   )
 
   // R7-settings: auto-load default dataset on first datasets load
@@ -437,7 +453,7 @@ export default function App() {
       showUndo({ type: 'archive', memoryId: archiveConfirmId })
       handleMemoryChange()
     } catch (err) {
-      console.error('Archive failed:', err)
+      showOperationError(err instanceof Error ? err.message : 'Archive failed')
     } finally {
       setArchiving(false)
       setArchiveConfirmId(null)
@@ -950,6 +966,44 @@ export default function App() {
         </div>
       )}
 
+      {/* Operation error banner (R9-error-feedback) */}
+      {operationError && (
+        <div
+          style={{
+            margin: 0,
+            padding: '10px 24px',
+            backgroundColor: 'var(--cm-error)',
+            color: 'var(--cm-bg-surface)',
+            fontSize: 13,
+            fontFamily: 'Raleway, sans-serif',
+            textAlign: 'center',
+            fontWeight: 500,
+            flexShrink: 0,
+            position: 'relative',
+          }}
+        >
+          {operationError}
+          <button
+            onClick={() => { setOperationError(null); if (operationErrorTimerRef.current) clearTimeout(operationErrorTimerRef.current) }}
+            style={{
+              position: 'absolute',
+              right: 16,
+              top: '50%',
+              transform: 'translateY(-50%)',
+              background: 'none',
+              border: 'none',
+              color: 'var(--cm-bg-surface)',
+              cursor: 'pointer',
+              fontSize: 14,
+              padding: '0 4px',
+              opacity: 0.7,
+            }}
+          >
+            x
+          </button>
+        </div>
+      )}
+
       {/* Main content */}
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden', position: 'relative' }}>
         {/* Graph view — always mounted (display toggled) to preserve cytoscape */}
@@ -1050,7 +1104,7 @@ export default function App() {
         {/* Dashboard view — shown when viewMode === 'dashboard' */}
         {viewMode === 'dashboard' && (
           <div style={{ flex: 1, overflow: 'hidden' }}>
-            <Dashboard onSelectMemory={handleDashSelect} onNavigateToFilter={handleNavigateToFilter} refreshTrigger={refreshTrigger} onCreateMemory={handleOpenCreate} />
+            <Dashboard onSelectMemory={handleDashSelect} onNavigateToFilter={handleNavigateToFilter} refreshTrigger={refreshTrigger} onCreateMemory={handleOpenCreate} onError={showOperationError} />
           </div>
         )}
 
