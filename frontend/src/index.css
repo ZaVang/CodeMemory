@@ -28,9 +28,9 @@
   --color-dir-snapshots: #A8A29E;
 
   /* --- Fonts --- */
-  --font-headline: 'Cormorant Garamond', serif;
-  --font-body: Raleway, sans-serif;
-  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+  --font-headline: 'Cormorant Garamond', Georgia, serif;
+  --font-body: Raleway, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'Cascadia Code', 'Fira Code', monospace;
 
   /* --- Spacing scale (base 12px) --- */
   --spacing-unit: 12px;
@@ -83,6 +83,22 @@ h1, h2, h3, h4 {
 
 code, pre {
   font-family: var(--font-mono);
+}
+
+/* Undo toast entrance animation */
+@keyframes undo-toast-enter {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+.undo-toast {
+  animation: undo-toast-enter 200ms ease-out;
 }
 
 /* Prose styling for react-markdown rendered content */

@@ -115,6 +115,24 @@ export default function App() {
     }
   }, [undoEntry])
 
+  // Network error banner (R6-network-error-feedback)
+  const [networkError, setNetworkError] = useState<string | null>(null)
+  const networkErrorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const msg = (e as CustomEvent<string>).detail
+      setNetworkError(msg)
+      if (networkErrorTimerRef.current) clearTimeout(networkErrorTimerRef.current)
+      networkErrorTimerRef.current = setTimeout(() => setNetworkError(null), 6000)
+    }
+    window.addEventListener('codememory:network-error', handler)
+    return () => {
+      window.removeEventListener('codememory:network-error', handler)
+      if (networkErrorTimerRef.current) clearTimeout(networkErrorTimerRef.current)
+    }
+  }, [])
+
   // Clean up undo timer on unmount
   useEffect(() => {
     return () => {
@@ -678,6 +696,44 @@ export default function App() {
         </button>
       </header>
 
+      {/* Network error banner (R6-network-error-feedback) */}
+      {networkError && (
+        <div
+          style={{
+            margin: 0,
+            padding: '10px 24px',
+            backgroundColor: '#991B1B',
+            color: '#FFFFFF',
+            fontSize: 13,
+            fontFamily: 'Raleway, sans-serif',
+            textAlign: 'center',
+            fontWeight: 500,
+            flexShrink: 0,
+            position: 'relative',
+          }}
+        >
+          {networkError}
+          <button
+            onClick={() => { setNetworkError(null); if (networkErrorTimerRef.current) clearTimeout(networkErrorTimerRef.current) }}
+            style={{
+              position: 'absolute',
+              right: 16,
+              top: '50%',
+              transform: 'translateY(-50%)',
+              background: 'none',
+              border: 'none',
+              color: '#FFFFFF',
+              cursor: 'pointer',
+              fontSize: 14,
+              padding: '0 4px',
+              opacity: 0.7,
+            }}
+          >
+            x
+          </button>
+        </div>
+      )}
+
       {/* Main content */}
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden', position: 'relative' }}>
         {/* Graph view — always mounted (display toggled) to preserve cytoscape */}
@@ -793,6 +849,7 @@ export default function App() {
               setAllNodesFit(false)
             }}
             resolveData={resolveData}
+            resolveError={resolveError}
             backlinks={(() => {
               if (!graphData || !selectedNode) return []
               // Compute reverse references: which nodes import selectedNode?
@@ -888,6 +945,7 @@ export default function App() {
       {/* Undo toast */}
       {undoEntry && (
         <div
+          className="undo-toast"
           style={{
             position: 'fixed',
             bottom: 24,
@@ -928,20 +986,6 @@ export default function App() {
             }}
           >
             Undo
-          </button>
-          <button
-            onClick={() => { setUndoEntry(null); if (undoToastTimerRef.current) clearTimeout(undoToastTimerRef.current) }}
-            style={{
-              background: 'none',
-              border: 'none',
-              cursor: 'pointer',
-              color: '#A8A29E',
-              fontSize: 16,
-              padding: '0 4px',
-              lineHeight: 1,
-            }}
-          >
-            x
           </button>
         </div>
       )}

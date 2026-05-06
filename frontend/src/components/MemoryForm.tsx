@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { fetchMemory, createMemory, updateMemory, fetchAllMemories } from '../api'
 import type { MemoryDetail, MemorySummary } from '../types'
 
@@ -8,13 +8,11 @@ interface Props {
   onClose: () => void
   /** Called after successful create/edit/delete to refresh the graph */
   onChange: () => void
-  /** Called when user clicks "View in Graph" after editing */
-  onSelectMemory?: (id: string) => void
   /** Called with undo entry after a successful operation */
   onUndoEntry?: (entry: { type: 'create' | 'update' | 'archive'; memoryId: string; previousState?: Record<string, unknown> }) => void
 }
 
-export default function MemoryForm({ memoryId, onClose, onChange, onSelectMemory, onUndoEntry }: Props) {
+export default function MemoryForm({ memoryId, onClose, onChange, onUndoEntry }: Props) {
   const isEdit = memoryId !== null
 
   // Form fields

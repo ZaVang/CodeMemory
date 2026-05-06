@@ -314,7 +314,7 @@ export default function Dashboard({ onSelectMemory, onNavigateToFilter, refreshT
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {maturityOrder.map((key) => {
                   const count = stats.maturity?.[key] ?? 0
-                  if (count === 0 && key !== 'draft') return null
+                  if (count === 0) return null
                   const maxVal = Math.max(...Object.values(stats.maturity ?? {}), 1)
                   const pct = Math.round((count / maxVal) * 100)
                   return (

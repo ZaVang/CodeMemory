@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
-import { fetchMemories, fetchAllMemories } from '../api'
-import type { MemorySummary, PaginatedMemoriesResponse } from '../types'
+import { fetchAllMemories } from '../api'
+import type { MemorySummary } from '../types'
+import { StatusBadge, MaturityBadge } from './Badges'
 
 interface Props {
   onSelectMemory: (id: string) => void
@@ -12,57 +13,6 @@ type SortField = 'id' | 'summary' | 'type' | 'maturity' | 'status'
 type SortDir = 'asc' | 'desc'
 
 const PAGE_SIZE = 20
-
-function MaturityBadge({ maturity }: { maturity: string }) {
-  const styles: Record<string, { bg: string; color: string }> = {
-    draft: { bg: '#F5F5F4', color: '#57534E' },
-    verified: { bg: '#1E40AF15', color: '#1E40AF' },
-    proven: { bg: '#16653415', color: '#166534' },
-    superseded: { bg: '#F5F5F4', color: '#A8A29E' },
-  }
-  const s = styles[maturity] || styles.draft
-  return (
-    <span style={{
-      display: 'inline-block',
-      padding: '1px 8px',
-      borderRadius: 2,
-      fontSize: 10,
-      fontWeight: 600,
-      fontFamily: 'Raleway, sans-serif',
-      textTransform: 'uppercase',
-      letterSpacing: '0.06em',
-      backgroundColor: s.bg,
-      color: s.color,
-    }}>
-      {maturity}
-    </span>
-  )
-}
-
-function StatusBadge({ status }: { status: string }) {
-  const styles: Record<string, { bg: string; color: string; label: string }> = {
-    active: { bg: '#16653420', color: '#166534', label: 'active' },
-    draft: { bg: '#F5F5F4', color: '#57534E', label: 'draft' },
-    archived: { bg: '#F5F5F4', color: '#A8A29E', label: 'archived' },
-  }
-  const s = styles[status] || styles.draft
-  return (
-    <span style={{
-      display: 'inline-block',
-      padding: '1px 8px',
-      borderRadius: 2,
-      fontSize: 10,
-      fontWeight: 600,
-      fontFamily: 'Raleway, sans-serif',
-      textTransform: 'uppercase',
-      letterSpacing: '0.06em',
-      backgroundColor: s.bg,
-      color: s.color,
-    }}>
-      {s.label}
-    </span>
-  )
-}
 
 export default function MemoryList({ onSelectMemory, refreshTrigger, initialFilter }: Props) {
   const [allMemories, setAllMemories] = useState<MemorySummary[]>([])
@@ -275,8 +225,8 @@ export default function MemoryList({ onSelectMemory, refreshTrigger, initialFilt
                     {mem.type}
                   </span>
                 </td>
-                <td style={tdStyle}><MaturityBadge maturity={mem.maturity} /></td>
-                <td style={tdStyle}><StatusBadge status={mem.status} /></td>
+                <td style={tdStyle}><MaturityBadge maturity={mem.maturity} opts={{ padding: '1px 8px', fontSize: 10 }} /></td>
+                <td style={tdStyle}><StatusBadge status={mem.status} opts={{ padding: '1px 8px', fontSize: 10 }} /></td>
                 <td style={tdStyle}>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
                     {mem.tags.slice(0, 4).map((t) => (

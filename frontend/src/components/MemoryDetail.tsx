@@ -1,8 +1,49 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { fetchMemory } from '../api'
 import type { MemoryDetail as MemoryDetailType, ResolveResponse } from '../types'
+import { StatusBadge, MaturityBadge } from './Badges'
+
+/** Build an LLM system prompt from resolved nodes and copy to clipboard. */
+function buildPromptContent(resolveData: ResolveResponse): string {
+  const lines: string[] = []
+  const nodes = [...resolveData.nodes].sort((a, b) => a.index - b.index)
+  const fullNodes = nodes.filter((n) => n.trim === 'full')
+  const summaryNodes = nodes.filter((n) => n.trim === 'summary')
+  const skippedNodes = nodes.filter((n) => n.trim === 'skipped')
+  const totalTokens = nodes.reduce((sum, n) => sum + n.body.length, 0)
+
+  lines.push('You are an assistant with access to a structured memory system.')
+  lines.push('Below is a context assembled from linked memory nodes in topological (dependency) order.\n')
+
+  lines.push(`## Resolved Context — ${resolveData.target}`)
+  lines.push(`Depth: ${resolveData.depth}  |  Budget: ${resolveData.budget}  |  Estimated tokens: ~${totalTokens}`)
+  lines.push(`Nodes: ${fullNodes.length} full-text, ${summaryNodes.length} summary, ${skippedNodes.length} skipped\n`)
+
+  for (const node of nodes) {
+    const trimLabel = node.trim === 'full' ? 'FULL' : node.trim === 'summary' ? 'SUMMARY' : 'SKIPPED'
+    lines.push(`### [${node.index}/${node.total}] ${node.id}  (${node.type}, ${trimLabel})`)
+    if (node.body) {
+      lines.push('')
+      lines.push(node.body)
+      lines.push('')
+    }
+  }
+
+  // Trailing instruction block
+  lines.push('---')
+  lines.push('## Instructions')
+  lines.push('')
+  lines.push('1. Nodes marked FULL contain the complete memory content — prioritise these.')
+  lines.push('2. Nodes marked SUMMARY contain only a summary — treat as background context.')
+  lines.push('3. Nodes marked SKIPPED are listed for awareness but their content is omitted.')
+  lines.push('4. Use the context above to ground your responses. When citing, reference the memory ID.')
+  lines.push('5. If the context is insufficient, state what additional information you need.')
+
+  return lines.join('\n')
+}
+
 
 interface Props {
   memoryId: string | null
@@ -11,75 +52,30 @@ interface Props {
   onClearResolve?: () => void
   onNavigateMemory?: (id: string) => void
   resolveData?: ResolveResponse | null
+  resolveError?: string | null
   backlinks?: { id: string; strength: string }[]
 }
 
-function StatusBadge({ status }: { status: string }) {
-  const styles: Record<string, { bg: string; color: string; label: string }> = {
-    active: { bg: '#16653420', color: '#166534', label: 'active' },
-    draft: { bg: '#F5F5F4', color: '#57534E', label: 'draft' },
-    archived: { bg: '#F5F5F4', color: '#A8A29E', label: 'archived' },
-  }
-
-  const s = styles[status] || styles.draft
-
-  return (
-    <span
-      style={{
-        display: 'inline-block',
-        padding: '2px 10px',
-        borderRadius: 2,
-        fontSize: 11,
-        fontWeight: 600,
-        fontFamily: 'Raleway, sans-serif',
-        textTransform: 'uppercase',
-        letterSpacing: '0.06em',
-        backgroundColor: s.bg,
-        color: s.color,
-      }}
-    >
-      {s.label}
-    </span>
-  )
-}
-
-function MaturityBadge({ maturity }: { maturity: string }) {
-  const styles: Record<string, { bg: string; color: string }> = {
-    draft: { bg: '#F5F5F4', color: '#57534E' },
-    verified: { bg: '#1E40AF15', color: '#1E40AF' },
-    proven: { bg: '#16653415', color: '#166534' },
-    superseded: { bg: '#F5F5F4', color: '#A8A29E' },
-  }
-
-  const s = styles[maturity] || styles.draft
-
-  return (
-    <span
-      style={{
-        display: 'inline-block',
-        padding: '2px 10px',
-        borderRadius: 2,
-        fontSize: 11,
-        fontWeight: 600,
-        fontFamily: 'Raleway, sans-serif',
-        textTransform: 'uppercase',
-        letterSpacing: '0.06em',
-        backgroundColor: s.bg,
-        color: s.color,
-      }}
-    >
-      {maturity}
-    </span>
-  )
-}
-
-export default function MemoryDetail({ memoryId, onClose, onResolve, onClearResolve, onNavigateMemory, resolveData, backlinks }: Props) {
+export default function MemoryDetail({ memoryId, onClose, onResolve, onClearResolve, onNavigateMemory, resolveData, resolveError, backlinks }: Props) {
   const [memory, setMemory] = useState<MemoryDetailType | null>(null)
   const [loading, setLoading] = useState(false)
   const [visible, setVisible] = useState(false)
   // PL3-6: track which strength groups are fully expanded
   const [expandedImports, setExpandedImports] = useState<Record<string, boolean>>({})
+  const [copyLabel, setCopyLabel] = useState('Generate Prompt')
   const IMPORT_PREVIEW_LIMIT = 10
+
+  const handleCopyPrompt = useCallback(() => {
+    if (!resolveData) return
+    const text = buildPromptContent(resolveData)
+    navigator.clipboard.writeText(text).then(
+      () => {
+        setCopyLabel('Copied!')
+        setTimeout(() => setCopyLabel('Generate Prompt'), 2000)
+      },
+      () => setCopyLabel('Copy failed'),
+    )
+  }, [resolveData])
 
   useEffect(() => {
     if (!memoryId) {
@@ -404,6 +400,32 @@ export default function MemoryDetail({ memoryId, onClose, onResolve, onClearReso
             </div>
           </div>
 
+          {/* Resolve error feedback (R6-resolve-error-feedback) */}
+          {resolveError && (
+            <div
+              style={{
+                padding: '14px 24px',
+                borderBottom: '1px solid #E7E5E4',
+                flexShrink: 0,
+              }}
+            >
+              <div
+                style={{
+                  padding: '8px 12px',
+                  backgroundColor: '#991B1B0A',
+                  borderLeft: '3px solid #991B1B',
+                  borderRadius: 2,
+                  fontSize: 12,
+                  fontFamily: 'Raleway, sans-serif',
+                  color: '#991B1B',
+                  lineHeight: 1.5,
+                }}
+              >
+                {resolveError}
+              </div>
+            </div>
+          )}
+
           {/* Resolve results */}
           {resolveData && resolveData.nodes.length > 0 && (
             <div
@@ -464,26 +486,46 @@ export default function MemoryDetail({ memoryId, onClose, onResolve, onClearReso
                     </span>
                   )}
                 </div>
-                {onClearResolve && (
+                <div style={{ display: 'flex', gap: 6 }}>
                   <button
-                    onClick={onClearResolve}
+                    onClick={handleCopyPrompt}
                     style={{
-                      border: '1px solid #D4D4D8',
-                      background: 'transparent',
+                      border: '1px solid #166534',
+                      background: copyLabel === 'Copied!' ? '#16653415' : 'transparent',
                       cursor: 'pointer',
                       fontSize: 10,
                       fontWeight: 600,
                       fontFamily: 'Raleway, sans-serif',
-                      color: '#57534E',
+                      color: copyLabel === 'Copied!' ? '#166534' : '#166534',
                       padding: '2px 8px',
                       borderRadius: 2,
                       textTransform: 'uppercase',
                       letterSpacing: '0.06em',
                     }}
                   >
-                    Clear
+                    {copyLabel}
                   </button>
-                )}
+                  {onClearResolve && (
+                    <button
+                      onClick={onClearResolve}
+                      style={{
+                        border: '1px solid #D4D4D8',
+                        background: 'transparent',
+                        cursor: 'pointer',
+                        fontSize: 10,
+                        fontWeight: 600,
+                        fontFamily: 'Raleway, sans-serif',
+                        color: '#57534E',
+                        padding: '2px 8px',
+                        borderRadius: 2,
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.06em',
+                      }}
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
               </div>
               {[...resolveData.nodes]
                 .sort((a, b) => a.index - b.index)

@@ -359,3 +359,66 @@ PYTHONPATH=src python tests/integration_test.py
   - 目标：鼠标悬浮图节点时显示其 summary，无需点击打开详情面板
   - 验收：悬浮节点 300ms 后出现 tooltip 显示记忆 summary；移开后 tooltip 消失
   - 来源：进化策略师 Important（reduces friction for graph exploration）
+
+## 第 6 轮追加任务（基于体验官 + 进化策略师审计 — 2026-05-06）
+
+### 第一梯队（🔴 Critical Bug 修复 — 本轮必须完成）
+
+- [x] R6-B1: 修复 MemoryForm.tsx 中缺失的 `useRef` import
+  - 目标：编辑记忆时不再因 `ReferenceError: useRef is not defined` 崩溃
+  - 验收：`import { useState, useEffect, useCallback, useRef } from 'react'`；编辑操作正常完成；TypeScript 零错误
+  - 来源：体验官 Critical #1（Runtime Crash — any edit operation throws）
+
+- [x] R6-B3: 使 resolve 端点返回 HTTP 404 而非 200（目标记忆不存在时）
+  - 目标：后端 `/api/resolve` 对不存在的记忆 ID 返回 HTTP 404，与 `GET /api/memories/{id}` 行为一致
+  - 验收：`curl -s -o /dev/null -w "%{http_code}" -X POST .../api/resolve -d '{"id":"nonexistent/id",...}'` 返回 `404`；存在的 ID 仍返回 200
+  - 来源：体验官 Critical #2（Silent failure — error buried in body, frontend shows empty success）
+
+- [x] R6-B5: 空搜索查询在 Backend 入口短路返回
+  - 目标：当 `query` 为空字符串或仅含空白时立即返回空结果，不扫描全部索引
+  - 验收：`curl -X POST .../api/search -d '{"query":""}'` 立即返回 `{"results":[],"count":0,"total":0,...}`；非空查询行为不变
+  - 来源：体验官 Critical #3（Wasted backend computation + semantic inconsistency）
+
+- [x] R6-integration-tests: 修复 5 条失败的集成测试
+  - 目标：`PYTHONPATH=src python tests/integration_test.py` 返回 24/24 passed（当前 5 条因 sandbox fixture 缺失而失败）
+  - 验收：`integration_test.py` 输出 `24/24 passed`；57 条单元测试零退化；修复方案不依赖 harnesslib 环境
+  - 来源：进化策略师 Critical #3（regression risk — no safety net for backend changes）
+
+### 第二梯队（🟡 错误可见性 + 组件卫生 — 本轮尽量完成）
+
+- [x] R6-B2: 移除 MemoryForm 中未使用的 `onSelectMemory` prop
+  - 目标：从 Props 接口和解构中删除声明但从未引用的死 prop
+  - 验收：TypeScript 零错误；MemoryForm 接口中无 `onSelectMemory`
+  - 来源：体验官 High #7（Dead code misleads future readers）
+
+- [x] R6-B4: 修复 0-count "draft" maturity 柱状图始终渲染的问题
+  - 目标：移除 Dashboard.tsx 中对 draft 的特殊豁免（`if (count === 0 && key !== 'draft')`），所有 maturity 在 count 为 0 时均不渲染柱状条
+  - 验收：当 draft 数量为 0 时不显示空 bar；非零时正常显示
+  - 来源：体验官 High #8（Visual confusion — empty bar with 0 count）
+
+- [x] R6-network-error-feedback: 添加用户可见的网络错误反馈
+  - 目标：当 API 不可达时显示 toast 或 banner（而非仅 `console.error`）
+  - 验收：断开后端后刷新页面或操作时出现可见的用户提示；恢复后提示消失或可关闭
+  - 来源：体验官 High #4（Errors swallowed into console — user sees nothing）
+
+- [x] R6-resolve-error-feedback: 在 UI 中展示 Resolve 错误信息
+  - 目标：当 resolve 端点返回 404 或错误文本时，在 Resolve 面板中展示错误（而非静默显示空面板）
+  - 验收：resolve 一条不存在的记忆后，面板中显示错误信息而非空白内容
+  - 来源：体验官 High #5（B3 counterpart — backend fix alone doesn't help the user）
+
+- [x] R6-consolidate-badges: 提取共享的 StatusBadge 和 MaturityBadge 组件
+  - 目标：两个组件从单一共享文件导入，消除 MemoryDetail 和 MemoryList 中的重复定义
+  - 验收：MemoryDetail 和 MemoryList 均从 `components/Badges.tsx`（或等效共享路径）导入；两处样式一致；重复代码已移除
+  - 来源：体验官 High #6（Duplication causes visual drift between views）
+
+### 第三梯队（🟢 战略功能 + 打磨 — 本轮至少完成一项）
+
+- [x] R6-resolve-to-prompt: "Resolve to Prompt"——将解析上下文导出为格式化 LLM 系统提示
+  - 目标：Resolve 面板新增"Generate Prompt"按钮，将已解析的所有节点按拓扑顺序格式化为 LLM 系统提示，含节点 trim level 标注和 token 计数，一键复制到剪贴板
+  - 验收：点击按钮后剪贴板包含结构化 prompt（含 resolved context + token budget + 指令块）；token 计数与 budget slider 一致；存在 resolve 结果的记忆均可操作
+  - 来源：进化策略师 Critical #4（#1 highest-ROI feature — bridges CodeMemory to AI ecosystem）
+
+- [x] R6-ui-polish: CSS 字体回退 + Undo toast 打磨
+  - 目标：(a) 在 `font-family` 链中添加系统字体回退（`Georgia, serif` / `system-ui, sans-serif`），防止 Google Fonts CDN 故障导致无字体；(b) 移除 undo toast 中的 "x" 关闭按钮（冗余于 5s 自动消失）；(c) 为 undo toast 添加 200ms fade-in + slide-up 入场动画
+  - 验收：CSS 中 `font-family` 声明包含系统字体回退；undo toast 无 "x" 按钮；toast 出现时有可见的入场动画
+  - 来源：体验官 Medium #10/#12/#13（polish items bundled into one task）

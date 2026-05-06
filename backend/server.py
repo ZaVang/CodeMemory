@@ -800,6 +800,12 @@ def post_resolve(req: ResolveRequest):
     Delegates to the existing codememory resolve handler — does NOT reimplement
     DAG construction, topological sort, or token trimming logic.
     """
+    # B3: check that the target ID exists in the index before resolving
+    index = _load_index()
+    memories = index.get("memories", {})
+    if req.id not in memories:
+        raise HTTPException(status_code=404, detail=f"Memory '{req.id}' not found in index")
+
     text = handle_resolve(
         root=MEMORY_ROOT,
         memory_id=req.id,
@@ -901,6 +907,10 @@ def post_search(req: SearchRequest):
     """Full-text search across memory body content and metadata.
     Returns ranked results with ID, summary, and matching body snippet.
     """
+    # B5: empty query means "no search performed" — short-circuit immediately
+    if not req.query or not req.query.strip():
+        return _serialize({"results": [], "count": 0, "total": 0, "query": req.query, "limit": req.limit})
+
     from codememory.search import search
 
     results = search(

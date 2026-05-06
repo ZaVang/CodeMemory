@@ -2,8 +2,21 @@ import type { MemorySummary, PaginatedMemoriesResponse, MemoryDetail, GraphData,
 
 const BASE = '/api'
 
+function _emitNetworkError(message: string) {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('codememory:network-error', { detail: message }))
+  }
+}
+
 async function fetcher<T>(url: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(url, init)
+  let res: Response
+  try {
+    res = await fetch(url, init)
+  } catch {
+    // Network failure (server unreachable, DNS, etc.)
+    _emitNetworkError('Cannot reach server. Check your connection and try again.')
+    throw new Error('Cannot reach server')
+  }
   if (!res.ok) {
     // Try to extract FastAPI detail field from the error response body
     let detail = `${res.status} ${res.statusText}`
