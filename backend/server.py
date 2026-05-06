@@ -189,8 +189,8 @@ def root():
 
 
 @app.get("/api/memories")
-def get_memories():
-    """Return summary list of all indexed memories."""
+def get_memories(offset: int = 0, limit: int = 100):
+    """Return summary list of all indexed memories with pagination support."""
     index = _load_index()
     memories = index.get("memories", {})
     result = []
@@ -217,7 +217,68 @@ def get_memories():
             "version": d.get("version", 1),
         })
 
-    return _serialize(result)
+    total = len(result)
+    # Apply pagination
+    paginated = result[offset : offset + limit] if offset >= 0 else result
+
+    return _serialize({
+        "memories": paginated,
+        "total": total,
+        "offset": offset,
+        "limit": limit,
+    })
+
+
+# NOTE: backlinks and any future /api/memories/{id}/<suffix> routes MUST be
+# registered BEFORE the generic GET /api/memories/{memory_id:path} route below.
+# FastAPI matches routes in registration order, and {memory_id:path} greedily
+# captures all path segments including "/backlinks" and similar suffixes.
+
+@app.get("/api/memories/{memory_id:path}/backlinks")
+def get_backlinks(memory_id: str):
+    """Return a list of memories that import (reference) the given memory ID."""
+    index = _load_index()
+    memories = index.get("memories", {})
+
+    backlinks: list[dict[str, str]] = []
+
+    for other_id, entry in memories.items():
+        if other_id == memory_id:
+            continue
+
+        # Extract imports from entry
+        if hasattr(entry, "model_dump"):
+            d = entry.model_dump(mode="json")
+        elif isinstance(entry, dict):
+            d = entry
+        else:
+            continue
+
+        imports = d.get("imports", {})
+        if not imports:
+            continue
+
+        # Check each strength level
+        for strength in ("required", "recommended", "related"):
+            deps = imports.get(strength, [])
+            if not deps:
+                continue
+            dep_ids: list[str] = []
+            for dep in deps:
+                if isinstance(dep, dict):
+                    dep_ids.append(dep.get("id", ""))
+                else:
+                    dep_ids.append(str(dep))
+
+            if memory_id in dep_ids:
+                backlinks.append({
+                    "id": other_id,
+                    "strength": strength,
+                    "summary": d.get("summary", ""),
+                })
+                break  # only add once per memory
+
+    return _serialize(backlinks)
 
 
 @app.get("/api/memories/{memory_id:path}")
@@ -832,6 +893,7 @@ class SearchRequest(BaseModel):
     type_: str | None = Field(default=None, alias="type")
     status: str | None = None
     maturity: str | None = None
+    limit: int = Field(default=50, description="Maximum number of results to return", ge=1, le=500)
 
 
 @app.post("/api/search")
@@ -849,6 +911,9 @@ def post_search(req: SearchRequest):
         status=req.status,
         maturity=req.maturity,
     )
+
+    # Apply limit before enrichment (snippet extraction is expensive)
+    results = results[:req.limit]
 
     # Enrich results with a body snippet showing the match context
     enriched = []
@@ -894,7 +959,7 @@ def post_search(req: SearchRequest):
             "snippet": snippet,
         })
 
-    return _serialize({"results": enriched, "count": len(enriched), "query": req.query})
+    return _serialize({"results": enriched, "count": len(enriched), "total": len(enriched), "query": req.query, "limit": req.limit})
 
 
 # ---------------------------------------------------------------------------
@@ -951,57 +1016,6 @@ def post_switch_dataset(req: SwitchDatasetRequest):
 
     # Return stats for the new dataset
     return get_stats()
-
-
-# ---------------------------------------------------------------------------
-# Backlinks endpoint — show which memories reference a given memory
-# ---------------------------------------------------------------------------
-
-@app.get("/api/memories/{memory_id:path}/backlinks")
-def get_backlinks(memory_id: str):
-    """Return a list of memories that import (reference) the given memory ID."""
-    index = _load_index()
-    memories = index.get("memories", {})
-
-    backlinks: list[dict[str, str]] = []
-
-    for other_id, entry in memories.items():
-        if other_id == memory_id:
-            continue
-
-        # Extract imports from entry
-        if hasattr(entry, "model_dump"):
-            d = entry.model_dump(mode="json")
-        elif isinstance(entry, dict):
-            d = entry
-        else:
-            continue
-
-        imports = d.get("imports", {})
-        if not imports:
-            continue
-
-        # Check each strength level
-        for strength in ("required", "recommended", "related"):
-            deps = imports.get(strength, [])
-            if not deps:
-                continue
-            dep_ids: list[str] = []
-            for dep in deps:
-                if isinstance(dep, dict):
-                    dep_ids.append(dep.get("id", ""))
-                else:
-                    dep_ids.append(str(dep))
-
-            if memory_id in dep_ids:
-                backlinks.append({
-                    "id": other_id,
-                    "strength": strength,
-                    "summary": d.get("summary", ""),
-                })
-                break  # only add once per memory
-
-    return _serialize(backlinks)
 
 
 # ---------------------------------------------------------------------------

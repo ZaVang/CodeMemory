@@ -1,4 +1,4 @@
-import type { MemorySummary, MemoryDetail, GraphData, ResolveRequest, ResolveResponse, StatsResponse, WanderResponse, ValidateResponse, CreateMemoryRequest, UpdateMemoryRequest } from './types'
+import type { MemorySummary, PaginatedMemoriesResponse, MemoryDetail, GraphData, ResolveRequest, ResolveResponse, StatsResponse, WanderResponse, ValidateResponse, CreateMemoryRequest, UpdateMemoryRequest } from './types'
 
 const BASE = '/api'
 
@@ -26,8 +26,14 @@ async function fetcher<T>(url: string, init?: RequestInit): Promise<T> {
   return res.json() as Promise<T>
 }
 
-export async function fetchMemories(): Promise<MemorySummary[]> {
-  return fetcher<MemorySummary[]>(`${BASE}/memories`)
+export async function fetchMemories(offset = 0, limit = 100): Promise<PaginatedMemoriesResponse> {
+  return fetcher<PaginatedMemoriesResponse>(`${BASE}/memories?offset=${offset}&limit=${limit}`)
+}
+
+export async function fetchAllMemories(): Promise<MemorySummary[]> {
+  // Fetch all memories for components that need the full list
+  const res = await fetchMemories(0, 10000)
+  return res.memories
 }
 
 export async function fetchMemory(id: string): Promise<MemoryDetail> {
@@ -124,13 +130,15 @@ export interface SearchResultItem {
 export interface SearchResultsResponse {
   results: SearchResultItem[]
   count: number
+  total: number
   query: string
+  limit: number
 }
 
-export async function fetchSearch(query: string): Promise<SearchResultsResponse> {
+export async function fetchSearch(query: string, limit = 20): Promise<SearchResultsResponse> {
   return fetcher<SearchResultsResponse>(`${BASE}/search`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ query }),
+    body: JSON.stringify({ query, limit }),
   })
 }

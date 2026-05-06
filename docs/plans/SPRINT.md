@@ -296,3 +296,66 @@ PYTHONPATH=src python tests/integration_test.py
 - [x] R4-search-ui: 在 UI 中暴露全文搜索能力
   - 目标：搜索栏支持跨记忆正文内容的搜索，并展示排名搜索结果列表（当前搜索仅做标签/ID/目录的子串匹配并高亮节点——CLI 的 `codememory search --query` 能力未在 UI 中暴露）
   - 验收：搜索时返回包含正文匹配的排名结果列表；结果展示记忆 ID、summary 及匹配片段预览；点击结果导航到对应记忆详情
+
+## 第 5 轮追加任务（基于体验官 + 进化策略师审计 — 2026-05-06）
+
+### 第一梯队（🔴 关键缺陷修复 — 本轮必须完成）
+
+- [x] R5-backlinks-fix: 修复 backlinks 后端端点路由顺序
+  - 目标：GET /api/memories/{id}/backlinks 端点可被正常访问，不再被通配路由拦截返回 404
+  - 验收：curl 请求任意记忆的 backlinks 端点返回反向引用列表（或空列表），而非 "Memory '.../backlinks' not found in index" 错误
+  - 来源：上轮遗留缺陷（R4 Eval + Round 5 体验官均报告 FAIL）+ 进化策略师 Critical
+
+- [x] R5-helppanel-update: 更新 HelpPanel 文档以反映当前 UI 状态
+  - 目标：HelpPanel 中不再包含已移除功能（Force 布局）的描述，Legend 颜色说明反映动态派生机制
+  - 验收：HelpPanel 全文无 "Force" 布局相关内容；Legend 说明不出现硬编码的投资目录颜色；若 UI 指南部分无法维护则考虑替换为动态方案或链接到 Onboarding
+  - 来源：体验官 Critical #2（stale documentation erodes trust）
+
+### 第二梯队（🟡 高价值改进 — 本轮尽量完成）
+
+- [x] R5-backend-pagination: 为 API 端点添加分页支持
+  - 目标：/api/memories 和 /api/search 支持 offset/limit 参数，防止大数据集下性能退化
+  - 验收：/api/memories?offset=0&limit=5 返回不超过 5 条结果并包含 total 计数；/api/search 支持 limit 参数；默认 limit 值合理
+  - 来源：进化策略师 Critical #3（无分页将在 200+ 记忆时触发性能问题）
+
+- [x] R5-memory-list-view: 添加记忆列表/表格浏览视图
+  - 目标：用户可通过表格形式浏览、排序、过滤全部记忆，补充纯图视图的不足
+  - 验收：导航栏新增 "List" 视图选项（Graph / List / Dashboard 三视图）；列表展示 ID、Summary、Type、Maturity、Tags、Status 列；支持按列排序和基本过滤
+  - 来源：进化策略师 Critical #2（#1 竞争性缺失——所有主要竞品均具备）+ 体验官认可
+
+- [x] R5-keyboard-shortcuts: 添加最小键盘快捷键集
+  - 目标：常用操作可通过键盘完成，降低鼠标依赖
+  - 验收：Ctrl+K 聚焦搜索栏；Ctrl+N 打开创建表单；Ctrl+Z 触发撤销；Escape 关闭面板/菜单（已有，确认不退化）；若存在快捷键覆盖层（? 键）则列出所有快捷键
+  - 来源：进化策略师 Critical #6（power users will not adopt without these）+ 体验官 Nice-to-have #5
+
+- [x] R5-unsaved-changes-warning: 添加未保存更改警告
+  - 目标：关闭含未保存内容的编辑表单时弹出确认提示，防止数据丢失
+  - 验收：在编辑表单中修改内容后点击遮罩/按 Escape/点 X 关闭时，弹出 "You have unsaved changes. Discard?" 确认对话框；未修改内容时正常关闭无提示
+  - 来源：进化策略师 Critical #5（basic UX expectation that prevents data loss）
+
+- [x] R5-template-create: 添加"从模板创建"功能
+  - 目标：创建记忆时可选从已有 schema 生成预填模板（如 architectural-decision），降低结构化记忆的创建门槛
+  - 验收：创建表单中提供模板选择器（列出所有 type=schema 的记忆）；选择模板后表单预填 schema 定义的结构化字段；仍可手动覆盖任何预填值
+  - 来源：进化策略师 Critical #4（schema system exists but invisible in UI）
+
+### 第三梯队（🟢 锦上添花 — 本轮至少完成一项）
+
+- [x] R5-resolve-clear-animation: 添加 Clear Resolve 过渡动画
+  - 目标：清除 Resolve 状态时节点从 trim 样式平滑过渡回正常样式，而非瞬间跳变
+  - 验收：点击 Clear Resolve 后节点在约 300ms 内从 dimmed/shrunk/dashed 渐变回正常透明度/大小/边框
+  - 来源：体验官 Important #3（polish，与拓扑动画的 300ms/step 风格一致）
+
+- [x] R5-deduplicate-colors: 消除 DIRECTORY_COLORS 跨组件重复定义
+  - 目标：目录颜色映射在一处集中定义，GraphCanvas 和 Legend 从同一来源引用
+  - 验收：两个组件不再各自维护一份颜色映射副本；修改颜色定义只需改一处
+  - 来源：进化策略师 Important（duplication causes visual drift）+ Planner 自主判断
+
+- [x] R5-clickable-dashboard: 使 Dashboard 元素可交互导航
+  - 目标：Dashboard 中的 tag 标签、maturity 柱状图、stale 记忆列表项可点击，导航到对应过滤视图
+  - 验收：点击 Dashboard 中的 tag 后导航到过滤了该 tag 的列表或图视图；点击 stale 列表项导航到该记忆详情
+  - 来源：进化策略师 Important（Dashboard should be a launchpad, not just a report）
+
+- [x] R5-graph-node-tooltips: 添加图节点悬浮提示
+  - 目标：鼠标悬浮图节点时显示其 summary，无需点击打开详情面板
+  - 验收：悬浮节点 300ms 后出现 tooltip 显示记忆 summary；移开后 tooltip 消失
+  - 来源：进化策略师 Important（reduces friction for graph exploration）

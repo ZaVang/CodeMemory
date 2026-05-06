@@ -3,6 +3,7 @@ import GraphCanvas from './components/GraphCanvas'
 import MemoryDetail from './components/MemoryDetail'
 import MemoryForm from './components/MemoryForm'
 import Dashboard from './components/Dashboard'
+import MemoryList from './components/MemoryList'
 import HelpPanel from './components/HelpPanel'
 import SearchBar from './components/SearchBar'
 import Legend from './components/Legend'
@@ -13,7 +14,7 @@ import type { DatasetInfo } from './api'
 
 const ONBOARDING_KEY = 'codememory-onboarded'
 
-type ViewMode = 'graph' | 'dashboard'
+type ViewMode = 'graph' | 'list' | 'dashboard'
 
 const BUDGET_MIN = 200
 const BUDGET_MAX = 5000
@@ -29,6 +30,9 @@ export default function App() {
   const [viewMode, setViewMode] = useState<ViewMode>('graph')
   const [selectedNode, setSelectedNode] = useState<string | null>(null)
   const [searchText, setSearchText] = useState('')
+
+  // List view filter state (R5-clickable-dashboard)
+  const [listFilter, setListFilter] = useState('')
 
   // Zoom level for the graph view
   const [zoomLevel, setZoomLevel] = useState(0.5)
@@ -250,6 +254,12 @@ export default function App() {
     setSelectedNode(id)
   }, [])
 
+  // Navigate from Dashboard clickable elements to filtered list view
+  const handleNavigateToFilter = useCallback((filter: string, type: 'tag' | 'maturity') => {
+    setViewMode('list')
+    setListFilter(filter)
+  }, [])
+
   // Context menu from right-click on graph node
   const handleContextMenu = useCallback((nodeId: string, position: { x: number; y: number }) => {
     setContextMenu({ nodeId, x: position.x, y: position.y })
@@ -334,6 +344,56 @@ export default function App() {
       window.removeEventListener('keydown', keyHandler)
     }
   }, [contextMenu, closeContextMenu])
+
+  // Keyboard shortcuts overlay
+  const [showShortcuts, setShowShortcuts] = useState(false)
+
+  // Global keyboard shortcuts (R5-keyboard-shortcuts)
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      // Don't capture when typing in an input/textarea/select (except for Escape)
+      const tag = (e.target as HTMLElement)?.tagName
+      const isInput = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT'
+
+      // Escape — close any open panel (only when not in input)
+      if (e.key === 'Escape') {
+        if (showShortcuts) { setShowShortcuts(false); return }
+        if (showHelp) { setShowHelp(false); return }
+        if (archiveConfirmId) { setArchiveConfirmId(null); return }
+        return
+      }
+
+      // Ctrl+K — focus search bar
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault()
+        document.getElementById('global-search-input')?.focus()
+        return
+      }
+
+      // Ctrl+N — open create form
+      if ((e.ctrlKey || e.metaKey) && e.key === 'n') {
+        e.preventDefault()
+        handleOpenCreate()
+        return
+      }
+
+      // Ctrl+Z — trigger undo
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
+        e.preventDefault()
+        if (undoEntry) handleUndo()
+        return
+      }
+
+      // ? — show keyboard shortcuts overlay (only when not in input)
+      if (e.key === '?' && !isInput) {
+        e.preventDefault()
+        setShowShortcuts(true)
+        return
+      }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [showShortcuts, showHelp, archiveConfirmId, undoEntry, handleUndo, handleOpenCreate])
 
   return (
     <div
@@ -423,6 +483,23 @@ export default function App() {
             Graph
           </button>
           <button
+            onClick={() => setViewMode('list')}
+            style={{
+              padding: '6px 20px',
+              border: 'none',
+              cursor: 'pointer',
+              fontSize: 11,
+              fontFamily: 'Raleway, sans-serif',
+              fontWeight: 600,
+              textTransform: 'uppercase',
+              letterSpacing: '0.08em',
+              backgroundColor: viewMode === 'list' ? '#1C1917' : 'transparent',
+              color: viewMode === 'list' ? '#FFFBEB' : '#57534E',
+            }}
+          >
+            List
+          </button>
+          <button
             onClick={() => setViewMode('dashboard')}
             style={{
               padding: '6px 20px',
@@ -475,7 +552,7 @@ export default function App() {
         )}
 
         <div style={{ flex: 1 }}>
-          {viewMode === 'graph' && (
+          {(viewMode === 'graph' || viewMode === 'list') && (
             <SearchBar
               value={searchText}
               onChange={setSearchText}
@@ -688,10 +765,17 @@ export default function App() {
           )}
         </div>
 
+        {/* List view — shown when viewMode === 'list' */}
+        {viewMode === 'list' && (
+          <div style={{ flex: 1, overflow: 'hidden' }}>
+            <MemoryList onSelectMemory={handleDashSelect} refreshTrigger={refreshTrigger} initialFilter={listFilter} />
+          </div>
+        )}
+
         {/* Dashboard view — shown when viewMode === 'dashboard' */}
         {viewMode === 'dashboard' && (
           <div style={{ flex: 1, overflow: 'hidden' }}>
-            <Dashboard onSelectMemory={handleDashSelect} refreshTrigger={refreshTrigger} />
+            <Dashboard onSelectMemory={handleDashSelect} onNavigateToFilter={handleNavigateToFilter} refreshTrigger={refreshTrigger} />
           </div>
         )}
 
@@ -962,6 +1046,93 @@ export default function App() {
                 {archiving ? 'Archiving...' : 'Yes, Archive'}
               </button>
             </div>
+          </div>
+        </>
+      )}
+
+      {/* Keyboard shortcuts overlay */}
+      {showShortcuts && (
+        <>
+          <div
+            onClick={() => setShowShortcuts(false)}
+            style={{
+              position: 'fixed',
+              inset: 0,
+              backgroundColor: 'rgba(28,25,23,0.15)',
+              zIndex: 199,
+            }}
+          />
+          <div
+            style={{
+              position: 'fixed',
+              top: '50%',
+              left: '50%',
+              transform: 'translate(-50%, -50%)',
+              backgroundColor: '#FFFBEB',
+              border: '1px solid #E7E5E4',
+              borderRadius: 2,
+              padding: 28,
+              maxWidth: 420,
+              width: '90%',
+              zIndex: 200,
+              boxShadow: '0 4px 24px rgba(28,25,23,0.12)',
+            }}
+          >
+            <h3 style={{
+              fontSize: 18,
+              fontFamily: "'Cormorant Garamond', serif",
+              fontWeight: 500,
+              color: '#1C1917',
+              margin: '0 0 16px 0',
+            }}>
+              Keyboard Shortcuts
+            </h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {[
+                { keys: 'Ctrl + K', desc: 'Focus search bar' },
+                { keys: 'Ctrl + N', desc: 'Open new memory form' },
+                { keys: 'Ctrl + Z', desc: 'Undo last action' },
+                { keys: 'Escape', desc: 'Close open panel / menu' },
+                { keys: '?', desc: 'Show this help overlay' },
+              ].map(({ keys, desc }) => (
+                <div key={keys} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <code style={{
+                    fontFamily: 'JetBrains Mono, monospace',
+                    fontSize: 11,
+                    backgroundColor: '#F5F5F4',
+                    padding: '2px 8px',
+                    borderRadius: 2,
+                    color: '#1C1917',
+                    minWidth: 80,
+                    textAlign: 'center',
+                  }}>
+                    {keys}
+                  </code>
+                  <span style={{ fontSize: 13, fontFamily: 'Raleway, sans-serif', color: '#57534E' }}>
+                    {desc}
+                  </span>
+                </div>
+              ))}
+            </div>
+            <button
+              onClick={() => setShowShortcuts(false)}
+              style={{
+                marginTop: 16,
+                padding: '8px 20px',
+                border: '1px solid #D4D4D8',
+                background: 'transparent',
+                color: '#57534E',
+                cursor: 'pointer',
+                fontSize: 11,
+                fontWeight: 600,
+                fontFamily: 'Raleway, sans-serif',
+                textTransform: 'uppercase',
+                letterSpacing: '0.08em',
+                borderRadius: 2,
+              }}
+            >
+              Close
+            </button>
           </div>
         </>
       )}

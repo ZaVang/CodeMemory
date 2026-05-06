@@ -11,6 +11,14 @@ export interface MemorySummary {
   version: number
 }
 
+/** Paginated response from GET /api/memories */
+export interface PaginatedMemoriesResponse {
+  memories: MemorySummary[]
+  total: number
+  offset: number
+  limit: number
+}
+
 /** Full memory content returned by GET /api/memories/{id} */
 export interface MemoryDetail {
   id: string

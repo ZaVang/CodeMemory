@@ -109,6 +109,7 @@ export default function SearchBar({ value, onChange, onNavigate }: Props) {
         </svg>
 
         <input
+          id="global-search-input"
           type="text"
           value={value}
           onChange={(e) => handleInputChange(e.target.value)}

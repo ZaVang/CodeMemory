@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
-import { fetchMemory, createMemory, updateMemory } from '../api'
-import type { MemoryDetail } from '../types'
+import { fetchMemory, createMemory, updateMemory, fetchAllMemories } from '../api'
+import type { MemoryDetail, MemorySummary } from '../types'
 
 interface Props {
   /** If set, edit mode; otherwise create mode */
@@ -37,7 +37,15 @@ export default function MemoryForm({ memoryId, onClose, onChange, onSelectMemory
   const [error, setError] = useState<string | null>(null)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [visible, setVisible] = useState(false)
+  const [showUnsavedWarning, setShowUnsavedWarning] = useState(false)
   const previousStateRef = useRef<Record<string, unknown> | null>(null)
+  // Track initial values to detect unsaved changes
+  const initialValuesRef = useRef<{ summary: string; tags: string; intensity: number; body: string; status: string; maturity: string; importsText: string } | null>(null)
+  const pendingCloseRef = useRef<(() => void) | null>(null)
+
+  // Template support (R5-template-create)
+  const [templates, setTemplates] = useState<MemorySummary[]>([])
+  const [selectedTemplate, setSelectedTemplate] = useState('')
 
   // Load existing data in edit mode
   useEffect(() => {
@@ -50,7 +58,12 @@ export default function MemoryForm({ memoryId, onClose, onChange, onSelectMemory
       setStatus('active')
       setMaturity('draft')
       setChangeNote('')
+      setImportsText('')
+      setImportStrengths({})
       setVisible(true)
+      initialValuesRef.current = {
+        summary: '', tags: '', intensity: 5, body: '', status: 'active', maturity: 'draft', importsText: '',
+      }
       return
     }
 
@@ -78,9 +91,9 @@ export default function MemoryForm({ memoryId, onClose, onChange, onSelectMemory
         setMaturity(mem.maturity || 'draft')
         setChangeNote('')
         // PL1-9: populate imports from existing memory
+        const allIds: string[] = []
+        const strengths: Record<string, string> = {}
         if (mem.imports) {
-          const allIds: string[] = []
-          const strengths: Record<string, string> = {}
           for (const [strength, deps] of Object.entries(mem.imports)) {
             if (Array.isArray(deps)) {
               for (const dep of deps) {
@@ -98,6 +111,16 @@ export default function MemoryForm({ memoryId, onClose, onChange, onSelectMemory
           setImportsText('')
           setImportStrengths({})
         }
+        // Capture initial values for dirty detection
+        initialValuesRef.current = {
+          summary: mem.summary || '',
+          tags: (mem.tags || []).join(', '),
+          intensity: mem.intensity || 5,
+          body: mem.body || '',
+          status: mem.status || 'active',
+          maturity: mem.maturity || 'draft',
+          importsText: allIds.join(', '),
+        }
       })
       .catch((err) => {
         console.error('Failed to load memory:', err)
@@ -105,6 +128,32 @@ export default function MemoryForm({ memoryId, onClose, onChange, onSelectMemory
       })
       .finally(() => setLoading(false))
   }, [memoryId])
+
+  // Load schemas for template selection (create mode only)
+  useEffect(() => {
+    if (isEdit) return
+    fetchAllMemories()
+      .then((mems) => setTemplates(mems.filter((m) => m.type === 'schema')))
+      .catch(() => setTemplates([]))
+  }, [isEdit])
+
+  // When a template is selected, load its details and prefill form
+  const handleTemplateSelect = useCallback((templateId: string) => {
+    if (!templateId) return
+    setSelectedTemplate(templateId)
+    fetchMemory(templateId)
+      .then((mem) => {
+        // Prefill: use the schema's body/summary as guidance, set schema field
+        setSummary(mem.summary ? `[from ${templateId}] ` : '')
+        setTags((mem.tags || []).join(', '))
+        setMaturity(mem.maturity || 'draft')
+        if (mem.body) {
+          setBody(`<!-- Template from ${templateId} -->\n${mem.body}`)
+        }
+        // Don't override ID or intensity — user controls those
+      })
+      .catch((err) => console.error('Failed to load template:', err))
+  }, [])
 
   // Validation
   const validate = useCallback((): string | null => {
@@ -119,6 +168,48 @@ export default function MemoryForm({ memoryId, onClose, onChange, onSelectMemory
     }
     return null
   }, [id, intensity, isEdit])
+
+  // Dirty state detection (R5-unsaved-changes-warning)
+  const isDirty = useCallback((): boolean => {
+    const init = initialValuesRef.current
+    if (!init) return false
+    return (
+      summary !== init.summary ||
+      tags !== init.tags ||
+      intensity !== init.intensity ||
+      body !== init.body ||
+      (isEdit && status !== init.status) ||
+      maturity !== init.maturity ||
+      importsText !== init.importsText
+    )
+  }, [summary, tags, intensity, body, status, maturity, importsText, isEdit])
+
+  // Safe close with dirty check
+  const requestClose = useCallback((action?: () => void) => {
+    if (isDirty()) {
+      pendingCloseRef.current = action || (() => onClose())
+      setShowUnsavedWarning(true)
+    } else if (action) {
+      action()
+    } else {
+      onClose()
+    }
+  }, [isDirty, onClose])
+
+  const confirmDiscard = useCallback(() => {
+    setShowUnsavedWarning(false)
+    if (pendingCloseRef.current) {
+      pendingCloseRef.current()
+      pendingCloseRef.current = null
+    } else {
+      onClose()
+    }
+  }, [onClose])
+
+  const cancelDiscard = useCallback(() => {
+    setShowUnsavedWarning(false)
+    pendingCloseRef.current = null
+  }, [])
 
   // Handle create
   const handleCreate = useCallback(async () => {
@@ -262,14 +353,14 @@ export default function MemoryForm({ memoryId, onClose, onChange, onSelectMemory
     }
   }, [memoryId, onChange, onClose])
 
-  // Close on Escape
+  // Close on Escape (with dirty check)
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !showDeleteConfirm) onClose()
+      if (e.key === 'Escape' && !showDeleteConfirm && !showUnsavedWarning) requestClose()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [onClose, showDeleteConfirm])
+  }, [requestClose, showDeleteConfirm, showUnsavedWarning])
 
   if (!visible) return null
 
@@ -277,7 +368,7 @@ export default function MemoryForm({ memoryId, onClose, onChange, onSelectMemory
     <>
       {/* Backdrop */}
       <div
-        onClick={onClose}
+        onClick={() => requestClose()}
         style={{
           position: 'fixed',
           inset: 0,
@@ -328,7 +419,7 @@ export default function MemoryForm({ memoryId, onClose, onChange, onSelectMemory
             {isEdit ? 'Edit Memory' : 'New Memory'}
           </h2>
           <button
-            onClick={onClose}
+            onClick={() => requestClose()}
             style={{
               border: 'none',
               background: 'none',
@@ -386,6 +477,24 @@ export default function MemoryForm({ memoryId, onClose, onChange, onSelectMemory
               padding: '24px',
             }}
           >
+            {/* Template selector (create mode only) */}
+            {!isEdit && templates.length > 0 && (
+              <Field label="Template (optional)">
+                <select
+                  value={selectedTemplate}
+                  onChange={(e) => handleTemplateSelect(e.target.value)}
+                  style={inputStyle}
+                >
+                  <option value="">None — start blank</option>
+                  {templates.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.id} — {t.summary}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            )}
+
             {/* ID field */}
             <Field label="ID" required={!isEdit}>
               <input
@@ -618,7 +727,7 @@ export default function MemoryForm({ memoryId, onClose, onChange, onSelectMemory
           <div style={{ flex: 1 }} />
 
           <button
-            onClick={onClose}
+            onClick={() => requestClose()}
             style={{
               padding: '10px 20px',
               border: '1px solid #D4D4D8',
@@ -657,6 +766,98 @@ export default function MemoryForm({ memoryId, onClose, onChange, onSelectMemory
           </button>
         </div>
       </div>
+
+      {/* Unsaved changes warning modal */}
+      {showUnsavedWarning && (
+        <>
+          <div
+            onClick={cancelDiscard}
+            style={{
+              position: 'fixed',
+              inset: 0,
+              backgroundColor: 'rgba(28,25,23,0.2)',
+              zIndex: 60,
+            }}
+          />
+          <div
+            style={{
+              position: 'fixed',
+              top: '50%',
+              left: '50%',
+              transform: 'translate(-50%, -50%)',
+              backgroundColor: '#FFFBEB',
+              border: '1px solid #E7E5E4',
+              borderRadius: 2,
+              padding: 28,
+              maxWidth: 400,
+              width: '90%',
+              zIndex: 61,
+              boxShadow: '0 4px 24px rgba(28,25,23,0.12)',
+            }}
+          >
+            <h3
+              style={{
+                fontSize: 18,
+                fontFamily: "'Cormorant Garamond', serif",
+                fontWeight: 500,
+                color: '#1C1917',
+                margin: '0 0 12px 0',
+              }}
+            >
+              Unsaved Changes
+            </h3>
+            <p
+              style={{
+                fontSize: 14,
+                fontFamily: 'Raleway, sans-serif',
+                color: '#57534E',
+                lineHeight: 1.6,
+                margin: '0 0 20px 0',
+              }}
+            >
+              You have unsaved changes. Discard them?
+            </p>
+            <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
+              <button
+                onClick={cancelDiscard}
+                style={{
+                  padding: '8px 20px',
+                  border: '1px solid #D4D4D8',
+                  background: 'transparent',
+                  color: '#57534E',
+                  cursor: 'pointer',
+                  fontSize: 11,
+                  fontWeight: 600,
+                  fontFamily: 'Raleway, sans-serif',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.08em',
+                  borderRadius: 2,
+                }}
+              >
+                Keep Editing
+              </button>
+              <button
+                onClick={confirmDiscard}
+                style={{
+                  padding: '8px 20px',
+                  backgroundColor: '#991B1B',
+                  color: '#FFFFFF',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontSize: 11,
+                  fontWeight: 600,
+                  fontFamily: 'Raleway, sans-serif',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.08em',
+                  borderRadius: 2,
+                }}
+              >
+                Discard
+              </button>
+            </div>
+          </div>
+        </>
+      )}
 
       {/* Delete confirmation modal */}
       {showDeleteConfirm && (

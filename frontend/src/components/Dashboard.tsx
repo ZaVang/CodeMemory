@@ -4,10 +4,11 @@ import type { StatsResponse, WanderResponse, ValidateResponse } from '../types'
 
 interface Props {
   onSelectMemory: (id: string) => void
+  onNavigateToFilter?: (filter: string, type: 'tag' | 'maturity') => void
   refreshTrigger?: number
 }
 
-export default function Dashboard({ onSelectMemory, refreshTrigger }: Props) {
+export default function Dashboard({ onSelectMemory, onNavigateToFilter, refreshTrigger }: Props) {
   const [stats, setStats] = useState<StatsResponse | null>(null)
   const [wanderResult, setWanderResult] = useState<WanderResponse | null>(null)
   const [validateResult, setValidateResult] = useState<ValidateResponse | null>(null)
@@ -317,7 +318,12 @@ export default function Dashboard({ onSelectMemory, refreshTrigger }: Props) {
                   const maxVal = Math.max(...Object.values(stats.maturity ?? {}), 1)
                   const pct = Math.round((count / maxVal) * 100)
                   return (
-                    <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <div
+                      key={key}
+                      onClick={() => onNavigateToFilter?.(key, 'maturity')}
+                      title={`Filter by maturity: ${key}`}
+                      style={{ display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer', padding: '2px 0' }}
+                    >
                       <span
                         style={{
                           fontSize: 12,
@@ -373,6 +379,8 @@ export default function Dashboard({ onSelectMemory, refreshTrigger }: Props) {
                 {stats.tags.slice(0, 15).map(({ tag, count }) => (
                   <span
                     key={tag}
+                    onClick={() => onNavigateToFilter?.(tag, 'tag')}
+                    title={`Filter by tag: ${tag}`}
                     style={{
                       display: 'inline-flex',
                       alignItems: 'center',
@@ -384,7 +392,11 @@ export default function Dashboard({ onSelectMemory, refreshTrigger }: Props) {
                       fontFamily: 'Raleway, sans-serif',
                       color: '#1C1917',
                       fontWeight: 500,
+                      cursor: 'pointer',
+                      transition: 'background-color 100ms ease',
                     }}
+                    onMouseEnter={(e) => { (e.currentTarget as HTMLSpanElement).style.backgroundColor = '#E7E5E4' }}
+                    onMouseLeave={(e) => { (e.currentTarget as HTMLSpanElement).style.backgroundColor = '#F5F5F4' }}
                   >
                     {tag}
                     <span

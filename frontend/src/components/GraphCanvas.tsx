@@ -3,6 +3,7 @@ import cytoscape, { type Core } from 'cytoscape'
 import dagre from 'dagre'
 import type { GraphData, GraphNode, GraphEdge, ResolveResponse } from '../types'
 import { fetchGraph } from '../api'
+import { DIRECTORY_COLORS, DIRECTORY_TINTS, DEFAULT_COLOR, DEFAULT_TINT } from '../colors'
 
 interface Props {
   searchText: string
@@ -15,36 +16,6 @@ interface Props {
   onGraphDataLoaded?: (data: GraphData) => void
 }
 
-// LuxCart directory colors — border color for nodes
-const DIRECTORY_COLORS: Record<string, string> = {
-  'user/facts': '#1C1917',         // Charcoal — objective facts
-  'user/observations': '#57534E',  // Warm Gray — observations
-  'user/preferences': '#B8860B',   // Gold — personal preferences
-  'user/decisions': '#991B1B',     // Error Red — decisions have consequences
-  'user/feelings': '#CA8A04',      // Warning Amber — emotions are signals
-  'user/people': '#7C3AED',        // Purple — people are special
-  'user/beliefs': '#166534',       // Success Green — deeply held beliefs
-  'user/moments': '#D97757',       // Coral — fleeting moments
-  'user/snapshots': '#A8A29E',     // Light Gray — frozen in time
-  'api': '#1E40AF',                // Info Blue — external knowledge
-  schemas: '#1C1917',
-}
-
-// LuxCart tints — light fill for nodes
-const DIRECTORY_TINTS: Record<string, string> = {
-  'user/facts': '#F5F5F4',
-  'user/observations': '#F5F5F4',
-  'user/preferences': '#FDF6E8',   // warm gold
-  'user/decisions': '#FDF2F2',     // warm red
-  'user/feelings': '#FEF9F0',      // warm amber
-  'user/people': '#F5F0FE',        // light purple
-  'user/beliefs': '#EDF7F0',       // light green
-  'user/moments': '#FDF3EE',       // light coral
-  'user/snapshots': '#F5F5F4',
-  'api': '#EEF2FA',                // cool blue
-  schemas: '#FDFBF5',
-}
-
 function shortId(id: string): string {
   const parts = id.split('/')
   return parts[parts.length - 1]
@@ -55,15 +26,15 @@ function getNodeColor(node: GraphNode): string {
   for (const [key, color] of Object.entries(DIRECTORY_COLORS)) {
     if (dir === key || dir.startsWith(key)) return color
   }
-  return '#57534E'
+  return DEFAULT_COLOR
 }
 
 function getNodeTint(node: GraphNode): string {
   const dir = node.data.directory || node.data.group || ''
-  for (const [key, color] of Object.entries(DIRECTORY_TINTS)) {
-    if (dir === key || dir.startsWith(key)) return color
+  for (const [key, tint] of Object.entries(DIRECTORY_TINTS)) {
+    if (dir === key || dir.startsWith(key)) return tint
   }
-  return '#FDFBF5'
+  return DEFAULT_TINT
 }
 
 function intensityToRadius(intensity: number): number {
@@ -74,6 +45,10 @@ export default function GraphCanvas({ searchText, onNodeClick, onNodeContextMenu
   const containerRef = useRef<HTMLDivElement>(null)
   const cyRef = useRef<Core | null>(null)
   const [graphData, setGraphData] = useState<GraphData | null>(null)
+  // Tooltip state (R5-graph-node-tooltips)
+  const tooltipRef = useRef<HTMLDivElement | null>(null)
+  const tooltipTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [tooltip, setTooltip] = useState<{ text: string; x: number; y: number } | null>(null)
 
   // Load graph data
   useEffect(() => {
@@ -310,6 +285,34 @@ export default function GraphCanvas({ searchText, onNodeClick, onNodeContextMenu
       })
     }
 
+    // R5-graph-node-tooltips: show summary on hover with 300ms delay
+    cy.on('mouseover', 'node', (evt) => {
+      const node = evt.target
+      const id = node.id()
+      // Find the node data from graphData to get full summary
+      const nd = graphData.nodes.find((n) => n.data.id === id)
+      const summary = nd?.data?.summary || ''
+      if (tooltipTimerRef.current) clearTimeout(tooltipTimerRef.current)
+      tooltipTimerRef.current = setTimeout(() => {
+        setTooltip({
+          text: summary || id,
+          x: evt.originalEvent.clientX,
+          y: evt.originalEvent.clientY,
+        })
+      }, 300)
+    })
+
+    cy.on('mouseout', 'node', () => {
+      if (tooltipTimerRef.current) {
+        clearTimeout(tooltipTimerRef.current)
+        tooltipTimerRef.current = null
+      }
+      setTooltip(null)
+    })
+
+    // Clear tooltip on graph pan/zoom
+    cy.on('pan zoom', () => setTooltip(null))
+
     // Apply initial zoom from prop (after layout renders)
     setTimeout(() => {
       cy.zoom(zoomLevel)
@@ -361,6 +364,8 @@ export default function GraphCanvas({ searchText, onNodeClick, onNodeContextMenu
 
   // Animation timer ref (for cleanup)
   const animTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Track previous resolve state for clear animation detection
+  const prevResolveDataRef = useRef<ResolveResponse | null>(null)
 
   // Handle resolve: animate topology then apply trim (PL3-3)
   useEffect(() => {
@@ -371,6 +376,37 @@ export default function GraphCanvas({ searchText, onNodeClick, onNodeContextMenu
     if (animTimerRef.current) {
       clearTimeout(animTimerRef.current)
       animTimerRef.current = null
+    }
+
+    // Detect clear-resolve transition (had data → now null) for smooth animation
+    const isClearing = prevResolveDataRef.current && !resolveData && !isResolving
+    prevResolveDataRef.current = resolveData
+
+    if (isClearing) {
+      // R5-resolve-clear-animation: animate nodes back to normal over ~300ms
+      const trimmedNodes = cy.nodes('.trim-summary, .trim-skipped, .off-path')
+      const trimmedEdges = cy.edges('.off-path')
+
+      trimmedNodes.stop().animate(
+        {
+          style: { opacity: 1 },
+        },
+        {
+          duration: 300,
+          easing: 'ease-out',
+          complete: () => {
+            cy.nodes().removeClass('resolve-highlight trim-summary trim-skipped off-path')
+            cy.edges().removeClass('off-path')
+          },
+        },
+      )
+
+      trimmedEdges.animate(
+        { style: { opacity: 1 } },
+        { duration: 300, easing: 'ease-out' },
+      )
+
+      return
     }
 
     // Clear previous resolve classes
@@ -485,13 +521,38 @@ export default function GraphCanvas({ searchText, onNodeClick, onNodeContextMenu
   }
 
   return (
-    <div
-      ref={containerRef}
-      style={{
-        width: '100%',
-        height: '100%',
-        backgroundColor: '#FFFBEB',
-      }}
-    />
+    <>
+      <div
+        ref={containerRef}
+        style={{
+          width: '100%',
+          height: '100%',
+          backgroundColor: '#FFFBEB',
+        }}
+      />
+      {/* R5-graph-node-tooltips: summary tooltip on hover */}
+      {tooltip && (
+        <div
+          style={{
+            position: 'fixed',
+            left: tooltip.x + 12,
+            top: tooltip.y + 12,
+            backgroundColor: '#1C1917',
+            color: '#FFFBEB',
+            padding: '6px 12px',
+            borderRadius: 2,
+            fontSize: 12,
+            fontFamily: 'Raleway, sans-serif',
+            maxWidth: 300,
+            lineHeight: 1.5,
+            zIndex: 25,
+            pointerEvents: 'none',
+            boxShadow: '0 2px 8px rgba(28,25,23,0.15)',
+          }}
+        >
+          {tooltip.text}
+        </div>
+      )}
+    </>
   )
 }

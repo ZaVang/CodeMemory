@@ -110,7 +110,7 @@ const UI_GUIDE = [
     items: [
       { name: 'Search 搜索', desc: '按 tag、目录、maturity 或关键词过滤。匹配节点金色高亮，非匹配节点淡化。' },
       { name: 'Budget 滑块', desc: 'Token 预算控制器（200–5000）。拖动时实时重新 resolve，被裁剪的节点会变半透明 + 缩小 + 虚线边框。' },
-      { name: 'Dagre / Force', desc: '布局切换。Dagre = 分层布局（自上而下，按依赖方向），Force = 力导向布局（弹簧模拟，自由探索）。' },
+      { name: 'Dagre', desc: '分层布局，自上而下展示依赖关系方向。这是当前唯一的图布局方式。' },
       { name: '+ New', desc: '创建新记忆表单。填写 id、summary、tags、intensity、body 后提交。' },
     ],
   },
@@ -137,7 +137,7 @@ const UI_GUIDE = [
   {
     section: 'Legend 图例',
     items: [
-      { name: '目录颜色', desc: 'facts=炭黑(#1C1917), preferences=金色(#B8860B), observations=暖灰(#57534E), investment=深蓝(#1E40AF), snapshots=浅灰(#A8A29E)。' },
+      { name: '目录颜色', desc: '从实际数据集中动态派生。节点边框颜色反映其所属目录。预定义调色板覆盖常见目录，未知目录自动分配回退颜色（标注 auto）。' },
       { name: '边类型', desc: '实线=required（理解 B 必须先读 A），虚线=recommended（读了更好），点线=related（有关联无依赖）。' },
     ],
   },

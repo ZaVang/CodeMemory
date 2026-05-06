@@ -1,41 +1,8 @@
 import type { GraphData } from '../types'
+import { DIRECTORY_COLORS, DEFAULT_COLOR, getColorForDirectory } from '../colors'
 
 interface Props {
   graphData: GraphData | null
-}
-
-// LuxCart directory color palette — shared with GraphCanvas
-const DIRECTORY_COLORS: Record<string, string> = {
-  'user/facts': '#1C1917',
-  'user/observations': '#57534E',
-  'user/preferences': '#B8860B',
-  'user/decisions': '#991B1B',
-  'user/feelings': '#CA8A04',
-  'user/people': '#7C3AED',
-  'user/beliefs': '#166534',
-  'user/moments': '#D97757',
-  'user/snapshots': '#A8A29E',
-  'api': '#1E40AF',
-  'schemas': '#1C1917',
-}
-
-const DEFAULT_COLOR = '#57534E'
-
-// Fallback colors for directories not in the known palette
-const FALLBACK_COLORS = [
-  '#1E40AF', '#7C3AED', '#166534', '#991B1B', '#CA8A04',
-  '#D97757', '#0F766E', '#BE185D', '#854D0E', '#4F46E5',
-]
-
-function getColorForDirectory(dir: string, extraIndex: number): string {
-  // Check known mappings first
-  if (DIRECTORY_COLORS[dir]) return DIRECTORY_COLORS[dir]
-  // Also check prefix match (e.g. "user/facts" partially matches "user/facts/something")
-  for (const [key, color] of Object.entries(DIRECTORY_COLORS)) {
-    if (dir.startsWith(key + '/') || key.startsWith(dir + '/')) return color
-  }
-  // Fallback: assign from palette based on index
-  return FALLBACK_COLORS[extraIndex % FALLBACK_COLORS.length]
 }
 
 const EDGE_STYLES = [
