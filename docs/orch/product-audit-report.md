@@ -1,506 +1,501 @@
-# CodeMemory Product Audit Report — Round 15 (Playwright, HelpPanel Animation, 11px Final Fix, Adaptive Stability, Long-Term Floor, Domain Defaults, Access Freshness)
+# CodeMemory Product Audit Report — Round 16 (APIRouter Split, Dataset Fix Verification, Graph Regression Fix)
 
 **Reviewer:** Product Experience Reviewer
 **Date:** 2026-05-07
-**Build:** Post-Round 15 (all 7 targeted changes from negotiation verified)
+**Build:** Post-APIRouter split (routers/memories.py, search.py, stats.py), with dataset/graph regression fixes
 **Datasets available:** companion (11), investment (10), software-architecture (11), quant_operators (62)
-**Method:** Live service testing (backend API at localhost:8000 + frontend SPA at localhost:5299/5300), Playwright smoke test execution (5/5 PASS), full-source review of resolve.py, core.py, create.py, server.py, HelpPanel.tsx, MemoryDetail.tsx, GraphCanvas.tsx, Badges.tsx, all frontend font-size references.
+**Method:** Full-service live testing (backend API at localhost:8000 + frontend SPA at localhost:5300), Puppeteer-based page state extraction, view switching, dataset switching, search testing, legend color verification, and full API endpoint verification.
 
 ---
 
-## Executive Summary (8.6 / 10)
+## Executive Summary (7.2 / 10)
 
-Round 15 is a **found-in-translation round**. The three reviewers' most critical findings — adaptive stability decay, long-term knowledge retention, and domain-differentiated defaults — came from the Research Reviewer and have been faithfully translated into code. The Product Experience Reviewer's two remaining critical items (HelpPanel exit animation, 11px stragglers) are both resolved. The Evolution Strategy Reviewer's third-attempt demand (Playwright smoke tests) finally ships.
+This round delivered the APIRouter split (R16-A1) — a significant backend refactor that decomposes server.py's monolithic endpoint list into three domain routers (memories, search, stats). The split is architecturally clean, with server.py reduced to app creation, middleware, and router mounting. However, the refactor surfaced a **self-reinforcing dataset default regression** that causes the frontend to always initialize to the companion dataset instead of the server-configured default (investment). This is a user-facing correctness issue that undermines the dataset switching feature.
 
-What makes this round different from R14: R14 was about delivering what R13 deferred. R15 is about making the decay model *correct* — not just visible and active, but genuinely adaptive, domain-aware, and backed by an empirical memory science finding (Bahrick's permastore). The product doesn't gain a new surface, but it gains a new foundation. The decay numbers the user sees are no longer static approximations; they adapt to actual retrieval history.
+On the positive side: all core API endpoints work correctly, the graph legend dynamically reflects actual directory-color mappings, search returns rich results with R-probability scores, the List and Dashboard views render properly, and dataset switching between datasets updates all views correctly. The onboarding experience is smooth once the blocking regression is bypassed.
 
-**Functionality (8.5/10):** Unchanged from Round 14. No new workflows were added. The access freshness display in MemoryDetail is surface-level — it renders data that was already in the API. The resolution pipeline is slightly slower (adaptive stability does math per-resolution), but the user cannot perceive the difference. Score stays flat.
+**Functionality (6.5/10):** Down from 8.5 in R15. The dataset default regression is a critical path bug — it makes the entire application initialize in the wrong state for all first-time and localStorage-cleared users. Core CRUD, search, resolve, and graph operations work correctly once the dataset issue is sidestepped. The APIRouter split introduced no new endpoint regressions.
 
-**Aesthetic Taste (8.5/10):** +0.5 from Round 14's 8.0. HelpPanel now has exit animation, completing the animation surface (7/7 animated). The 11px-to-12px migration is genuine — zero sub-12px DOM text remains. The product's typography floor is now unequivocally 12px across all interactive text surfaces. The R14-era "borderline" HelpPanel shortcut table is now illegibility-free.
+**Aesthetic Taste (8.0/10):** Down from 8.5 in R15. The visual design remains strong — LuxCart palette, Raleway/Cormorant Garamond typography, directory-color mapping, and edge-strength differentiation are all intact. However, the dataset regression means the initial view always shows companion (11 warm-and-fuzzy personal memories) instead of the application's intended default of investment (a more structured, dependency-rich dataset). This degrades the first-impression narrative arc.
 
-**Product Imagination (8.0/10):** Unchanged from Round 14. The round's deep work (adaptive stability, long-term floor, domain defaults) is infrastructure, not product surface. The MemoryDetail access freshness section is informative but not interactive — it shows R-probability but doesn't let the user act on it. The "review queue" and "per-memory stability UI" remain the open product frontier.
+**Product Imagination (7.0/10):** The APIRouter split is pure infrastructure — it creates no new user-facing capability. The dataset regression fix was reactive, not proactive. The quant_operators dataset (62 auto-generated API docs) is the most visually impressive graph but is hidden behind a broken default. Five feature proposals and one removal candidate are detailed in Phase 3.
 
 ---
 
 ## Phase 1: Functional Experience
 
-### 1.1 Round 15 Feature Verification
+### 1.1 Core Flow: First-Visit Onboarding
 
-#### P1: Playwright Smoke Tests — VERIFIED WORKING (5/5)
+**Status: PARTIALLY WORKING — blocked by dataset regression.**
 
-**Test execution result:** 5 tests, 5 passed, 2.3 minutes.
+The onboarding flow (welcome message with "Your memory is a dependency graph" copy) renders correctly on first visit. The SKIP and NEXT buttons are visible and functional. However, the underlying dataset is wrong — the user sees companion's 11 personal-life memories instead of the server default of investment's 10 financial-decision memories. This means the onboarding's claim ("a personal knowledge graph where every piece of information knows what it depends on") is demonstrated with a dataset that has very few dependencies, undermining the product's core value proposition.
 
-| # | Test | Status | Duration |
-|---|------|--------|----------|
-| 1 | Page loads — title and key elements present | PASS | 31.2s |
-| 2 | View switching — Graph → List → Dashboard | PASS | 40.2s |
-| 3 | Search — typing a query filters results | PASS | 11.3s |
-| 4 | Memory detail — opening and closing the detail panel | PASS | 37.2s |
-| 5 | Dataset switching — switching dataset updates the view | PASS | 14.9s |
+The onboarding is dismissable via localStorage (`codememory-onboarded` key) and stays dismissed on subsequent visits.
 
-The test suite covers the five critical user journeys: initial load, view navigation, search, detail panel interaction, and dataset switching. Each test includes onboarding dismissal logic (the `dismissOnboarding` helper) — the tests work on first-visit and returning-visit scenarios.
+**Verdict: Onboarding UX is polished; the default dataset bug sabotages the narrative.**
 
-**Issue:** The tests cannot run from the project root (`npx playwright test` at the `CodeMemory/` level fails with "test.describe() called in configuration context"). Tests must be run from `frontend/` directory. The `playwright.config.ts` uses relative paths (`testDir: './tests'`) that resolve correctly from `frontend/` but not from the project root. This is a minor ergonomic issue, not a correctness issue.
+### 1.2 Dataset Switching
 
-**Impact:** Three consecutive rounds of deferral (R12, R13, R14) are finally resolved. The product now has a safety net. A 5-test suite will not catch all regressions, but it covers the 80th-percentile user paths — page load, navigation, search, detail, and dataset switching.
+**Status: REGRESSION CONFIRMED — self-reinforcing default override.**
 
-**Verdict: VERIFIED WORKING.** 5/5 pass. The config path issue is a note, not a defect.
+**Root cause (two-part):**
 
----
+1. **Frontend:** `api.ts` line 8 hardcodes `let _currentDataset: string = 'companion'`. The very first API call (`fetchDatasets()`) sends `X-Codememory-Dataset: companion` as a header.
 
-#### I1: HelpPanel Exit Animation — VERIFIED WORKING
-
-**The gap (R14):** HelpPanel was the sole unanimated UI surface. It rendered with hardcoded `panel-slide-enter`, gated on the raw `showHelp` boolean, and unmounted instantly on close.
-
-**The fix (R15, HelpPanel.tsx lines 1, 151, 153-154, 160, 171):**
-
-```typescript
-import { useExitAnimation } from '../useExitAnimation'  // line 1, NEW
-// ...
-const { visible, closing } = useExitAnimation(show)     // line 151, NEW
-if (!visible) return null                                 // line 153, gating on visible
-```
-
-The panel applies `panel-slide-exit` on the panel div and `backdrop-fade-exit` on the backdrop div when `closing` is true. The animation sequence matches all other panels (250ms):
-
-1. User clicks close (X button, backdrop, or Escape)
-2. `show` becomes false → `closing` set to `true`, `visible` remains `true`
-3. `panel-slide-exit` + `backdrop-fade-exit` classes applied
-4. 250ms CSS animation runs
-5. setTimeout fires → `visible = false`, component unmounts
-
-**Animation matrix (post-R15):**
-
-| UI Surface | Enter | Exit | Status |
-|------------|-------|------|--------|
-| MemoryDetail | panel-slide-enter (250ms) | panel-slide-exit (250ms) | VERIFIED |
-| MemoryForm | panel-slide-enter (250ms) | panel-slide-exit (250ms) | VERIFIED |
-| Settings | modal-fade-enter (250ms) | modal-fade-exit (250ms) | VERIFIED |
-| Wander | modal-fade-enter (250ms) | modal-fade-exit (250ms) | VERIFIED |
-| Validate | modal-fade-enter (250ms) | modal-fade-exit (250ms) | VERIFIED |
-| HelpPanel | panel-slide-enter (250ms) | panel-slide-exit (250ms) | **VERIFIED (NEW)** |
-| Search dropdown | dropdownFadeIn (150ms) | N/A (instant) | ACCEPTABLE |
-
-**Verdict: VERIFIED WORKING.** 7/7 animated surfaces complete. The R13/R14 holdout is resolved. Every panel and modal in the product now has both enter and exit animation. This is a first since R12.
-
----
-
-#### I2: 11px-to-12px Font Migration — VERIFIED COMPLETE
-
-**R14 state (4 items at 11px):**
-- HelpPanel keycaps: 11px
-- HelpPanel shortcut descriptions: 11px
-- MemoryDetail empty-state text: 11px
-- View shortcut hints ("1"/"2"/"3"): 11px
-
-**R15 state:** All four are now 12px. The help panel shortcut table — the domain where this mattered most, as users learn product behavior from it — is now fully legible at 12px.
-
-**Complete font audit (all DOM text, post-R15):**
-
-| Minimum Size | Count | Context | Verdict |
-|-------------|-------|---------|---------|
-| 8px | 1 | GraphCanvas trim-skipped node label | Canvas-only, acceptable |
-| 9px | 1 | GraphCanvas trim-summary node label | Canvas-only, acceptable |
-| 11px | 1 | GraphCanvas active node label | Canvas-only, acceptable |
-| 12px | All others | All DOM-rendered text | VERIFIED |
-
-**The GraphCanvas caveat:** Three canvas sizes remain (11px, 9px, 8px). These operate on a zoomable Cytoscape canvas where the user controls magnification. The 8-9px labels on trimmed nodes intentionally communicate "diminished relevance" through size reduction. This domain has different readability requirements than DOM text.
-
-**Verdict: VERIFIED COMPLETE.** The product's DOM text floor is now unambiguously 12px. The R14 "borderline" assessment for HelpPanel keycaps is resolved — they are now 12px, matching the rest of the product. Zero DOM text renders below 12px.
-
-**Minor note:** `Badges.tsx` line 19 contains a stale comment: `/** Override font size. Detail view uses 12px; List view uses 10px. */`. The actual default is 12px, and the List view explicitly passes `fontSize: 12` (MemoryList.tsx line 226). The comment refers to a pre-R14 state and should be updated.
-
----
-
-#### C1: Adaptive Stability Update (on Resolve) — VERIFIED WORKING
-
-**Implementation (resolve.py lines 322-329):**
-
+2. **Backend middleware (server.py lines 51-57):** The `_DatasetContextMiddleware` sets the ContextVar from the header even for exempt paths:
 ```python
-old_days_since = entry.days_since_last_access
-if old_days_since is not None and old_days_since > 0 and entry.stability > 0:
-    R = compute_retrieval_probability(old_days_since, entry.stability)
-    # Simplified SInc — Gaussian peak at R ~ 0.78, range 1.05-1.80
-    s_inc = 1.05 + 0.75 * math.exp(-((R - 0.78) ** 2) / 0.125)
-    # Diminishing returns at high stability
-    diminish = math.sqrt(14.0 / max(entry.stability, 14.0))
-    entry.stability = min(entry.stability * s_inc * diminish, 365.0)
-
-entry.access_count += 1
-entry.last_access = now_iso
+is_exempt = path in ("/", "/api/datasets", "/api/datasets/switch", ...)
+dataset = request.headers.get("X-Codememory-Dataset", "")
+if dataset and dataset.strip():
+    _current_dataset.set(dataset)  # SETS EVEN FOR EXEMPT PATHS
 ```
 
-**How it works:**
-1. On every resolve, compute the retrieval probability R for the target memory
-2. Stability increment SInc follows a Gaussian curve peaking at R ~ 0.78 (the "desirable difficulty" sweet spot): slightly forgotten but still retrievable memory gets the largest stability boost
-3. SInc range: 1.05 (at R=0 or R=1, always at least a tiny boost) to 1.80 (at R=0.78)
-4. Diminishing returns for high-stability memories (sqrt(14.0 / stability))
-5. Stability capped at 365 days (one year — domain defaults handle beyond-year stability)
-
-**Backward compatibility:** All memories start at stability=14.0 (the universal default, overridden by domain defaults for new creates). The adaptive update operates on whatever stability the memory has. The mechanism is purely additive — stability only increases on resolve (never decreases in this implementation — stability decrease on hash-mismatch "stale" detection is deferred to R16 per negotiation).
-
-**Verification:** Resolve `user/investment/context` → its `access_count` increments from the API. The stability field updates on disk (in memory's index.json entry) after a resolve access.
-
-**Verdict: VERIFIED WORKING.** The implementation is faithful to the FSRS/SuperMemo research the Reviewer cited. The Gaussian peak at R=0.78 is the correct "sweet spot" per the spaced repetition literature. The diminishing returns factor prevents absurd stability values from accumulating on frequently-accessed memories. The 365-day cap is sensible.
-
----
-
-#### C2: Long-Term Retention Floor (Hybrid Decay) — VERIFIED WORKING
-
-**Implementation (core.py lines 95-119):**
-
+3. **Backend handler (stats.py line 135):** The `/api/datasets` handler reads from the (now-contaminated) ContextVar:
 ```python
-def compute_retrieval_probability(
-    days_since: int | float,
-    stability: float,
-    min_retention: float = 0.05,
-) -> float:
-    """Hybrid decay formula with a long-term retention floor (R15-C2).
-
-    R_hybrid = max(0.5^(days/stability), min_retention / (1 + days / (10 * stability)))
-
-    Short-term behavior (< 60 days at default stability=14.0) is unchanged.
-    Long-term floor matches Bahrick's "permastore" finding: ~3-6% baseline.
-    """
-    exponential = math.pow(0.5, days_since / stability)
-    floor = min_retention / (1.0 + days_since / (10.0 * stability))
-    return max(exponential, floor)
+current = str(current_dataset.get())  # Returns "companion" instead of "investment"
 ```
 
-**Behavior at key milestones (stability=14.0):**
-
-| Days Since | Exponential | Floor | R_hybrid (max) | Without Floor |
-|------------|-------------|-------|----------------|---------------|
-| 0 | 1.000 | 0.0500 | 1.000 | 1.000 |
-| 14 | 0.500 | 0.0455 | 0.500 (exp wins) | 0.500 |
-| 46 (~3.3 HL) | 0.100 | 0.0376 | 0.100 (exp wins) | 0.100 |
-| 90 | 0.012 | 0.0304 | 0.0304 (floor wins) | 0.012 |
-| 180 | 0.0001 | 0.0219 | 0.0219 (floor wins) | 0.0001 |
-| 365 | ~0 | 0.0139 | 0.0139 (floor wins) | ~0 |
-
-**The critical transition:** At approximately 60 days at default stability (14.0), the exponential crosses below the floor. From that point forward, the floor provides a minimum retrieval probability that asymptotically decays as ~1/days rather than exponentially. This means a memory at 365 days old still has approximately 1.4% retrieval probability under the hybrid formula vs. effectively zero under pure exponential.
-
-**Frontend implementation:** The same hybrid formula is computed client-side in MemoryDetail.tsx (lines 400-402), ensuring the R-probability displayed in the UI matches the backend's calculation.
-
-**Verdict: VERIFIED WORKING.** This is the round's most consequential single change from a product perspective. The pure exponential decay formula — which gave <0.01% retrieval probability at 90 days — silently deleted knowledge. The hybrid formula ensures even year-old reference knowledge retains a minimum discoverable baseline. The implementation is minimal (14 lines of math), correctly matches the Research Reviewer's cite of Bahrick's permastore findings, and is replicated on both backend and frontend.
-
----
-
-#### C3: Domain-Differentiated Default Stability — VERIFIED WORKING
-
-**Implementation (create.py lines 15-54):**
-
-```python
-SEMANTIC_TYPE_STABILITY: dict[str, float] = {
-    "schemas": 365.0,          # Schema definitions are permanent reference
-    "api": 365.0,               # API documentation is permanent reference
-    "architectural-decision": 90.0,  # Architecture decisions have medium lifecycle
-    "decision": 90.0,           # General decisions have medium lifecycle
-    "research": 90.0,           # Research notes have medium lifecycle
-    # ... plus several other semantic types
-}
-
-def _default_stability(tags, schema, root_dir) -> float:
-    """Priority: tags → schema reference → universal default 14.0"""
-    if tags:
-        for tag in tags:
-            if tag in SEMANTIC_TYPE_STABILITY:
-                return SEMANTIC_TYPE_STABILITY[tag]
-    if schema:
-        return 365.0  # schema-backed memories get permanent retention
-    return 14.0
+**Reproduction (verified with curl):**
+```
+No header:            -> "current": "investment"  (correct)
+X-Codememory-Dataset: companion   -> "current": "companion"  (WRONG)
+X-Codememory-Dataset: investment  -> "current": "investment"  (WRONG — should be server default)
+X-Codememory-Dataset: nonexistent -> "current": "nonexistent" (WRONG)
 ```
 
-The lookup table covers the major knowledge types: permanent reference (schemas, API docs at 365d), medium-term decisions (decisions, ADRs, research at 90d), and ephemeral observations (defaults to 14.0d). This eliminates the most common wrong-default scenario the Research Reviewer identified: "API documentation at 46 days to decay."
+**User impact:** Every browser session initializes to companion unless the user has a saved `defaultDataset` in localStorage. The server's `DEFAULT_DATASET` environment variable is completely ignored for browser clients. This means every new user's first experience is with a personal-journal dataset rather than the investment-decision dataset the server is configured to present.
 
-**Verification:** New memories created via `codememory create` with appropriate tags receive the correct stability. The `_default_stability` function returns the lookup value when a tag matches, falls back to schema-based 365d for schema-backed memories, and finally to 14.0 for unclassifiable memories.
+**Dataset switch after initialization:** Once initialized (even to the wrong default), switching to other datasets works correctly. The graph, list, dashboard, search, and legend all update with the new dataset's data. The "Switching..." loading indicator displays correctly during the transition. The quant_operators disclaimer ("Auto-generated API documentation...") appears when switching to that dataset.
 
-**Verdict: VERIFIED WORKING.** The single highest-ROI change per the Research Reviewer's analysis (30 minutes of work, eliminates the single most common wrong-default). The lookup table is appropriately conservative — only schemas and decisions get aggressive retention; everything else defaults to the 14-day behavior that was already shipping.
+**Verdict: CRITICAL BUG.** The server's notion of "current dataset" is corrupted by the very act of the client asking what the current dataset is.
 
----
+### 1.3 Graph View + Node Colors
 
-#### C4: Unified Search Output (Dual-Representation Elimination) — VERIFIED WORKING
+**Status: WORKING — regression fix verified.**
 
-The search endpoint now includes `days_since_last_access` and `stability` in every search result (server.py lines 1200-1201). The `/api/stats` endpoint computes a `decay_risk` array using the hybrid formula, identifying memories with retrieval probability below 0.1.
+The `/api/graph` endpoint returns proper cytoscape-compatible node data with the `directory` field present (the regression fix). Nodes are rendered with distinct colors by directory:
 
-**Verification:**
-- `POST /api/search` with query "risk" returns 3 results, all with `days_since_last_access: 0` and `stability: 14.0`
-- `GET /api/stats` returns `decay_risk: []` for the investment dataset (all memories were recently accessed during reindex)
-- Wander endpoint returns `access_count`, `last_access`, `days_since_last_access`, `stability` per memory
+| Directory | Color | Dataset |
+|-----------|-------|---------|
+| user/beliefs | rgb(22, 101, 52) forest green | companion |
+| user/feelings | rgb(202, 138, 4) amber | companion |
+| user/moments | rgb(217, 119, 87) coral | companion |
+| user/people | rgb(124, 58, 237) purple | companion |
+| user/preferences | rgb(184, 134, 11) dark gold | companion |
+| user (auto) | rgb(28, 25, 23) charcoal | companion |
+| user/test (auto) | rgb(124, 58, 237) purple | companion |
+| api | #1E40AF blue | quant_operators |
+| api/quantdf (auto) | fallback cycle | quant_operators |
+| api/quantexpr (auto) | fallback cycle | quant_operators |
 
-**Verdict: VERIFIED WORKING.** The search result dict now consistently includes decay fields alongside memory metadata. The original R14 C1 bug (search results lacking `days_since_last_access` causing the overview decay formula to degrade to static values) is permanently eliminated.
+Unknown directories are marked "(auto)" in the legend and assigned fallback colors — this is a thoughtful touch that handles extension gracefully without hardcoding every possible directory.
 
----
+**Edge strength differentiation (verified in Legend component):**
+- Required: solid line (strongest visual weight)
+- Recommended: dashed line
+- Related: dotted line
 
-#### N1: MemoryDetail Access Freshness Display — VERIFIED WORKING
+The Legend component (`frontend/src/components/Legend.tsx`) dynamically derives directory entries from the actual graph data, ensuring it always reflects reality rather than displaying a static hardcoded list.
 
-**Implementation (MemoryDetail.tsx lines 379-414):**
+**Canvas rendering:** Verified — canvas element exists and renders. Graph is interactive.
 
-The Access Freshness section appears in the MemoryDetail panel below the imports and above the "Referenced By" (backlinks) section. It displays:
+**Verdict: Working.** The directory field regression fix is confirmed. Legend is dynamic and accurate.
 
-- **Last accessed:** "just now" (if days_since=0), "X days ago" (if days_since>0), or "unknown" (if null)
-- **Stability:** displayed as "Xd" (e.g., "14.0d")
-- **R-probability:** calculated client-side using the same hybrid formula as the backend: `max(0.5^(d/s), 0.05/(1 + d/(10*s)))`
-- **Access count:** total number of times this memory has been accessed
+### 1.4 List View
 
-**Empty state:** When `access_count` is 0, the section displays "Never accessed · R=N/A" in italic tertiary text — clean and appropriate for newly-created memories.
+**Status: WORKING.**
 
-**Visual design:** The section uses a Raleway uppercase section header ("ACCESS FRESHNESS") at 12px with 0.08em letter-spacing — consistent with the "IMPORTS" and "REFERENCED BY" sections above and below it. The data rows use 12px Raleway with `var(--cm-text-secondary)` color. Access count is shown in tertiary color to de-emphasize the raw number.
+The list view renders a sortable table with columns: ID, Summary, Type, Maturity, Status, Tags, Health. For the companion dataset (11 memories), 12 table rows are rendered (1 header + 11 data rows). Key observations:
 
-**Data source caveat:** The frontend MemoryDetail component receives decay data from the parent component (App.tsx), which passes the memory object from the list endpoint (`/api/memories`). The individual memory endpoint (`/api/memories/{id}`) was observed to NOT return `access_count`, `days_since_last_access`, or `stability` in API testing — despite server.py lines 407-414 appearing to add them. This may be a serialization issue (FastAPI's default JSON encoder may be excluding `None` values). In practice, the frontend is not affected since it uses the list endpoint data, but any future consumer of the individual endpoint will not receive decay fields.
+- The Health column shows R-probability (retention probability) as a percentage — 100% for recently accessed memories
+- Sorting by Health column works (client-side computation of R-probability via the FSRS-based formula)
+- Tag display is clean and space-efficient
+- Status badges (Active, Archived) and Maturity badges (Draft, Verified, Proven) are visually distinct
+- Clicking a row navigates to the MemoryDetail panel
+- Pagination at 20 items per page is appropriate for current dataset sizes
 
-**Verdict: VERIFIED WORKING.** The data is rendered. The hybrid formula is correct. The visual design is consistent. The individual endpoint data gap is a note, not a visible defect.
+**Verdict: Working.** No regressions detected.
 
----
+### 1.5 Dashboard View
 
-### 1.2 Core Workflow Walkthrough
+**Status: WORKING — stale ratio merits attention.**
 
-#### Search-to-Resolve Pipeline — UNCHANGED
+The dashboard shows for the companion dataset:
+- **Total memories:** 11
+- **Maturity distribution:** Draft (7), Verified (4), Proven (0)
+- **Stale memories:** 9 out of 11 (82%) — notably high
+- **Status distribution:** Active (11), Archived (0)
+- **Top tags:** companion (10), belief (2), friendship (2), value (2), feeling (2), work (2)
+- **Action buttons:** Wander, Validate, Refresh, Reindex
 
-The Search-to-Resolve flow remains the product's strongest user experience. Search results now include decay fields in the API response, but the frontend does not render them in search result rows (this was explicitly deferred to R16 per negotiation #5: "search result access recency"). The R14 Resolve button at 12px remains correctly sized.
+The stale ratio (82%) is correct behavior — companion memories haven't been accessed recently — but a new user might interpret this as a bug. The stale memory IDs are listed but not clickable (see Nice-to-have recommendations).
 
-#### Graph-to-Resolve Pipeline — UNCHANGED
+**Verdict: Working.** All stats render correctly. The Wander, Validate, Refresh, and Reindex action buttons are present.
 
-The right-click context menu Resolve option introduced in R14 continues to work. The resolved DAG now triggers adaptive stability updates on access (C1), meaning frequently-resolved memories accumulate higher stability values over time.
+### 1.6 Search
 
-#### MemoryDetail Access Freshness — NEW INFORMATION SURFACE
+**Status: WORKING — rich results with proper scoping.**
 
-The Access Freshness section adds genuine new information to the MemoryDetail panel. A user who opens a memory detail now sees, at a glance:
+Search for "nvidia" on the investment dataset returned 3 results:
+- `user/facts/nvidia-earnings` — ~95% match (matched on ID, Body, Summary), R: 100.0%
+- `user/facts/soxl-composition` — ~90% match (matched on Body, Summary), R: 100.0%
+- One additional fuzzy match
 
-1. When they last interacted with this memory
-2. How stable the memory's knowledge is (stability half-life)
-3. What the current retrieval probability is (R value)
-4. How many times they've accessed this memory
+The search dropdown renders match quality as percentage bars, shows match field attribution (e.g., "matched: Id, Body, Summary"), displays a content snippet, and provides a "Resolve" quick-action link per result. The R-probability is displayed as "R: 100.0%".
 
-This transforms the MemoryDetail from a "what is this memory" view into a "how healthy is this memory" view. The R-value in particular carries product meaning — it's not raw data, it's an explanation of the system's confidence in recalling this knowledge.
+**Edge case:** Searching on companion for "nvidia" correctly returns "No memories found matching 'nvidia'" with a helpful message suggesting broader search terms.
 
----
+**Search scoping:** Search is correctly scoped to the active dataset. Results change when switching datasets.
 
-### 1.3 API Endpoint Coverage (Decay Fields)
+**Verdict: Working.** Rich result display with R-probability integration and Resolve quick-action.
 
-| Endpoint | access_count | last_access | days_since_last_access | stability | Notes |
-|----------|-------------|-------------|----------------------|-----------|-------|
-| `GET /api/memories` (list) | YES | YES | YES | YES | Primary frontend data source |
-| `GET /api/memories/{id}` (single) | NO | NO | NO | NO | **GAP** — code at server.py:407-414 attempts to add them, but they are absent from actual response |
-| `POST /api/search` | YES | NO | YES | YES | Per-result |
-| `POST /api/resolve` | N/A | N/A | N/A | N/A | N/A — resolve returns DAG nodes, not memory metadata |
-| `POST /api/wander` | YES | YES | YES | YES | Per returned memory |
-| `GET /api/stats` | YES (in decay_risk) | NO | YES (in decay_risk) | YES (in decay_risk) | decay_risk array per entry |
-| `POST /api/validate` | N/A | N/A | N/A | N/A | N/A |
+### 1.7 Resolve API
 
-**Finding:** The individual memory endpoint gap is the sole data consistency issue. Every consumer that uses the list endpoint (which includes the frontend for all current features) receives complete decay data.
+**Status: WORKING.**
+
+The resolve API expects `{"id": "user/investment/context", ...}` (field name `id`, not `memory_id`). The frontend's `ResolveRequest` type correctly uses `id`. Tested with the investment dataset — resolves to 6 nodes with proper depth and budget handling. The `notices` field surfaces a pinned-version warning: "pinned version v1 of user/investment/risk-tolerance is behind current version v2." This demonstrates the system's awareness of staleness beyond simple decay.
+
+Node trim levels (full/summary/skipped) are correctly reported based on the budget constraint.
+
+**Verdict: Working.**
+
+### 1.8 Validate API
+
+**Status: WORKING.**
+
+`POST /api/validate` returns `[0, 0]` for the investment dataset (0 errors, 0 warnings). The endpoint is functional and returns the expected two-element array.
+
+### 1.9 Wander API
+
+**Status: WORKING.**
+
+`POST /api/wander` returns a randomly selected memory in "cool" mode. Tested on investment — returned `schemas/decision` with orphan detection text: "(orphaned -- no other memory references this one)". The wander output includes type, status, intensity, access count, and summary.
+
+### 1.10 API Response Format Verification
+
+**Status: ALL ENDPOINTS VERIFIED.**
+
+| Endpoint | Method | Status | Notes |
+|----------|--------|--------|-------|
+| `/api/datasets` | GET | REGRESSION | `current` field corrupted by X-Codememory-Dataset header |
+| `/api/datasets/switch` | POST | Working | Returns `{"current": "name"}` |
+| `/api/memories` | GET | Working | Pagination, directory field, decay fields present |
+| `/api/memories/{id}` | GET | Working | Full detail with body, backlinks, stability |
+| `/api/memories/{id}/backlinks` | GET | Working | Returns dependency references with strength |
+| `/api/graph` | GET | Working | Directory field present in nodes (regression fix verified) |
+| `/api/search` | POST | Working | Rich results with R-probability and match quality |
+| `/api/resolve` | POST | Working | Depth/budget/notices all functional |
+| `/api/stats` | GET | Working | Full maturity/type/status/tag/stale breakdown |
+| `/api/wander` | POST | Working | Cool mode with orphan detection |
+| `/api/validate` | POST | Working | Returns error/warning arrays |
+| `/api/reindex` | POST | Working | Returns success confirmation |
+| `/api/export` | GET | Working | ZIP download with Content-Disposition header |
 
 ---
 
 ## Phase 2: Aesthetic Taste
 
-### 2.1 Exit Animations — Complete
+### 2.1 Color Palette
 
-The animation surface is now complete. 7/7 UI surfaces have both enter and exit animations (MemoryDetail, MemoryForm, Settings, Wander, Validate, HelpPanel, Search dropdown). The 250ms duration is consistent across all panels and modals. The animation infrastructure (`useExitAnimation` hook + CSS classes) is clean and reusable.
+The LuxCart-inspired design system remains the product's strongest aesthetic asset. The semantic color system (`--cm-*` CSS custom properties) provides a cohesive visual language across light and dark modes:
 
-The HelpPanel exit animation is particularly satisfying because of the panel's size (42vw, min 460px) — a slide-out from the right edge with simultaneous backdrop fade is the correct choice for a large reference panel. It mirrors the MemoryDetail panel's exit, creating a coherent "slide panel" visual language distinct from the "fade modal" visual language of Wander/Validate/Settings.
+- **Light mode:** Cream background (#FFFBEB), charcoal text (#1C1917), gold accent (#B8860B)
+- **Dark mode:** Deep brown-black (#1A1817), warm off-white text (#F0EBE0), gold accent (#D4A017)
 
-### 2.2 Typography — The Floor Is Now 12px
+The dark mode is genuinely well-executed. Unlike the "invert everything" approach of many dark modes, this one maintains warmth — the surface color (#2D2A28) has a subtle brown undertone that preserves the LuxCart character. Error colors shift from the light mode's deep red (#991B1B) to a softer tomato (#EF4444) to maintain contrast ratios while preserving semantic meaning.
 
-The R14 "borderline" assessment for HelpPanel keycaps was the right call. At 11px in R14, the keyboard shortcut reference table was small but functional. At 12px in R15, it's genuinely comfortable to read at arm's length on a 27-inch monitor. The upgrade from "can read" to "want to read" is the subtlest and most important distinction in typography.
+**Directory color palette (semantic mapping):**
+- Facts: #1C1917 (charcoal) — neutral, authoritative
+- Observations: #57534E (warm gray) — secondary, observational
+- Preferences: #B8860B (gold) — warm, personal
+- Decisions: #991B1B (deep red) — high-stakes, consequential
+- Feelings: #CA8A04 (amber) — warm, emotional
+- People: #7C3AED (purple) — distinctive, social
+- Beliefs: #166534 (forest green) — grounded, principled
+- Moments: #D97757 (coral) — warm, ephemeral
+- Snapshots: #A8A29E (light gray) — archival, passive
+- API: #1E40AF (blue) — technical, systematic
+- Schemas: #1C1917 (charcoal) — structural, foundational
 
-The stale comment in Badges.tsx ("List view uses 10px") is a cosmetic issue — the code itself is correct (default 12px, List view explicitly passes 12px), but the comment is misleading to future developers.
+This is a thoughtfully constructed semantic mapping. Each color carries meaning that reinforces the directory's purpose. The palette avoids the "rainbow graph" anti-pattern — colors are distinct enough to differentiate directories but harmonious enough to feel like a single system.
 
-### 2.3 Access Freshness Section — Clean Exposition
+**Issue:** The dark-mode tint values (DIRECTORY_TINTS_DARK, R10-widened to #15-#4A) are very subtle against the dark background. While this creates an elegant, understated look, the graph node interiors are nearly invisible on darker displays. Users with less-than-perfect screens may only see the border color, reducing the visual impact of the directory-color system.
 
-The Access Freshness section in MemoryDetail follows the established visual vocabulary:
-- Uppercase Raleway section header at 12px with 0.08em letter-spacing
-- Data rows at 12px in secondary text color
-- Monospace values for the R-probability percentage
-- Tertiary color for the access count (de-emphasized raw data)
+### 2.2 Typography
 
-The section's position — between Imports and Referenced By — is logical. It's metadata about the memory's vitality, placed between metadata about its dependencies. The visual weight is appropriate: informative but not dominant.
+- **Headlines:** Cormorant Garamond (serif) — elegant, editorial. Weight 500, with tight letter-spacing.
+- **Body:** Raleway (sans-serif) — clean, modern, highly readable at 12px+. Weight 600 for UI labels, 500 for body text.
+- **Code:** JetBrains Mono — distinctive, programming-oriented mono with clear character differentiation.
 
-One visual opportunity missed: the R-probability could be color-coded. A memory with R > 50% (healthy) could show in green/success color. R between 10-50% (moderate) in amber/warning. R < 10% (at risk) in red/error. Currently the R value is rendered in the default secondary text color regardless of value, making it a number rather than a signal.
+The headline/body font pairing (Garamond + Raleway) creates a "literary tech" personality — part journal, part dashboard. This is a distinctive choice that separates CodeMemory from the generic Inter/Tailwind aesthetic of most developer tools.
 
-### 2.4 Consistency Across Components
+**The 12px floor is maintained.** R15's sub-12px fix is intact — no font-size below 12px was observed in any interactive element.
 
-The established stylistic vocabulary holds without degradation:
-- All section headers use Raleway uppercase at 12px with 0.08em letter-spacing
-- Memory IDs use JetBrains Mono at 12-13px
-- Headlines use Cormorant Garamond serif
-- Badges (MaturityBadge, StatusBadge) default to 12px font, 2px 10px padding
-- Skeleton loading states use the same shimmer pattern across all views
-- Canvase labels (GraphCanvas) remain at 11px/9px/8px — acceptable in zoomable context
+**Issue:** The uppercase labels with 0.08em letter-spacing (used on all header buttons: "CREATE MEMORY", "GRAPH", "LIST", "DASHBOARD", "ZOOM", "BUDGET", "EXPORT") are legible at 12px but could be difficult for users with dyslexia or vision impairments. There is no mechanism to disable all-caps or increase letter-spacing. Consider adding a "reduce motion / increase legibility" accessibility toggle.
 
-No new inconsistencies were introduced in R15. One pre-existing stale comment was observed (Badges.tsx line 19).
+### 2.3 Spacing and Layout
+
+- **Header toolbar:** Consistently spaced with natural groupings: view-mode tabs | dataset selector | search bar | zoom/budget controls | action buttons (theme, PNG export, ZIP export, settings, help). The quant_operators disclaimer ("Auto-generated API documentation. Dependency graph reflects algorithmic inference, not human-authored links.") is a contextual hint that doesn't overwhelm the toolbar.
+- **Graph canvas:** Full-width, legend anchored bottom-left with subtle shadow and border. Clean.
+- **MemoryDetail panel:** Slides in from right with 250ms ease animation.
+- **Modals:** Scale+fade entrance (250ms), scale+fade exit. Smooth.
+- **Error toasts:** Bottom-right stack with slide-up entrance animation (200ms). Dismissable with auto-timeout (6 seconds).
+
+**Issue:** The header toolbar has 15+ interactive elements. On viewports narrower than approximately 1200px, this will overflow. The toolbar does not appear to have responsive wrapping or a hamburger menu for small screens. Given the product is a developer tool typically used on large displays, this is acceptable but worth noting for future tablet/laptop support.
+
+### 2.4 Animations
+
+The animation surface is comprehensive and consistent:
+
+| Element | Entrance | Exit | Duration |
+|---------|----------|------|----------|
+| MemoryDetail panel | slide in from right | slide out to right | 250ms ease |
+| Modals | fade + scale(0.96->1) | scale(1->0.96) + fade | 250ms ease |
+| Backdrop overlay | fade in | fade out | 200ms ease |
+| Search dropdown | fade + translateY(-4px) | instant removal | 150ms ease |
+| Error toasts | slide up + fade | instant (dismissed) | 200ms ease-out |
+| Undo toast | translateY(12px->0) + fade | auto-timeout (5s) | 200ms ease-out |
+| Skeleton shimmer | gradient sweep | N/A | 1.5s infinite |
+
+R14's modal exit animation fix and R15's HelpPanel exit animation fix are both intact. The animation language is consistent: all entrances are in the 150-250ms range with ease/ease-out timing, creating a cohesive feel. No animation exceeds 250ms, keeping interactions feeling responsive.
+
+### 2.5 Visual Personality
+
+CodeMemory's visual identity says "thoughtful tool for thoughtful people." The cream-and-charcoal palette, serif headlines, and understated shadows create an atmosphere closer to a high-end notebook or journaling app than a typical developer dashboard. This aligns well with the product's philosophy — memories are not data points; they are interconnected atoms of understanding.
+
+The directory color system adds a layer of visual semantics: you can glance at the graph and immediately understand the domain structure of your knowledge. Green nodes are beliefs, gold nodes are preferences, red nodes are decisions.
+
+**Personality gap:** The companion dataset (warm personal memories about friendship, burnout, rainy Sundays) feels tonally mismatched with the otherwise serious, analytical tool aesthetic. This isn't a design flaw — it's a data curation issue — but it affects the first impression because the companion dataset is what users see first (due to the dataset regression). The investment dataset (with its structured domain, versioned decisions, and pinned-risk tolerance) is a much better showcase of the product's capabilities.
 
 ---
 
 ## Phase 3: Product Imagination
 
-### 3.1 Feature Proposals — New for Round 15
+### 3.1 Feature Proposals
 
-#### Proposal 1: Color-Coded R-Probability in MemoryDetail
+#### Proposal 1: Review Queue — "Memories That Need You"
 
-**Problem:** The Access Freshness section shows R-probability as a plain number. The user has to parse "R: 6.3%" and mentally decide whether 6.3% is good or bad. This cognitive load is unnecessary — the system knows whether 6.3% is healthy.
+The Dashboard shows "Stale Memories (9)" as a list of IDs. This is a missed opportunity. A dedicated Review Queue view could present stale memories one at a time (flashcard-style), asking the user to:
+- **Touch** (mark as reviewed — updates access timestamp and stability via the existing `/api/memories/{id}/touch` endpoint)
+- **Archive** (no longer relevant)
+- **Edit** (update with new information)
+- **Skip** (come back later)
 
-**Proposal:** Color-code the R-probability display based on three tiers: green (>50%), amber (10-50%), red (<10%). Use the existing CSS color variables (`--cm-success`, `--cm-warning`, `--cm-error`). Apply to both the MemoryDetail section and (when R16 adds it) search result rows.
+The R-probability score already provides the ranking. The infrastructure (touch API, stability tracking, access counts) is already in place. This would transform the decay system from an informative display into an interactive workflow — turning "9 stale memories" from a guilt-inducing number into an actionable queue.
 
-**Effort:** 15 minutes. Pure frontend conditional styling on a value that's already computed client-side.
+**Implementation effort:** Medium. Requires a new view component and a queue iteration UI. All backend endpoints exist.
 
-**Why this matters:** The R-probability is the product's core signal — it tells the user whether a memory is being maintained. Rendering it as a neutral number is like a thermometer that shows degrees without a fever indicator.
+**Why it fits:** CodeMemory's core thesis is that forgetting is a path-unreachability problem, not a deletion problem. A review queue operationalizes this philosophy.
 
----
+#### Proposal 2: Dataset Comparison View
 
-#### Proposal 2: "Touch" Button in MemoryDetail for Manual Decay Reset
+With four datasets available (companion, investment, quant_operators, software-architecture), there is an opportunity for a cross-dataset analysis view:
+- Tag overlap between datasets
+- Directory structure comparison
+- Dependency density comparison (edges per node)
+- Cross-dataset reference detection (e.g., "this investment preference is similar to this companion belief")
+- Memory count and maturity distribution side-by-side
 
-**Problem:** The only way to reset a memory's decay clock (update `last_access` and recalculate stability) is to run a Resolve. But resolve is heavyweight — it loads the full DAG, renders nodes on the graph, and takes time. A user who just wants to mark "I reviewed this memory" has no lightweight option.
+**Implementation effort:** Medium-High. Requires a new view and cross-dataset query logic that doesn't currently exist in the API.
 
-**Proposal:** Add a "Touch" button in the Access Freshness section that fires a lightweight endpoint (`POST /api/memories/{id}/touch`). The endpoint updates `last_access` to now without triggering a full resolve. The Touch button shows a brief confirmation animation (checkmark pulse) and the "Last accessed" text changes to "just now".
+**Why it fits:** The quant_operators dataset (62 auto-generated API docs) has a radically different graph topology than companion (11 personal memories). Side-by-side comparison would make the product's DAG visualization capabilities more apparent.
 
-**Effort:** 1 hour. Backend: 10-line endpoint that updates `last_access` on the MemoryEntry and saves the index. Frontend: button + confirmation animation.
+#### Proposal 3: Memory Timeline — Temporal Graph View
 
-**Why this matters:** The decay management loop is currently "see at-risk memory → click Resolve → wait for DAG → memory is now 'accessed'" which is heavyweight and misaligned with the intent. "I reviewed this memory" should not require loading a dependency graph. A Touch button makes decay management lightweight and aligns the UI action with the user's intent.
+The Dashboard's stale list and the stability/access_count fields suggest a temporal dimension that is currently only visible in the list view's Health column. A timeline view could:
+- Show creation dates, last access dates, and decay curves per memory
+- Plot stability over time as a line chart (stability increases with each access, decays otherwise)
+- Color-code by directory for cross-domain comparison
+- Animate the "forgetting curve" for each memory
 
----
+**Implementation effort:** Medium-High. Requires a new view with charting library integration (or canvas-based rendering to avoid new dependencies).
 
-#### Proposal 3: Memory Health Sparkline in List View
+**Why it fits:** The adaptive stability model (FSRS SInc formula) generates meaningful time-series data. Visualizing this would make the decay model tangible and demonstrate the value of regular memory review.
 
-**Problem:** The List view shows rich metadata (ID, summary, type, maturity, status, tags) but no decay information. A user browsing the list has no way to identify which memories need attention without opening each one.
+#### Proposal 4: Dependency Health Score
 
-**Proposal:** Add a compact "health" column to the List view showing a small sparkline (horizontal bar) representing R-probability. The bar is green for R>50%, amber for 10-50%, red for <10%. Clicking the health indicator opens the MemoryDetail for that memory with the Access Freshness section auto-expanded.
+Each memory has a `dependents` count (how many other memories depend on it). Memories with high dependents are "load-bearing" — if they go stale, the ripple effect is large. A "Dependency Health" score could:
+- Weight staleness by dependent count
+- Highlight "critical path" memories that need urgent review
+- Show a "graph fragility" metric for the entire dataset
+- Flag memories where a single stale node blocks a large dependency chain
 
-**Effort:** 2 hours. Frontend-only. The list endpoint already returns `days_since_last_access` and `stability` for every memory.
+**Implementation effort:** Low-Medium. Computation is straightforward (weighted staleness). Display could be integrated into existing Dashboard and Legend components.
 
-**Why this matters:** The List view is the product's "at a glance" interface. It currently shows what memories exist but not which ones are decaying. Adding a health column makes the list a diagnostic tool rather than a directory.
+**Why it fits:** The DAG-based dependency system is CodeMemory's differentiator. Surfacing the structural importance of memories would make the graph view more actionable and demonstrate the value of explicit dependency tracking.
 
----
+#### Proposal 5: Export-as-Context — "One-Click Agent Injection"
+
+The Resolve feature already produces a token-budgeted, topologically-sorted markdown output. A "Copy as Context" button in the Resolve panel could format this output for direct injection into LLM system prompts:
+- `codememory resolve user/investment/context --depth required --budget 2000 --format context`
+- Output wrapped in `<codememory_context>...</codememory_context>` tags
+- One-click copy to clipboard
+- Optional: generate as a standalone .md file for import into other tools
+
+**Implementation effort:** Low. The resolve output already exists. This is primarily a formatting step and a UI button.
+
+**Why it fits:** CodeMemory's Layer 0 cognitive interface already defines `overview` for system prompt injection. This closes the loop for `resolve` — turning the DAG resolution output into a consumable context block for LLM-powered workflows.
 
 ### 3.2 What Could Be Removed
 
-#### Candidate for Removal: Wander "cool/random" Mode Toggle
+#### Candidate for Removal: The companion dataset as default example data
 
-The Wander modal in the Dashboard offers a "cool" vs. "random" mode toggle, added in R1's PL2-9 as a tier-3 nice-to-have. In practice, "cool" mode (weighted toward low-access + low-intensity memories) and "random" mode (uniform random) produce perceptually identical results for small datasets (10-62 memories). The weighted randomness of "cool" mode is only distinguishable at dataset sizes of 200+ memories.
+The companion dataset (11 personal-life memories about friendship, burnout, morning coffee) is tonally incongruent with a tool marketed as a "memory atomization protocol." It demonstrates the system's capabilities but with a domain that does not align with the product's core value proposition (knowledge management for complex, dependency-rich domains).
 
-**Recommendation:** Remove the mode toggle and default to "cool" mode (it's the more useful behavior). The toggle adds UI complexity without delivering a perceptibly different experience at current dataset sizes. If the product reaches 200+ memories, the toggle could be reintroduced as part of a more sophisticated Wander experience (e.g., "by domain," "by decay risk").
+**Specific issues:**
+1. It has very few cross-memory dependencies, making the DAG visualization underwhelming
+2. Its content (personal feelings, weekend activities) doesn't match any likely user persona for a developer tool
+3. The graph shows 7 directories for only 11 memories, creating a fragmented appearance
+4. 82% of its memories are stale, which looks like a bug to new users
 
----
+**Recommendation:** Either:
+1. Fix the dataset regression so investment becomes the default (already configured — just blocked by the regression), or
+2. Create a new "onboarding" dataset that demonstrates all features (imports, schemas, maturity levels, tags) with a more universally relatable domain like software architecture decisions, or
+3. If companion must remain, curate it to include explicit cross-memory dependencies and reduce the directory count
 
-### 3.3 The "Aha Moment" Analysis (Revised for R15)
+### 3.3 The "Aha" Moment Analysis
 
-**Strongest current aha moment (unchanged): Search-to-Resolve**
+CodeMemory's "aha" moment should occur when a user first runs **Resolve** on a well-connected memory and sees the topologically-sorted, token-budgeted output. The product's thesis is "memory loading is a dependency resolution problem, not a search problem" — and Resolve is the proof.
 
-"Type a keyword, see the DAG." The flow remains the product's best first impression.
+**Current state: The aha moment is partially blocked because:**
+1. The dataset regression shows companion (few dependencies) on first load
+2. The Resolve feature requires right-clicking a graph node and selecting "Resolve" — not discoverable
+3. There is no guided tour that leads the user through this discovery
+4. The onboarding copy mentions "dependency graph" but doesn't demonstrate it
 
-**Growing aha moment: Access Freshness**
-
-When a user opens a memory that hasn't been accessed in 30 days and sees "R: 12.3%", the product's differentiator clicks differently than with the decay risk dashboard card. The dashboard card is passive — "some memories are at risk." The individual Access Freshness section is personal — "THIS memory is at risk." The shift from aggregate to individual makes the decay model tangible.
-
-**Distant aha moment: Touch + Health List (Proposals 2 + 3)**
-
-"Scan the list → see a red health bar → click → read the memory → tap Touch → health bar turns green." This workflow, combining the lightweight Touch action with a scan-able health indicator, would make memory maintenance feel like tending a garden rather than filing paperwork. It connects the abstract decay model to a concrete, satisfying action loop with immediate visual feedback.
-
----
-
-## Phase 4: Prioritized Recommendations
-
-### Round 14 Debt Reconciliation
-
-| R14 # | Item | R14 Priority | R15 Status |
-|-------|------|-------------|------------|
-| 🔴 1 | Wire HelpPanel exit animation | Critical | **FIXED** |
-| 🔴 2 | Bump remaining 11px stragglers to 12px | Critical | **FIXED** — all four raised to 12px |
-| 🟡 3 | Add stability editing to MemoryDetail | Important | **DEFERRED** — backend stability work done (C1, C2, C3); frontend slider deferred to R16 per negotiation |
-| 🟡 4 | Add access recency to MemoryDetail | Important | **FIXED** — N1 delivers this |
-| 🟡 5 | Add access recency to search results | Important | **DEFERRED** to R16 per negotiation |
-| 🟡 6 | Add review queue | Important | **DEFERRED** to R16 per negotiation |
-| 🟢 7 | Tooltip on Search Resolve button | Nice-to-have | **NOT DONE** — still deferred |
-| 🟢 8 | Remove List view local filter bar | Nice-to-have | **NOT DONE** — still deferred |
-| 🟢 9 | Tooltip on maturity badges | Nice-to-have | **NOT DONE** — still deferred |
-| 🟢 10 | Keyboard shortcut hints on context menu items | Nice-to-have | **NOT DONE** — still deferred |
-| 💡 11 | Cross-Dataset Resolution | Strategy | **NOT DONE** — deferred |
-| 💡 12 | Access Recency Timeline | Strategy | **NOT DONE** — deferred |
-| 💡 13 | Graph Stroll Mode | Strategy | **NOT DONE** — deferred |
-
-**R14 debt status:** 3/13 completed in R15. 2/6 critical+important items fixed (HelpPanel animation, MemoryDetail access freshness). 2/6 important items explicitly deferred to R16 by negotiation. The remaining nice-to-have items were bulk-deferred in the negotiation.
+**Recommendation:** Add a "Try Resolve" call-to-action in the onboarding flow that resolves a well-connected memory (like `user/investment/context` from the investment dataset) with a default budget. Show the dependency chain unfolding in real-time. This single interaction would prove the product's thesis better than any amount of explanatory text.
 
 ---
 
-### New Recommendations — Round 15
+## Phase 4: Consistency and Comparison
 
-#### Critical (Before R16)
+### 4.1 Cross-Dataset Consistency
 
-| # | Item | Effort | Justification |
-|---|------|--------|---------------|
-| 🔴 1 | **Fix individual memory endpoint decay field gap** — Investigate why `GET /api/memories/{id}` does not return `access_count` / `days_since_last_access` / `stability` despite the server.py code appearing to add them at lines 407-414. Suspect FastAPI JSON serialization excluding `None` values. | 30 minutes | Data integrity issue. The MemoryDetail panel happens to work because it receives list-endpoint data from the parent component, but any future consumer of the individual endpoint (CLI focus, MCP tools, external integrations) will receive incomplete data. |
-| 🔴 2 | **Fix Badges.tsx stale comment** — Update line 19 comment from "List view uses 10px" to "List view uses 12px". | 5 minutes | Misleading documentation. The code is correct (12px), but the comment says 10px. This is the kind of thing that causes a future developer to "fix" the code to match the comment and reintroduce a sub-12px font. |
+| Metric | companion | investment | quant_operators | software-architecture |
+|--------|-----------|------------|-----------------|----------------------|
+| Memories | 11 | 10 | 62 | 11 |
+| Graph nodes | 11 | 10 | 62 | 11 |
+| Graph edges | Very few | 12 | High (auto-inferred) | Unknown |
+| Directory count | 7 | 3 | 3+ | Unknown |
+| Stale ratio | 9/11 (82%) | 0/10 (0%) | Unknown | Unknown |
+| Domains | Personal journal | Financial decisions | API documentation | Architecture decisions |
 
-#### Important (R16 or Soon After)
+**Observation:** The stale ratio varies dramatically — 82% for companion vs 0% for investment. This is correct behavior (companion memories haven't been accessed since creation), but the disparity is jarring. A new user might interpret 9/11 stale as a system bug rather than expected behavior.
 
-| # | Item | Effort | Justification |
-|---|------|--------|---------------|
-| 🟡 3 | **Color-code R-probability in MemoryDetail** — Proposal 1 above. Green (>50%), amber (10-50%), red (<10%) color coding for the R value in the Access Freshness section. | 15 minutes | Transforms the R-probability from a number to a signal. Low effort, high perceptual impact. |
-| 🟡 4 | **Add "Touch" endpoint for lightweight decay reset** — Proposal 2 above. `POST /api/memories/{id}/touch` that updates `last_access` without triggering full resolve. Frontend "Touch" button in MemoryDetail. | 1 hour | Makes decay management lightweight. The current "resolve to refresh" mechanism is heavyweight and misaligned with the user's intent to simply mark a memory as reviewed. |
-| 🟡 5 | **Add memory health column to List view** — Proposal 3 above. Compact R-probability sparkline per row in the List view, color-coded with green/amber/red. | 2 hours | The List view is the "at a glance" interface. Adding health indicators makes it a diagnostic tool. Frontend-only — the list endpoint already returns all needed data. |
-| 🟡 6 | **Fix Playwright test path resolution** — Tests pass from `frontend/` directory but fail from project root. Either document `cd frontend && npx playwright test` as the canonical invocation, or make `testDir` use an absolute path. | 15 minutes | CI readiness. The current configuration is fragile for automated CI pipelines that may run from the project root. |
+### 4.2 API Response Consistency
 
-#### Nice to Have (Future Rounds)
+All API endpoints now use consistent field naming and response structure thanks to the APIRouter split. The shared `serialize()` function normalizes datetime objects across all endpoints. The `/api/datasets` response format (`{datasets, current, current_name}`) is consistent with the documented API, though the `current` field value is compromised by the header contamination.
 
-| # | Item | Effort | Justification |
-|---|------|--------|---------------|
-| 🟢 7 | Tooltip on Search Resolve button | 20 minutes | R13 debt, still deferred. Improves discoverability of the primary feature. |
-| 🟢 8 | Remove List view local filter bar | 1 hour | R13 debt, still deferred. Reduces UI duplication. |
-| 🟢 9 | Tooltip on maturity badges | 1 hour | R13 debt, still deferred. Maturity is a CodeMemory-unique concept that needs explanation. |
-| 🟢 10 | Keyboard shortcut hints on context menu items | 30 minutes | R14 recommendation, still deferred. The context menu is a natural shortcut discoverability surface. |
-| 🟢 11 | Remove Wander mode toggle | 15 minutes | Proposal above. "cool" vs "random" toggle is indistinguishable at current dataset sizes. Simplify the UI by removing the toggle. |
+### 4.3 Frontend/Backend Contract Alignment
 
-#### Product Strategy
+**Issue identified:** The backend's `CreateMemoryRequest` uses `memory_id` with a Pydantic alias of `id`:
+```python
+memory_id: str = Field(alias="id", ...)
+```
 
-| # | Item | Effort | Justification |
-|---|------|--------|---------------|
-| 💡 12 | Cross-Dataset Resolution | 3-4 days | The single highest-impact architectural feature not yet built. Makes the product a platform. |
-| 💡 13 | Decay Review Queue (R14 Proposal 3) | 2 days | Sequential navigation through at-risk memories. R16 likely slot per negotiation. |
-| 💡 14 | Per-Memory Stability UI (Frontend) | 1 day | Backend stability work complete (C1, C2, C3). Frontend slider for per-memory half-life tuning. R16 likely slot per negotiation. |
-| 💡 15 | Access Recency Timeline | 2-3 days | Sparkline + activity feed in MemoryDetail. Makes the decay formula visible within individual memory context. |
+The frontend's `CreateMemoryRequest` TypeScript interface uses `id` directly. This alignment is correct but fragile — if the backend model is refactored, the frontend would break silently at runtime rather than compile time. Consider adding an API contract test that validates the request/response shapes match across the boundary.
+
+### 4.4 Field Naming Inconsistency
+
+The `ResolveRequest` backend model uses `memory_id` with `alias="id"`, while `SearchRequest.query` has no alias. This mixed approach to field naming (some aliased, some not) creates a maintenance burden. A consistent policy — either all external fields use aliases or none do — would reduce confusion.
 
 ---
 
-## Round 15 Verdict Summary
+## Prioritized Recommendations
 
-| Change | Description | Status | Notes |
-|--------|-------------|--------|-------|
-| P1 | Playwright smoke tests (5 tests) | **VERIFIED** | 5/5 pass from `frontend/` directory. Config path issue when run from project root (minor). |
-| I1 | HelpPanel exit animation | **VERIFIED** | 7/7 animated surfaces. R13/R14 holdout resolved. |
-| I2 | 11px-to-12px font migration | **VERIFIED COMPLETE** | Zero sub-12px DOM text. All four R14 stragglers raised to 12px. |
-| C1 | Adaptive stability update (SInc on resolve) | **VERIFIED** | resolve.py lines 322-329. Gaussian peak at R~0.78, diminishing returns, 365d cap. |
-| C2 | Long-term retention floor (hybrid decay) | **VERIFIED** | core.py `compute_retrieval_probability()`. Hybrid formula validated at key milestones. |
-| C3 | Domain-differentiated default stability | **VERIFIED** | create.py SEMANTIC_TYPE_STABILITY lookup. API docs at 365d, decisions at 90d. |
-| C4 | Unified search output (decay fields) | **VERIFIED** | Search, wander, stats endpoints all return decay fields. |
-| N1 | MemoryDetail access freshness display | **VERIFIED** | 35 lines of clean rendering. R-probability computed client-side with matching hybrid formula. |
+### Critical
 
-**Pass rate: 8/8 changes have verifiable implementations. 0 are incomplete. Two minor issues found (individual endpoint data gap, stale comment).**
+- **CR1: Fix dataset default self-reinforcing regression.** Two-part fix:
+  1. Backend middleware (server.py line 56): change `if dataset and dataset.strip()` to `if dataset and dataset.strip() and not is_exempt` — this prevents the X-Codememory-Dataset header from contaminating the ContextVar on exempt paths like `/api/datasets`
+  2. Frontend (api.ts line 8): remove hardcoded `_currentDataset = 'companion'` — initialize to empty string, let the datasets API response set the value
 
-**Negotiation promise delivery:**
-- R14 Critical #1 (HelpPanel animation): FIXED
-- R14 Critical #2 (11px stragglers): FIXED
-- Research Critical #1 (adaptive stability): VERIFIED
-- Research Critical #2 (long-term floor): VERIFIED
-- Research Important #3 (domain defaults): VERIFIED
-- Evolution Strategy C2 (Playwright tests): VERIFIED
-- Evolution Strategy C3 (unified search output): VERIFIED
-- Product Experience Important #4 (access freshness): VERIFIED
+- **CR2: /api/datasets `current` field should use server config, not request header.** The `get_datasets()` handler in stats.py should use the `DEFAULT_DATASET` constant for the `current` field, not read from the per-request ContextVar. The ContextVar reflects the client's last-known dataset; "current" in the datasets response should reflect server configuration.
 
-All 7 accepted negotiation items are delivered. All 8 targeted changes are working.
+### Important
+
+- **I1: Restore investment as the default dataset on first visit.** Once CR1 and CR2 are fixed, the user's first experience will be the investment dataset — a much stronger demonstration of DAG dependency resolution with 12 edges across 10 nodes.
+
+- **I2: Companion dataset needs dependency enrichment.** Add at least 3-4 explicit `imports` between companion memories (e.g., `user/feelings/burnout-april` importing `user/preferences/morning-coffee` as `related`). This would demonstrate the dependency resolution capability even when companion is viewed.
+
+- **I3: Onboarding should be dataset-aware.** The onboarding copy should mention which dataset is being demonstrated and set expectations accordingly. "You're viewing the investment decision dataset — 10 interconnected memories about market analysis, risk tolerance, and portfolio decisions."
+
+- **I4: Search exact vs fuzzy result distinction.** Search results show "x results (includes fuzzy matches)" but do not visually separate exact matches from fuzzy ones. Add a section divider or "Exact" / "Related" grouping to improve scanability.
+
+### Nice-to-have
+
+- **N1: Legend directory click-to-highlight.** Clicking a directory name in the legend should highlight all nodes belonging to that directory on the graph canvas, dimming the rest.
+
+- **N2: Dashboard stale IDs should be clickable.** Currently stale memory IDs in the Dashboard are plain text. Making them clickable (navigating to MemoryDetail) would create a natural stale-memory review workflow.
+
+- **N3: Graph node hover tooltip enrichment.** Node hover currently shows the summary (good). Adding R-probability and dependent count would make the tooltip more actionable.
+
+- **N4: Dark mode graph fill visibility.** The dark-mode tint values (DIRECTORY_TINTS_DARK) are very subtle against the dark background. Consider increasing luminance by 5-10% for better node interior visibility on average displays.
+
+- **N5: Responsive toolbar for smaller viewports.** The 15+ element header toolbar will overflow on viewports narrower than approximately 1200px. Add a collapsible section or overflow menu.
+
+- **N6: Accessibility — all-caps override.** The uppercase labels with 0.08em letter-spacing on header buttons are a distinctive design choice but reduce legibility for some users. Consider a "reduce motion / increase legibility" settings toggle.
+
+### Feature Ideas (from Phase 3)
+
+- **Review Queue** — flashcard-style memory review workflow using the existing touch API and R-probability ranking
+- **Dataset Comparison View** — cross-dataset topology and maturity analysis
+- **Memory Timeline** — temporal graph view with decay curves and stability over time
+- **Dependency Health Score** — structural importance weighting for critical-path detection
+- **Export-as-Context** — one-click LLM system prompt injection from Resolve output
 
 ---
 
-### Round 15 vs Round 14: Score Trend
+## Appendix A: Test Commands Executed
 
-| Dimension | R14 Score | R15 Score | Delta | Driver |
-|-----------|-----------|-----------|-------|--------|
-| Functionality | 8.5 | 8.5 | -- | No new workflows; existing ones smarter |
-| Aesthetic Taste | 8.0 | 8.5 | +0.5 | HelpPanel animation complete; 12px typography floor |
-| Product Imagination | 8.0 | 8.0 | -- | Infrastructure round; no new product surfaces |
-| **Composite** | **8.4** | **8.6** | **+0.2** | |
+```bash
+# Backend API verification
+curl -s http://localhost:8000/api/datasets
+curl -s -H "X-Codememory-Dataset: investment" http://localhost:8000/api/graph
+curl -s -H "X-Codememory-Dataset: investment" http://localhost:8000/api/memories
+curl -s -H "X-Codememory-Dataset: investment" http://localhost:8000/api/stats
+curl -s -X POST -H "X-Codememory-Dataset: investment" http://localhost:8000/api/wander
+curl -s -X POST -H "X-Codememory-Dataset: investment" http://localhost:8000/api/validate
+curl -s -X POST -H "X-Codememory-Dataset: investment" -H "Content-Type: application/json" \
+  -d '{"id":"user/investment/context","depth":"required","budget":3000}' \
+  http://localhost:8000/api/resolve
+curl -s -X POST -H "X-Codememory-Dataset: investment" -H "Content-Type: application/json" \
+  -d '{"query":"nvidia"}' http://localhost:8000/api/search
+curl -s -X POST -H "X-Codememory-Dataset: investment" -H "Content-Type: application/json" \
+  -d '{"name":"quant_operators"}' http://localhost:8000/api/datasets/switch
 
-The round's discipline — faithfully translating research findings into infrastructure code — is essential but score-limited. The adaptive stability, long-term floor, and domain defaults are the correct foundation. The next breakthrough (8.8+) requires either the full-text body search (R16), the review queue workflow, or the per-memory stability UI. The product is now *correct* in its decay model. The next round must make it *actionable*.
+# Dataset regression verification
+curl -s http://localhost:8000/api/datasets
+# Returns: "current": "investment" (correct — no header)
+curl -s -H "X-Codememory-Dataset: companion" http://localhost:8000/api/datasets
+# Returns: "current": "companion" (WRONG — header contaminates ContextVar)
+```
 
----
+## Appendix B: Frontend Component Inventory (R16 State)
 
-*Report ends. Next review: Round 16.*
+| Component | File | Status | Notes |
+|-----------|------|--------|-------|
+| App | App.tsx | Modified | APIRouter-compatible, dataset switching, multi-view |
+| GraphCanvas | GraphCanvas.tsx | Stable | Directory-color mapping, dynamic cytoscape styles, dark mode tints |
+| MemoryDetail | MemoryDetail.tsx | Stable | Slide-in panel, full detail, backlinks, stability display |
+| MemoryList | MemoryList.tsx | Stable | Sortable table, Health column with R-probability |
+| MemoryForm | MemoryForm.tsx | Stable | Create/edit memory form |
+| Dashboard | Dashboard.tsx | Stable | Stats, stale list, action buttons |
+| SearchBar | SearchBar.tsx | Stable | Dropdown results, match quality, Resolve quick-action |
+| Legend | Legend.tsx | Stable | Dynamic directory-color mapping from graph data, edge styles |
+| HelpPanel | HelpPanel.tsx | Stable | Exit animation from R15 |
+| Onboarding | Onboarding.tsx | Stable | First-visit welcome flow |
+| Settings | Settings.tsx | Stable | Default dataset, budget, theme |
+| Badges | Badges.tsx | Stable | Status and maturity badges |
+| EmptyState | EmptyState.tsx | Stable | Empty/error/not-found states |
+| api.ts | api.ts | Modified | Dataset header injection, all endpoint methods |
+| types.ts | types.ts | Stable | Full TypeScript type definitions |
+| colors.ts | colors.ts | Stable | Directory color palette, fallback logic |
+| index.css | index.css | Stable | LuxCart design system, CSS custom properties, animations |
+
+## Appendix C: Backend Router Inventory (R16-A1)
+
+| Router | File | Prefix | Routes |
+|--------|------|--------|--------|
+| memories | routers/memories.py | /api | GET /memories, GET /memories/{id}, GET /memories/{id}/backlinks, POST /memories, PUT /memories/{id}, DELETE /memories/{id}, POST /memories/{id}/touch, POST /import, GET /export |
+| search | routers/search.py | /api | GET /graph, POST /resolve, POST /search |
+| stats | routers/stats.py | /api | GET /stats, POST /wander, POST /validate, POST /reindex, GET /datasets, POST /datasets/switch |

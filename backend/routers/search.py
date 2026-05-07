@@ -314,6 +314,7 @@ def post_search(req: SearchRequest):
                 "match_fields": match_fields,
                 "days_since_last_access": d.get("days_since_last_access", None),
                 "stability": d.get("stability", 14.0),
+                "stability_source": d.get("stability_source", None),
                 "access_count": d.get("access_count", 0),
             }
 
@@ -336,6 +337,7 @@ def post_search(req: SearchRequest):
                 "match_fields": [],
                 "days_since_last_access": d.get("days_since_last_access", None),
                 "stability": d.get("stability", 14.0),
+                "stability_source": d.get("stability_source", None),
                 "access_count": d.get("access_count", 0),
             }
             exact_matches.append(match_entry)

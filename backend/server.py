@@ -5,6 +5,7 @@ Does NOT modify src/codememory/ internal logic.
 
 R16-A1: Endpoints split into routers/ by business domain.
 server.py retains only app creation, middleware, and router mounting.
+R17-T1: Migrated from deprecated @app.on_event("startup") to lifespan.
 """
 
 from __future__ import annotations
@@ -13,6 +14,7 @@ import json
 import logging
 import os
 import sys
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -34,10 +36,32 @@ if str(_BACKEND) not in sys.path:
 from shared import current_dataset as _current_dataset, DEFAULT_DATASET as _DEFAULT_DATASET, resolve_root as _resolve_root, get_available_datasets as _get_available_datasets
 
 # ---------------------------------------------------------------------------
+# Lifespan (R17-T1: replaces deprecated @app.on_event("startup"))
+# ---------------------------------------------------------------------------
+
+from codememory.index import reindex as _cm_reindex
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Reindex all known datasets on startup."""
+    logger = logging.getLogger("codememory.startup")
+    datasets = _get_available_datasets()
+    for ds in datasets:
+        try:
+            root_path = Path(ds["path"])
+            _cm_reindex(root_path)
+            logger.info("Reindexed %s (%d memories)", ds["name"], ds["memory_count"])
+        except Exception as exc:
+            logger.error("Failed to reindex %s: %s", ds["name"], exc)
+    yield
+
+
+# ---------------------------------------------------------------------------
 # App creation
 # ---------------------------------------------------------------------------
 
-app = FastAPI(title="CodeMemory API", version="0.1.0")
+app = FastAPI(title="CodeMemory API", version="0.1.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -48,13 +72,17 @@ app.add_middleware(
 )
 
 # Per-request dataset context middleware
+# R17-CR1: exempt paths must not write ContextVar (the /api/datasets endpoint
+# uses DEFAULT_DATASET directly to return the server's real default, not
+# whatever the client sent in a header).
 class _DatasetContextMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request, call_next):
         path = request.url.path
         is_exempt = path in ("/", "/api/datasets", "/api/datasets/switch", "/docs", "/openapi.json")
         dataset = request.headers.get("X-Codememory-Dataset", "")
         if dataset and dataset.strip():
-            _current_dataset.set(dataset)
+            if not is_exempt:
+                _current_dataset.set(dataset)
         elif not is_exempt and path.startswith("/api/"):
             datasets = _get_available_datasets()
             names = [d["name"] for d in datasets]
@@ -106,27 +134,6 @@ def root():
         "default_dataset": _DEFAULT_DATASET,
         "available_datasets": [d["name"] for d in datasets],
     }
-
-
-# ---------------------------------------------------------------------------
-# Startup: reindex all known datasets
-# ---------------------------------------------------------------------------
-
-from codememory.index import reindex as _cm_reindex
-
-
-@app.on_event("startup")
-async def _startup_reindex():
-    """Reindex all known datasets on startup."""
-    logger = logging.getLogger("codememory.startup")
-    datasets = _get_available_datasets()
-    for ds in datasets:
-        try:
-            root_path = Path(ds["path"])
-            _cm_reindex(root_path)
-            logger.info("Reindexed %s (%d memories)", ds["name"], ds["memory_count"])
-        except Exception as exc:
-            logger.error("Failed to reindex %s: %s", ds["name"], exc)
 
 
 # ---------------------------------------------------------------------------

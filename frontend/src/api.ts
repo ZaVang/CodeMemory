@@ -5,7 +5,10 @@ const BASE = '/api'
 // Per-tab dataset tracker — set via setCurrentDataset() before requests.
 // This replaces the backend global MEMORY_ROOT, enabling concurrent tabs
 // to view different datasets independently.
-let _currentDataset: string = 'companion'
+// R17-CR1: Initialize empty to avoid sending a premature header on the
+// first /api/datasets call. The server's response.current field sets the
+// real initial value, which the App layer persists to localStorage.
+let _currentDataset: string = ''
 
 /** Inform the API layer which dataset to scope subsequent requests to. */
 export function setCurrentDataset(name: string) {

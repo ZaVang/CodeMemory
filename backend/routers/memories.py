@@ -75,6 +75,7 @@ def get_memories(offset: int = 0, limit: int = 100):
             "last_access": d.get("last_access", None),
             "days_since_last_access": d.get("days_since_last_access", None),
             "stability": d.get("stability", 14.0),
+            "stability_source": d.get("stability_source", None),
         })
 
     total = len(result)
@@ -153,6 +154,7 @@ def get_memory(memory_id: str):
         "body": body,
         "days_since_last_access": entry.days_since_last_access,
         "stability": getattr(entry, "stability", 14.0),
+        "stability_source": getattr(entry, "stability_source", None),
         "access_count": entry.access_count,
     }
 
@@ -242,6 +244,7 @@ def post_create_memory(req: CreateMemoryRequest):
         "body": body,
         "days_since_last_access": days_since,
         "stability": stability_val,
+        "stability_source": getattr(entry, "stability_source", None) if entry else None,
         "access_count": access_count_val,
     }
     return serialize(result)
@@ -325,6 +328,7 @@ def put_update_memory(memory_id: str, req: UpdateMemoryRequest):
         "body": body,
         "days_since_last_access": days_since,
         "stability": stability_val,
+        "stability_source": getattr(updated_entry, "stability_source", None) if updated_entry else None,
         "access_count": access_count_val,
     }
     return serialize(result)
@@ -366,6 +370,7 @@ def post_touch(memory_id: str):
         "body": body,
         "days_since_last_access": 0,
         "stability": entry.stability,
+        "stability_source": getattr(entry, "stability_source", None),
         "access_count": entry.access_count,
     }
     return serialize(result)

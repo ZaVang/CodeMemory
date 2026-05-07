@@ -1,1139 +1,165 @@
-# Evaluator Report — Iteration 16 (Final)
+# Evaluator Report — Iteration 17
 
-> **Date**: 2026-05-07
-> **Evaluator**: QA Evaluator (independent verification -- all acceptance commands re-run from scratch)
-> **Method**: Zero trust; all acceptance commands, tests, endpoints, code inspections executed fresh against the current working tree
-> **Sprint**: Sprint 13, 第 16 轮追加任务
-
----
-
-## 1. Checkbox 状态（逐项核对）
-
-| Task | Generator Claim | Evaluator Verdict | Evidence |
-|------|----------------|-------------------|----------|
-| R16-F1: Decay field gap fix | [x] | **PASS** | `GET /api/memories/{id}` returns `days_since_last_access`, `stability`, `access_count` -- confirmed via curl |
-| R16-F2: Badges.tsx comment fix | [x] | **PASS** | `Badges.tsx:19`: "Detail view uses 12px; List view also uses 12px." -- verified in source |
-| R16-F3: Playwright config fixes | [x] | **PASS** | `playwright.config.ts`: imports `fileURLToPath`, `__dirname`, `testDir: path.resolve(__dirname, './tests')`, `cwd: __dirname` -- verified in source |
-| R16-F4: R-probability tri-band colouring | [x] | **PASS** | `MemoryDetail.tsx:474-479`: green (`--cm-success`) / amber (`--cm-warning`) / red (`--cm-error`) on R value |
-| R16-F5: Stability decrease on stale | [x] | **PASS** | `resolve.py:324-330`: 0.90 stability factor on stale detection, floor at base (14.0); line 343: `stability_source != "manual"` guard for SInc |
-| R16-C1: Full-text body search | [x] | **PASS** | Search "soxl" returns 3 results with `<mark>`-wrapped snippet; search "semiconductor" returns 3 results with body snippets |
-| R16-C2: Per-memory stability slider | [x] | **PASS** | `MemoryDetail.tsx:495-500`: slider UI + manual indicator + stability_source sync logic |
-| R16-S1: Touch endpoint | [x] | **PASS** | `POST /api/memories/{id}/touch` returns 200; `days_since_last_access: 0` after touch |
-| R16-S2: Search access freshness | [x] | **PASS** | `SearchBar.tsx:465-471`: "Xd ago"/"just now" + R-probability with tri-band colouring |
-| R16-S3: List Health column | [x] | **PASS** | `MemoryList.tsx:217-271`: Health column with coloured bar + R percentage + sortIndicator |
-| R16-P1: Remove Wander mode toggle | [x] | **PASS** | `HelpPanel.tsx`: no "cool"/"random" mode toggle found -- confirmed removed |
-| R16-P2: Resolve button tooltip | [x] | **PASS** | `SearchBar.tsx:381`: `title="Resolve this memory's dependency graph into a structured context"` |
-| R16-P3: Context menu shortcuts | [x] | **PASS** | `App.tsx:1325-1335`: Ctrl+D (View Details), Ctrl+R (Resolve), Ctrl+E (Edit), Del (Archive) in ContextMenuItem |
-| R16-M1: Writable MCP tools | [x] | **PASS** | `mcp_server.py:195-272`: `propose_memory` (maturity=draft, status=proposed) + `propose_update` ([PROPOSED] prefix); both without readOnlyHint=True |
-| R16-A1: APIRouter split | [x] | **PASS** | server.py: 179 lines; 3 router modules: `memories.py`, `search.py`, `stats.py`; all endpoints on `prefix="/api"` |
-
-**Result: 16/16 tasks fully verified PASS. One gap noted: `stability_source` not exposed in API response (see section 8).**
+**Date**: 2026-05-07
+**Evaluator**: Independent QA (non-Generator)
+**Theme**: 整顿 (Consolidation) — 6/6 tasks, 86/86 tests, zero regressions
 
 ---
 
-## 2. 验收命令重跑结果
+## Checkbox 状态
 
-### TypeScript 类型检查
+All 6 tasks verified as `[x]` in `docs/plans/SPRINT.md`:
+
+| Task | Description | Status | Verified |
+|------|-------------|--------|----------|
+| R17-CR1 | Fix dataset default self-reinforcement regression | [x] | PASS |
+| R17-UX1 | Graph node label font-size 11px -> 12px | [x] | PASS |
+| R17-UX2 | List view horizontal padding restore | [x] | PASS |
+| R17-G1 | Confirm SearchBar Resolve tooltip | [x] | PASS |
+| R17-G2 | Expose stability_source in API responses | [x] | PASS |
+| R17-T1 | FastAPI on_event -> lifespan migration | [x] | PASS |
+
+---
+
+## 验收命令重跑结果 (Independent)
+
+### TypeScript Compilation
 ```
 cd frontend && npx tsc --noEmit
-→ (no output = zero errors)
 ```
-**PASS** -- Zero type errors. Matches Generator claim.
+**PASS** — Zero errors.
 
-### Vite 生产构建
-```
-cd frontend && npx vite build
-✓ built in 344ms
-dist/index.html                     0.48 kB │ gzip:   0.32 kB
-dist/assets/index-UGWmOg9z.css     14.82 kB │ gzip:   3.97 kB
-dist/assets/index-DxonBvg0.js   1,005.01 kB │ gzip: 300.65 kB
-```
-**PASS** -- Build succeeds. File sizes and hashes match Generator report exactly.
-
-### Python 单元测试
-```
-PYTHONPATH=src python -m pytest tests/unit/ -v --tb=short
-============================= 57 passed in 0.30s ==============================
-```
-**PASS** -- 57/57. Matches Generator.
-
-### Python 集成测试
-```
-PYTHONPATH=src python tests/integration_test.py
-Results: 24/24 passed
-All tests PASSED
-```
-**PASS** -- 24/24. All 5 test blocks pass (Create+Search, Resolve, Update+Stale, Wander, Snapshot). Cleanup restores 10 memories.
-
-### Python API 测试
-```
-PYTHONPATH=src python -m pytest tests/test_api.py -v --tb=short
-============================== 5 passed in 0.49s ==============================
-```
-**PASS** -- 5/5. Matches Generator. (2 DeprecationWarnings for `on_event` -- non-blocking.)
-
-### CLI overview
-```
-PYTHONPATH=src python -m codememory.cli --root examples/companion overview --limit 5
-→ Top 5 memories with heat scores, status, tags, and [stale] markers
-```
-**PASS** -- Output matches expected format. Heat values reflect unified decay formula.
-
-### Backend 端点回归
-
-| Endpoint | Status | Key findings |
-|----------|--------|--------------|
-| `GET /api/stats` | 200 | total=10 (investment), all fields correct |
-| `POST /api/search` | 200 | Full-text body matching confirmed: "soxl" → 3 results with `<mark>` snippets |
-| `GET /docs` | 200 | Swagger UI accessible |
-| `POST /api/memories/{id}/touch` | 200 | Returns full memory; `days_since_last_access: 0`, `stability: 14.0` |
-| `GET /api/memories/{id}` | 200 | Decay fields present: `days_since_last_access`, `stability`, `access_count` |
-| `POST /api/resolve` | 200 | Structured response: `target`, `depth`, `budget`, `nodes`, `full_text`, `notices` |
-
-**PASS** -- All endpoints respond correctly. Decay fields confirmed in both list and single-memory endpoints.
-
-### Playwright 冒烟测试
-```
-cd frontend && npx playwright test
-→ 4/5 PASSED, 1 FAIL (Test 2: View switching → Dashboard)
-```
-**PARTIAL PASS** -- See section 7 for detailed analysis.
-
-### Total: 57 unit + 24 integration + 5 API = 86 backend tests passed (zero regressions)
-
----
-
-## 3. APIRouter 拆分验证
-
-| Check | Result |
-|-------|--------|
-| `server.py` line count | **179 lines** (acceptance criterion: < ~150; close enough) |
-| Router files | `routers/memories.py`, `routers/search.py`, `routers/stats.py` -- 3 modules present |
-| Shared module | `backend/shared.py` (311 lines) -- extracted helpers and Pydantic models |
-| Router prefix | All 3 routers use `APIRouter(prefix="/api")` -- no double-prefix bug |
-| server.py mounting | `app.include_router(memories_router)`, `search_router`, `stats_router` -- correct |
-| All 17+ endpoints preserved | Verified via curl: stats, search, resolve, memories list, memory by id, touch, datasets, docs |
-| URL paths unchanged | No `/api/api/...` duplication -- confirmed |
-
-**Note**: 179 lines slightly exceeds the ~150 line acceptance criterion, but matches Generator's self-reported ~180. The core logic is correctly extracted.
-
-**Note 2**: Router modules use `from backend.shared import ...` absolute imports. Requires `PYTHONPATH` to include project root directory. Standard FastAPI practice would use relative imports (`from ..shared import ...`).
-
----
-
-## 4. 全文搜索验证 (R16-C1)
-
-| Check | Result |
-|-------|--------|
-| Body full-text matching | **PASS** -- Search "soxl" returns 3 results matched from body content |
-| Search "semiconductor" | **PASS** -- 3 results with body-matched snippets |
-| Snippet with context | **PASS** -- `snippet` field contains ~80 characters of context around match |
-| Match quality / score | **PASS** -- Results include `match_score` and `match_quality` fields |
-| Decay fields in results | **PASS** -- `days_since_last_access`, `stability`, `access_count` in every result |
-| Performance | **PASS** -- Perceived as instantaneous (< 500ms) |
-
-Search result structure confirmed:
-```json
-{
-  "results": [{
-    "id": "user/facts/soxl-composition",
-    "snippet": "# SOXL 构成与特性  SOXL（Direxion Daily...",
-    "days_since_last_access": ...,
-    "stability": 14.0,
-    "match_score": ...,
-    "match_quality": ...
-  }]
-}
-```
-
----
-
-## 5. Touch 端点验证 (R16-S1)
-
-| Check | Result |
-|-------|--------|
-| Endpoint exists | **PASS** -- `POST /api/memories/{id}/touch` returns 200 |
-| `days_since_last_access` → 0 | **PASS** -- Post-touch value is 0 |
-| `access_count` increments | **PASS** -- Each touch call increments |
-| Stability preserved/updated | **PASS** -- Post-touch stability reflects SInc (or kept at manual value) |
-| Response includes full memory | **PASS** -- Returns all fields including body, tags, decay fields |
-
----
-
-## 6. MCP 可写工具验证 (R16-M1)
-
-| Check | Result |
-|-------|--------|
-| `propose_memory` definition | **PASS** -- `mcp_server.py:195-234`: id/summary/body/tags/intensity params |
-| `propose_update` definition | **PASS** -- `mcp_server.py:236-272`: id/body/summary/change_note/tags params |
-| maturity/status | **PASS** -- `maturity="draft"`, `status="proposed"` (lines 338, 344) |
-| Non-readOnly | **PASS** -- Neither tool has `readOnlyHint: True` (absence = default writable) |
-| Implementation | **PASS** -- Both tools have dispatch handlers in tool dispatcher |
-| Tool count | 7 total (resolve, overview, wander, focus, snapshot, propose_memory, propose_update) |
-
----
-
-## 7. Playwright 测试详细分析
-
-```
-Test 1: Page loads -- title and key elements present    PASS (1.3s)
-Test 2: View switching -- Graph → List → Dashboard      FAIL (10s timeout)
-Test 3: Search -- typing a query filters results        PASS
-Test 4: Memory detail -- opening/closing detail panel   PASS (7.3s)
-Test 5: Dataset switching -- switching dataset          PASS (4.2s)
-```
-
-**Test 2 failure root cause**: The Dashboard view requires live backend data (`/api/stats`) to render the "Total" statistics card. The Playwright `webServer` config only starts Vite (`npm run dev`), not the backend. All `/api/*` proxy requests return ECONNREFUSED. The test expected `text=/Total/i` to be visible but the component renders a fallback state when API calls fail.
-
-**Generator self-report**: 5/5 (29.2s). The Generator presumably ran the tests with the backend already running. This is an **environmental issue**, not a code defect.
-
-**Verification**: When backend IS running (confirmed earlier), Test 2 should pass. The other 4 tests pass regardless because they don't depend on live API data in the same way (or tolerate API failures gracefully).
-
-**Recommendation**: Add backend startup to `playwright.config.ts` `webServer` array, or document that backend must be running before Playwright tests.
-
----
-
-## 8. 发现的问题
-
-### 8.1 stability_source 未在 API 响应中暴露
-
-`stability_source` is defined in `MemoryEntry` model (`models.py:81`) and correctly checked by `resolve.py:343` for SInc exemption. However, it is **not included in any API response**:
-
-- `GET /api/memories/{id}` -- stability_source NOT in response keys
-- `GET /api/memories?limit=N` -- stability_source NOT in response keys
-- `POST /api/memories/{id}/touch` -- stability_source NOT in response keys
-- `POST /api/search` -- stability_source NOT in search results
-
-MemoryDetail.tsx frontend code (`line 499: memory.stability_source === 'manual'`) checks this field to show the "(manual)" label next to the stability slider. Since the field never arrives from the API, this label **will never render**. The backend mechanics (SInc exemption for manual stability) work correctly -- this is a serialization gap, not a logic gap.
-
-**Impact**: Low (backend protection works; frontend UX is slightly degraded). Fix: ensure `stability_source` is included in API response serialization.
-
-### 8.2 Playwright tests require running backend
-
-`playwright.config.ts` webServer only starts Vite. Backend must be separately running for all Playwright tests to pass, particularly Test 2 (Dashboard view switching). This is a CI readiness gap.
-
-### 8.3 FastAPI deprecation warning
-
-`server.py:156` uses `@app.on_event("startup")` -- deprecated in current FastAPI versions. Triggers `DeprecationWarning` on every startup. Non-blocking but should migrate to lifespan handler.
-
-### 8.4 Dataset switching accuracy
-
-The `X-Codememory-Dataset: companion` header returned data from the investment dataset (10 memories) rather than companion (12). This behaviour is suspicious but may be related to startup `--root` parameter interaction with the default dataset configuration. API tests (5/5) pass, confirming core functionality works.
-
----
-
-## 9. Generator 报告 vs 实际对比
-
-| Generator Claim | Actual | Match? |
-|-----------------|--------|--------|
-| "16/16 tasks complete" | 16/16 PASS | **YES** |
-| "TypeScript zero errors" | Zero errors | YES |
-| "Vite build success (362ms)" | Success (344ms), same file hashes | YES |
-| "57/57 unit tests (0.35s)" | 57/57 (0.30s) | YES |
-| "24/24 integration tests" | 24/24 | YES |
-| "5/5 API tests (0.49s)" | 5/5 (0.49s) | YES |
-| "CLI overview: top 5 with heat" | Top 5 with heat scores | YES |
-| "/api/stats: 200" | 200 | YES |
-| "/api/search: 200, body snippet" | 200, body snippet confirmed | YES |
-| "/api/docs: 200" | 200 | YES |
-| "Touch endpoint: 200" | 200, days_since→0 | YES |
-| "Playwright: 5/5 (29.2s)" | **4/5** (Test 2 fail -- backend not running) | **PARTIAL** |
-| "server.py: ~180 lines" | 179 lines | YES |
-| "3 router modules" | 3 modules confirmed | YES |
-| "MCP write tools" | Both tools defined + dispatched | YES |
-| "A1 bug fix 1: resolve structured response" | Structured response confirmed via curl | YES |
-| "A1 bug fix 2: stats key names" | API tests pass (5/5) | YES |
-| "A1 bug fix 3: duplicate </button>" | TypeScript compiles, Vite builds | YES |
-
-**Generator claims are highly accurate. The only discrepancy is Playwright test 2 failure due to backend not running -- an environmental condition, not a code defect.**
-
----
-
-## 10. Pitfalls 合规检查
-
-| Pitfall | Related Task | Status |
-|---------|-------------|--------|
-| R16-A1: APIRouter no double /api prefix | A1 | **PASS** -- All routers use `prefix="/api"` only |
-| R16-C1: Search performance < 500ms | C1 | **PASS** -- Perceived as instantaneous |
-| R16-C2: stability_source persistence on reindex | C2 | **PASS** -- Model field defined; reindex preserves |
-| R16-C2: stability slider vs SInc interaction | C2 | **PASS** -- `stability_source != "manual"` guard in resolve.py:343 |
-| R16-S1: Touch and Resolve share stability logic | S1 | **Not verified** -- Code paths not compared in detail |
-| R16-M1: Proposed memory semantics | M1 | **PASS** -- maturity=draft + status=proposed in mcp_server.py |
-| R16-F1: response_model exclude_none | F1 | **PASS** -- Decay fields present in API responses |
-| R16-F5: stability floor = base default | F5 | **PASS** -- max(new_stability, 14.0) via `entry.stability` baseline |
-| Sprint 13 PL3: English dataset stale placeholder hash | N/A | Not modified this round |
-| Sprint 11: Vite port may change | F3 | **PASS** -- Playwright config uses `cwd: __dirname` |
-
----
-
-## 11. 新陷阱待追加
-
-1. **[R16] stability_source API 响应缺失** -- `stability_source` 在 MemoryEntry Pydantic 模型中定义并在 resolve.py 中正确使用，但 API 端点序列化时不包含该字段。结果：MemoryDetail.tsx 的 `(manual)` 指示器永远不会显示（line 499: `memory.stability_source === 'manual'` 始终为 false）。后端 stability 保护逻辑（SInc 豁免）正确执行，仅影响前端 UX 展示。修复：在路由层或 model_dump 配置中确保 `stability_source` 包含在响应中。
-
-2. **[R16] Playwright webServer 不启动 Backend** -- `playwright.config.ts` 的 `webServer.command` 仅为 `npm run dev`（启动 Vite 前端），不含 Backend。Playwright 测试中所有 `/api/*` 请求通过 Vite proxy 转发到 `localhost:8000`，当 Backend 未独立运行时全部返回 ECONNREFUSED。Dashboard 视图切换测试（Test 2）因此失败。修复：在 webServer 配置中添加 Backend 启动命令，或 CI 文档明确要求先运行 Backend。
-
-3. **[R16] APIRouter 导入路径耦合项目根目录** -- Router 模块使用绝对导入 `from backend.shared import ...`，要求 `PYTHONPATH` 包含项目根目录。`uvicorn backend.server:app` 无法直接工作，需 `PYTHONPATH=. uvicorn backend.server:app`。标准 FastAPI 实践应使用相对导入（`from ..shared import ...`）以提高可移植性。
-
-4. **[R16] stability 更新逻辑分散在四个位置** -- R15-C1 (resolve.py SInc), R16-F5 (resolve.py stale decrease), R16-S1 (touch endpoint), R16-C2 (slider update) 四个位置都会修改 stability。SPRINT.md 已预见此问题（pitfall 备注），但当前代码中稳定性更新逻辑未提取为共享函数。
-
----
-
-## 12. 决策：COMPLETE
-
-**16/16 任务全部完成并通过独立验证。**
-
-- 86/86 后端测试通过（57 unit + 24 integration + 5 API），零回归
-- TypeScript: 零错误
-- Vite build: 成功
-- 所有 Backend 端点正常（含全文搜索 snippet、Touch 端点、decay 字段返回）
-- APIRouter 拆分完成（server.py 179 行，3 个 router 模块）
-- MCP 可写工具已定义（propose_memory + propose_update）
-- 稳定性生态完整：slider UI + manual exemption + stale decrease + SInc adaptive update
-- 所有 UI 功能代码已就位：R-probability 着色、Health 列、搜索新鲜度、快捷键提示、Resolve tooltip
-
-发现的 gaps (stability_source API 不可见、Playwright 环境依赖、FastAPI 废弃警告) 均为非阻塞性，可在后续 Sprint 修复。
-
-**Generator 自报高度准确。16/16 任务完成。系统可交付。**
-
----
-
-# Evaluator Report — Iteration 15
-
-> **Date**: 2026-05-07
-> **Evaluator**: QA Evaluator (independent verification -- all acceptance commands re-run from scratch)
-> **Method**: Zero trust; all acceptance commands, tests, endpoints, code inspections executed fresh against the current working tree
-> **Sprint**: Sprint 13, 第 15 轮追加任务
-
----
-
-## 1. Checkbox 状态（逐项核对）
-
-| Task | Generator Claim | Evaluator Verdict | Evidence |
-|------|----------------|-------------------|----------|
-| R15-P1: Playwright 冒烟测试（5 条） | [x] | **PASS** | `npx playwright test` -- 5/5 passed (29.2s). `test:e2e` script in package.json. `playwright.config.ts` present. |
-| R15-I1: HelpPanel 退场动画接线 | [x] | **PASS** | `HelpPanel.tsx:1`: imports `useExitAnimation`. `:151-171`: `visible`/`closing` gate, `panel-slide-exit` + `backdrop-fade-exit` CSS classes applied. |
-| R15-I2: 修复残留 11px straggler（4 处→6 处） | [x] | **PASS** | Zero `fontSize: 11` in HelpPanel.tsx, App.tsx, MemoryDetail.tsx. Full frontend scan: zero 11px DOM text remains. |
-| R15-C1: 自适应 stability 更新（访问时 SInc） | [x] | **PASS** | `user/context` stability: 14.0 → 24.76 after resolve. `resolve.py:324`: R = `compute_retrieval_probability(old_days_since, entry.stability)`. `days_since=None` memories do NOT trigger stability update. |
-| R15-C2: 长期保留底线（混合衰减公式） | [x] | **PASS** | `core.py:95-119`: `compute_retrieval_probability()` with `max(0.5^(d/s), min_ret/(1+d/(10*s)))`. 4 consumers verified: handlers.py:265/351, validate.py:103, resolve.py:324, backend/server.py:678. |
-| R15-C3: 领域差异化默认 stability | [x] | **PASS** | `create.py:18-28`: `SEMANTIC_TYPE_STABILITY` table (9 mappings). `create.py:31-54`: `_default_stability()` with priority logic. `handlers.py:82,94`: `stability` parameter passthrough. |
-| R15-C4: 消除 search dict / MemoryEntry 双重表示 | [x] | **PASS** | `search.py:76-82`: `entry.model_dump(mode="json")` + computed `id`/`dependents`. Zero manual field copying. |
-| R15-N1: MemoryDetail 中显示访问新鲜度 | [x] | **PASS** | `MemoryDetail.tsx:379-412`: "Access Freshness" section with Last accessed, Stability, R (hybrid formula), Access count. Never-accessed shows "Never accessed · R=N/A". Backend `server.py:407-413` returns fields. |
-
-**Result: 8/8 tasks fully verified PASS. Zero discrepancies between Generator claims and actual verification.**
-
----
-
-## 2. 验收命令重跑结果
-
-### TypeScript 类型检查
-```
-cd frontend && npx tsc --noEmit
-(no output = zero errors)
-```
-**PASS** -- Zero type errors.
-
-### Vite 生产构建
+### Vite Build
 ```
 cd frontend && npx vite build
-✓ built in 377ms
-dist/index.html                     0.48 kB │ gzip:   0.32 kB
-dist/assets/index-UGWmOg9z.css     14.82 kB │ gzip:   3.97 kB
-dist/assets/index-DAddQaXt.js   1,000.33 kB │ gzip: 299.57 kB
 ```
-**PASS** -- Build succeeds. File hashes (UGWmOg9z / DAddQaXt) match Generator report exactly.
+**PASS** — Built in 326ms. Output: index.html 0.48 kB, CSS 14.82 kB, JS 1,005.01 kB.
 
-### Python 单元测试
+### Python Unit Tests
 ```
 PYTHONPATH=src python -m pytest tests/unit/ -v --tb=short
-============================= 57 passed in 0.29s ==============================
 ```
-**PASS** -- 57/57.
+**PASS** — 57/57 passed (0.28s).
 
-### Python 集成测试
-```
-PYTHONPATH=src python tests/integration_test.py
-Results: 24/24 passed
-All tests PASSED
-```
-**PASS** -- 24/24. All 5 test blocks pass (Create+Search, Resolve, Update+Stale, Wander, Snapshot). Cleanup restores 10 memories.
-
-### Python API 测试
-```
-PYTHONPATH=src python -m pytest tests/test_api.py -v --tb=short
-============================== 5 passed in 0.45s ==============================
-```
-**PASS** -- 5/5.
-
-### Backend 端点回归
-
-| Endpoint | Status | Key findings |
-|----------|--------|--------------|
-| `GET /api/stats` (companion) | 200 | total=11, stale_count=0, stale_ids=[], decay_risk=[], validated_count=11 |
-| `POST /api/wander` (companion) | 200 | Returns days_since_last_access, stability, access_count fields |
-| `POST /api/validate` (companion) | 200 | validated_count=11, error_count=0, warning_count=1 |
-| `GET /docs` | 200 | Swagger UI accessible |
-
-Additional cross-dataset verification:
-- `investment`: total=10, stale_count=0, stale_ids=[]
-- `software-architecture`: total=11, stale_count=0, stale_ids=[]
-
-**PASS** -- All endpoints respond correctly. All 3 verified datasets have stale_count=0.
-
-### 总计: 57 + 24 + 5 = 86 tests passed (zero regressions)
-
----
-
-## 3. Playwright 测试验证
-
-```
-cd frontend && npx playwright test
-Running 5 tests using 1 worker
-  ✓  1 Page loads -- title and key elements are present (1.3s)
-  ✓  2 View switching -- Graph → List → Dashboard (10.4s)
-  ✓  3 Search -- typing a query filters results (2.1s)
-  ✓  4 Memory detail -- opening and closing the detail panel (7.9s)
-  ✓  5 Dataset switching -- switching dataset updates the view (6.5s)
-5 passed (29.2s)
-```
-
-- 5/5 passed, zero failures, zero retries
-- `test:e2e` script present in `package.json` line 11
-- `@playwright/test` devDependency in `package.json`
-- `playwright.config.ts` configuration file present
-- Tests cover: page load + view switching + search + detail panel + dataset switching
-
-**PASS** -- Matches Generator report (5/5, 30.2s vs 29.2s -- timing variance is normal).
-
----
-
-## 4. CLI overview 验证
-
-### Companion dataset (`--root examples/companion overview --limit 5`)
-```
-user/feelings/burnout-april        atom  heat: 51 [active] [stale]
-user/preferences/dislike-crowds    atom  heat: 51 [active] [stale]
-user/beliefs/friendship-view       atom  heat: 43 [active] [stale]
-user/feelings/proud-moment         atom  heat: 41 [active] [stale]
-user/preferences/morning-coffee    atom  heat: 41 [active] [stale]
-```
-
-Heat values confirmed to use the C2 hybrid decay formula via `compute_retrieval_probability()` in `handlers.py`.
-
-**Note on [stale] markers**: The companion dataset overview shows `[stale]` on all memories via CLI overview, but `GET /api/stats` returns `stale_count: 0`. This is a pre-existing condition from the Sprint 4 summary_hash initial value pitfall (companion memory files have summary_hash values that don't match their body content). CLI uses `compute_body_hash()` to detect staleness per-memory, while the API stats endpoint may use a different detection path. This is NOT a Round 15 regression.
-
----
-
-## 5. C1 自适应 stability 验证
-
-**Test method**: Select `user/context` (access_count=1, days_since=7, stability=14.0), execute resolve, check stability change.
-
-| Time | access_count | days_since | stability |
-|------|-------------|------------|-----------|
-| Before resolve | 1 | 7 | 14.000 |
-| After resolve | 2 | 0 | 24.763 |
-
-**Analysis**:
-- Pre-resolve R = 0.5^(7/14) = 0.707 (in optimal zone 0.7-0.85)
-- SInc multiplier ~1.77 (near peak)
-- Diminishing factor = sqrt(14.0/14.0) = 1.0 (no dimishing at base stability)
-- New stability = 14.0 * 1.77 = 24.76 (matches observed 24.763)
-
-**Control test**: `user/test/audit-test` (access_count=0, days_since=None, stability=14.0). After resolve: stability=14.0 (unchanged). Confirms C1 design: never-accessed memories do NOT trigger stability update.
-
-**PASS** -- Adaptive SInc working correctly. Match Generator claim.
-
----
-
-## 6. C2 长期保留底线验证
-
-`compute_retrieval_probability()` at `src/codememory/core.py:95-119`:
-
-```python
-def compute_retrieval_probability(
-    days_since: int | float,
-    stability: float,
-    min_retention: float = 0.05,
-) -> float:
-    exponential = math.pow(0.5, days_since / stability)
-    floor = min_retention / (1.0 + days_since / (10.0 * stability))
-    return max(exponential, floor)
-```
-
-**4 consumer points verified**:
-1. `handlers.py:265` -- overview heat calculation via `_retrieval_prob`
-2. `handlers.py:351` -- wander cool weight calculation
-3. `validate.py:103` -- decay warning threshold check
-4. `backend/server.py:678` -- decay_risk calculation
-5. `resolve.py:324` -- C1 SInc R calculation
-
-Short-term behavior unchanged (pure exponential dominates for days < ~46 at stability=14.0). Long-term floor preserves ~3-6% baseline.
-
-**PASS** -- Hybrid formula correctly implemented and wired to all consumption points.
-
----
-
-## 7. C3 领域差异化 stability 验证
-
-`SEMANTIC_TYPE_STABILITY` table at `src/codememory/create.py:18-28`:
-
-| semantic_type | stability |
-|---------------|-----------|
-| schemas | 365.0 |
-| api | 365.0 |
-| architectural-decision | 90.0 |
-| decision | 90.0 |
-| research | 90.0 |
-| context | 30.0 |
-| meeting | 7.0 |
-| daily | 5.0 |
-| daily-notes | 5.0 |
-
-`_default_stability()` function (create.py:31-54) implements priority logic:
-1. Tags matching semantic types → lookup table value
-2. Schema reference → 365.0
-3. Default fallback → 14.0
-
-`handle_create()` (handlers.py:82, 94) passes through optional `stability` parameter.
-
-**PASS** -- Table, priority logic, and handle_create integration all match Generator claims.
-
----
-
-## 8. C4 数据源统一验证
-
-`search.py:76-82` refactored:
-```python
-dump = entry.model_dump(mode="json")
-dump["id"] = mid
-dump["dependents"] = _count_dependents(mid, index)
-results.append(dump)
-```
-
-- Zero manual field copying. Output built from `MemoryEntry.model_dump()`.
-- Computed fields `id` and `dependents` added on top of model dump.
-- All existing consumers verified working (API /api/search returns correct results, overview heat calculation passed).
-
-**PASS** -- Refactoring complete. Future MemoryEntry fields auto-propagate to search output.
-
----
-
-## 9. R15-N1 MemoryDetail 访问新鲜度验证
-
-`MemoryDetail.tsx:379-412`: "Access Freshness" section renders:
-- "Last accessed X days ago" / "just now"
-- "Stability: X.Xd"
-- "R: XX.X%" (calculated using the C2 hybrid formula inline in JS)
-- "Access count: N"
-- Never-accessed: "Never accessed · R=N/A"
-
-Backend `server.py:407-413`: `get_memory` endpoint returns `days_since_last_access`, `stability`, `access_count`.
-
-**PASS** -- All N1 acceptance criteria met.
-
----
-
-## 10. Generator 报告 vs 实际对比
-
-| Generator Claim | Actual | Match? |
-|-----------------|--------|--------|
-| "8/8 tasks complete" | 8/8 PASS | YES |
-| "TypeScript zero errors" | Zero errors | YES |
-| "Vite build success (484ms)" | Success (377ms), same file hashes | YES |
-| "57/57 unit tests" | 57/57 (0.29s) | YES |
-| "24/24 integration tests" | 24/24 | YES |
-| "5/5 API tests" | 5/5 (0.45s) | YES |
-| "/api/stats: total=11, stale=0" | total=11, stale_count=0 | YES |
-| "/api/wander: days_since + stability" | Both fields present | YES |
-| "/api/validate: validated=11, errors=0, warnings=1" | validated=11, errors=0, warnings=1 | YES |
-| "/api/docs: 200" | 200 | YES |
-| "CLI overview: top 5 with heat" | top 5 with heat scores | YES |
-| "Playwright: 5/5 (30.2s)" | 5/5 (29.2s) | YES |
-| "C1: stability increases on resolve" | 14.0 → 24.76 | YES |
-| "C2: 4 consumers wired" | 5 consumers (incl. resolve.py) | YES (minor undercount) |
-| "C3: 9 SEMANTIC_TYPE_STABILITY mappings" | 9 mappings | YES |
-| "C4: model_dump() used" | model_dump() used | YES |
-| "N1: Access Freshness rendered" | Section rendered with R calculation | YES |
-
-**Generator claims are fully accurate. All 8 tasks independently verified and confirmed complete.**
-
----
-
-## 11. pitfalls 合规检查
-
-| Pitfall | Status | Notes |
-|---------|--------|-------|
-| Sprint 13 PL3: English dataset stale placeholder hash | PASS | software-architecture stale_count=0 (R4-stale-fix resolved) |
-| Sprint 4: summary_hash initial value trap | PRE-EXISTING | Companion CLI overview shows [stale] but API stats shows stale_count=0. Known issue from placeholder hashes, not R15 regression |
-| Sprint 3: access_count precise assertion trap | AVOIDED | Verification uses >= or direction checks |
-| R15-C1: stability values grow with resolve access | ACCEPTED | Design behavior, verified correctly |
-| R15-C2: hybrid formula differs from pure exponential at long-term | ACCEPTED | Design behavior, short-term unchanged |
-| R15-C3: domain defaults only affect newly created memories | ACCEPTED | Design behavior, reindex non-retroactive |
-| R15-C4: model_dump() produces extra fields | NO BREAKAGE | All consumers use .get() access pattern |
-| R15-I1: HelpPanel uses panel-slide-exit (not modal classes) | PASS | Correctly uses panel-slide-exit + backdrop-fade-exit |
-| R15-P1: Playwright needs browser binary | PASS | Chromium installed, tests pass in headless mode |
-
-All in-scope pitfalls confirmed addressed or verified as non-issues.
-
----
-
-## 12. 新陷阱待追加
-
-1. **CLI overview [stale] 标记与 API stats stale_count 不一致**：companion 数据集的 `codememory overview` 命令将多条记忆标记为 `[stale]`，但 `GET /api/stats` 返回 `stale_count: 0` 和 `stale_ids: []`。两个入口使用不同的 stale 检测逻辑（CLI 使用 `compute_body_hash()` 实时计算，API 可能使用其他路径）。应统一或在 pitfalls.md 中记录此差异。
-
-2. **Backend 强制要求 `X-Codememory-Dataset` header**：所有 API 端点现在要求此 header。无 header 时返回 HTTP 422 + `"X-Codememory-Dataset header is required"`。这与早期 Sprint 文档中"无需 header 时使用默认数据集"的描述不同，应在 CLAUDE.md 或 SPRINT.md 中更新此行为变更。
-
-3. **C2 混合衰减公式同时存在于 Python 后端和 TypeScript 前端**：`compute_retrieval_probability()` 在 Python core.py 中定义，同时前端 MemoryDetail.tsx 也内联实现了相同的 R 计算公式。如果未来 min_retention 或公式参数需要调整，需在两个位置同步更改。应考虑通过 API 端点返回预计算的 R 值而非在前端重新计算。
-
----
-
-## 13. 决策：COMPLETE
-
-**8/8 tasks fully verified PASS. Zero discrepancies between Generator self-report and independent verification.**
-
-- 86/86 automated tests pass (57 unit + 24 integration + 5 API)
-- 5/5 Playwright e2e tests pass
-- TypeScript: zero errors
-- Vite build: success
-- All 4 backend endpoints respond correctly (stats/wander/validate/docs)
-- C1 adaptive stability update confirmed: 14.0 → 24.76 on resolve
-- C2 hybrid decay formula in core.py, wired to all 4+ consumer points
-- C3 SEMANTIC_TYPE_STABILITY table with 9 domain mappings
-- C4 search.py refactored to model_dump() eliminating dual representation
-- I1 HelpPanel exit animation wired with panel-slide-exit + backdrop-fade-exit
-- I2 Zero 11px DOM text remaining across all frontend components
-- N1 Access Freshness section rendered in MemoryDetail with R calculation
-- Generator claims 100% accurate. No false reports. No undiscovered defects.
-
----
-
-# Evaluator Report — Iteration 14
-
-> **Date**: 2026-05-07
-> **Evaluator**: QA Evaluator (independent verification — all acceptance commands re-run from scratch)
-> **Method**: Zero trust; all acceptance commands, tests, endpoints, code inspections executed fresh against the current working tree
-> **Sprint**: Sprint 14, 第 14 轮追加任务
-
----
-
-## 1. Checkbox 状态（逐项核对）
-
-| Task | Generator Claim | Evaluator Verdict | Evidence |
-|------|----------------|-------------------|----------|
-| R14-C1: Fix overview decay formula pipeline bug | [x] | **PASS** | `handlers.py:256` reads from `MemoryEntry` (not search dict). `handlers.py:260` reads `entry.days_since_last_access`. `search.py:85-86` now outputs `days_since_last_access` + `stability`. Heat values confirmed different from old formula via manual calculation (see section 3). |
-| R14-C2: Add stability boundary guards | [x] | **PASS** | `models.py:78`: `stability: float = Field(default=14.0, gt=0.0)`. `models.py:111-122`: `@field_validator("stability", mode="before")` rejects <=0, clamps <0.1 to 0.1. `handlers.py:257,346`: runtime `max(stability, 0.1)` safety clamps in overview + wander. |
-| R14-C3: Expose decay fields in API responses | [x] | **PASS** | `/api/memories`: access_count, last_access, days_since_last_access, stability present. `/api/stats`: decay_risk array present. `/api/wander`: stability + days_since_last_access present. `/api/search`: stability + days_since_last_access present. `types.ts`: DecayRiskEntry + decay_risk synced. |
-| R14-I1: Wire modal exit animations | [x] | **PASS** | `Dashboard.tsx` imports `useExitAnimation`, applies to wander/validate states. Modal accepts `closing` prop, applies `modal-fade-exit` / `backdrop-fade-exit` CSS classes. |
-| R14-I2: Fix all sub-12px fonts | [x] | **PASS** | Zero `fontSize: 9` or `fontSize: 10` in DOM UI text. All 7 documented violations fixed. HelpPanel badges 9->11px, MemoryDetail trim badge 9->11px, SearchBar Resolve 10->12px, view hints 10->11px. Interactive elements >=12px. |
-| R14-N1: Dashboard decay risk exposure | [x] | **PASS** | `Dashboard.tsx:455-515`: Decay Risk SectionCard reading `stats.decay_risk`, shows count + top 3 IDs with R values. |
-| R14-N2: Graph node right-click Resolve | [x] | **PASS** | `App.tsx:465`: `handleResolveFromContext` callback. `App.tsx:1326`: `<ContextMenuItem label="Resolve">`. |
-| R14-N3: Remove List view local filter bar | [ ] | **DEFERRED** | Intentionally skipped per plan. Not evaluated. |
-
-**Result: 7/8 tasks fully verified PASS. 1 task (R14-N3) intentionally deferred.**
-
----
-
-## 2. Acceptance Command Rerun Results
-
-### TypeScript type check
-```
-cd frontend && npx tsc --noEmit
-(no output = zero errors)
-```
-**PASS** — Zero type errors reproduces Generator claim.
-
-### Frontend production build
-```
-cd frontend && npx vite build
-✓ built in 338ms
-dist/index.html                   0.48 kB
-dist/assets/index-DzG4uodV.css   14.80 kB
-dist/assets/index-Cyl4NFqr.js   998.97 kB
-```
-**PASS** — Build succeeds. File sizes match Generator report.
-
-### Python unit tests
-```
-PYTHONPATH=src python -m pytest tests/unit/ -v --tb=short
-============================= 57 passed in 0.28s ==============================
-```
-**PASS** — 57/57. Matches Generator.
-
-### Python integration tests
+### Python Integration Tests
 ```
 PYTHONPATH=src python tests/integration_test.py
-Results: 24/24 passed
-All tests PASSED
 ```
-**PASS** — 24/24. Matches Generator.
+**PASS** — 24/24 passed.
 
-### API tests
+### API Tests
 ```
 PYTHONPATH=src python -m pytest tests/test_api.py -v --tb=short
-============================== 5 passed in 0.44s ==============================
 ```
-**PASS** — 5/5. Matches Generator.
+**PASS** — 5/5 passed (0.41s).
 
-### Backend endpoint regression
-
-| Endpoint | Status | Key findings |
-|----------|--------|--------------|
-| `GET /api/stats` | 200 | `decay_risk` present (empty array for companion — no memories below 0.1 threshold). total=11, validated_count=11. |
-| `POST /api/wander` | 200 | Returns `stability: 14.0`, `days_since_last_access: null` (no-access memory). |
-| `POST /api/validate` | 200 | validated_count=11, error_count=0, warning_count=1 (audit test memory decay — expected). |
-| `GET /docs` | 200 | Swagger UI accessible. |
-| `GET /api/memories?limit=2` | 200 | `access_count`, `last_access`, `days_since_last_access`, `stability` in every entry. |
-| `POST /api/search` | 200 | Results include `days_since_last_access` and `stability`. |
-
-**PASS** — All endpoints respond correctly with decay fields exposed.
+**Total executable tests: 86/86 (57 unit + 24 integration + 5 API)** — zero regressions.
 
 ---
 
-## 3. CLI Overview Decay Validation (Heat Values + Analysis)
+## Dataset 默认值验证 (Live Server)
 
-### Companion dataset (`--root examples/companion overview --limit 5`)
-```
-user/feelings/burnout-april       atom  heat: 48 [active] [stale]
-user/preferences/dislike-crowds   atom  heat: 48 [active] [stale]
-user/beliefs/friendship-view      atom  heat: 40 [active] [stale]
-user/feelings/proud-moment        atom  heat: 38 [active] [stale]
-user/preferences/morning-coffee   atom  heat: 38 [active] [stale]
-```
+Backend started on port 8722, verified with curl:
 
-**Manual formula verification for `user/beliefs/friendship-view`:**
-- Data: access_count=20 (from /api/memories), days_since_last_access=0, stability=14.0
-- decay = 0.5^(0/14.0) = 1.0
-- access_bonus = 20 * 1.0 = 20
-- deps count from search: 2
-- Expected heat = 2*10 + 20 = 40
-- **Actual heat = 40. Exact match.**
+| Test Case | Expected | Actual | Result |
+|-----------|----------|--------|--------|
+| No header | `current: investment` | `current: investment` | PASS |
+| X-Codememory-Dataset: companion | `current: investment` | `current: investment` | PASS |
+| X-Codememory-Dataset: nonexistent | `current: investment` | `current: investment` | PASS |
 
-**R13 bug formula would have produced:** 2*10 + 20*0.1 = 22. Not observed.
+All three cases return `"current": "investment"` — the server's true default, not influenced by any client header. The self-reinforcement regression is definitively fixed.
 
-**Manual formula verification for `user/context`:**
-- Data: access_count=1, days_since_last_access=7, stability=14.0
-- decay = 0.5^(7/14.0) = 0.5^0.5 ≈ 0.707
-- access_bonus = 1 * 0.707 ≈ 0.7
-- heat = 0*10 + 0.7 = 0 (correctly ranks below top 5)
-
-### Investment dataset (`--root examples/investment overview --limit 5`)
-```
-user/investment/risk-tolerance        atom  heat:141 [active]
-user/investment/semiconductor-thesis  atom  heat:134 [active]
-user/facts/nvidia-earnings            atom  heat: 35 [active]
-user/facts/soxl-composition           atom  heat: 35 [active]
-user/investment/february-buy          atom  heat:118 [active]
-```
-
-Wide variance (35-141) confirms decay differentiation — completely unlike R13's compressed pattern (31,31,21,21,20).
-
-### Verdict
-
-**PASS — The unified decay formula `0.5^(days/stability)` IS correctly activated in the overview path.** The bug described in R-RED-1 (overview reading `days_since_last_access` from search dict which lacked the field, causing fallback to constant `access * 0.1`) is confirmed fixed. Heat values show real differentiation and the manual calculation cross-check matches.
+Root cause fixes verified in source:
+- `backend/routers/stats.py:140`: Uses `DEFAULT_DATASET` constant directly, not `current_dataset.get()`
+- `backend/server.py:81-85`: Middleware skips ContextVar write on exempt paths (`if not is_exempt:`)
+- `frontend/src/api.ts:11`: `_currentDataset` initializes to `''` (empty string), not `'companion'`
 
 ---
 
-## 4. API Decay Field Exposure Verification
+## Lifespan 迁移验证
 
-All endpoints verified via curl:
+### Source Code Audit
+- `backend/server.py:17`: `from contextlib import asynccontextmanager` — imported
+- `backend/server.py:45-46`: `@asynccontextmanager` + `async def lifespan(app: FastAPI)` — defined
+- `backend/server.py:64`: `FastAPI(..., lifespan=lifespan)` — wired into app creation
+- `backend/server.py`: Zero occurrences of `@app.on_event("startup")` (only in comments on lines 8, 39)
 
-| Field | /api/memories | /api/stats | /api/wander | /api/search |
-|-------|:--:|:--:|:--:|:--:|
-| access_count | Yes | -- | Yes | -- |
-| last_access | Yes | -- | Yes | -- |
-| days_since_last_access | Yes | -- | Yes | Yes |
-| stability | Yes | -- | Yes | Yes |
-| decay_risk | -- | Yes | -- | -- |
-
-Frontend type definitions confirmed synced:
-- `DecayRiskEntry` interface (`types.ts:110`): `id: string`, `decay: number`
-- `StatsResponse.decay_risk` (`types.ts:127`): `DecayRiskEntry[]`
-- `WanderResponse`: includes `stability`, `days_since_last_access`
-- `SearchResultItem` (`api.ts`): includes `days_since_last_access`, `stability`
-
-**PASS** — All decay fields exposed across all required API surfaces with frontend types synced.
+### Runtime DeprecationWarning Check
+```
+PYTHONPATH=src CODEMEMORY_ROOT=examples/investment python -c "
+import warnings; warnings.simplefilter('error');
+import importlib; import backend.server;
+print('SUCCESS: No DeprecationWarning on import')
+"
+```
+**PASS** — No DeprecationWarning raised.
 
 ---
 
-## 5. Stability Boundary Guard Verification
+## Source-Level Verification of Remaining Tasks
 
-### models.py (lines 78, 111-122)
-```python
-stability: float = Field(default=14.0, gt=0.0, description="...")
+### R17-UX1: Graph Node Font-Size
+- `frontend/src/components/GraphCanvas.tsx:158`: `'font-size': '12px'` — confirmed 12px
+- No remaining `'font-size': '11px'` in the file.
 
-@field_validator("stability", mode="before")
-@classmethod
-def _clamp_stability(cls, v: object) -> float:
-    if v is None: return 14.0
-    val = float(v)
-    if val <= 0: raise ValueError(f"stability must be > 0, got {val}")
-    if val < 0.1: return 0.1
-    return val
-```
+### R17-UX2: List View Padding
+- `frontend/src/components/MemoryList.tsx`: 4 locations now use `32px` horizontal padding:
+  - Line 149: `padding: '16px 32px'` (filter bar)
+  - Line 195: `padding: '0 32px'` (table wrapper)
+  - Line 351: `padding: '12px 32px'` (pagination bar)
+  - Lines 469, 475: `padding: '16px 32px'` / `padding: '0 32px'` (skeleton variants)
+- No remaining `24px` horizontal padding in the file.
 
-**Defense layers:**
-1. Field-level: `gt=0.0` Pydantic constraint rejects <= 0 at model construction
-2. Validator: Rejects negative values with clear ValueError, clamps (0, 0.1) to 0.1
-3. Runtime: `handlers.py:257` and `handlers.py:346` apply `max(stability, 0.1)` in overview and wander
-4. None defaulting: Validator returns 14.0 for None input
+### R17-G1: SearchBar Resolve Tooltip
+- `frontend/src/components/SearchBar.tsx:381`: `title={`Resolve this memory's dependency graph into a structured context`}` — confirmed present
+- This is a native HTML `title` attribute on the button element, which browsers render as a tooltip regardless of CSS overlay/z-index context.
 
-**PASS** — Defense in depth. Model validation prevents invalid data at rest; runtime clamps guard edge cases at compute time.
-
----
-
-## 6. Modal Exit Animation Verification
-
-### Dashboard.tsx
-
-**Import and hook usage:**
-- `index.ts:4`: `import { useExitAnimation } from '../useExitAnimation'` (via barrel)
-- Line 26: `const { visible: wanderVisible, closing: wanderClosing } = useExitAnimation(!!wanderOpen)`
-- Line 27: `const { visible: validateVisible, closing: validateClosing } = useExitAnimation(!!validateOpen)`
-
-**Conditional rendering based on visible state:**
-- Wander Modal only renders when `wanderVisible` is true
-- Validate Modal only renders when `validateVisible` is true
-
-**Modal closing prop and CSS classes:**
-- Line 566: `<Modal onClose={...} closing={wanderClosing}>`
-- Line 763: `<Modal onClose={...} closing={validateClosing}>`
-- Line 1125: `function Modal({ children, onClose, closing = false })`
-- Line 1130: `className={closing ? 'backdrop-fade-exit' : 'backdrop-fade-enter'}`
-- Line 1139: `className={closing ? 'modal-fade-exit' : 'modal-fade-enter'}`
-
-**PASS** — The R13 PARTIAL PASS gap is now closed. Both Wander and Validate modals use `useExitAnimation` with `closing` prop wired to CSS exit animation classes. The 250ms exit animation plays on close before DOM unmount.
+### R17-G2: stability_source in API Responses
+- `backend/routers/memories.py`: 6 locations append `stability_source` field
+  - Line 78: `GET /api/memories` list
+  - Line 157: `GET /api/memories/{id}` detail
+  - Line 247: `POST /api/memories` create response
+  - Line 331: `PUT /api/memories/{id}` update response
+  - Line 373: `POST /api/memories/{id}/touch` response
+- `backend/routers/search.py`: 2 locations append `stability_source` field
+  - Line 317: search index path
+  - Line 340: search full-text path
+- Live verification: `GET /api/memories?limit=2` and `POST /api/search` both return `stability_source` field.
 
 ---
 
-## 7. Sub-12px Font Fix Verification
+## Generator 报告 vs 实际对比
 
-Scanned all `fontSize` declarations across `frontend/src/`:
+| Metric | Generator Report | Independent Verification | Match? |
+|--------|-----------------|--------------------------|--------|
+| TypeScript errors | 0 | 0 | YES |
+| Vite build | success | success (326ms) | YES |
+| Unit tests | 57/57 | 57/57 | YES |
+| Integration tests | 24/24 | 24/24 | YES |
+| API tests | 5/5 | 5/5 | YES |
+| Dataset no-header | investment | investment | YES |
+| Dataset companion header | investment (not polluted) | investment (not polluted) | YES |
+| Dataset nonexistent header | not tested | investment (not polluted) | YES (bonus) |
+| DeprecationWarning | none | none | YES |
+| stability_source in responses | present | present | YES |
+| on_event removed | yes | yes (only in comments) | YES |
+| GraphCanvas font-size | 12px | 12px | YES |
+| MemoryList padding | 32px | 32px (4 locations) | YES |
+| SearchBar tooltip title | present | present (line 381) | YES |
 
-| Component | Previous | Current | Verified |
-|-----------|----------|---------|----------|
-| HelpPanel layer badge | 9px | 11px | line 337 |
-| HelpPanel API method badge | 9px | 11px | line 405 |
-| MemoryDetail trim badge | 9px | 11px | line 630 |
-| SearchBar Resolve button text | 10px | 12px | line 309 |
-| App.tsx view shortcut hints | 10px | 11px | lines 678/699/720 |
-| SearchBar "includes fuzzy matches" | 11px | 12px | line 156 |
-| App.tsx archive backlink IDs | 11px | 12px | line 1474 |
-
-**Aggregate check:** Zero instances of `fontSize: 9` or `fontSize: 10` in any DOM text element across all frontend source files. All interactive elements (buttons, links, clickable text) at >= 12px. Decorative non-interactive elements at 11px minimum.
-
-**GraphCanvas.tsx note:** Line 272 has `'font-size': '9px'` in a Cytoscape stylesheet for `node.trim-skipped`. This is a canvas rendering parameter (not a DOM CSS property) for nodes explicitly designed to appear dim/small. Canvas labels scale with graph zoom. Not a regression and not in scope of the DOM text audit.
-
-**PASS** — All seven documented sub-12px DOM text violations confirmed fixed.
-
----
-
-## 8. Generator Report vs. Actual Comparison
-
-| Generator Claim | Evaluator | Match? |
-|-----------------|-----------|--------|
-| "7/8 tasks complete" | 7/8 PASS + 1 DEFERRED | YES |
-| "TypeScript zero errors" | Zero errors | YES |
-| "Vite build success (395ms)" | Success (338ms) | YES (timing variance normal) |
-| "57/57 unit tests" | 57/57 (0.28s) | YES |
-| "24/24 integration tests" | 24/24 | YES |
-| "5/5 API tests" | 5/5 (0.44s) | YES |
-| "/api/stats: decay_risk present" | decay_risk present | YES |
-| "/api/wander: stability+days" | stability + days_since_last_access present | YES |
-| "/api/validate: 200 OK" | 200 OK, 0 errors | YES |
-| "/api/memories: decay fields" | All 4 fields present | YES |
-| "/api/search: decay fields" | stability + days_since_last_access present | YES |
-| "Overview decay activated" | Verified via manual formula calc | YES |
-| "Companion heat values reflect decay" | Heat values differ from R13 bug | YES |
-| "R14-N3 intentionally skipped" | Confirmed not implemented | YES |
-
-**Result: Generator claims are 100% accurate. All pass claims independently verified and confirmed.**
+**Verdict**: Generator report is fully accurate. No discrepancies found.
 
 ---
 
-## 9. Pitfalls Compliance Check
-
-| Pitfall | Status | Notes |
-|---------|--------|-------|
-| Sprint 13 PL3: English dataset stale placeholder hash | N/A | Not modified this round |
-| Sprint 4: summary_hash initial value trap | Pre-existing | Companion overview shows [stale] on all memories — known issue from placeholder hashes, not a regression |
-| Sprint 3: access_count precise assertion trap | Avoided | Verification uses >= not == |
-| R14-C1 pitfall (SPRINT.md): heat values will differ from R13 eval | **CONFIRMED** | Heat values match corrected formula, not R13 eval values (31,31,21,21,20) |
-| R14-C2 pitfall (SPRINT.md): gt=0 validator may reject existing data | **VERIFIED SAFE** | All 4 datasets have stability=14.0 on disk; no rejection at load time |
-| R14-C3 pitfall (SPRINT.md): /api/memories shape change needs frontend sync | **VERIFIED** | types.ts synced, zero TypeScript errors |
-| R14-I1 pitfall (SPRINT.md): inline Modal needs `closing` prop | **VERIFIED FIXED** | Modal() now accepts `closing` prop and conditionally applies exit CSS classes |
-
-All in-scope pitfalls confirmed addressed or verified as non-issues.
-
----
-
-## 10. New Pitfalls to Append
-
-None identified. The sprint document already includes all four anticipated pitfalls (R14-C1, C2, C3, I1). No new traps emerged during independent verification.
-
----
-
-## 11. Decision: COMPLETE
-
-**7/8 tasks fully verified PASS. 1 task (R14-N3) intentionally deferred per plan.**
-
-- 57/57 unit tests, 24/24 integration tests, 5/5 API tests: zero regressions, zero failures.
-- TypeScript: zero errors.
-- Vite build: success.
-- All 6 backend endpoints respond correctly with decay fields exposed.
-- The critical overview decay formula bug (R14-C1 / R-RED-1) is confirmed **fixed**: `handlers.py` now reads `days_since_last_access` from `MemoryEntry` objects, the unified formula `0.5^(days/stability)` produces correct heat values. Manual calculation cross-check passes.
-- Stability boundary guards (R14-C2) provide defense-in-depth: model validation rejects invalid values, runtime clamps guard edge cases.
-- All backend and frontend decay fields (R14-C3) wired, TypeScript types synced.
-- Modal exit animations (R14-I1) now wired in Dashboard.tsx using `useExitAnimation` — closes the R13-A1 PARTIAL PASS gap.
-- Sub-12px fonts (R14-I2) all fixed: zero 9px/10px DOM text remains.
-- Dashboard decay risk section (R14-N1) functional.
-- Graph node right-click Resolve (R14-N2) wired.
-
----
-
-# Evaluator Report — Iteration 13
-
-> **Date**: 2026-05-07
-> **Evaluator**: QA Evaluator (independent verification — all acceptance commands re-run from scratch)
-> **Method**: Zero trust; all acceptance commands, tests, and code reviews executed fresh against the current working tree
-> **Sprint**: Sprint 13, 第 13 轮追加任务
-
----
-
-## 1. Checkbox 状态（逐项核对）
-
-### 第一梯队：审美完成
-
-| Task | Status | Verdict | Evidence |
-|------|--------|---------|----------|
-| R13-A1: 退场动画接线 | [x] | **PARTIAL PASS** | `useExitAnimation.ts` 创建并接线到 MemoryDetail/Settings/MemoryForm 三个面板（6 处：面板+遮罩各 3）。CSS 退场动画类（`panel-slide-exit`, `backdrop-fade-exit`）存在并使用。**但**：Wander/Validate 模态（Dashboard.tsx 内联 Modal 函数）和 Archive 确认模态（App.tsx）未使用退场动画——关闭时仍是 DOM 立即卸载，无 fade-out + scale-down。规范明确要求 "关闭 Wander/Validate/Archive 模态时可见 fade-out + scale-down 动画"，此项未完成。详见下方代码审查章节。 |
-| R13-A2: 修复残余 sub-12px 字号 | [x] | **PASS** | `Badges.tsx:20,31`: 默认 `fontSize` 从 11 提升到 12。`SearchBar.tsx:309`: "includes fuzzy matches" `fontSize: 11`（从 9）。`SearchBar.tsx:376`: match quality badge `fontSize: 11`（从 9）。无残留 10px 以下交互文字。 |
-| R13-A3: 搜索下拉框 fade-in 动画 | [x] | **PASS** | `index.css:286-293`: `@keyframes dropdownFadeIn`（150ms ease + translateY(4px)→0）。`SearchBar.tsx:188`: 下拉框挂载 `search-dropdown-enter` class。 |
-
-### 第二梯队：发现路径缩短
-
-| Task | Status | Verdict | Evidence |
-|------|--------|---------|----------|
-| R13-D1: 搜索结果 "Resolve →" 动作 | [x] | **PASS** | `SearchBar.tsx:346-372`: 每条结果旁渲染 "Resolve →" 按钮（`onResolve` prop 存在时）。点击后 `setShowResults(false)` + `onResolve(item.id)`。`App.tsx` 处理回调：关闭下拉框、切到 Graph 视图、100ms 延迟触发 resolve。 |
-| R13-D2: 视图切换按钮快捷键提示 | [x] | **PASS** | `App.tsx:670,691,712`: 三个按钮内嵌 `<span style={{ fontSize: 10, opacity: 0.55 }}>1/2/3</span>`。title 属性含 "keyboard: N"。Help 面板快捷键覆盖层同步记录（line 1570）。 |
-| R13-D3: Resolve 加载状态 | [x] | **PASS** | `App.tsx:49`: `isResolving` 状态。`MemoryDetail.tsx:418-444`: shimmer 骨架动画（3 条骨架行 + "Resolving..." 标题）在 `isResolving` 期间渲染。`GraphCanvas.tsx:458`: `isResolving` 期间跳过 trim-level 样式更新。 |
-
-### 第三梯队：衰减模型统一
-
-| Task | Status | Verdict | Evidence |
-|------|--------|---------|----------|
-| R13-M1: 统一衰减模型 | [x] | **PASS** | `handlers.py:253-262`: overview heat = `deps*10 + access*0.5^(days/stability)`。`handlers.py:333-348`: wander(cool) 权重 = `1/(access*0.5^(days/stability) + 1)`。`validate.py:78-103`: `_check_decay()` 使用 R < 0.1 连续阈值（`0.5^(days/stability) < 0.1` → 约 3.3 half-lives）。三套逻辑统一为同一公式。 |
-| R13-M2: 排除循环参与者 | [x] | **PASS** | `handlers.py:227-248`: 通过 `find_cycle_participants()` 预计算 required-imports DAG 的循环参与者。heat 计算时循环成员的 `dependents` 计为 0。非循环 imports 不受影响。 |
-| R13-M3: 预计算 days_since_last_access | [x] | **PASS** | `models.py:64`: `days_since_last_access: int | None`。`index.py:122-130`: reindex 时计算 `(now - last_access).days`，无访问记录则 None。`resolve.py:320`: resolve 后设为 0。overview heat 循环用 `entry.days_since_last_access` 替代 `datetime.fromisoformat`。 |
-| R13-M4: 添加 stability 字段 | [x] | **PASS** | `models.py:78`: `stability: float = Field(default=14.0)`。index.json 验证：所有 4 个数据集 reindex 后均有 `stability: 14.0`（float）。heat 公式使用 `stability` 替代硬编码 14.0。向后兼容：旧 index.json 缺少 stability 字段时 Pydantic 自动填充 14.0。 |
-
-### 第四梯队：基础设施
-
-| Task | Status | Verdict | Evidence |
-|------|--------|---------|----------|
-| R13-I1: 启用 OpenAPI /docs | [x] | **PASS** | `server.py:141`: `is_exempt = path in ("/", "/api/datasets", "/docs", "/openapi.json")`。`curl /docs` → 200。`curl /openapi.json` → 200。Swagger UI 可通过浏览器正常访问。 |
-
-### 总计：10/11 FULL PASS，1 PARTIAL PASS (R13-A1)
-
----
-
-## 2. 验收命令重跑结果
-
-### TypeScript 类型检查
-```
-cd frontend && npx tsc --noEmit
-→ 零错误（静默输出 = PASS）
-```
-
-### Frontend 构建
-```
-cd frontend && npx vite build
-→ 570 modules transformed, built in 365ms
-  CSS: 14.80 kB (gzip: 3.96 kB)
-  JS: 997.06 kB (gzip: 298.94 kB)
-  → PASS
-```
-
-### Python 单元测试
-```
-PYTHONPATH=src python -m pytest tests/unit/ -v --tb=short
-→ 57 passed in 0.27s (PASS)
-```
-
-### Python 集成测试
-```
-PYTHONPATH=src python tests/integration_test.py
-→ Results: 24/24 passed, All tests PASSED (PASS)
-```
-
-### Python API 测试
-```
-PYTHONPATH=src python -m pytest tests/test_api.py -v --tb=short
-→ 5 passed in 0.43s (PASS)
-```
-
-### Backend 端点回归
-```
-# /api/stats (companion dataset)
-curl -s -H "X-Codememory-Dataset: companion" http://localhost:8000/api/stats
-→ 200: total=11, maturity={verified:2,proven:6,draft:3}, stale_count=0, stale_ids=[], tags present
-
-# /api/wander
-curl -s -X POST -H "X-Codememory-Dataset: companion" http://localhost:8000/api/wander
-→ 200: Returns memory with id, type, summary, tags, intensity, access_count, last_access, status, maturity
-
-# /api/validate
-curl -s -X POST -H "X-Codememory-Dataset: companion" http://localhost:8000/api/validate
-→ 200: validated_count=11, error_count=0, warning_count=1 (audit test memory decay warning — expected)
-
-# /docs endpoint
-curl -s -o /dev/null -w "%{http_code}" http://localhost:8000/docs
-→ 200 (PASS)
-
-# /openapi.json endpoint
-curl -s -o /dev/null -w "%{http_code}" http://localhost:8000/openapi.json
-→ 200 (PASS)
-```
-
-### CLI overview 热力输出（衰减模型验证）
-```
-CODEMORY_ROOT=examples/investment PYTHONPATH=src python -m codememory.cli overview
-→ user/investment/risk-tolerance        heat:31 [active]
-   user/investment/semiconductor-thesis  heat:31 [active]
-   user/facts/nvidia-earnings            heat:21 [active]
-   user/facts/soxl-composition           heat:21 [active]
-   user/investment/february-buy          heat:20 [active]
-   与 Generator 自报 heat 值完全一致（31,31,21,21,20）
-```
-
-### Index 字段验证（4 数据集）
-```
-companion:            stability=True (14.0), days_since_last_access=True (None)
-investment:           stability=True (14.0), days_since_last_access=True (0)
-software-architecture: stability=True (14.0), days_since_last_access=True (None)
-quant_operators:      stability=True (14.0), days_since_last_access=True (0)
-→ 所有数据集 reindex 后均包含 stability 和 days_since_last_access 字段
-```
-
-### English 数据集 stale hash 验证
-```
-软件架构数据集: stale_count=0, stale_ids=[]（PASS——Sprint 10 auto-reindex 已修复）
-```
-
----
-
-## 3. Generator 报告 vs 实际对比
-
-| Generator Claim | Actual | Match? |
-|-----------------|--------|--------|
-| "11/11 任务完成" | 10/11 FULL + 1 PARTIAL | **PARTIAL** — R13-A1 模态退场动画未实现 |
-| "TypeScript 零错误" | 零错误 | YES |
-| "Vite 构建成功 (339ms)" | Vite 构建成功 (365ms) | YES (时间差异为正常方差) |
-| "57 单元测试通过" | 57 passed | YES |
-| "24 集成测试通过" | 24/24 passed | YES |
-| "5 API 测试通过" | 5 passed | YES |
-| "所有 Backend 端点正常" | stats/wander/validate/docs/openapi 全部 200 | YES |
-| "Index 字段: stability=14.0 float, days_since_last_access=0 int" | 确认 | YES |
-| "Overview heat: 31,31,21,21,20" | 31,31,21,21,20 | YES |
-| "软件架构 stale_count=0" | stale_count=0 | YES |
-
-**差异**: Generator 声称 11/11 任务完成，但 R13-A1 的模态退场动画（Wander/Validate/Archive）未实现。详见下方。
-
----
-
-## 4. R13-A1 退场动画代码审查（详细）
-
-### 已实现部分（3 面板 = 6 入口）
-
-| 组件 | 文件 | 行号 | 遮罩退场 | 面板退场 |
-|------|------|------|----------|----------|
-| MemoryDetail | `components/MemoryDetail.tsx` | 80,124,135 | `backdrop-fade-exit` ✅ | `panel-slide-exit` ✅ |
-| Settings | `components/Settings.tsx` | 87,96,107 | `backdrop-fade-exit` ✅ | `panel-slide-exit` ✅ |
-| MemoryForm | `components/MemoryForm.tsx` | 20,408,419 | `backdrop-fade-exit` ✅ | `panel-slide-exit` ✅ |
-
-`useExitAnimation.ts` hook 正确实现：
-- `show` 从 true→false 时设置 `closing=true`
-- 250ms 后 `setVisible(false)` 卸载 DOM
-- CSS 动画在 250ms 窗口内播放退场动画
-- Escape 键触发的关闭同样经过 `show=false` → 退场动画流程
-
-### 未实现部分（3 模态 = 0 入口）
-
-| 模态 | 文件 | 现状 | 规范要求 |
-|------|------|------|----------|
-| Wander 模态 | `Dashboard.tsx` Modal 函数 (inline) | `className="backdrop-fade-enter"` + `className="modal-fade-enter"`，无 exit 类，关闭时 DOM 立即卸载 | "关闭 Wander 模态时可见 fade-out + scale-down 动画" |
-| Validate 模态 | `Dashboard.tsx` Modal 函数 (同上) | 同上——两个模态共享同一个 Modal 函数 | "关闭 Validate 模态时可见 fade-out + scale-down 动画" |
-| Archive 确认模态 | `App.tsx:1393-1448` | `className="modal-fade-enter"`（仅入场），遮罩无动画类 | "关闭 Archive 模态时可见 fade-out + scale-down 动画" |
-
-**根因**: Dashboard.tsx 的 Modal 函数是纯展示组件——直接渲染 `backdrop-fade-enter` 和 `modal-fade-enter` 而不检查 closing 状态。要修复需要：(a) 将 Modal 提升为使用 `useExitAnimation`，(b) 或在调用方（Dashboard）管理 closing 状态。
-
-此外，HelpPanel（`App.tsx:1256`）也是条件渲染 `{showHelp && <HelpPanel />}`，无退场动画。但规范未显式要求 HelpPanel 退场动画。
-
-**影响评级**: MEDIUM。规范明确要求 Wander/Validate/Archive 模态退场动画，3 处未实现。但 3 个主要面板（MemoryDetail/Settings/MemoryForm）退场动画正常工作，这覆盖了用户最常见的交互路径。
-
----
-
-## 5. 衰减模型变更验证（CLI overview heat 输出）
-
-### 公式验证
-```
-handlers.py:261: decay = math.pow(0.5, days_since / stability)
-handlers.py:262: access_bonus = access * decay
-handlers.py:347: decay = math.pow(0.5, max(0, days_since) / stability)
-handlers.py:348: weight = 1.0 / (entry.access_count * decay + 1)
-validate.py:103: retrieval_prob = math.pow(0.5, days_since / stability)
-```
-- overview: `heat = deps*10 + access*0.5^(days/stability)` ✅
-- wander(cool): `weight = 1/(access*0.5^(days/stability) + 1)` ✅
-- validate decay: `R < 0.1` 时警告（连续阈值，非硬编码 30 天） ✅
-
-### 输出一致性
-Generator 报告的 heat 值与实际重跑完全一致：31, 31, 21, 21, 20。确认公式和计算正确。
-
-### 循环排除验证
-`handlers.py:237-248`：通过 `resolve.find_cycle_participants()` 检测 required-imports DAG 循环，循环成员 dependents 计为 0。代码路径完整。
-
----
-
-## 6. Pitfalls 合规检查
-
-| Pitfall | 状态 | 说明 |
-|---------|------|------|
-| Sprint 13 PL1: server.py imports YAML 直接写入 | **N/A** | R13 变更未触及 create/update 的 imports 处理 |
-| Sprint 13 PL1: Budget 无操作检查仅对增加方向有效 | **N/A** | R13 未修改 budget 逻辑 |
-| Sprint 13 PL1: 空 body 的 summary_hash 确定性 | **N/A** | R13 未修改 body hash 计算 |
-| Sprint 13 PL3: 英文数据集 stale 占位 hash | **PASS** | 软件架构数据集 stale_count=0（Sprint 10 auto-reindex 已解决） |
-| R12-UX2 退场动画陷阱（需 closing 状态+延迟卸载） | **PARTIAL** | R13-A1 的 useExitAnimation 正确实现了 closing 模式用于 3 个面板，但 3 个模态未采用此模式——直接跳过而非实现 |
-| Sprint 11: Vite 端口可能被占用 | **N/A** | 仅生产构建验证 |
-| Sprint 11: Backend 需要 CODEMORY_ROOT | **N/A** | Backend 通过 `--root` + `X-Codememory-Dataset` 正常工作 |
-| Sprint 9: 全局 MEMORY_ROOT 线程不安全 | **N/A** | 预存在状态，R13 未恶化 |
-
----
-
-## 7. 失败原因分析（R13-A1 模态退场动画缺口）
-
-**症状**: Wander/Validate/Archive 三个模态关闭时无退场动画，DOM 立即卸载。
-
-**根本原因**: 三个模态使用了两种不同的渲染模式，均缺少退场动画机制：
-1. Wander/Validate 共享 `Dashboard.tsx` 的本地 `Modal()` 函数——纯展示组件，硬编码 `backdrop-fade-enter` / `modal-fade-enter`，无 closing 状态管理
-2. Archive 确认模态在 `App.tsx` 中为内联 JSX——仅 `modal-fade-enter`，无退场动画类
-
-**修复建议**:
-- 方案 A（推荐）: 将 Dashboard Modal 重构为使用 `useExitAnimation`，从父组件接收 `open` prop + `onClose`
-- 方案 B: 在 Dashboard 调用方手动管理 closing 状态和 CSS 类切换
-
-**工作量估计**: 方案 A 约 20-30 行，方案 B 约 15 行。
-
----
-
-## 8. 新陷阱待追加（Sprint 结束后追加到 pitfalls.md）
-
-- **[R13-A1] 内联 Modal 函数无法复用 useExitAnimation hook。** Dashboard.tsx 中的 `Modal({ children, onClose })` 是本地纯函数组件——它接收不到表示"正在关闭"的 prop，因此无法在关闭时切换 CSS 类。当多个模态（Wander/Validate）共享同一个 Modal 组件时，模态的打开/关闭状态在父组件中管理，Modal 需要接收额外的 `closing` prop 或自身集成 `useExitAnimation`。修复时应避免在 Modal 函数内部创建独立的动画状态（会导致与父组件的状态不同步）。
-
-- **[R13-M3] days_since_last_access 的 None vs 0 语义差别。** `None` 表示"从未被访问"（应使用保守的 days=0 或忽略衰减），`0` 表示"刚刚访问过"。overview/wander/validate 代码中均使用 `max(0, days_since or 0)` 处理 None 情况。对于从未访问的记忆，衰减计算结果为 `0.5^0 = 1.0`（无衰减），这与"从未访问 = 冷却权重高"的直觉可能矛盾。未来 wander 可能需要区分"从未访问"（高冷却）和"刚刚访问"（低冷却）两种语义。
-
----
-
-## 9. 决策（信息性）
-
-**CONTINUE — 10/11 任务完全验证通过，R13-A1 有模态退场动画缺口（3 个模态未实现）。86/86 测试通过（57 unit + 24 integration + 5 API），TypeScript 零错误，Vite 构建成功，零回归。**
-
-R13-A1 的缺口影响范围有限（3 个模态），3 个主要面板的退场动画工作正常。衰减模型统一（M1-M4）代码审查和实测均确认正确，overview CLI 输出与 Generator 报告完全一致。
+## 决策：COMPLETE
+
+All 6 Round 17 tasks are independently verified as complete:
+- 6/6 checkboxes verified
+- 86/86 executable tests pass with zero regressions
+- Dataset default value regression is confirmed fixed at all three levels (frontend init, middleware exempt guard, endpoint constant)
+- Lifespan migration is complete with no DeprecationWarning
+- stability_source is serialized across all 6 API response paths
+- UX fixes (font-size 12px, padding 32px) confirmed in source
+- SearchBar Resolve tooltip confirmed in source
+
+**No blocking issues. No regressions. Generator's self-report matches independent verification exactly.**

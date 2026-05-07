@@ -1284,3 +1284,80 @@ PYTHONPATH=src python tests/integration_test.py
 - **下一 Sprint 次高优先级——语义图谱**：语义边扩展（5 天）+ God Object 完整拆分（3 天，如前序未完成）。Gemini 研究员标注为长链推理突破点。
 - **导入端点 CLI/API 统一**（进化策略师 + 体验官）—— `codememory import` CLI 和 `POST /api/import` 端点当前行为一致但代码路径分离。合并为共享 handler 减少分歧风险。
 - **搜索性能基准测试**（进化策略师 TH2 延伸）—— 在 100/500/1000 条记忆的数据集上建立搜索性能基线。为未来 SQLite 索引后端迁移提供量化依据。
+
+---
+
+## 第 17 轮追加任务
+
+> **日期**：2026-05-07
+> **上轮评估**：Round 16 — 16/16 PASS，零回归（91/91 测试通过）。APIRouter 拆分完成、全文搜索交付、可写 MCP 工具上线。体验官审计 7.2/10（功能 6.5 因 dataset 回归下降，美学 8.0）。进化策略师审计 7.5/10（引擎 9.5/10，产品体验 6/10）。
+> **主题**：整顿 —— 修复 R16 遗留回归、回应体验官发现的展示问题、消除技术债务警告。
+> **筛选原则**：本轮不接受新功能。只做缺陷修复和债务消除。所有任务均有审计报告直接证据支撑。
+
+### 第一梯队：CRITICAL 回归修复（必达，< 1 小时）
+
+- [x] R17-CR1: 修复 dataset 默认值自强化回归
+  - 目标：自 R16-A1 APIRouter 拆分后，每个浏览器会话初始化为 companion（11 条个人记忆、82% stale、极少依赖）而非服务端配置的 investment。根因两段式：(a) 前端 `api.ts` 硬编码 `_currentDataset = 'companion'` 导致首次 API 调用发送 `X-Codememory-Dataset: companion` header；(b) 后端 `_DatasetContextMiddleware` 在豁免路径（如 `/api/datasets`）上仍从 header 写入 ContextVar；(c) `/api/datasets` handler 从已污染的 ContextVar 读取 `current` 字段。修复要求：服务端 `/api/datasets` 端点返回服务端真实默认值（使用 `DEFAULT_DATASET` 常量，不读 per-request ContextVar）；前端初始化 `_currentDataset` 为空字符串，由 datasets API 响应设置初始值；中间件对豁免路径不写 ContextVar。
+  - 验收：`curl http://localhost:8000/api/datasets` 返回 `"current": "investment"`；`curl -H "X-Codememory-Dataset: companion" http://localhost:8000/api/datasets` 仍返回 `"current": "investment"`（不因 header 改变）；`curl -H "X-Codememory-Dataset: nonexistent" http://localhost:8000/api/datasets` 仍返回 `"current": "investment"`（不因 header 改变）；浏览器首次访问（无 localStorage）初始化为 investment 数据集；已有 localStorage 的用户不受影响（继续使用已保存的 defaultDataset）；数据集切换行为不变；全部 91 测试无回归
+  - 来源：体验官 CR1/CR2、进化策略师 TH5——两段式回归，服务端 ContextVar 被客户端请求污染
+
+### 第二梯队：展示层修复（< 30 分钟合计）
+
+- [x] R17-UX1: 图节点标签字号提升至 12px
+  - 目标：R15 将交互元素提升至 12px floor，但图 canvas 上的节点标签仍为 11px。体验官现场验证指出 Legend 中目录名可读但图节点标签难以辨认。将图 canvas 节点标签字号提升至 12px，与产品其余部分的已建立 floor 一致。
+  - 验收：图 canvas 上所有节点标签字号 >= 12px；亮色和深色模式下可读；Legend 渲染不变；TypeScript 构建零错误
+  - 来源：体验官执行摘要 + Phase 2.2 排版评估——"图节点标签 11px 仍太小"
+
+- [x] R17-UX2: 修复 List 视图水平 padding 回归
+  - 目标：体验官注意到 List 视图表格缺少水平内边距，内容紧贴边缘显示。这是 R16 期间遗留的展示回归。恢复合理的水平 padding。
+  - 验收：List 视图表格单元格有可见的水平内边距（内容不紧贴左右边缘）；亮色和深色模式均适用；列表行为不变（排序、分页、点击跳转 MemoryDetail）；TypeScript 构建零错误
+  - 来源：体验官执行摘要——"List 视图缺少水平 padding（回归）"
+
+### 第三梯队：R16 交付完整性补充（< 30 分钟合计）
+
+- [x] R17-G1: 确认/修复 SearchBar Resolve 按钮 tooltip 在实时环境中生效
+  - 目标：R16-P2 被 Generator 和 Evaluator 均标记为 PASS（源码中存在 tooltip），但体验官现场测试报告"SearchBar Resolve 按钮无 tooltip"。需现场验证：(a) 编译后的 DOM 中 title 属性是否存在；(b) 若存在但不可见，根因可能是 CSS z-index 被下拉菜单叠层覆盖、title 属性被 CSS content 覆盖、或条件渲染路径在特定 dataset 组合下跳过了 tooltip 宿主元素。根据现场诊断结果修复。
+  - 验收：鼠标悬浮在搜索结果的 "Resolve →" 按钮上时 tooltip 可见；tooltip 文本解释 Resolve 功能；亮色和深色模式下均可用；TypeScript 构建零错误
+  - 来源：体验官执行摘要 + R16-P2 验收核对（存在交付-运行差异的可能性）
+
+- [x] R17-G2: 暴露 `stability_source` 字段到 API 响应
+  - 目标：Eval 报告 8.1 指出 `stability_source` 在 `MemoryEntry` 模型中已定义（`models.py`）且后端逻辑正确检查（`resolve.py` 的 SInc 豁免），但未出现在任何 API 端点的 JSON 响应中。前端 `MemoryDetail.tsx` 检查 `memory.stability_source === 'manual'` 来显示 "(manual)" 标签——此标签因字段永久缺失而从不渲染。后端保护正确（manual stability 不被 SInc 覆盖），但前端 UX 降级。修复方式：在 API 响应序列化中包含 `stability_source` 字段。
+  - 验收：`GET /api/memories/{id}` 响应包含 `stability_source` 字段；`GET /api/memories?limit=N` 响应中每条记忆包含 `stability_source` 字段；`POST /api/memories/{id}/touch` 响应包含 `stability_source` 字段；`POST /api/search` 结果中每条记忆包含 `stability_source` 字段；手动设置 stability 的记忆显示 `stability_source: "manual"`；未手动调整的记忆显示 `stability_source: "adaptive"`（或等效默认值）；MemoryDetail 面板中 "(manual)" 标签对手动调整 stability 的记忆可见；全部 91 测试无回归
+  - 来源：Eval 报告 8.1——序列化缺口（非逻辑缺口），后端保护正确但前端 UX 降级
+
+### 第四梯队：技术债务消除（< 30 分钟合计）
+
+- [x] R17-T1: FastAPI `on_event` → lifespan 迁移
+  - 目标：`server.py` 使用已废弃的 `@app.on_event("startup")`，每次启动触发 `DeprecationWarning`。迁移至 lifespan context manager（`@app.router.on_event` 或 `async def lifespan`），消除废弃警告。启动逻辑（CORS 中间件注册、router 挂载）执行时机和顺序不变。
+  - 验收：`uvicorn backend.server:app` 启动无 DeprecationWarning；`/docs` Swagger UI 可访问；所有 API 端点正常响应；全部 91 测试无回归
+  - 来源：Eval 报告 8.3——每次启动触发 DeprecationWarning，长期累积开发摩擦
+
+---
+
+### 本轮排除项目（不接受、不实现、不讨论）
+
+- **新功能提案**（Review Queue、Dataset Comparison、Memory Timeline、Dependency Health Score、Export-as-Context）—— 留待未来 Sprint
+- **竞争差距**（导入 UI、AI 辅助创建、语义搜索、移动端适配）—— 留待未来 Sprint
+- **架构迁移**（App.tsx 状态管理、CSS 现代化、SQLite 索引后端）—— 留待未来 Sprint
+- **companion 数据集维护**（依赖丰富、内容清洗）—— 数据集回归修复后 investment 成为默认值，紧迫性自然下降。留待未来 Sprint。
+- **Dashboard stale ID 可点击** —— 体验官 Nice-to-have N2。本轮容量已用于更紧急的回归修复。
+- **图节点 hover tooltip 丰富** —— 体验官 Nice-to-have N3。
+- **暗色模式图节点填充可见性** —— 体验官 Nice-to-have N4。
+- **响应式工具栏** —— 体验官 Nice-to-have N5。
+- **无障碍全大写覆写** —— 体验官 Nice-to-have N6。
+- **Playwright 测试需后端运行** —— Eval 8.2。CI 就绪改进，非代码缺陷。
+- **搜索精确/模糊结果分组** —— 体验官 Important I4。功能改进非缺陷。
+- **引导流程数据集感知** —— 体验官 Important I3。内容改进非缺陷。
+
+### 新增陷阱（本轮结束后追加至 pitfalls.md）
+
+- **[R17-CR1] ContextVar 在 ASGI 中间件中的生命周期。** `_DatasetContextMiddleware` 使用 `ContextVar` 存储当前数据集。在 ASGI 事件循环中，ContextVar 的值在请求之间隔离（类似于 `threading.local`）。但需验证：如果客户端在不带 header 的情况下调用 `/api/datasets`（在之前带 header 的请求之后），新的请求是否会获得自己的 ContextVar 副本（应为空默认值）？修复方式有两种：(a) 简单修复——`/api/datasets` handler 忽略 ContextVar，直接使用 `DEFAULT_DATASET` 常量；(b) 完整修复——中间件完全不在豁免路径上写 ContextVar + `/api/datasets` 使用 `DEFAULT_DATASET`。方案 (a) 更安全（datasets handler 的可预测性不依赖中间件行为）。优先级：方案 (a)。
+
+- **[R17-CR1] 前端初始化时序。** 当前 `fetchDatasets()` 是首个 API 调用。如果改为 `_currentDataset = ''`，首次调用将发送空 header（或不发 header——取决于 `_DatasetContextMiddleware` 对空值的处理）。需确认：空 header 时服务端的行为是否等于无 header。如果空字符串被中间件视为有效 dataset 名称写入 ContextVar，会引入新 bug（ContextVar 被设为空字符串而非保持默认值）。修复方式：前端在 `_currentDataset` 为空时不发送 `X-Codememory-Dataset` header。
+
+- **[R17-G1] tooltip 验证需在实时环境中进行。** 源码检查可能确认 title 属性存在，但浏览器渲染可能因 CSS 或叠层上下文隐藏 tooltip。验收需使用浏览器开发者工具检查：(a) 下拉搜索结果中的 Resolve 按钮 DOM 节点是否有 title 属性；(b) hover 时浏览器原生 tooltip 是否弹出；(c) 若使用自定义 tooltip 组件而非原生 title，需检查组件是否正确挂载且 z-index 高于下拉菜单。
+
+- **[R17-G2] stability_source 字段新增对 API 消费者的影响。** 在 API 响应 JSON 中新增字段是向后兼容的纯加法——未知字段被任何合理实现的消费者忽略。但需确认：Pydantic model 中 `stability_source` 是否有 `default` 值（旧记忆在 index.json 中无此字段时反序列化是否正确）。如果旧数据加载后 `stability_source` 为 None，序列化时应输出合理的默认值（如 `"adaptive"`）而非 `null`。
+
+- **[R17-T1] lifespan 迁移后 startup 执行时机。** `@app.on_event("startup")` 和 lifespan 的 `yield` 之前逻辑执行时机相同——均在 app 启动后、首次请求前。但需确认：`@app.middleware` 装饰器注册的中间件是否在 lifespan 启动后正确挂载。FastAPI 的 middleware 注册通常在 app 创建时完成（`app.add_middleware(...)`），不受 startup 事件影响。如果 `server.py` 中中间件注册在 `on_event("startup")` 内执行（非常规做法），则 lifespan 迁移需将其移到 app 创建阶段。
+

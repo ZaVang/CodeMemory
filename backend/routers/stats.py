@@ -11,6 +11,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException
 
 from shared import (
+    DEFAULT_DATASET,
     DatasetSwitchRequest,
     compute_body_hash,
     current_dataset,
@@ -132,7 +133,11 @@ def post_reindex():
 @router.get("/datasets")
 def get_datasets():
     datasets = get_available_datasets()
-    current = str(current_dataset.get())
+    # R17-CR1: Always return the server's real default (DEFAULT_DATASET),
+    # not whatever the client may have sent in the X-Codememory-Dataset header.
+    # The middleware no longer writes ContextVar on exempt paths, but using
+    # the constant here is a belt-and-suspenders defence against self-reinforcement.
+    current = DEFAULT_DATASET
     current_name = current
     return {
         "datasets": serialize(datasets),

@@ -145,8 +145,8 @@ export default function MemoryList({ onSelectMemory, refreshTrigger, initialFilt
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', backgroundColor: 'var(--cm-bg-primary)' }}>
-      {/* Filter bar */}
-      <div style={{ padding: '16px 24px', borderBottom: '1px solid var(--cm-border)', display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
+      {/* Filter bar — R17-UX2: increased horizontal padding */}
+      <div style={{ padding: '16px 32px', borderBottom: '1px solid var(--cm-border)', display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
         <div style={{
           display: 'flex',
           alignItems: 'center',
@@ -191,8 +191,8 @@ export default function MemoryList({ onSelectMemory, refreshTrigger, initialFilt
         </span>
       </div>
 
-      {/* Table */}
-      <div style={{ flex: 1, overflow: 'auto', padding: '0 24px' }}>
+      {/* Table — R17-UX2: increased horizontal padding */}
+      <div style={{ flex: 1, overflow: 'auto', padding: '0 32px' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
             <tr>
@@ -348,7 +348,7 @@ export default function MemoryList({ onSelectMemory, refreshTrigger, initialFilt
       {/* Pagination */}
       {totalPages > 1 && (
         <div style={{
-          padding: '12px 24px',
+          padding: '12px 32px',
           borderTop: '1px solid var(--cm-border)',
           display: 'flex',
           alignItems: 'center',
@@ -466,13 +466,13 @@ function ListSkeleton() {
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', backgroundColor: 'var(--cm-bg-primary)' }}>
       {/* Filter bar skeleton */}
-      <div style={{ padding: '16px 24px', borderBottom: '1px solid var(--cm-border)', display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
+      <div style={{ padding: '16px 32px', borderBottom: '1px solid var(--cm-border)', display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
         <div className="skeleton-shimmer" style={shimmerBlock(260, 30)} />
         <div className="skeleton-shimmer" style={shimmerBlock(100, 16)} />
       </div>
 
-      {/* Table skeleton */}
-      <div style={{ flex: 1, overflow: 'hidden', padding: '0 24px' }}>
+      {/* Table skeleton — R17-UX2: increased horizontal padding */}
+      <div style={{ flex: 1, overflow: 'hidden', padding: '0 32px' }}>
         {/* Header row */}
         <div style={{ display: 'flex', gap: 12, padding: '12px 0', borderBottom: '2px solid var(--cm-border)' }}>
           {COLUMNS.map((w, i) => (

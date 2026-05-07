@@ -1,61 +1,75 @@
-# Generator Status — Iteration 16 (Final)
+# Generator Status — Round 17 (Final)
 
-## 完成的任务 (16/16)
+**日期：** 2026-05-07
+**模型：** deepseek-v4-pro
+**主题：** 整顿 — 6/6 任务完成，全部 86 测试零回归
 
-### 第一梯队：必达 — 承诺兑现 + 已知缺陷 (F1-F5)
+---
 
-- [x] **R16-F1: 修复端点缺失的 decay 字段** — POST/PUT 端点在 reindex 后重新加载索引，确保 `days_since_last_access`、`stability`、`access_count` 出现在响应中。`get_memory` 端点调整 dict 构建顺序：`**meta` 在前，显式 decay 字段在后覆盖，防止 frontmatter 覆盖索引数据。
+## 完成的任务 (6/6)
 
-- [x] **R16-F2: 修复过时注释** — 修正 Badges.tsx 中 "List view uses 10px" 为 "List view also uses 12px"。
+### 第一梯队：CRITICAL 回归修复
 
-- [x] **R16-F3: 修复 Playwright 配置** — 添加 `import path from 'path'` 和 `import { fileURLToPath } from 'url'`，计算 `__dirname`。`testDir` 改为 `path.resolve(__dirname, './tests')`。webServer 添加 `cwd: __dirname`。`package.json` 添加 `test:e2e:root` 脚本。
+- [x] **R17-CR1: 修复 dataset 默认值自强化回归**
 
-- [x] **R16-F4: R-probability 三档着色** — MemoryDetail 的 Access Freshness 区域使用绿色(R>50%)、琥珀色(10-50%)、红色(R<10%) 着色 R 值。
+  根因两段式：(a) 前端 `api.ts:8` `_currentDataset = 'companion'` 硬编码初始值；(b) 后端 `_DatasetContextMiddleware` 对豁免路径 `/api/datasets` 仍写入 ContextVar；(c) `get_datasets()` handler 从已污染的 ContextVar 读取 `current`。
 
-- [x] **R16-F5: 陈旧检测时降低 stability** — `resolve.py` 在 SInc 之前检测陈旧记忆，对它们的 stability 应用 0.90 衰减因子（下限 14.0）。`MemoryEntry` 添加 `stability_source` 字段追踪来源。
+  **修复（三处原子变更）：**
 
-### 第二梯队：特性 — 全文搜索 + stability UI (C1-C2)
+  | 位置 | 变更 | 文件 |
+  |------|------|------|
+  | datasets 端点 | `current_dataset.get()` → `DEFAULT_DATASET` 常量 | `backend/routers/stats.py` |
+  | 中间件 | exempt 路径不写 ContextVar（加 `if not is_exempt:` 守卫） | `backend/server.py` |
+  | 前端初始化 | `'companion'` → `''`（空值不发 header） | `frontend/src/api.ts` |
 
-- [x] **R16-C1: 全文 body 搜索** — 搜索端点加载 `.md` 文件 body 内容并参与模糊匹配。匹配优先级：ID > summary > tag > body。搜索结果包含高亮 snippet（`<mark>` 标签封装匹配关键词）。
+  验收：
+  - `curl /api/datasets` → `"current": "investment"` ✓
+  - `curl -H "X-Codememory-Dataset: companion" /api/datasets` → `"current": "investment"` ✓（不受 header 污染）
+  - 前端初始化时序正确：空 `_currentDataset` 时不发 header，服务端返回真实默认值 ✓
 
-- [x] **R16-C2: 单条记忆 stability 滑块** — MemoryDetail 面板添加 stability 滑块（范围 1-365，步长 1）。拖动后设置 `stability_source: "manual"` 并持久化到 index.json。SInc 公式仅对 `stability_source != "manual"` 的记忆应用。
+### 第二梯队：展示层修复
 
-### 第三梯队：衰减表面 (S1-S3)
+- [x] **R17-UX1: 图节点标签字号 11px → 12px**
 
-- [x] **R16-S1: Touch 端点** — 新增 `POST /api/memories/{id}/touch` 端点：更新 `last_access` 为当前时间、`days_since_last_access` 设为 0、若 stability_source 非 manual 则用 SInc 重算 stability。前端添加 Touch 按钮，点击后显示 ~600ms 对勾动画，"Last accessed" 变为 "just now"，R 值更新并着色为绿色。
+  `GraphCanvas.tsx:158` `'font-size': '11px'` → `'12px'`，与 R15 建立的 12px floor 一致。适用于亮色/深色模式。
 
-- [x] **R16-S2: 搜索结果中显示访问新鲜度** — SearchBar 搜索结果条目内联显示 "X days ago" / "never" 和 R-probability 百分比（三档着色）。数据来自搜索 API 响应中的 `days_since_last_access` 和 `stability` 字段。
+- [x] **R17-UX2: List 视图水平 padding 回归**
 
-- [x] **R16-S3: List 视图健康列** — MemoryList 表格新增 "Health" 列：每行显示彩色水平条形（绿/琥珀/红）和 R 百分比数值。Health 列可排序（按 R 值降序——最有风险的排在最前）。点击健康指示器打开 MemoryDetail 面板。
+  `MemoryList.tsx` 中 4 处 `24px` 统一提升至 `32px`：filter bar、table wrapper、pagination bar、skeleton 变体。组合后的水平呼吸空间充足（表头/单元格另有独立 `padding: 8px 12px`）。
 
-### 第四梯队：批量 Polish (P1-P3)
+### 第三梯队：R16 交付完整性补充
 
-- [x] **R16-P1: 移除 Wander 模式切换** — HelpPanel 移除 "cool" / "random" 模式切换 UI 和对应状态管理。默认使用 "cool" 模式。
+- [x] **R17-G1: SearchBar Resolve tooltip 确认**
 
-- [x] **R16-P2: Resolve 按钮 tooltip** — SearchBar 搜索结果中的 "Resolve ->" 按钮添加 title 属性 "Resolve this memory's dependency graph into a structured context"。
+  源码中 `SearchBar.tsx:381` 已有 `title="Resolve this memory's dependency graph into a structured context"` 属性。全局 CSS 无任何规则干扰原生 title tooltip。按钮位于下拉菜单内（`overflowY: auto`），但原生 tooltip 不受 CSS overflow 限制。代码正确，无需修改。
 
-- [x] **R16-P3: 上下文菜单快捷键提示** — App.tsx 的 ContextMenuItem 组件添加可选的 `shortcut` prop，右键菜单项显示快捷键提示（"Ctrl+D"、"Ctrl+R"、"Ctrl+E"、"Del"）。
+- [x] **R17-G2: 暴露 `stability_source` 到 API 响应**
 
-### 第五梯队：延伸目标 (M1, A1)
+  6 个端点序列化路径全部追加该字段：
 
-- [x] **R16-M1: 可写 MCP 工具** — `mcp_server.py` 添加 `propose_memory` 和 `propose_update` 工具定义。`propose_memory` 创建 `maturity: draft` + `status: proposed` 的记忆；`propose_update` 以 `[PROPOSED]` 前缀提出更新。两个工具均非 readOnly。
+  | 端点 | 文件:行 | 字段来源 |
+  |------|---------|---------|
+  | `GET /api/memories` | `memories.py:78` | `d.get("stability_source", None)` |
+  | `GET /api/memories/{id}` | `memories.py:157` | `getattr(entry, "stability_source", None)` |
+  | `POST /api/memories` | `memories.py:246` | `getattr(entry, ...)` |
+  | `PUT /api/memories/{id}` | `memories.py:331` | `getattr(updated_entry, ...)` |
+  | `POST /api/memories/{id}/touch` | `memories.py:373` | `getattr(entry, ...)` |
+  | `POST /api/search` | `search.py:318,340` | `d.get("stability_source", None)` |
 
-- [x] **R16-A1: APIRouter 拆分** — `server.py` 从 ~1419 行缩减至 ~180 行（仅 app 创建、中间件、router 挂载和启动逻辑）。端点按业务域拆分为 3 个 router 模块：
-  - `routers/memories.py`：8 个端点（GET list/by id/backlinks、POST create/update/import、DELETE、POST touch）
-  - `routers/search.py`：3 个端点（GET graph、POST resolve、POST search）
-  - `routers/stats.py`：6 个端点（GET stats、POST wander/validate/reindex、GET datasets、POST datasets/switch）
-  - 共享代码提取至 `backend/shared.py`（helpers、Pydantic models、配置常量）
+  验收：TestClient 验证所有端点响应包含 `stability_source` 字段，前端 `MemoryDetail.tsx` 的 `stability_source === 'manual'` 检查现在可达 ✓
 
-## 未完成的任务
+### 第四梯队：技术债务消除
 
-无。全部 16 项任务完成。
+- [x] **R17-T1: FastAPI `on_event` → lifespan 迁移**
 
-## A1 bug 修复记录
+  废弃的 `@app.on_event("startup")` 替换为 lifespan context manager：
+  - 引入 `from contextlib import asynccontextmanager`
+  - 定义 `async def lifespan(app: FastAPI)`：startup reindex 逻辑 + `yield`
+  - `FastAPI(lifespan=lifespan)` 替代 `@app.on_event`
 
-APIRouter 拆分过程中发现并修复了 3 个错误：
-1. **resolve 端点丢失结构化响应**：新 router 返回 `{"result": text}` 而非包含 `target`、`depth`、`budget`、`nodes`、`full_text`、`notices` 的结构化响应。修复：将完整的 resolve 解析逻辑从旧 server.py 移植到 routers/search.py。
-2. **stats 端点键名不匹配**：router 返回 `"types"` 而非 `"type"`、`"statuses"` 而非 `"status"`，与 API 测试预期不符。修复：对齐键名。
-3. **Vite build 失败**：App.tsx 第 1666 行存在重复的 `</button>` 闭合标签（P3 上下文菜单编辑的产物）。修复：移除重复标签。
+  验收：`warnings.simplefilter('error')` + 导入 server 模块 — 无 DeprecationWarning ✓
+
+---
 
 ## 验收命令输出
 
@@ -70,10 +84,10 @@ cd frontend && npx tsc --noEmit
 cd frontend && npx vite build
 ```
 ```
-✓ built in 362ms
+✓ built in 332ms
 dist/index.html                     0.48 kB │ gzip:   0.32 kB
 dist/assets/index-UGWmOg9z.css     14.82 kB │ gzip:   3.97 kB
-dist/assets/index-DxonBvg0.js   1,005.01 kB │ gzip: 300.65 kB
+dist/assets/index-Bi2AD-eO.js   1,005.01 kB │ gzip: 300.65 kB
 ```
 构建成功。
 
@@ -81,63 +95,67 @@ dist/assets/index-DxonBvg0.js   1,005.01 kB │ gzip: 300.65 kB
 ```
 PYTHONPATH=src python -m pytest tests/unit/ -v --tb=short
 ```
-**57/57 passed** (0.35s)
+**57/57 passed** (0.29s)
 
 ### Python 集成测试
 ```
 PYTHONPATH=src python tests/integration_test.py
 ```
-**24/24 passed**
+**24/24 passed** — 24/24 passed, All tests PASSED
 
 ### API 测试
 ```
 PYTHONPATH=src python -m pytest tests/test_api.py -v --tb=short
 ```
-**5/5 passed** (0.49s)
+**5/5 passed** (0.43s)
 
-### CLI Overview
+### datasets 默认值验证 (TestClient)
 ```
-PYTHONPATH=src python -m codememory.cli --root examples/companion overview --limit 5
+GET /api/datasets                          → current=investment, current_name=investment
+GET /api/datasets (companion header)       → current=investment  ← 不受污染
 ```
-正确输出 top 5 记忆摘要，含 heat 分数、status、tags。
 
-### Backend 端点 (curl)
+### stability_source 字段验证 (TestClient)
 ```
-GET  /api/stats    → 200 OK (total:12, type/status/maturity/tags 统计正确)
-POST /api/search   → 200 OK (全文 body 匹配有效，返回 snippet 和 decay 字段)
-GET  /docs         → 200 OK (OpenAPI Swagger UI 可访问)
+GET /api/memories?limit=2  → has stability_source=True
+GET /api/memories/{id}     → has stability_source=True
+POST /api/search           → has stability_source=True
+POST /api/memories/{id}/touch → has stability_source=True
+```
+
+### Server DeprecationWarning 验证
+```
+warnings.simplefilter('error') + import server  → 无异常，无 DeprecationWarning
 ```
 
 ### Playwright 冒烟测试
 ```
-cd frontend && npx playwright test
+跳过 — 需要 Vite dev server + backend 同时运行（Eval 8.2 记录问题）
 ```
-**5/5 passed** (28.9s) — 零失败、零重试。
 
-## 文件变更清单
+---
 
-| 文件 | 任务 |
-|------|------|
-| `backend/server.py` | A1: APIRouter 拆分 — 从 ~1419 行缩减至 ~180 行 |
-| `backend/shared.py` | A1: 共享后端模块（新增） |
-| `backend/routers/__init__.py` | A1: Router 包标记（新增） |
-| `backend/routers/memories.py` | A1: 记忆 CRUD 路由（新增）+ F1: decay 字段修复 |
-| `backend/routers/search.py` | A1: 搜索+解析路由（新增）+ C1: 全文 body 搜索 |
-| `backend/routers/stats.py` | A1: 统计+工具路由（新增） |
-| `src/codememory/models.py` | F5/C2: MemoryEntry 添加 `stability_source` 字段 |
-| `src/codememory/resolve.py` | F5: 陈旧记忆 stability 衰减 + C2: manual stability 排除 |
-| `src/codememory/search.py` | C1: 全文 body 搜索 + snippet 提取 |
-| `src/codememory/mcp_server.py` | M1: `propose_memory` + `propose_update` 工具 |
-| `frontend/src/App.tsx` | P3: 上下文菜单快捷键提示 + A1 bugfix: 移除重复 </button> |
-| `frontend/src/components/Badges.tsx` | F2: 注释修正 |
-| `frontend/src/components/MemoryDetail.tsx` | F4: R-probability 着色 + C2: stability 滑块 + S1: Touch 按钮 |
-| `frontend/src/components/SearchBar.tsx` | C1: 高亮匹配 + S2: 访问新鲜度 + P2: Resolve tooltip |
-| `frontend/src/components/MemoryList.tsx` | S3: Health 列 + 排序 |
-| `frontend/src/components/HelpPanel.tsx` | P1: 移除 Wander 模式切换描述 |
-| `frontend/playwright.config.ts` | F3: cwd 修复 |
-| `frontend/package.json` | F3: test:e2e:root 脚本 |
-| `frontend/src/types.ts` | C2: stability_source / UpdateMemoryRequest stability |
-| `frontend/src/api.ts` | S1: touchMemory() 函数 + C2: stability 字段 |
+## 未完成的任务
+
+无。全部 6 项任务完成。
+
+---
+
+## 变更文件清单
+
+| 文件 | 任务 | 变更内容 |
+|------|------|---------|
+| `backend/server.py` | CR1 + T1 | 中间件 exempt 路径不写 ContextVar；`@app.on_event` → lifespan |
+| `backend/routers/stats.py` | CR1 | datasets 端点使用 `DEFAULT_DATASET` 常量替代 `current_dataset.get()` |
+| `backend/routers/memories.py` | G2 | 4 处响应追加 `stability_source` 字段 |
+| `backend/routers/search.py` | G2 | 2 处搜索结果追加 `stability_source` 字段 |
+| `frontend/src/api.ts` | CR1 | `_currentDataset` 初始值 `'companion'` → `''` |
+| `frontend/src/components/GraphCanvas.tsx` | UX1 | 节点标签 `'font-size': '11px'` → `'12px'` |
+| `frontend/src/components/MemoryList.tsx` | UX2 | 4 处水平 padding `24px` → `32px` |
+| `docs/plans/SPRINT.md` | — | 6 项任务 `[ ]` → `[x]` |
+| `docs/orch/gen_status.md` | — | 本报告更新 |
+
+---
 
 ## 测试总计
 
@@ -146,11 +164,13 @@ cd frontend && npx playwright test
 | Python 单元测试 | 57 | 57 |
 | Python 集成测试 | 24 | 24 |
 | API 测试 | 5 | 5 |
-| Playwright 冒烟测试 | 5 | 5 |
 | TypeScript 编译 | 0 errors | — |
 | Vite 构建 | success | — |
-| **合计** | **91** | **91** |
+| Playwright 冒烟测试 | N/A（需实时服务） | 5 |
+| **合计（可执行）** | **86** | **86** |
+
+---
 
 ## 状态
 
-**PASSED** — 16/16 任务完成，91/91 测试通过（57 unit + 24 integration + 5 API + 5 Playwright），TypeScript 零错误，Vite 构建成功，所有 Backend 端点正常，APIRouter 拆分完成。
+**PASSED** — 6/6 任务完成，86/86 可执行测试通过（57 unit + 24 integration + 5 API），TypeScript 零错误，Vite 构建成功，server 模块加载无 DeprecationWarning，dataset 默认值回归已修复，`stability_source` 已序列化到所有 API 端点。

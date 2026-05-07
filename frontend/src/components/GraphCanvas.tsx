@@ -155,7 +155,7 @@ const GraphCanvas = forwardRef<GraphCanvasHandle, Props>(function GraphCanvas({ 
             'label': (el) => shortId(el.id()),
             'text-wrap': 'ellipsis',
             'text-max-width': '80px',
-            'font-size': '11px',
+            'font-size': '12px',
             'font-family': 'Raleway, sans-serif',
             'font-weight': '500',
             'color': cssVar('--cm-text-primary'),
