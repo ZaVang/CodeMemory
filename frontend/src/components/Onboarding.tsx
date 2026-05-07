@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
 /** Static descriptions for known datasets. Falls back to name + memory count. */
 const KNOWN_DATASET_DESCRIPTIONS: Record<string, string> = {
@@ -8,10 +8,21 @@ const KNOWN_DATASET_DESCRIPTIONS: Record<string, string> = {
   quant_operators: 'trading strategies, quantitative operations, and algorithmic decision-making signals',
 }
 
+/** Simplified resolve result for onboarding demo display */
+export interface OnboardingResolveDemo {
+  nodeCount: number
+  target: string
+  fullCount: number
+  summaryCount: number
+  skippedCount: number
+}
+
 interface Props {
   onComplete: () => void
   datasetName?: string
   datasetCount?: number
+  /** R19-C2: callback to trigger a resolve demo. Returns simplified result or null on failure. */
+  onDemoResolve?: () => Promise<OnboardingResolveDemo | null>
 }
 
 // R12-P1: SVG geometric icons for each onboarding step
@@ -93,7 +104,7 @@ const BASE_STEPS = [
   },
 ]
 
-export default function Onboarding({ onComplete, datasetName, datasetCount }: Props) {
+export default function Onboarding({ onComplete, datasetName, datasetCount, onDemoResolve }: Props) {
   // Build steps with dataset-aware welcome step
   const hasDataset = !!datasetName && datasetCount != null && datasetCount > 0
   const datasetDesc = datasetName ? (KNOWN_DATASET_DESCRIPTIONS[datasetName] || '') : ''
@@ -124,6 +135,30 @@ export default function Onboarding({ onComplete, datasetName, datasetCount }: Pr
   const [step, setStep] = useState(0)
   const current = STEPS[step]
   const isLast = step === STEPS.length - 1
+
+  // R19-C2: resolve demo state
+  const [demoResult, setDemoResult] = useState<OnboardingResolveDemo | null>(null)
+  const [demoLoading, setDemoLoading] = useState(false)
+  const [demoFailed, setDemoFailed] = useState(false)
+
+  // Trigger resolve demo when user reaches the Resolve step (step 2)
+  useEffect(() => {
+    if (step !== 2 || demoResult || demoLoading || demoFailed || !onDemoResolve) return
+    // Only trigger for the investment dataset (the canonical demo dataset with a known entry point)
+    if (datasetName !== 'investment') return
+
+    setDemoLoading(true)
+    onDemoResolve()
+      .then((result) => {
+        if (result) {
+          setDemoResult(result)
+        } else {
+          setDemoFailed(true)
+        }
+      })
+      .catch(() => setDemoFailed(true))
+      .finally(() => setDemoLoading(false))
+  }, [step, datasetName, demoResult, demoLoading, demoFailed, onDemoResolve])
 
   return (
     <>
@@ -206,6 +241,68 @@ export default function Onboarding({ onComplete, datasetName, datasetCount }: Pr
           >
             {current.description}
           </p>
+
+          {/* R19-C2: resolve demo result display */}
+          {step === 2 && (
+            <div
+              style={{
+                margin: '0 0 24px 0',
+                padding: '12px 16px',
+                borderRadius: 2,
+                border: '1px solid var(--cm-border)',
+                backgroundColor: 'var(--cm-bg-subtle)',
+                textAlign: 'left',
+              }}
+            >
+              {demoLoading && (
+                <div style={{ fontSize: 13, fontFamily: 'Raleway, sans-serif', color: 'var(--cm-text-tertiary)' }}>
+                  Resolving <code style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12 }}>user/investment/context</code>...
+                </div>
+              )}
+
+              {demoFailed && (
+                <div style={{ fontSize: 13, fontFamily: 'Raleway, sans-serif', color: 'var(--cm-text-secondary)' }}>
+                  <strong style={{ color: 'var(--cm-accent)' }}>Try it yourself:</strong> Click a memory node, then click "Resolve" in the detail panel to trace its dependency chain.
+                </div>
+              )}
+
+              {demoResult && (
+                <div>
+                  <div style={{ fontSize: 12, fontWeight: 600, fontFamily: 'Raleway, sans-serif', color: 'var(--cm-accent)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
+                    This is what Resolve looks like
+                  </div>
+                  <div style={{ fontSize: 13, fontFamily: 'Raleway, sans-serif', color: 'var(--cm-text-primary)', marginBottom: 6 }}>
+                    Resolving <code style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, backgroundColor: 'var(--cm-bg-hover)', padding: '1px 4px', borderRadius: 2 }}>{demoResult.target}</code> —
+                    {' '}{demoResult.nodeCount} nodes assembled in topological order
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, fontSize: 12, fontFamily: 'Raleway, sans-serif' }}>
+                    <span style={{ color: 'var(--cm-success)' }}>
+                      <span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: 1, backgroundColor: 'var(--cm-success)', marginRight: 4 }} />
+                      {demoResult.fullCount} full-text
+                    </span>
+                    {demoResult.summaryCount > 0 && (
+                      <span style={{ color: 'var(--cm-warning)' }}>
+                        <span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: 1, backgroundColor: 'var(--cm-warning)', marginRight: 4 }} />
+                        {demoResult.summaryCount} summarized
+                      </span>
+                    )}
+                    {demoResult.skippedCount > 0 && (
+                      <span style={{ color: 'var(--cm-text-tertiary)' }}>
+                        <span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: 1, backgroundColor: 'var(--cm-text-tertiary)', marginRight: 4 }} />
+                        {demoResult.skippedCount} skipped
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {!demoLoading && !demoFailed && !demoResult && !onDemoResolve && (
+                <div style={{ fontSize: 13, fontFamily: 'Raleway, sans-serif', color: 'var(--cm-text-secondary)' }}>
+                  <strong style={{ color: 'var(--cm-accent)' }}>Try it yourself:</strong> Click a memory node, then click "Resolve" in the detail panel to trace its dependency chain.
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Step dots */}
           <div

@@ -9,6 +9,7 @@ import HelpPanel from './components/HelpPanel'
 import SearchBar from './components/SearchBar'
 import Legend from './components/Legend'
 import Onboarding from './components/Onboarding'
+import type { OnboardingResolveDemo } from './components/Onboarding'
 import Settings from './components/Settings'
 import { loadSettings, saveSettings } from './components/Settings'
 import type { UserSettings } from './components/Settings'
@@ -389,6 +390,25 @@ export default function App() {
     [budget, doResolve],
   )
 
+  // R19-C2: onboarding resolve demo — resolves user/investment/context and returns a simplified result
+  const handleDemoResolve = useCallback(async (): Promise<OnboardingResolveDemo | null> => {
+    try {
+      const data = await fetchResolve({ id: 'user/investment/context', depth: 'recommended', budget: 2000 })
+      const fullCount = data.nodes.filter((n) => n.trim === 'full').length
+      const summaryCount = data.nodes.filter((n) => n.trim === 'summary').length
+      const skippedCount = data.nodes.filter((n) => n.trim === 'skipped').length
+      return {
+        nodeCount: data.nodes.length,
+        target: data.target,
+        fullCount,
+        summaryCount,
+        skippedCount,
+      }
+    } catch {
+      return null
+    }
+  }, [])
+
   // Clean up debounce on unmount
   useEffect(() => {
     return () => {
@@ -519,6 +539,9 @@ export default function App() {
   // Keyboard shortcuts overlay
   const [showShortcuts, setShowShortcuts] = useState(false)
 
+  // R19-C4: copyTrigger — incremented to signal MemoryDetail to copy context via Ctrl+Shift+C
+  const [copyTrigger, setCopyTrigger] = useState(0)
+
   // Global keyboard shortcuts (R5-keyboard-shortcuts)
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -572,6 +595,19 @@ export default function App() {
         return
       }
 
+      // Ctrl+Shift+C — copy as context (R19-C4)
+      // Only intercept when MemoryDetail is open and resolve data is available.
+      // Otherwise let browser handle it (e.g. Chrome DevTools element selector).
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'C') {
+        if (selectedNode && resolveData && resolveData.nodes.length > 0) {
+          e.preventDefault()
+          setCopyTrigger((prev) => prev + 1)
+          return
+        }
+        // No resolve data available — let browser handle Ctrl+Shift+C natively
+        return
+      }
+
       // ? — show keyboard shortcuts overlay (only when not in input)
       if (e.key === '?' && !isInput) {
         e.preventDefault()
@@ -590,7 +626,7 @@ export default function App() {
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [showShortcuts, showHelp, archiveConfirmId, undoEntry, handleUndo, handleOpenCreate, viewMode, activeTheme])
+  }, [showShortcuts, showHelp, archiveConfirmId, undoEntry, handleUndo, handleOpenCreate, viewMode, activeTheme, selectedNode, resolveData])
 
   return (
     <div
@@ -1241,6 +1277,7 @@ export default function App() {
             resolveData={resolveData}
             resolveError={resolveError}
             isResolving={isResolving}
+            copyTrigger={copyTrigger}
             backlinks={(() => {
               if (!graphData || !selectedNode) return []
               // Compute reverse references: which nodes import selectedNode?
@@ -1298,6 +1335,7 @@ export default function App() {
           }}
           datasetName={currentDataset || undefined}
           datasetCount={datasets.find((d) => d.name === currentDataset)?.memory_count}
+          onDemoResolve={handleDemoResolve}
         />
       )}
 
@@ -1588,6 +1626,7 @@ export default function App() {
                 { keys: 'Ctrl + K', desc: 'Focus search bar' },
                 { keys: 'Ctrl + N', desc: 'Open new memory form' },
                 { keys: 'Ctrl + Z', desc: 'Undo last action' },
+                { keys: 'Ctrl + Shift + C', desc: 'Copy as Context (when resolve result is visible)' },
                 { keys: 'Ctrl + Shift + D', desc: 'Toggle dark mode' },
                 { keys: '1 / 2 / 3', desc: 'Switch to Graph / List / Dashboard view' },
                 { keys: 'Escape', desc: 'Close open panel / menu' },

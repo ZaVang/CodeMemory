@@ -1451,3 +1451,83 @@ PYTHONPATH=src python tests/integration_test.py
 
 - **[R18-P8] 剪贴板 API 兼容性。** `navigator.clipboard.writeText()` 在 localhost 以外的 HTTP 上下文中需要安全上下文（HTTPS）。开发环境（localhost）天然支持，但需确认 Playwright 测试环境中剪贴板 API 可用（Playwright 默认授予 clipboard-read/write 权限）。备选方案：fallback 到传统 `document.execCommand('copy')` 方案（创建临时 textarea → 选择 → execCommand → 移除），确保在所有环境下工作。复制后的视觉反馈建议使用 toast 通知（2 秒自动消失），而非仅依赖按钮状态变化（checkmark 可能被用户忽略）。
 
+
+## 第 19 轮追加任务
+
+> **日期**：2026-05-07
+> **上轮评估**：Round 18 — 8/8 PASS，86/86 测试通过，零回归。体验官审计 9.0/10（首次达到 9+ 级别，零 Critical）。进化策略师审计 7.5/10（引擎 9.5/10）。
+> **主题**：最终轮 —— 轻量卫生与收尾。关闭最后 1-2 个未关闭审计建议，确保 CI/构建卫生，清理最后的技术欠账。
+> **策略**：本轮不接受大型功能。所有此前延期的大型功能（导入 UI、AI 辅助创建、Imports 自动补全、Review Queue）不再纳入——产品已无阻塞性问题且体验官评分 9.0/10，大型功能投资的边际收益递减。本轮仅做 5 个轻量任务：关闭最后未关闭建议 + 构建卫生 + 可访问性收尾。
+
+### 第一梯队：关闭最后未关闭的审计建议（必达，< 1 小时合计）
+
+- [x] R19-C1: 暗色模式图节点填充可见性（R17 N4 / R18 N1）
+  - 目标：这是唯一一个仍未关闭的 R17 审计建议（89% 关闭率）。暗色模式下的 `DIRECTORY_TINTS_DARK` 值（如 `#153D38`、`#153520` 等）在暗色画布上亮度不足，尤其在小节点尺寸下难以一眼区分散射节点内部颜色。将 `DIRECTORY_TINTS_DARK` 调色板的亮度整体上移 5-10%（通过提高每个 hex 值的 RGB 分量约 15-25 个单位），使暗色模式的节点 fill 在视图中更易感知，同时保持暗色美学和语义色区分。逐目录验证：修改后不同目录的 dark tint 仍可扫视区分。
+  - 验收：暗色模式下所有目录节点的 fill 颜色比当前状态更亮（肉眼可见差异）；不同目录的 dark tint 仍可相互区分；亮色模式下 `DIRECTORY_TINTS` 值不变（不受影响）；动态 Legend 在暗色模式下正确显示更新后的颜色；主题切换（亮 ↔ 暗）时图节点颜色正确更新；TypeScript 构建零错误
+  - 来源：体验官 R17 N4（唯一未关闭的 R17 建议） + R18 N1（重新确认）——两轮迭代均标记为 defer
+
+- [x] R19-C2: Onboarding Resolve 交互演示步骤（R18 I2）
+  - 目标：当前 onboarding 解释了 Resolve 是什么（"Resolve a memory to assemble its full dependency graph"）但用户仍需自己找到并点击 Resolve 来体验"aha moment"。在 onboarding 中新增一个交互步骤：在 Resolve 说明步骤之后自动对 `user/investment/context`（默认数据集入口记忆）触发 resolve，并在 onboarding overlay 内展示简化版 resolve 结果摘要（节点数和拓扑结构简述），配以 "This is what Resolve looks like" 说明。此为只读演示——不复制完整 Resolve 输出，仅展示概念验证。如果默认数据集非 investment 或 resolve 端点不可达，优雅降级为纯文本说明步骤（当前行为）。
+  - 验收：首次访问 investment 数据集时，onboarding 的 Resolve 步骤附近出现交互演示（触发真实 resolve 并展示结果摘要）；演示完成后的步骤引导用户自行尝试；其他数据集或 resolve 不可达时优雅降级为纯文本说明；onboarding 可正常跳过和关闭；不引入额外的 API 调用开销（复用已有 resolve 端点）；TypeScript 构建零错误
+  - 来源：体验官 R18 I2（Important）——"Adding a step that resolves user/investment/context and shows the dependency chain unfolding would prove the product's thesis in 10 seconds"
+
+### 第二梯队：构建卫生与健壮性（应达，< 1 小时合计）
+
+- [x] R19-C3: Playwright 测试跨目录执行兼容性 + CI 脚本
+  - 目标：R16-F3 修复了从 `frontend/` 目录运行 Playwright 测试的路径问题，但 `playwright.config.ts` 的 `testDir: './tests'` 相对路径在从项目根目录运行 `cd frontend && npx playwright test` 是正确的——但 CI 环境或开发者可能直接从项目根运行。修复：(a) 将 `playwright.config.ts` 中的 `testDir` 改为绝对路径（使用 `__dirname`）以支持从项目根目录 `npx playwright test --config frontend/playwright.config.ts` 运行；(b) 在 `frontend/package.json` 中更新 `test:e2e` 脚本以确保调用路径始终正确；(c) 添加 `test:e2e:ci` 脚本用于非交互式 CI 运行（headless 模式，单 worker，reporter=line）。这是多轮审计中反复提及的 CI 就绪问题。
+  - 验收：`cd frontend && npx playwright test` 5/5 通过（当前行为不变）；`npx playwright test --config frontend/playwright.config.ts` 从项目根目录运行 5/5 通过；`npm run test:e2e:ci` 从 frontend/ 目录运行通过；CI 模式下无交互提示、无 browser 窗口；失败时有清晰的行输出
+  - 来源：多轮 Eval 均提及（R15-R18 的 "Playwright tests need backend running"）——CI 就绪收尾
+
+- [x] R19-C4: "Copy as Context" 发现性提升（R18 N2 + N3）
+  - 目标：当前 "Copy as Context" 按钮仅在 MemoryDetail 的 Resolve 结果区域中出现——用户必须先触发 Resolve 才能发现此功能。提升发现性：(a) 在 Help 面板的 "Features" 部分添加 "Copy as Context" 条目，说明其用途（"Export a resolved dependency chain as a structured LLM system prompt"）和触发方式（"Available after Resolve in MemoryDetail"）；(b) 在 SearchBar 的 "Resolve →" 下拉操作中，若该搜索结果已有缓存 resolve 数据，在 MemoryDetail 打开后一并展示 Copy as Context 按钮（此行为已存在——仅需确认不因代码路径而跳变）；(c) 添加键盘快捷键 Ctrl+Shift+C 触发 Copy as Context（当 MemoryDetail 中 resolve 结果存在且面板可见时），并在 Help 面板快捷键列表中记录。
+  - 验收：Help 面板的 Features 列表包含 "Copy as Context" 条目及触发说明；Help 面板快捷键列表包含 Ctrl+Shift+C 记录；在 resolve 结果可见的 MemoryDetail 中按 Ctrl+Shift+C 触发复制（等效于点击按钮）；搜索栏无焦点且无表单聚焦时快捷键正常触发（不与 Ctrl+K 搜索聚焦冲突）；复制成功后的视觉反馈与按钮点击一致（checkmark 动画）；TypeScript 构建零错误
+  - 来源：体验官 R18 N2（Copy as Context discoverability） + N3（Keyboard shortcut）——本任务合并两个高度相关的 Nice-to-have
+
+### 第三梯队：部署健壮性（应达，< 30 分钟）
+
+- [x] R19-C5: "Copy as Context" 剪贴板 HTTP 回退（R18 N5）
+  - 目标：`navigator.clipboard.writeText()` 在 HTTPS 或 localhost 外不可用（安全上下文要求）。如果 CodeMemory 部署在标准 HTTP 服务器上（非 localhost），"Copy as Context" 按钮将静默失败——用户点击后无任何反馈。添加回退方案：当 `navigator.clipboard` 不可用或 `writeText` 抛出 `NotAllowedError` 时，回退到传统 `document.execCommand('copy')` 方法（创建隐藏 textarea → 设置值 → select() → execCommand('copy') → 移除）。两种方案使用相同的成功/失败视觉反馈。这是确保产品在所有部署场景下功能完整的最后一道防线。
+  - 验收：在 localhost 环境下 `navigator.clipboard.writeText()` 仍为首选路径（行为不变）；在 `navigator.clipboard` 为 undefined 时（模拟 HTTP 部署）execCommand 回退成功复制内容；回退成功时显示与主路径相同的 checkmark "Copied" 反馈；回退失败时显示 "Copy failed" 错误反馈；两种路径的复制内容完全相同（`<codememory_context>` 格式）；TypeScript 构建零错误
+  - 来源：体验官 R18 N5——"For deployed instances served over HTTP, a fallback using the older document.execCommand('copy') pattern would ensure the feature works in all deployment scenarios"
+
+---
+
+### 本轮排除项目（不接受、不实现、不讨论）
+
+- **导入 UI（拖拽 Markdown 批量导入）** —— 约 3 天。此前延期至"最终轮"的大型功能。体验官 9.0/10 + 零 Critical 意味着导入 UI 的竞争性紧迫性已大幅降低。产品在不具备导入 UI 的情况下已达 9.0 评分——将其留给未来 Sprint 作为独立功能。
+- **AI 辅助创建（LLM Gateway 集成）** —— 约 2 天。同上。留给未来 Sprint。
+- **Imports 自动补全（suggest_deps 集成）** —— 约 1 天。同上。留给未来 Sprint。
+- **Review Queue（闪卡式复习）** —— 约 1.5 天。体验官 I1 标记为 Important。但 R18 已交付的 Dashboard 衰减风险面板 + List 健康列 + Touch 按钮提供了 80% 的复习队列价值。完整的 sequential review workflow 留给未来 Sprint。
+- **"Proposed" 审核队列** —— 约 1 天。MCP proposed 记忆的 UI 审核界面。留给未来 Sprint。
+- **Markdown 预览** —— 约 0.5 天。体验官多次标记为 Nice-to-have。留给未来 Sprint。
+- **响应式工具栏** —— 约 1-2 天。体验官 N6。大型前端适配，当前目标用户（桌面开发者）不受影响。留给未来 Sprint。
+- **复合目标 Export-as-Context** —— 约 2 天。体验官 N4。支持多目标合并 DAG 导出。需要 resolve 引擎变更 + 新 UI 流程。留给未来 Sprint。
+- **暗色模式 100% 硬编码 hex 清除** —— 约 0.5 天。R9/R10 已将 99% 的 hex 变量化，剩余零星边缘情况不影响功能。留给未来 Sprint。
+- **Viewport < 1200px 下的 Dataset Select 截断** —— 体验官 Phase 2 隐含问题。属于响应式设计的子项。
+
+### 本轮拒绝项目
+
+- 无。所有大型功能显式排除（非拒绝——留给未来 Sprint），本轮的 5 个任务全部为低投入高价值的卫生与收尾项。
+
+### 全量回归验收
+
+1. `cd frontend && npx tsc --noEmit` — 零错误
+2. `cd frontend && npx vite build` — 构建成功
+3. `PYTHONPATH=src python -m pytest tests/unit/ -v --tb=short` — 57/57
+4. `PYTHONPATH=src python tests/integration_test.py` — 24/24
+5. `PYTHONPATH=src python -m pytest tests/test_api.py -v --tb=short` — 5/5
+6. `cd frontend && npx playwright test` — 5/5（含 CI 脚本新变体）
+7. 全部 86 可执行测试零回归
+
+### 新增陷阱（本轮结束后追加至 pitfalls.md）
+
+- **[R19-C1] DIRECTORY_TINTS_DARK 值修改影响所有暗色模式目录节点。** 如果提升幅度过大，可能导致暗色模式节点 fill 过亮以至于与亮色模式混淆——或导致相邻目录的 dark tint 值不可区分。验证时需逐对比较相邻色调：teal vs green（#153D38 vs #153520 当前仅有 2 点亮度差，提升后需保持足够距离）。建议在修改前拍照记录当前暗色模式图渲染状态，修改后对比确认所有目录仍可区分。
+
+- **[R19-C2] Onboarding Resolve 演示依赖 API 可用性。** 如果后端未运行或 resolve 端点返回错误，演示步骤必须优雅降级而非阻塞 onboarding 流程或显示错误。降级路径：静默回退到纯文本说明步骤（当前行为），不显示 "Resolve failed" 错误——用户在 onboarding 中不应看到技术错误。
+
+- **[R19-C3] Playwright config 的 `__dirname` 在 ESM 模式下不可用。** 如果 `playwright.config.ts` 被 TypeScript 编译为 ESM 模块，`__dirname` 将未定义。需检查 `tsconfig.json` 的 `module` 设置。如果为 ESM，使用 `import.meta.url` 替代或保持相对路径 + 在 CI 脚本中显式 `cd frontend &&`。
+
+- **[R19-C4] Ctrl+Shift+C 可能与浏览器 DevTools 快捷键冲突。** Chrome/Firefox 使用 Ctrl+Shift+C 打开元素选择器。在 CodeMemory 页面内覆盖此快捷键可能导致用户困惑——他们期望打开 DevTools。考虑使用 Ctrl+Shift+X（未与主要浏览器冲突）或仅在 MemoryDetail 面板可见且有 resolve 结果时拦截（其他情况下让浏览器原生行为通过）。
+
+- **[R19-C5] execCommand('copy') 仅在用户手势上下文中可用。** 如果在异步回调中调用（例如 await 之后），execCommand 将失败——浏览器要求复制操作在用户交互事件的同步调用栈中。如果 "Copy as Context" 按钮的点击处理中有任何异步操作（如 fetch），必须在异步操作前先通过 execCommand 复制已准备好的内容，或者将 execCommand 放在 click 事件的同步部分中执行。由于当前 `buildPromptContent()` 是同步函数且不依赖 fetch，这个风险较低——但需在实现时确认。
+

@@ -1,3 +1,172 @@
+# Generator Status — Round 19 (Final)
+
+**日期：** 2026-05-07
+**模型：** deepseek-v4-pro
+**主题：** 最终轮 — 5/5 任务完成，全部 86 测试零回归
+
+---
+
+## 完成的任务 (5/5)
+
+### 第一梯队：关闭最后未关闭的审计建议
+
+- [x] **R19-C1: 暗色模式图节点填充可见性 (R17 N4 / R18 N1)**
+
+  `DIRECTORY_TINTS_DARK` 全部 12 个值每个 RGB 通道 +15（约 6% 亮度提升），`DEFAULT_TINT_DARK` 同步提升。相邻色调保持区分度（teal `#244C47` vs green `#24442F`，B 通道差 24）。亮色模式 `DIRECTORY_TINTS` 值不变。R17 唯一的未关闭建议现已关闭——R17 关闭率 100%。
+
+  文件: `frontend/src/colors.ts`
+
+- [x] **R19-C2: Onboarding Resolve 交互演示步骤 (R18 I2)**
+
+  Onboarding 组件新增 `onDemoResolve` prop（`Promise<OnboardingResolveDemo | null>`）。到达 Resolve 步骤（step 2）时自动对 `user/investment/context` 触发 resolve：
+  - 仅 investment 数据集触发；其他数据集优雅降级
+  - 成功时显示：目标 ID、节点总数、full/summary/skipped 分布（带颜色圆点）
+  - API 不可达时降级为 "Try it yourself" 纯文本提示
+  - Loading 状态显示 "Resolving..." 文本
+  - Onboarding 可正常跳过和关闭
+
+  App.tsx 提供 `handleDemoResolve` 回调，调用 `fetchResolve` 并返回简化的 `OnboardingResolveDemo` 结果。
+
+  文件: `frontend/src/components/Onboarding.tsx`, `frontend/src/App.tsx`
+
+### 第二梯队：构建卫生与健壮性
+
+- [x] **R19-C3: Playwright 跨目录执行兼容性 + CI 脚本**
+
+  - `playwright.config.ts` 早已使用 `path.resolve(__dirname, './tests')` 绝对路径 + `import.meta.url` ESM 方案
+  - 添加 `test:e2e:ci` 脚本：`playwright test --reporter=line`
+  - `cd frontend && npm run test:e2e:ci` — 5/5 PASS (30.6s)
+  - `cd frontend && npx playwright test` — 5/5 PASS（行为不变）
+  - 从项目根运行存在已知 playwright 双版本模块解析冲突（`.claude/scripts` vs `frontend`），CI 脚本使用 `cd frontend &&` 前缀规避
+
+  文件: `frontend/package.json`
+
+- [x] **R19-C4: "Copy as Context" 发现性提升 (R18 N2 + N3)**
+
+  - Help 面板"详情面板"区域新增 "Copy as Context" 条目，含用途说明和 Ctrl+Shift+C 触发方式
+  - Help 面板工具栏快捷键列表更新：`Ctrl+Shift+C=Copy as Context`
+  - 键盘快捷键 overlay (`?`) 新增 `Ctrl + Shift + C` 条目
+  - Ctrl+Shift+C：当 MemoryDetail 可见且 resolve 结果存在时触发复制（等效于点击按钮），其他情况下让浏览器原生行为通过（不拦截 Chrome DevTools 元素选择器）
+  - MemoryDetail 新增 `copyTrigger` prop：App.tsx 快捷键处理器递增 counter → useEffect 触发 `handleCopyPrompt`
+  - 复制反馈：checkmark "Copied" 动画与按钮点击一致
+
+  文件: `frontend/src/components/HelpPanel.tsx`, `frontend/src/App.tsx`, `frontend/src/components/MemoryDetail.tsx`
+
+### 第三梯队：部署健壮性
+
+- [x] **R19-C5: "Copy as Context" 剪贴板 HTTP 回退 (R18 N5)**
+
+  - 主路径：`navigator.clipboard.writeText()`（localhost/HTTPS）
+  - 回退路径 1：clipboard API 不可用时 → `execCommand('copy')`（同步调用栈，安全）
+  - 回退路径 2：clipboard API 调用失败时（如 NotAllowedError）→ `execCommand('copy')`（微任务回调）
+  - 两种路径使用相同的 checkmark/Copy failed 视觉反馈
+  - `buildPromptContent` 导出为公共函数供 App.tsx 快捷键复用（C4）
+
+  文件: `frontend/src/components/MemoryDetail.tsx`
+
+---
+
+## 验收命令输出
+
+### TypeScript
+
+```
+cd frontend && npx tsc --noEmit
+```
+零错误，通过。
+
+### Vite Build
+
+```
+cd frontend && npx vite build
+```
+```
+✓ built in 328ms
+dist/index.html                     0.48 kB │ gzip:   0.32 kB
+dist/assets/index-CWf1w1gj.css     14.87 kB │ gzip:   3.98 kB
+dist/assets/index-DaNgOcEv.js   1,013.02 kB │ gzip: 302.58 kB
+```
+构建成功。
+
+### Python 单元测试
+
+```
+PYTHONPATH=src python -m pytest tests/unit/ -v --tb=short
+```
+**57/57 passed** (0.28s)
+
+### Python 集成测试
+
+```
+PYTHONPATH=src python tests/integration_test.py
+```
+**24/24 passed** — All tests PASSED
+
+### API 测试
+
+```
+PYTHONPATH=src python -m pytest tests/test_api.py -v --tb=short
+```
+**5/5 passed** (0.41s)
+
+### Playwright 冒烟测试
+
+```
+cd frontend && npx playwright test
+```
+**5/5 passed** (30.1s)
+
+### Playwright CI 模式
+
+```
+cd frontend && npm run test:e2e:ci
+```
+**5/5 passed** (30.6s) — line reporter, non-interactive
+
+---
+
+## 测试总计
+
+| 测试类型 | 通过 | 总计 |
+|----------|------|------|
+| Python 单元测试 | 57 | 57 |
+| Python 集成测试 | 24 | 24 |
+| API 测试 | 5 | 5 |
+| Playwright E2E | 5 | 5 |
+| Playwright CI 模式 | 5 | 5 |
+| TypeScript 编译 | 0 errors | — |
+| Vite 构建 | success | — |
+| **合计（可执行）** | **86** | **86** |
+
+---
+
+## 变更文件清单
+
+| 文件 | 变更类型 | 相关任务 |
+|------|---------|---------|
+| `frontend/src/colors.ts` | 修改 | C1 |
+| `frontend/src/components/Onboarding.tsx` | 修改 | C2 |
+| `frontend/src/App.tsx` | 修改 | C2, C4 |
+| `frontend/src/components/MemoryDetail.tsx` | 修改 | C4, C5 |
+| `frontend/src/components/HelpPanel.tsx` | 修改 | C4 |
+| `frontend/package.json` | 修改 | C3 |
+| `docs/plans/SPRINT.md` | 修改 | 5 checkboxes |
+| `docs/orch/gen_status.md` | 修改 | 本报告 |
+
+---
+
+## 未解决问题
+
+- **C3 已知限制**: 从项目根目录 `npx playwright test --config frontend/playwright.config.ts` 存在 playwright 模块双重加载问题。CI 脚本使用 `cd frontend &&` 前缀规避。如需支持根目录执行，需清理 `.claude/scripts/node_modules` 或统一 playwright 版本。
+
+---
+
+## 状态
+
+**PASSED** — 5/5 任务完成，86/86 可执行测试通过（57 unit + 24 integration + 5 API + 5 E2E），TypeScript 零错误，Vite 构建成功，Playwright CI 模式 5/5。R17 审计建议关闭率 100%（C1 关闭了唯一未关闭项），R18 审计 I2/N2/N3/N5 全部关闭。
+
+---
+
 # Generator Status — Round 18 (Final)
 
 **日期：** 2026-05-07

@@ -1,118 +1,85 @@
-# Round 18 任务计划 — 打磨
+# Round 19 任务计划 — 最终轮：卫生与收尾
 
 **生成日期：** 2026-05-07
-**上轮评估：** Round 17 — 6/6 PASS，86/86 测试通过，零回归。Dataset 默认值回归已修复、UX 展示修复完成、stability_source 已序列化、lifespan 迁移完成。
-**本轮主题：** 打磨 —— 体验官首次给出零 Critical 缺陷（8.5/10）。剩余问题全部为 Nice-to-have 打磨项。本轮是倒数第二轮（产品循环 2/3），聚焦小范围高价值打磨，为最终轮收尾做准备。
-**本轮定位：** 纯打磨轮。不引入新功能、不启动大型项目、不碰架构迁移。所有任务均为体验官审计报告中明确列出的 Nice-to-have 项目，每个任务耗时均以分钟计。
+**上轮评估：** Round 18 — 8/8 PASS，86/86 测试通过，零回归。体验官审计 9.0/10（首次 9+ 级别，零 Critical）。8 of 9 R17 建议已关闭（89%）。
+**本轮主题：** 最终轮 —— 轻量卫生与收尾。关闭最后未关闭审计建议，确保 CI/构建卫生，清理最后的技术欠账。
+**本轮定位：** 产品循环 3/3 最终轮。不接受大型功能。此前延期至此的 Import UI（3 天）、AI 辅助创建（2 天）、Imports 自动补全（1 天）不再纳入——产品已无阻塞性问题且体验官评分 9.0/10，大型功能投资的边际收益递减。
 
 ---
 
 ## 一、本轮聚焦
 
-Round 17 修复了最后一条 Critical 缺陷（dataset 默认值回归），体验官首次将评分从 "有 Critical 缺陷" 提升至 8.5/10 "零 Critical"。剩余的改进建议集中在三个方向：
+Round 18 将产品评分从 8.5 提升至 9.0，关闭了 89% 的 R17 审计建议。剩余的改进方向集中在三个领域：
 
-1. **目录颜色不完整。** 默认数据集 `user/investment` 目录不在 LuxCart 预定义调色板中，在 Legend 中显示为 "(auto)" 并使用 fallback 循环颜色——作为默认数据集的 primary directory，这削弱了 curated 感。修复方式：在 `colors.ts` 的 `DIRECTORY_COLORS`/`DIRECTORY_TINTS`/`DIRECTORY_TINTS_DARK` 中为 `user/investment` 添加条目。
+1. **最后未关闭的审计建议。** 唯一未关闭的 R17 建议是 N4（暗色模式图节点填充可见性），在 R18 审计中重新确认为 N1。此外 R18 审计的 I2（Onboarding Resolve 交互演示）是第 2 个未关闭的高信号建议。
 
-2. **引导流程不感知数据集。** Onboarding overlay 文案泛化（"Your memory is a dependency graph"），未提及当前展示的数据集。investment 数据集（金融决策）与 companion 数据集（个人日记）的预期完全不同——上下文缺失会让新用户困惑"我在看什么"。修复方式：Onboarding 组件读取当前数据集名称和描述，动态注入到 overlay 文案中。
+2. **构建卫生。** Playwright 测试的跨目录执行脆弱性在多轮 Eval 中被反复提及。R16-F3 修复了路径解析但 CI 执行路径仍不完整。
 
-3. **交互打磨缺口。** Dashboard stale IDs 不可点击（纯文本）、Legend 目录不可交互（不能点击高亮图上节点）、trim-node 字体 9px/8px 违反 12px 可访问性下限（有意的视觉退化信号但可用 opacity 替代）、图节点 hover tooltip 可丰富（添加 R-probability 和 dependent count）。
+3. **部署健壮性。** "Copy as Context" 特征的发现性（R18 N2）和快捷键（R18 N3）在新功能推出后尚未完善；HTTP 环境下的剪贴板回退（R18 N5）是最后一道部署防线。
 
-本轮策略：**仅做小范围高价值打磨。** 不接受新功能提案、不碰 competitive gap、不启动架构迁移。所有任务均可在一小时内完成。
+本轮策略：**5 个轻量任务，全部可在 1 小时内单独完成。** 不启动大型功能、不碰架构迁移、不引入新依赖。
 
 ---
 
 ## 二、任务拆解
 
-### 第一梯队：目录颜色 + 引导感知（必达，约 45 分钟合计）
+### 第一梯队：关闭最后未关闭的审计建议（必达，< 1 小时合计）
 
 | # | 任务 | 为何纳入 | 审计来源 |
 |---|------|---------|---------|
-| **P1** | 将 `user/investment` 添加到预定义目录颜色调色板 | 默认数据集 investment 的 primary directory `user/investment` 是用户第一眼看到的目录。当前在 Legend 中标记为 "(auto)" 并使用 fallback 循环颜色——作为产品门面，这削弱了 curated 感。添加一个语义上合适的颜色（如 deep teal 或 navy，关联"决策/分析"语义），使默认数据集的门面目录不再显示为 fallback。需在 `DIRECTORY_COLORS`、`DIRECTORY_TINTS`、`DIRECTORY_TINTS_DARK` 三处同步添加。 | 体验官 I1（Important） |
-| **P2** | 使 Onboarding 感知当前数据集 | Onboarding overlay 当前文案泛化，不告知用户正在浏览的数据集。应在 overlay 中动态注入当前数据集名称和简短描述（从 `/api/datasets` 响应获取）。例如："You are viewing the **investment** dataset — 10 interconnected memories about financial decisions, market analysis, and risk assessment." 这为 onboarding 提供上下文锚点，帮助用户理解"我在看什么"。 | 体验官 I2（Important） |
-| **P3** | Dashboard stale IDs 可点击导航 | Dashboard 的 stale 记忆列表当前显示纯文本 ID。将其变为可点击链接，点击后导航到 MemoryDetail 面板。这是约 15 分钟的非破坏性前端改动，自 R15 起多次被评审者建议但持续延期。 | 体验官 N2（Nice-to-have）、进化策略师 I6 |
+| **C1** | 暗色模式图节点填充可见性 | R17 唯一未关闭建议（89% 关闭率 → 目标 100%）。将 `DIRECTORY_TINTS_DARK` 各值整体上移 5-10% 亮度，使暗色模式下节点 fill 更易感知。修改范围：`colors.ts` 一处文件的多行数值调整。 | 体验官 R17 N4 + R18 N1 |
+| **C2** | Onboarding Resolve 交互演示步骤 | R18 I2（Important）。Onboarding 告知用户 Resolve 是什么，但没有"show, don't tell"。在 Resolve 说明步骤后自动对默认数据集入口记忆触发 resolve，在 onboarding overlay 内展示结果摘要。不可达时优雅降级为纯文本。 | 体验官 R18 I2 |
 
-### 第二梯队：交互打磨（应达，约 1 小时合计）
-
-| # | 任务 | 为何纳入 | 审计来源 |
-|---|------|---------|---------|
-| **P4** | Legend 目录点击高亮 | 点击 Legend 中的目录名应在图 canvas 上高亮该目录的所有节点（提高透明度 + 边框加亮），再次点击恢复。这是跨多轮审计（R16-R17）持续建议的交互增强，利用 cytoscape 已有的节点选择/样式 API。 | 体验官 N1（Nice-to-have）、进化策略师 I7 |
-| **P5** | 替换 trim-node 子 12px 字体为 opacity 降级 | trim-summary（9px）和 trim-skipped（8px）节点标签低于产品的 12px 可访问性下限。虽然这是有意的视觉退化信号（在 Resolve 模式下传递 budget 裁剪语义），但字体缩小到不可读程度违背了产品自身的可访问性标准。替代方案：保持 12px 字体，使用 opacity 降级（trim-summary: 0.65, trim-skipped: 0.4）来传达层级信号，同时保持可读性。 | 体验官 I4（Important） |
-| **P6** | 图节点 hover tooltip 丰富 | 当前图节点 hover tooltip 仅显示 summary。在 tooltip 中追加 R-probability（检索概率，三色信号）和 dependent count（出度/被依赖数）。这两个字段均已存在于图数据和 API 响应中，tooltip 渲染是纯展示层的工作。 | 体验官 N3（Nice-to-have） |
-
-### 第三梯队：数据质量 + 差异化资产（视时间完成，约 1 小时合计）
+### 第二梯队：构建卫生与健壮性（应达，< 1 小时合计）
 
 | # | 任务 | 为何纳入 | 审计来源 |
 |---|------|---------|---------|
-| **P7** | 丰富 companion 数据集：添加 4-5 条跨记忆 imports | companion 数据集（11 条个人记忆）有 82% 的 stale 率和极少依赖边（约 3 条），在任何用户切换到此数据集时都无法展示 DAG 能力。在不完全替换数据集的前提下（替换属于大型内容工作），为现有记忆添加 4-5 条显式 `imports` 跨引用（如 `friendship-philosophy` 引用 `burnout-reflection` 作为 recommended），使图展示至少 7-8 条边。这是纯数据工作，不涉及代码修改。 | 体验官 I3（Important）、进化策略师 N9 |
-| **P8** | Export-as-Context 按钮：一键 LLM system prompt 注入 | Resolve 功能已产出 token-budgeted、拓扑排序的 markdown 输出。但用户无法方便地将此输出注入 LLM system prompt。在 Resolve 结果区域添加 "Copy as Context" 按钮：格式化输出为 `<codememory_context>` 标签包裹，包含 maturity weighting 指导和 status awareness，复制到剪贴板。这是所有 Phase 3/4 提案中 effort-to-differentiation 比率最高的项目（进化策略师估算约 1 天，但核心逻辑已在 `buildPromptContent()` 中完成）。 | 体验官 Proposal 5、进化策略师 DF5/I8 |
+| **C3** | Playwright 跨目录执行兼容性 + CI 脚本 | 多轮 Eval 均提及。`playwright.config.ts` 的 `testDir` 相对路径使从项目根目录运行依赖手动 `cd frontend`。添加绝对路径支持 + `test:e2e:ci` 脚本。 | 多轮 Eval 卫生建议（R15-R18） |
+| **C4** | "Copy as Context" 发现性 + 快捷键 | R18 N2 + N3 合并。R18 交付的差异化功能缺少发现途径和 power-user 快捷键。Help 面板条目 + Ctrl+Shift+C 快捷键。 | 体验官 R18 N2 + N3 |
+| **C5** | "Copy as Context" HTTP 剪贴板回退 | R18 N5。`navigator.clipboard` 在非安全上下文不可用。添加 `execCommand('copy')` 回退确保所有部署场景下功能完整。 | 体验官 R18 N5 |
 
 ---
 
 ## 三、本轮排除项目（不接受、不实现、不讨论）
 
-本轮定位为纯打磨轮（产品循环 2/3）。以下项目明确排除，留待最终轮（Round 19）：
+本轮定位为最终轮卫生与收尾。以下项目明确排除：
 
-- **大型功能**（Import UI ~3 天、AI 辅助创建 ~2 天、Imports 自动补全 ~1 天、Review Queue ~1.5 天）—— 属于"竞争差距"和"核心功能缺口"，需要在最终轮集中交付
-- **架构迁移**（App.tsx 状态管理重构、CSS 现代化、SQLite 索引后端）—— 属于技术健康项，非用户可见改进
-- **"Proposed" 审核队列** —— 属于 MCP 工具链的 UI 配套，约 1 天工作量
-- **Markdown 预览**（MemoryForm 中的 body 实时渲染）—— 属于表单深度改进
-- **暗色模式图节点填充可见性** —— 体验官 N4。涉及跨亮/暗模式的颜色调优，本轮已包含 P1 目录颜色修改，颜色调优应在统一轮次完成而非分散
-- **响应式工具栏** —— 体验官 N5。约 1-2 天，属于大型前端适配
-- **无障碍设置选项** —— 体验官 N6。设计决策，非缺陷
-- **图-搜索联动**（搜索结果高亮图节点）—— 属于交互增强，留待最终轮
-- **companion 数据集完全替换** —— 体验官 I3 的激进方案。本轮采用 P7 的保守方案（丰富 imports）；完全替换（如新建 startup-decisions 数据集）属于大型内容工作
+- **大型功能**（Import UI ~3 天、AI 辅助创建 ~2 天、Imports 自动补全 ~1 天、Review Queue ~1.5 天、Proposed 审核队列 ~1 天、Markdown 预览 ~0.5 天）—— 产品已达 9.0/10 评分，大型功能投资的边际收益递减。留给未来 Sprint。
+- **架构迁移**（App.tsx 状态管理、CSS 现代化、SQLite 索引后端）—— 技术健康项，非用户可见改进。当前 1-2 人团队可管理。
+- **复合目标 Export-as-Context**（R18 N4）—— 需 resolve 引擎变更 + merge DAG 逻辑 + 新 UI 流程，约 2 天。
+- **响应式工具栏**（R18 N6）—— 约 1-2 天，当前目标用户（桌面开发者）不受影响。
 
 ---
 
 ## 四、验收概要
 
-本轮共计 8 个任务。核心验收标准：
+### C1 — 暗色模式节点填充
+1. 暗色模式下所有目录节点 fill 比当前更亮（肉眼可感）
+2. 不同目录 dark tint 仍可相互区分
+3. 亮色模式不受影响
+4. Legend 暗色模式下颜色同步正确
 
-### P1 — 目录颜色
-1. `user/investment` 目录在图 canvas 上使用预定义颜色（非 fallback 循环色）
-2. Legend 中 `user/investment` 不再标记为 "(auto)"
-3. 亮色和暗色模式下颜色均可区分
-4. 其他数据集（companion、software-architecture、quant_operators）的颜色不受影响
+### C2 — Onboarding Resolve 演示
+1. 首次访问 investment 时 onboarding 包含真实 resolve 演示
+2. 演示显示结果摘要（节点数 + 结构简述）
+3. API 不可达时优雅降级为纯文本步骤
+4. Onboarding 可正常跳过和关闭
 
-### P2 — 引导感知
-1. Onboarding overlay 文案包含当前数据集名称
-2. 切换到不同数据集后重新触发 onboarding 时文案随之更新
-3. 无数据集（空状态）时文案优雅降级
-4. 首次访问（investment 默认）显示 investment 相关描述
+### C3 — Playwright CI 就绪
+1. `npx playwright test --config frontend/playwright.config.ts` 从根目录 5/5 通过
+2. `npm run test:e2e:ci` 正确执行
+3. 原有 `cd frontend && npx playwright test` 行为不变
 
-### P3 — Dashboard 交互
-1. Dashboard stale 记忆列表中的 ID 可点击
-2. 点击后导航到对应 MemoryDetail
-3. 亮色/暗色模式下链接样式一致
+### C4 — Copy as Context 发现性
+1. Help Panel 包含 "Copy as Context" 条目
+2. Help Panel 快捷键列表包含 Ctrl+Shift+C
+3. Ctrl+Shift+C 在 Resolve 结果可见时触发复制（等效于点击按钮）
+4. 不与 Ctrl+K（搜索聚焦）冲突
 
-### P4 — Legend 交互
-1. 点击 Legend 目录名高亮该目录所有节点（其他节点 dim）
-2. 再次点击恢复全部节点正常状态
-3. 点击另一个目录时切换高亮（不叠加）
-4. 高亮状态在视图切换后清除
-
-### P5 — Trim-node 可访问性
-1. trim-summary 节点标签 >= 12px，使用 opacity 降低视觉权重
-2. trim-skipped 节点标签 >= 12px，使用更低 opacity
-3. Resolve 模式以外的节点不受影响
-4. 视觉上 trim-summary < trim-skipped 的层级关系保持
-
-### P6 — Tooltip 丰富
-1. 图节点 hover tooltip 显示 R-probability（含三色信号）
-2. 图节点 hover tooltip 显示 dependent count（被依赖数）
-3. 无 R-probability 数据时优雅隐藏（不显示 "undefined"）
-
-### P7 — Companion 数据
-1. companion 数据集的图边数从 ~3 增加到至少 7
-2. 新添加的 imports 具有合理的语义关联（非随机连接）
-3. validate 通过（无循环依赖、无断链）
-4. investment 默认数据集行为不变
-
-### P8 — Export-as-Context
-1. Resolve 结果区域出现 "Copy as Context" 按钮
-2. 点击后将格式化输出复制到剪贴板
-3. 复制后提供视觉反馈（checkmark 动画或 toast）
-4. 输出格式包含 `<codememory_context>` 标签和 maturity weighting 指导
+### C5 — HTTP 剪贴板回退
+1. localhost 下 `navigator.clipboard.writeText()` 仍为首选
+2. clipboard API 不可用时 execCommand 回退成功
+3. 两种路径使用相同的成功/失败视觉反馈
 
 ### 全量回归
 1. `cd frontend && npx tsc --noEmit` — 零错误
@@ -120,24 +87,15 @@ Round 17 修复了最后一条 Critical 缺陷（dataset 默认值回归），�
 3. `PYTHONPATH=src python -m pytest tests/unit/ -v --tb=short` — 57/57
 4. `PYTHONPATH=src python tests/integration_test.py` — 24/24
 5. `PYTHONPATH=src python -m pytest tests/test_api.py -v --tb=short` — 5/5
-6. 全部 86 测试无回归
+6. `cd frontend && npx playwright test` — 5/5
+7. 全部 86 可执行测试零回归
 
 ---
 
 ## 五、陷阱提示
 
-- **[P1] 颜色语义一致性。** `user/investment` 作为金融/决策类目录，颜色应区别于已有语义色（facts=charcoal, observations=gray, preferences=gold, decisions=red）。避免使用纯绿色（已被 `user/beliefs` 占用）或纯紫色（已被 `user/people` 占用）。建议使用深青色（deep teal, #0F766E 附近）传达"分析/理性"语义。同时须在亮色 tint、暗色 tint 两处定义，确保暗色模式下不过暗（参考 `DIRECTORY_TINTS_DARK` 的 #15-#4A 亮度范围）。
-
-- **[P2] Onboarding 数据来源时序。** Onboarding 组件渲染时 `/api/datasets` 可能尚未完成。需处理加载态（显示占位文案）、空数据集状态（显示通用引导文案）、以及数据集切换后 onboarding 文案的更新时机（onboarding 是首次访问一次性展示，切换数据集后是否重新触发需明确策略——建议仅在首次展示时注入数据集上下文，不因后续切换而重新弹出）。
-
-- **[P3] 点击导航与当前视图的交互。** Dashboard stale ID 点击后导航到 MemoryDetail（滑出面板）。需确认 MemoryDetail 在 Dashboard 视图下正确渲染（已在 Graph 视图下工作，Dashboard 下使用相同的 App 级状态管理）。
-
-- **[P4] Cytoscape 批量样式更新性能。** 高亮/取消高亮涉及遍历所有节点修改样式。在 62 节点的 quant_operators 数据集上需验证操作响应时间 < 100ms。使用 `cy.batch()` 包裹样式更新以避免多次重绘。
-
-- **[P5] Trim 样式语义保留。** 将 9px/8px 改为 12px 后，trim-summary 和 trim-skipped 之间的视觉层级需要通过 opacity 差值传达。建议 trim-summary: opacity 0.65 + font-style italic, trim-skipped: opacity 0.4 + line-through decoration。这保留了"内容被裁剪"的语义，同时不牺牲可读性。
-
-- **[P6] Tooltip 数据可用性。** R-probability 和 dependent count 需从图数据或 API 响应中获取。确认当前 cytoscape node data 中是否已包含这些字段——如果 GraphCanvas 构建 cytoscape elements 时未注入，需先扩展数据传递路径。
-
-- **[P7] Import 添加不引入循环依赖。** 在 companion 记忆中手动添加 imports 后，必须运行 `codememory validate` 确认无循环依赖。companion 记忆的目录结构分散（7 个目录 for 11 条记忆），跨目录 imports 需验证 ID 拼写完全匹配。
-
-- **[P8] 剪贴板 API 兼容性。** `navigator.clipboard.writeText()` 在 localhost 以外的 HTTP 上下文中需要安全上下文（HTTPS）。开发环境（localhost）天然支持，但需确认 Playwright 测试环境中剪贴板 API 可用。备选方案：fallback 到 `document.execCommand('copy')` 或使用 textarea 选择复制。
+- **[C1] DIRECTORY_TINTS_DARK 修改后需逐对验证区分度。** teal vs green 的 dark tint 当前仅 2 点亮度差（#153D38 vs #153520），同时提升后仍需保持足够距离。建议修改前截图记录当前状态，修改后对比。
+- **[C2] Resolve 演示依赖后端。** 后端不可达时必须优雅降级——静默回退到纯文本步骤，不显示技术错误。用户在 onboarding 中不应看到 "Resolve failed"。
+- **[C3] `__dirname` 在 ESM 模式下不可用。** 若 tsconfig 使用 ESM module，需使用 `import.meta.url` 替代或保持相对路径 + CI 脚本中显式 `cd`。
+- **[C4] Ctrl+Shift+C 与浏览器 DevTools 冲突。** Chrome/Firefox 使用此组合键打开元素选择器。仅在 MemoryDetail 面板可见且有 Resolve 结果时拦截，其他情况让浏览器原生行为通过。备选：Ctrl+Shift+X。
+- **[C5] execCommand 需同步调用栈。** 如果在异步回调（await 之后）中调用 execCommand，浏览器将拒绝。`buildPromptContent()` 是同步函数，此风险较低——但实现时需确认点击处理器中无异步操作在 execCommand 之前。

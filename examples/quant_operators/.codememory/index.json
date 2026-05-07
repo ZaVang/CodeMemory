@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-05-07T19:38:53.698431",
+  "updated": "2026-05-07T20:25:09.554709",
   "memories": {
     "user/test/r6-test": {
       "type": "atom",
@@ -15,7 +15,7 @@
       "path": "user/test/r6-test.md",
       "access_count": 1,
       "last_access": "2026-05-06T12:15:34.521265",
-      "days_since_last_access": 0,
+      "days_since_last_access": 1,
       "created": "2026-05-06",
       "updated": "2026-05-06",
       "imports": {},

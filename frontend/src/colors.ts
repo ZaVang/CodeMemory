@@ -35,28 +35,30 @@ export const DIRECTORY_TINTS: Record<string, string> = {
 /** Dark-mode fill/tint colors — lighter and more saturated than uniform-darkening
  * output so nodes from different directories remain visually distinguishable.
  * Each value preserves the semantic identity of its light-mode counterpart.
- * R10: widened luminance range from ~#2D-#3D to ~#15-#4A for better glanceability. */
+ * R10: widened luminance range from ~#2D-#3D to ~#15-#4A for better glanceability.
+ * R19-C1: brightened 5-10% (+15 per RGB channel) for improved fill visibility. */
 export const DIRECTORY_TINTS_DARK: Record<string, string> = {
-  'user/facts': '#1F1D1B',
-  'user/observations': '#2A2825',
-  'user/preferences': '#4A3D1A',
-  'user/decisions': '#4A1E1E',
-  'user/feelings': '#4A3418',
-  'user/people': '#261D3D',
-  'user/beliefs': '#153520',
-  'user/moments': '#4A2E20',
-  'user/snapshots': '#1E1D1C',
-  'user/investment': '#153D38',
-  'api': '#162A40',
-  'schemas': '#1F1D1B',
+  'user/facts': '#2E2C2A',
+  'user/observations': '#393734',
+  'user/preferences': '#594C29',
+  'user/decisions': '#592D2D',
+  'user/feelings': '#594327',
+  'user/people': '#352C4C',
+  'user/beliefs': '#24442F',
+  'user/moments': '#593D2F',
+  'user/snapshots': '#2D2C2B',
+  'user/investment': '#244C47',
+  'api': '#25394F',
+  'schemas': '#2E2C2A',
 }
 
 /** Default color for directories not in the known palette */
 export const DEFAULT_COLOR = '#57534E'
 export const DEFAULT_TINT = '#FDFBF5'
 /** Default dark-mode tint — darker than the uniform 82%-black blend.
- * R10: widened to span the #15-#4A range. */
-export const DEFAULT_TINT_DARK = '#1F1D1B'
+ * R10: widened to span the #15-#4A range.
+ * R19-C1: brightened in sync with DIRECTORY_TINTS_DARK. */
+export const DEFAULT_TINT_DARK = '#2E2C2A'
 
 /** Fallback colors cycled through for unknown directories */
 export const FALLBACK_COLORS = [

@@ -6,8 +6,9 @@ import type { MemoryDetail as MemoryDetailType, ResolveResponse } from '../types
 import { StatusBadge, MaturityBadge } from './Badges'
 import { useExitAnimation } from '../useExitAnimation'
 
-/** Build an LLM system prompt from resolved nodes, wrapped in <codememory_context> tags. */
-function buildPromptContent(resolveData: ResolveResponse): string {
+/** Build an LLM system prompt from resolved nodes, wrapped in <codememory_context> tags.
+ * Exported for use by keyboard shortcut handler (R19-C4). */
+export function buildPromptContent(resolveData: ResolveResponse): string {
   const lines: string[] = []
   const nodes = [...resolveData.nodes].sort((a, b) => a.index - b.index)
   const fullNodes = nodes.filter((n) => n.trim === 'full')
@@ -79,9 +80,11 @@ interface Props {
   resolveError?: string | null
   isResolving?: boolean
   backlinks?: { id: string; strength: string }[]
+  /** R19-C4: incremented by App.tsx to trigger copy via Ctrl+Shift+C keyboard shortcut */
+  copyTrigger?: number
 }
 
-export default function MemoryDetail({ memoryId, onClose, onResolve, onClearResolve, onNavigateMemory, resolveData, resolveError, isResolving, backlinks }: Props) {
+export default function MemoryDetail({ memoryId, onClose, onResolve, onClearResolve, onNavigateMemory, resolveData, resolveError, isResolving, backlinks, copyTrigger }: Props) {
   const [memory, setMemory] = useState<MemoryDetailType | null>(null)
   const [loading, setLoading] = useState(false)
   const { visible: panelVisible, closing } = useExitAnimation(!!memoryId)
@@ -95,17 +98,55 @@ export default function MemoryDetail({ memoryId, onClose, onResolve, onClearReso
   const [copyLabel, setCopyLabel] = useState('Copy as Context')
   const IMPORT_PREVIEW_LIMIT = 10
 
+  // R19-C5: clipboard write with HTTP fallback via execCommand('copy')
+  const doClipboardCopy = useCallback((text: string) => {
+    const onSuccess = () => {
+      setCopyLabel('\u2713 Copied')
+      setTimeout(() => setCopyLabel('Copy as Context'), 2000)
+    }
+    const onError = () => setCopyLabel('Copy failed')
+
+    // Modern clipboard API available — use it (preferred path for localhost / HTTPS)
+    if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+      navigator.clipboard.writeText(text).then(onSuccess, () => {
+        // Clipboard API failed (e.g. NotAllowedError) — try synchronous fallback
+        try {
+          const textarea = document.createElement('textarea')
+          textarea.value = text
+          textarea.style.position = 'fixed'
+          textarea.style.opacity = '0'
+          document.body.appendChild(textarea)
+          textarea.select()
+          document.execCommand('copy')
+          document.body.removeChild(textarea)
+          onSuccess()
+        } catch {
+          onError()
+        }
+      })
+      return
+    }
+
+    // No clipboard API (non-secure context) — synchronous fallback
+    try {
+      const textarea = document.createElement('textarea')
+      textarea.value = text
+      textarea.style.position = 'fixed'
+      textarea.style.opacity = '0'
+      document.body.appendChild(textarea)
+      textarea.select()
+      document.execCommand('copy')
+      document.body.removeChild(textarea)
+      onSuccess()
+    } catch {
+      onError()
+    }
+  }, [])
+
   const handleCopyPrompt = useCallback(() => {
     if (!resolveData) return
-    const text = buildPromptContent(resolveData)
-    navigator.clipboard.writeText(text).then(
-      () => {
-        setCopyLabel('\u2713 Copied')
-        setTimeout(() => setCopyLabel('Copy as Context'), 2000)
-      },
-      () => setCopyLabel('Copy failed'),
-    )
-  }, [resolveData])
+    doClipboardCopy(buildPromptContent(resolveData))
+  }, [resolveData, doClipboardCopy])
 
   useEffect(() => {
     if (!memoryId) {
@@ -161,6 +202,13 @@ export default function MemoryDetail({ memoryId, onClose, onResolve, onClearReso
         setTimeout(() => setTouchAnimating(false), 600)
       })
   }, [memoryId, touchAnimating])
+
+  // R19-C4: respond to copyTrigger from App.tsx (Ctrl+Shift+C keyboard shortcut)
+  useEffect(() => {
+    if (copyTrigger && copyTrigger > 0 && resolveData) {
+      handleCopyPrompt()
+    }
+  }, [copyTrigger]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Close on Escape key
   useEffect(() => {

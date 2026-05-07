@@ -1072,3 +1072,34 @@
 | 2026-05-07 20:18:31 | update       | user/test/sprint5-c-stale v3: Change body without updating summary
 | 2026-05-07 20:18:31 | update       | user/test/sprint5-c-stale v4: Fix summary to match new body
 | 2026-05-07 20:18:31 | snapshot     | sprint5-e-201831 (2 nodes)
+| 2026-05-07 20:35:24 | maturity     | user/facts/soxl-composition: draft -> verified
+| 2026-05-07 20:35:24 | maturity     | user/facts/nvidia-earnings: verified -> proven
+| 2026-05-07 20:35:24 | maturity     | user/investment/risk-tolerance: draft -> verified
+| 2026-05-07 20:35:24 | maturity     | user/investment/semiconductor-thesis: draft -> verified
+| 2026-05-07 20:35:24 | maturity     | user/observations/soxl-drop-march: draft -> verified
+| 2026-05-07 20:37:34 | maturity     | user/facts/soxl-composition: verified -> proven
+| 2026-05-07 20:37:34 | maturity     | user/investment/risk-tolerance: verified -> proven
+| 2026-05-07 20:37:34 | maturity     | user/investment/semiconductor-thesis: verified -> proven
+| 2026-05-07 20:37:34 | maturity     | user/observations/soxl-drop-march: verified -> proven
+| 2026-05-07 20:59:59 | create       | user/test/sprint5-a-test (atom)
+| 2026-05-07 20:59:59 | maturity     | user/investment/risk-tolerance: draft -> verified
+| 2026-05-07 20:59:59 | maturity     | user/investment/semiconductor-thesis: draft -> verified
+| 2026-05-07 20:59:59 | maturity     | user/investment/current-holdings: draft -> verified
+| 2026-05-07 20:59:59 | maturity     | user/investment/february-buy: draft -> verified
+| 2026-05-07 20:59:59 | maturity     | user/investment/context: draft -> verified
+| 2026-05-07 20:59:59 | create       | user/test/sprint5-c-stale (atom)
+| 2026-05-07 20:59:59 | update       | user/test/sprint5-c-stale v2: Set initial body and summary
+| 2026-05-07 20:59:59 | update       | user/test/sprint5-c-stale v3: Change body without updating summary
+| 2026-05-07 20:59:59 | update       | user/test/sprint5-c-stale v4: Fix summary to match new body
+| 2026-05-07 20:59:59 | snapshot     | sprint5-e-205959 (2 nodes)
+| 2026-05-07 21:07:46 | create       | user/test/sprint5-a-test (atom)
+| 2026-05-07 21:07:46 | maturity     | user/investment/risk-tolerance: draft -> verified
+| 2026-05-07 21:07:46 | maturity     | user/investment/semiconductor-thesis: draft -> verified
+| 2026-05-07 21:07:46 | maturity     | user/investment/current-holdings: draft -> verified
+| 2026-05-07 21:07:46 | maturity     | user/investment/february-buy: draft -> verified
+| 2026-05-07 21:07:46 | maturity     | user/investment/context: draft -> verified
+| 2026-05-07 21:07:46 | create       | user/test/sprint5-c-stale (atom)
+| 2026-05-07 21:07:46 | update       | user/test/sprint5-c-stale v2: Set initial body and summary
+| 2026-05-07 21:07:46 | update       | user/test/sprint5-c-stale v3: Change body without updating summary
+| 2026-05-07 21:07:46 | update       | user/test/sprint5-c-stale v4: Fix summary to match new body
+| 2026-05-07 21:07:46 | snapshot     | sprint5-e-210746 (2 nodes)

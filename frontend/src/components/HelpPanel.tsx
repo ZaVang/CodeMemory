@@ -115,7 +115,7 @@ const UI_GUIDE = [
       { name: 'Budget 滑块', desc: 'Token 预算控制器（200–5000）。拖动时实时重新 resolve，被裁剪的节点会变半透明 + 缩小 + 虚线边框。' },
       { name: 'Dagre', desc: '分层布局，自上而下展示依赖关系方向。这是当前唯一的图布局方式。' },
       { name: 'Create Memory', desc: '创建新记忆表单。填写 id、summary、tags、intensity、body 后提交。' },
-      { name: '快捷键', desc: '1=Graph / 2=List / 3=Dashboard / Ctrl+K=Search / Ctrl+N=Create / Ctrl+Z=Undo / ?=Shortcuts / Esc=Close' },
+      { name: '快捷键', desc: '1=Graph / 2=List / 3=Dashboard / Ctrl+K=Search / Ctrl+N=Create / Ctrl+Z=Undo / Ctrl+Shift+C=Copy as Context / ?=Shortcuts / Esc=Close' },
     ],
   },
   {
@@ -123,6 +123,7 @@ const UI_GUIDE = [
     items: [
       { name: '元数据卡片', desc: '展示 status / maturity 徽章、type、id、tags、intensity、version、created/updated 时间、imports 依赖列表。' },
       { name: 'Resolve 按钮', desc: '以当前记忆为入口，运行 DAG 拓扑解析。图上的节点按拓扑顺序依次金色高亮（300ms/步），展示依赖加载顺序。' },
+      { name: 'Copy as Context', desc: 'Export a resolved dependency chain as a structured LLM system prompt (wrapped in &lt;codememory_context&gt; tags). Available after Resolve in MemoryDetail — use the Copy as Context button or press Ctrl+Shift+C.' },
       { name: 'Markdown 正文', desc: '完整渲染的记忆 body 内容，支持标题、列表、表格、代码块等 GFM 语法。' },
       { name: '关闭方式', desc: '点击 ✕ 按钮 / 点击遮罩层 / 按 Escape 键。' },
     ],

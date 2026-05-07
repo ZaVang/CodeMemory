@@ -9,6 +9,7 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "test:e2e": "playwright test",
+    "test:e2e:ci": "playwright test --reporter=line",
     "test:e2e:root": "cd frontend && npx playwright test"
   },
   "dependencies": {

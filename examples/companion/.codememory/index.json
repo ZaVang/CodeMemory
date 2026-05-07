@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-05-07T20:18:36.308143",
+  "updated": "2026-05-07T21:07:50.658189",
   "memories": {
     "user/context": {
       "type": "atom",
@@ -60,8 +60,8 @@
       "intensity": 6,
       "version": 1,
       "path": "user/beliefs/friendship-view.md",
-      "access_count": 40,
-      "last_access": "2026-05-07T20:18:36.307948",
+      "access_count": 42,
+      "last_access": "2026-05-07T21:07:50.658018",
       "days_since_last_access": 0,
       "created": "2026-04-22",
       "updated": "",
@@ -78,9 +78,13 @@
       "change_note": null,
       "change_log": [],
       "source": null,
-      "maturity": "verified",
+      "maturity": "proven",
       "evidence": {
         "verified_in": [
+          {
+            "version": 1,
+            "date": "2026-05-07"
+          },
           {
             "version": 1,
             "date": "2026-05-07"
@@ -138,8 +142,8 @@
       "intensity": 7,
       "version": 1,
       "path": "user/feelings/burnout-april.md",
-      "access_count": 38,
-      "last_access": "2026-05-07T20:18:36.307948",
+      "access_count": 40,
+      "last_access": "2026-05-07T21:07:50.658018",
       "days_since_last_access": 0,
       "created": "2026-04-14",
       "updated": "",
@@ -183,8 +187,8 @@
       "intensity": 6,
       "version": 1,
       "path": "user/feelings/proud-moment.md",
-      "access_count": 38,
-      "last_access": "2026-05-07T20:18:36.307948",
+      "access_count": 40,
+      "last_access": "2026-05-07T21:07:50.658018",
       "days_since_last_access": 0,
       "created": "2026-04-26",
       "updated": "",
@@ -203,9 +207,13 @@
       "change_note": null,
       "change_log": [],
       "source": null,
-      "maturity": "verified",
+      "maturity": "proven",
       "evidence": {
         "verified_in": [
+          {
+            "version": 1,
+            "date": "2026-05-07"
+          },
           {
             "version": 1,
             "date": "2026-05-07"
@@ -227,8 +235,8 @@
       "intensity": 4,
       "version": 1,
       "path": "user/moments/rainy-sunday.md",
-      "access_count": 36,
-      "last_access": "2026-05-07T20:18:36.307948",
+      "access_count": 38,
+      "last_access": "2026-05-07T21:07:50.658018",
       "days_since_last_access": 0,
       "created": "2026-04-19",
       "updated": "",
@@ -248,9 +256,13 @@
       "change_note": null,
       "change_log": [],
       "source": null,
-      "maturity": "verified",
+      "maturity": "proven",
       "evidence": {
         "verified_in": [
+          {
+            "version": 1,
+            "date": "2026-05-07"
+          },
           {
             "version": 1,
             "date": "2026-05-07"
@@ -340,8 +352,8 @@
       "intensity": 5,
       "version": 1,
       "path": "user/preferences/dislike-crowds.md",
-      "access_count": 38,
-      "last_access": "2026-05-07T20:18:36.307948",
+      "access_count": 40,
+      "last_access": "2026-05-07T21:07:50.658018",
       "days_since_last_access": 0,
       "created": "2026-04-10",
       "updated": "",
@@ -354,9 +366,13 @@
       "change_note": null,
       "change_log": [],
       "source": null,
-      "maturity": "verified",
+      "maturity": "proven",
       "evidence": {
         "verified_in": [
+          {
+            "version": 1,
+            "date": "2026-05-07"
+          },
           {
             "version": 1,
             "date": "2026-05-07"
@@ -377,8 +393,8 @@
       "intensity": 5,
       "version": 1,
       "path": "user/preferences/morning-coffee.md",
-      "access_count": 38,
-      "last_access": "2026-05-07T20:18:36.307948",
+      "access_count": 40,
+      "last_access": "2026-05-07T21:07:50.658018",
       "days_since_last_access": 0,
       "created": "2026-04-10",
       "updated": "",
