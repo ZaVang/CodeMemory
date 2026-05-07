@@ -154,7 +154,7 @@ from codememory.index import reindex as _cm_reindex
 
 
 @app.on_event("startup")
-def _startup_reindex():
+async def _startup_reindex():
     """Reindex all known datasets on startup."""
     logger = logging.getLogger("codememory.startup")
     datasets = _get_available_datasets()
@@ -176,4 +176,4 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     print(f"CodeMemory API starting on http://localhost:8000")
     print(f"Default dataset: {_DEFAULT_DATASET} ({_resolve_root(_DEFAULT_DATASET)})")
-    uvicorn.run("backend.server:app", host="0.0.0.0", port=8000, reload=False)
+    uvicorn.run(app, host="0.0.0.0", port=8000, reload=False)
