@@ -131,7 +131,14 @@ def post_reindex():
 
 @router.get("/datasets")
 def get_datasets():
-    return serialize(get_available_datasets())
+    datasets = get_available_datasets()
+    current = str(current_dataset.get())
+    current_name = current
+    return {
+        "datasets": serialize(datasets),
+        "current": current,
+        "current_name": current_name,
+    }
 
 
 @router.post("/datasets/switch")
