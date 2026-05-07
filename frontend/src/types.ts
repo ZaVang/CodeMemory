@@ -9,6 +9,10 @@ export interface MemorySummary {
   directory: string
   status: string
   version: number
+  access_count?: number
+  last_access?: string | null
+  days_since_last_access?: number | null
+  stability?: number
 }
 
 /** Paginated response from GET /api/memories */
@@ -102,6 +106,15 @@ export interface ResolveResponse {
   notices: string[]
 }
 
+/** A decay risk entry */
+export interface DecayRiskEntry {
+  id: string
+  decay: number
+  days_since_last_access: number
+  stability: number
+  access_count: number
+}
+
 /** Stats endpoint response */
 export interface StatsResponse {
   total: number
@@ -111,6 +124,7 @@ export interface StatsResponse {
   stale_count: number
   stale_ids: string[]
   tags: { tag: string; count: number }[]
+  decay_risk?: DecayRiskEntry[]
 }
 
 /** Wander endpoint response */
@@ -124,6 +138,8 @@ export interface WanderResponse {
   last_access: string | null
   status: string
   maturity: string
+  days_since_last_access?: number | null
+  stability?: number
 }
 
 /** Validate endpoint response */

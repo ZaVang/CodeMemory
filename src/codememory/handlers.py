@@ -254,8 +254,10 @@ def handle_overview(
         # Access bonus = access_count * decay
         # Zero-access memories get minimal access bonus (10% weight).
         entry = index.memories.get(mid)
-        stability = entry.stability if entry else 14.0
-        days_since = r.get("days_since_last_access") if isinstance(r, dict) else getattr(r, "days_since_last_access", None)
+        stability = max(entry.stability, 0.1) if entry else 14.0  # C2: clamp to safe minimum
+        # C1 fix: read days_since_last_access from MemoryEntry (not from search dict),
+        # as search() previously did not include this field. Also apply C2 safety clamp.
+        days_since = entry.days_since_last_access if entry else None
         if access > 0 and days_since is not None:
             days_since = max(0, days_since)
             decay = math.pow(0.5, days_since / stability)
@@ -341,7 +343,7 @@ def handle_wander(
 
         weights = []
         for _mid, entry in cool_candidates:
-            stability = getattr(entry, 'stability', 14.0)
+            stability = max(getattr(entry, 'stability', 14.0), 0.1)  # C2: clamp to safe minimum
             days_since = getattr(entry, 'days_since_last_access', None)
             if entry.access_count > 0 and days_since is not None:
                 decay = math.pow(0.5, max(0, days_since) / stability)

@@ -461,6 +461,14 @@ export default function App() {
     setShowCreateForm(false)
   }, [])
 
+  // Resolve from context menu (R14-N2)
+  const handleResolveFromContext = useCallback(() => {
+    if (contextMenu) {
+      handleResolve(contextMenu.nodeId)
+      setContextMenu(null)
+    }
+  }, [contextMenu, handleResolve])
+
   // Archive from context menu (PL1-5)
   const handleArchiveFromContext = useCallback(() => {
     if (contextMenu) {
@@ -667,7 +675,7 @@ export default function App() {
               gap: 6,
             }}
           >
-            Graph<span style={{ fontSize: 10, opacity: 0.55, letterSpacing: 0 }}>1</span>
+            Graph<span style={{ fontSize: 11, opacity: 0.55, letterSpacing: 0 }}>1</span>
           </button>
           <button
             onClick={() => setViewMode('list')}
@@ -688,7 +696,7 @@ export default function App() {
               gap: 6,
             }}
           >
-            List<span style={{ fontSize: 10, opacity: 0.55, letterSpacing: 0 }}>2</span>
+            List<span style={{ fontSize: 11, opacity: 0.55, letterSpacing: 0 }}>2</span>
           </button>
           <button
             onClick={() => setViewMode('dashboard')}
@@ -709,7 +717,7 @@ export default function App() {
               gap: 6,
             }}
           >
-            Dashboard<span style={{ fontSize: 10, opacity: 0.55, letterSpacing: 0 }}>3</span>
+            Dashboard<span style={{ fontSize: 11, opacity: 0.55, letterSpacing: 0 }}>3</span>
           </button>
         </div>
 
@@ -1315,6 +1323,7 @@ export default function App() {
               {contextMenu.nodeId}
             </div>
             <ContextMenuItem label="View Details" onClick={handleDetailFromContext} />
+            <ContextMenuItem label="Resolve" onClick={handleResolveFromContext} />
             <ContextMenuItem label="Edit" onClick={handleEditFromContext} />
             <div
               style={{
@@ -1462,7 +1471,7 @@ export default function App() {
                 >
                   {archiveBacklinks.length} {archiveBacklinks.length === 1 ? 'memory imports' : 'memories import'} this one. Archiving it will create broken links.
                 </p>
-                <div style={{ fontSize: 11, fontFamily: 'JetBrains Mono, monospace', color: 'var(--cm-text-tertiary)', maxHeight: 80, overflowY: 'auto', lineHeight: 1.6 }}>
+                <div style={{ fontSize: 12, fontFamily: 'JetBrains Mono, monospace', color: 'var(--cm-text-tertiary)', maxHeight: 80, overflowY: 'auto', lineHeight: 1.6 }}>
                   {archiveBacklinks.slice(0, 8).map((b) => (
                     <span key={b.id} style={{ display: 'inline-block', marginRight: 8, marginBottom: 2 }}>{b.id}</span>
                   ))}

@@ -305,6 +305,10 @@ def get_memories(offset: int = 0, limit: int = 100):
             "directory": directory,
             "status": d.get("status", "active"),
             "version": d.get("version", 1),
+            "access_count": d.get("access_count", 0),
+            "last_access": d.get("last_access", None),
+            "days_since_last_access": d.get("days_since_last_access", None),
+            "stability": d.get("stability", 14.0),
         })
 
     total = len(result)
@@ -653,6 +657,31 @@ def get_stats():
     # Sort tag_counts by frequency descending
     sorted_tags = sorted(tag_counts.items(), key=lambda x: x[1], reverse=True)
 
+    # C3: compute decay risk — memories where 0.5^(days/stability) < 0.1
+    import math as _math
+    decay_risk: list[dict] = []
+    for mem_id, entry in memories.items():
+        if hasattr(entry, "model_dump"):
+            d = entry.model_dump(mode="json")
+        elif isinstance(entry, dict):
+            d = entry
+        else:
+            continue
+        days_since = d.get("days_since_last_access", None)
+        stability = d.get("stability", 14.0)
+        access_count = d.get("access_count", 0)
+        if access_count > 0 and days_since is not None and days_since > 0 and stability > 0:
+            decay = _math.pow(0.5, max(0, days_since) / stability)
+            if decay < 0.1:
+                decay_risk.append({
+                    "id": mem_id,
+                    "decay": round(decay, 4),
+                    "days_since_last_access": days_since,
+                    "stability": stability,
+                    "access_count": access_count,
+                })
+    decay_risk.sort(key=lambda x: x["decay"])
+
     return _serialize({
         "total": total,
         "maturity": maturity_counts,
@@ -661,6 +690,7 @@ def get_stats():
         "stale_count": stale_count,
         "stale_ids": stale_ids,
         "tags": [{"tag": t, "count": c} for t, c in sorted_tags],
+        "decay_risk": decay_risk,
     })
 
 
@@ -706,6 +736,8 @@ def post_wander(req: WanderRequest = WanderRequest()):
                 "last_access": entry.last_access,
                 "status": entry.status,
                 "maturity": entry.maturity,
+                "days_since_last_access": entry.days_since_last_access,
+                "stability": entry.stability,
             })
 
     # Fallback: implement wander directly if handle_wander parsing fails
@@ -737,6 +769,8 @@ def post_wander(req: WanderRequest = WanderRequest()):
         "last_access": entry.last_access,
         "status": entry.status,
         "maturity": entry.maturity,
+        "days_since_last_access": entry.days_since_last_access,
+        "stability": entry.stability,
     })
 
 
@@ -1159,6 +1193,8 @@ def post_search(req: SearchRequest):
                 "match_quality": match_quality_tag,
                 "match_score": round(best_score, 2),
                 "match_fields": match_fields,
+                "days_since_last_access": d.get("days_since_last_access", None),
+                "stability": d.get("stability", 14.0),
             }
 
             if is_exact:
@@ -1179,6 +1215,8 @@ def post_search(req: SearchRequest):
                 "match_quality": "filter",
                 "match_score": 1.0,
                 "match_fields": [],
+                "days_since_last_access": d.get("days_since_last_access", None),
+                "stability": d.get("stability", 14.0),
             }
             exact_matches.append(match_entry)
 

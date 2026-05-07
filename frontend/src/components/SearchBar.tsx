@@ -306,7 +306,7 @@ export default function SearchBar({ value, onChange, onNavigate, onResolve }: Pr
           >
             <span>{results.length} result{results.length !== 1 ? 's' : ''}</span>
             {results.some((r) => r.match_quality === 'fuzzy') && (
-              <span style={{ fontWeight: 400, textTransform: 'none', letterSpacing: '0', fontSize: 11 }}>
+              <span style={{ fontWeight: 400, textTransform: 'none', letterSpacing: '0', fontSize: 12 }}>
                 includes fuzzy matches
               </span>
             )}
@@ -356,7 +356,7 @@ export default function SearchBar({ value, onChange, onNavigate, onResolve }: Pr
                       border: '1px solid var(--cm-accent)',
                       background: 'transparent',
                       cursor: 'pointer',
-                      fontSize: 10,
+                      fontSize: 12,
                       fontWeight: 600,
                       fontFamily: 'Raleway, sans-serif',
                       color: 'var(--cm-accent)',
@@ -373,7 +373,7 @@ export default function SearchBar({ value, onChange, onNavigate, onResolve }: Pr
                 )}
                 {/* Match quality indicator — always visible */}
                 <span style={{
-                  fontSize: 11,
+                  fontSize: 12,
                   fontWeight: 600,
                   fontFamily: 'Raleway, sans-serif',
                   textTransform: 'uppercase',

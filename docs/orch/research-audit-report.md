@@ -1,563 +1,600 @@
-# CodeMemory Design Research Audit — Round 12 Post-Mortem
+# CodeMemory Design Research Audit — Round 13 Post-Mortem
 
 **Reviewer:** Product Research Reviewer
 **Date:** 2026-05-07
-**Trigger:** Round 12 introduces ACT-R time-decay activation (heat formula `deps*10 + access*0.5^(days_since/14)`). This audit asks: is this the right direction, and what would a radical rethink look like?
-
-**Method:** Full source review (resolve.py, handlers.py, models.py, index.py, validate.py, search.py, transient.py, orphans.py, suggest_deps.py, update.py, create.py, integrations.py) + adjacent domain research via WebSearch (3 domains: cognitive architectures, knowledge graphs, human memory models) + gap analysis + proposal synthesis.
-
----
-
-## Executive Summary
-
-Round 12's time-decay activation formula is a valid first step toward a richer memory lifecycle model — but it is a **local maximum**, not the destination. Three deeper findings reshape the design space:
-
-1. **ACT-R's full activation model does something CodeMemory ignores entirely: spreading activation from context.** The current formula only models recency/frequency (base-level activation). A memory about risk tolerance should be "hotter" when the user is working on risk analysis — regardless of when it was last accessed. This contextual dimension is the single largest missing piece.
-
-2. **The "memory = file" metaphor is already cracking under its own success.** TransientDAG nodes are memories with no file. Snapshots flatten internal topology. DAG edges carry rich semantics (required/recommended/related, pin versions, reasons) but are compressed to a single integer (dependents count) in the heat formula. The real memory is the graph topology, not the individual files.
-
-3. **The FSRS community has solved a problem we are only beginning to touch.** FSRS models each memory unit with three parameters (Difficulty, Stability, Retrievability) that create a personalized forgetting curve. Its key finding — reviewing when retrieval probability is low maximizes learning — **inverts** CodeMemory's current design where frequent access = promoted.
-
-**Biggest opportunity:** Shift from a one-dimensional heat ranking to a **three-dimensional memory state model** (structural x temporal x stability), enabling distinct "surfacing" vs "reviewing" vs "fading" operations.
-
-**One-sentence direction:** Replace the global 14-day half-life with per-memory stability learned from access history; add context-dependent activation from tags/domain; and treat edges as first-class entities with their own lifecycle.
+**Build:** Post-Round 13 (10/11 FULL PASS + 1 PARTIAL PASS per EVAL.md)
+**Method:** Full source review (models.py, handlers.py, resolve.py, validate.py, search.py, index.py) + adjacent-field web research (FSRS v4-v6, Ebbinghaus forgetting curves / Radvansky 2024 meta-analysis, Duolingo HLR half-life regression, recommender systems: CF-KAN, knowledge-graph CF) + logical edge-case analysis (stability=0, negative, None; data plumbing verification; cross-system interaction audit)
 
 ---
 
-## Phase 1: Core Assumption Questioning
+## Executive Summary (6.5 / 10)
 
-### 1.1 Assumption Inventory (7 examined)
+Round 13 made a conceptually correct and architecturally ambitious move: introducing a unified exponential decay formula `0.5^(days/stability)` anchored by a per-memory `stability` field (default 14.0 days) and precomputed `days_since_last_access`. This replaced three independent decay heuristics (overview flat 10%, wander raw count, validate 30-day binary threshold) with a single continuous model. The direction is right. The implementation is directionally correct but suffers from one blocking data-plumbing bug, three unexamined edge cases, and a design philosophy that stops at "uniform model" without reaching "differentiated model."
 
-| # | Assumption | Where It Manifests | Stress Test |
-|---|-----------|-------------------|-------------|
-| A1 | Memory = file (.md with frontmatter) | `create.py`, `index.py`, `resolve.py` | TransientDAG nodes are memories with no file; snapshot compresses topology |
-| A2 | Heat = structural (dependents) + temporal (access decay) | `handle_overview()` in `handlers.py:256` | No spreading activation; no task-context awareness |
-| A3 | Access frequency signals importance | `MemoryEntry.access_count`, `handle_overview()` | A memory accessed 50 times by accident is "hotter" than a critical one accessed 3 times intentionally |
-| A4 | 14-day half-life is universal | `handle_overview():249` | Investment research and software architecture have different natural forgetting rates |
-| A5 | Primary user is an AI agent | All CLI commands, MCP integration | Human users need temporal browsing, social sharing, visual navigation |
-| A6 | Maturity moves forward only (draft->verified->proven) | `resolve.py:322-338` | A "proven" memory unaccessed for 2 years remains proven; no demotion path exists |
-| A7 | Dependents count = structural importance | `handle_overview():256` (`deps * 10`) | One `required` import carries more semantic weight than ten `related` imports, but all count equally |
+**Key findings:**
 
-### 1.2 Deep Dive: The "Memory = File" Metaphor Under Stress
+1. **Data plumbing bug (CRITICAL):** `handle_overview()` reads `days_since_last_access` from the search result dict (line 258) — but `search()` never includes this field in its output. The decay formula `0.5^(days/stability)` never activates in the overview path. All accessed memories fall back to the pre-R13 flat `access * 0.1` multiplier. The eval heat values (31, 31, 21, 21, 20) passed because they match the old formula, not because the new formula was verified. Contrast: `handle_wander()` correctly reads from `entry.days_since_last_access` (line 345) and works as designed.
 
-The file metaphor holds well for the core atom model: one conceptual unit, one file, one path. But it breaks in three emerging use cases:
+2. **Uniform 14.0-day stability lacks empirical grounding.** Adjacent-field research shows memory half-lives span four orders of magnitude: hours (rote facts) to years (procedural skills). A single default is an arbitrary midpoint. The 2024 Radvansky meta-analysis (916 datasets) found no single function fits all content types — exponential, power-law, logarithmic, and linear functions each dominate different domains.
 
-**Break 1: Compound memories (TransientDAG).** `transient.py` defines in-process memory nodes never written to disk. When a session reasoning chain produces a conclusion depending on 4 intermediate steps, where is the "memory"? The 5 transient nodes existed in memory. The snapshot (`snapshot.py`) flattens them into one file — losing the internal topology. The file is a lossy compression of the actual memory structure.
+3. **High-frequency access paradox unresolved.** Memories accessed daily have `days_since=0` → `decay=1.0` perpetually. Their overview heat climbs monotonically. Wander's "cool mode" correctly gives them minimal weight, but there is no mechanism to detect or discourage "over-access" — a memory reviewed daily provides near-zero new learning benefit (massed practice regime per spacing effect research).
 
-**Break 2: The DAG edges are memories too.** An import like `{required: [user/risk/tolerance], pin: "v3", reason: "underpins all sector analysis"}` encodes a judgment with author, timestamp, rationale. This judgment IS a memory — but edges are stored as metadata on nodes, not as first-class entities. You cannot search for "all edges that were added in the last month" or "all edges with pinned versions that need review."
+4. **Three edge cases unguarded:** stability=0 (ZeroDivisionError → crash), stability<0 (decay>1.0 → nonsensical), and `days_since_last_access=None` semantics inconsistent between overview (treated as 0, accidental) and wander (treated as max weight, intentional).
 
-**Break 3: Version history is temporal memory.** `update.py` versions a file (v1->v2->v3). Version 3 of a memory represents an evolved understanding. But the index only stores one `MemoryEntry` per id. The temporal dimension of "how did my thinking change from v1 to v3?" is flattened into a version number and a changelog. The v1 DAG topology (which imports existed at v1) is lost — only the current topology is preserved.
+**Research Contribution (7.0/10):** The stability field + unified formula is the right abstraction at the right time. The three-pronged application (overview heat, wander cool weighting, validate decay check) shows systems thinking.
 
-**Assessment:** The file metaphor is excellent for the atom unit (stable, authored, versioned). It is strained for compound, relational, and temporal memory. The system needs a **second representation** for edges as first-class and temporal sequences as queryable — augmenting rather than replacing the file model.
+**Potential Impact (6.5/10):** Fixing the overview plumbing bug unlocks the intended UX. But uniform 14.0-day stability and single-curve assumption limit expressiveness. The biggest missed opportunity: stability remains static when FSRS research shows adaptive stability (updated per access) is what makes the model personal.
 
-### 1.3 Is Time Decay Enough?
+**Risk Level (5.5/10):** Medium. The overview bug is hidden (eval passes, no crash) but neuters the flagship R13 feature in the most-used code path. The stability=0 edge case is a crash vector waiting for a user to set it. The None semantics ambiguity creates divergent behavior between overview and wander for unaccessed memories.
 
-Round 12 formula: `heat = deps*10 + access * 0.5^(days_since/14)`
+---
 
-This models **base-level activation** (B_i) from ACT-R — frequency and recency. But ACT-R's full activation equation has three more components:
+## Phase 1: Core Assumptions Under Scrutiny
+
+### 1.1 The 14.0-Day Default Stability — Empirically Unanchored
+
+**The assumption:** `stability: float = Field(default=14.0)` in models.py:78. All four datasets reindex with stability=14.0 across every memory. The choice of 14 appears to derive from the pre-R13 30-day hard threshold (14 * 2 = 28, approximately 30).
+
+**Adjacent-field evidence contradicts a single default:**
+
+| Source | Half-Life Range | Context |
+|--------|----------------|---------|
+| Ebbinghaus (1885) | ~1 day | Nonsense syllables, no reinforcement |
+| Duolingo HLR (Settles & Meeder, 2016) | Hours to multiple days | Per-word, lexeme-specific; 45% error reduction vs Leitner boxes |
+| SuperMemo (Wozniak) | ~1 day (first interval) → months/years | Depends on repetition count and item difficulty |
+| Husna et al. (2025) | Optimal review at 26.5 hours | Real Analysis students, 80% retention target |
+| MIT (Subirana, Bagiati, Sarma, 2017) | ~2 years half-life | College academics, unreinforced |
+| Procedural skills (Karni & Sagi, 1993) | Months to years | Motor sequences, mirror tracing — near-immune to decay once overlearned |
+| FSRS v6 (2024) | Learned per-card from review history | 17-21 trainable parameters including personalized forgetting curve exponent w20 |
+
+A single 14.0-day half-life is an arbitrary midpoint in a domain where half-lives span four orders of magnitude (hours to years). For CodeMemory's current datasets, different defaults would be empirically better justified:
+
+| Dataset | Dominant Memory Type | Best-Fit Decay Profile (from research) | Suggested Default Stability |
+|---------|---------------------|--------------------------------------|---------------------------|
+| investment | Declarative facts + time-sensitive decisions | Exponential-power (steep initial drop) | 7-14 days |
+| software-architecture | Conceptual + structural patterns | Logarithmic or linear (gentle, schema-aided reconstruction) | 30-60 days |
+| companion | Episodic + personal interactions | Power-law (moderate) | 14-30 days |
+| quant_operators | Procedural formulas + trading rules | Slow power-law or plateau (procedural consolidation) | 60-180 days |
+
+**The risk of a single default:** With stability=14.0 and the exponential formula, a memory unaccessed for 90 days has `R = 0.5^(90/14) ≈ 0.011` — effectively zero retrieval probability. This is appropriate for a volatile fact (e.g., "NVDA guidance for Q3") but aggressively wrong for a stable concept (e.g., "event-driven architecture pattern"). The latter at 90 days with power-law decay (tau=0.5) would have `R ≈ 0.38` — still substantially retrievable. The uniform exponential encodes a philosophy that unsupported by research: "all memories fade at the same rate."
+
+### 1.2 The Exponential Decay Curve — Valid Approximation, Not the Best Fit
+
+**The assumption:** `decay = 0.5^(days/stability)` — a simple exponential with base 0.5 and half-life = stability.
+
+**The evidence:** The 2024 Radvansky, Parra & Doolen meta-analysis (Psychonomic Bulletin & Review) reviewed 256 papers and 916 datasets spanning 150 years of memory research. Key findings:
+
+| Best-Fit Function | Equation | Best For |
+|-------------------|----------|----------|
+| **Exponential-power** | `M = a * e^(-b * sqrt(t))` | Widest range of data; special case of Weibull |
+| **Logarithmic** | `M = a - b * ln(t)` | Non-autobiographical memory; Ebbinghaus's original |
+| **Linear** | `M = bt + a` | Complex/event memories; well-learned material |
+| **Power** | `M = a * t^b` | Less well-learned information; consolidation-based |
+
+Surprisingly, the power function — long considered the default — was **not** the best-fitting function most often. The simple exponential (CodeMemory's choice) was adequate for short intervals but failed at long retention periods.
+
+**The Memory Phases Framework** (Radvansky, Doolen, Pettijohn & Ritchey, 2022, JEP:LMC) argues no single continuous function captures forgetting across all phases. Different functions apply at different timescales. CodeMemory operates entirely in the transitional-to-long-lasting domain (>1 week), where power-law or logarithmic decay is better supported by data.
+
+**Practical consequence for CodeMemory:**
+
+| days_since | Exponential (stability=14) | Power-law (tau=0.5, S=14) | Ratio |
+|-----------|---------------------------|--------------------------|-------|
+| 0 | 1.0 | 1.0 | 1.0x |
+| 14 | 0.5 | 0.71 | 1.4x |
+| 30 | 0.22 | 0.57 | 2.6x |
+| 90 | 0.011 | 0.38 | 34x |
+| 180 | 0.00012 | 0.27 | 2200x |
+
+The exponential erases long-tail signal at a rate that is 2,200x more aggressive than power-law at 180 days. For a PKM system where memories can be valuable years after creation, this is a design choice with consequences: the exponential implicitly declares "not accessed in 90+ days = effectively forgotten." Power-law declares "not accessed in 90 days = harder to recall but still potentially valuable."
+
+**The choice of formula encodes a philosophy about what forgetting means.** CodeMemory's current exponential says forgetting is near-binary after a few half-lives. Power-law says forgetting has a long, thin tail — old memories never truly vanish, they just become progressively harder to access.
+
+### 1.3 High-Frequency Access Paradox — No Cooling Mechanism
+
+**The assumption:** `days_since_last_access = 0` (set in resolve.py:320 after access) means `decay = 1.0` for recently-accessed memories. They never decay.
+
+**The paradox:**
+- A memory accessed daily: `days_since=0 → decay=1.0` always. Its heat = `deps*10 + access_count * 1.0`. Both components climb monotonically.
+- A memory accessed 13 days ago (just shy of one half-life): `decay = 0.5^(13/14) ≈ 0.53`.
+- The daily memory gets 2x the access bonus of the 13-day memory — perpetually.
+
+**Is this desired?** For overview ("what should the agent see now?"), yes — recently-used memories are relevant. For wander ("what needs serendipitous rediscovery?"), wander's cool mode correctly handles this by giving `weight = 1/(access*decay + 1)` → near-zero weight for high-access recent memories. But no mechanism discourages over-access.
+
+**The spacing effect from cognitive science:** In spaced repetition research, a memory reviewed daily provides near-zero new learning benefit — it's in the "massed practice" regime. The optimal review point is when retrieval probability drops to ~70-90% (the "desirable difficulty" sweet spot per FSRS research). A memory at R=1.0 (just accessed) gives the smallest stability gain; a memory at R=0.7-0.8 gives the largest.
+
+**What's missing:** CodeMemory has no mechanism to detect that a memory is being "over-accessed" (massed practice) and to suggest spacing it out. The system could track `avg_days_between_accesses` and warn when it drops below the optimal review interval for that memory's stability.
+
+### 1.4 The "days_since" Precomputation Enables Fast Heat But Loses Temporal Resolution
+
+**The assumption:** `days_since_last_access` is an integer (precomputed as `(now - last_access).days` during reindex). This is efficient — avoids datetime parsing in every heat calculation.
+
+**What's lost:** Integer-day resolution means a memory accessed 30 minutes ago and a memory accessed 23.5 hours ago both have `days_since=0`. They receive identical decay=1.0. In FSRS and ACT-R, sub-day temporal precision matters for working memory → early LTM transitions. For CodeMemory's current use cases (overview, wander, validate), day-level resolution is adequate. But if the system ever adds "same-session" activation (which FSRS v6 now models explicitly with its w19 parameter), sub-day precision becomes necessary.
+
+**The precomputation timing issue:** `days_since_last_access` is computed at reindex time and updated at resolve time. If reindex runs on Monday and resolve runs on Friday, a memory accessed on Friday gets `days_since=0`. But a memory accessed on Monday and never reindexed still shows `days_since=0` on Friday (it was 0 at Monday's reindex, and no resolve refreshed it). The field is a **snapshot**, not a live computation. This is fine for overview (which runs frequently with fresh index loads) but could cause stale values in long-running server processes that cache the index.
+
+---
+
+## Phase 2: Adjacent Field Research Synthesis
+
+### 2.1 FSRS (Free Spaced Repetition Scheduler) — Full Model Mapping
+
+FSRS v6 (Jarrett Ye / open-spaced-repetition, 2024) is the current state-of-the-art in open-source spaced repetition. It models each memory card with three continuous parameters and 21 trainable weights. Its architecture maps surprisingly well to CodeMemory's current data model:
+
+| FSRS v6 Concept | Symbol | Definition | CodeMemory Analog | Convergence Effort |
+|---|---|---|---|---|
+| **Stability** | S | Days for R to decay from 100% to 90% | `stability` field — but CodeMemory uses 50% point (half-life) | Trivial: `S_cm ≈ 6.6 * S_fsrs` |
+| **Difficulty** | D [1,10] | Inherent complexity; learned from review outcomes | `intensity` field [1,10] — but assigned by user, not learned | Medium: repurpose intensity or add D field |
+| **Retrievability** | R [0,1] | Instantaneous recall probability | `0.5^(days/stability)` — same concept | None: already computed |
+| **Stability Increase (SInc)** | S' = S * (1 + ...) | S increases after successful recall; magnitude depends on D and R at review | NOT PRESENT | High: new update logic needed |
+| **Forgetting Curve Exponent** | w20 [0.1, 0.8] | Personalized curve shape per user (FSRS v6) | NOT PRESENT | Very high: requires ML optimization |
+| **Same-Day Review** | w19 | Models within-day multiple reviews (FSRS v6) | NOT PRESENT | Medium: requires sub-day timestamping |
+| **Desired Retention** | r (e.g., 0.90) | User-specified target retention rate | NOT PRESENT | Low: add config field |
+
+**The critical missing piece: adaptive stability.** In FSRS, stability is not a static field — it is updated after every review according to a formula that incorporates difficulty, current retrievability, and the review grade:
 
 ```
-ACT-R Full:  A_i = B_i(base-level) + S_i(spreading activation) + P_i(partial matching) + noise
-CodeMemory:  heat = deps*10 + access * decay(days_since)
-              ↕                ↕
-         structural proxy   temporal recency
-         (approximates B_i)  (B_i component only)
+S' = S * [1 + (11-D) * S^(-w9) * (e^(w10*(1-R)) - 1) * h * b * e^w8]
 ```
 
-**What's missing:**
+The SInc magnitude is:
+- **Larger when R is moderate** (~0.7-0.8) — the "spacing effect": gains are maximal when you're close to forgetting
+- **Larger for easy material** (low D) — easy material consolidates faster
+- **Smaller for high-S material** — stability saturates (harder to make stable memories even more stable)
 
-| ACT-R Component | Description | CodeMemory Equivalent | Status |
-|----------------|-------------|----------------------|--------|
-| Base-Level Activation: `ln(Σ t_j^(-d))` | Power-law sum over all access history | `access * 0.5^(days_since/14)` | Partially modeled — exponential instead of power-law, no sum over full history |
-| Spreading Activation: context-dependent boost | Boost from active goal/context | None | **Missing entirely** |
-| Partial Matching: relevance to retrieval request | Mismatch penalty for partial matches | None (search is binary substring) | **Missing entirely** |
-| Retrieval Threshold τ: below this, can't retrieve | Functional forgetting boundary | None (all memories always reachable) | **Missing entirely** |
-| Noise: logistic noise on retrieval | Probabilistic retrieval | None (deterministic) | Deliberately absent |
+Applying this to CodeMemory: on each `resolve` or `focus`, compute `R_at_access = 0.5^(days_since / stability)`, then update stability proportional to `(11 - intensity) * S_increase_factor(R_at_access)`. Over time:
+- Frequently-accessed, low-intensity memories stabilize fast → their overview heat drops less rapidly between accesses
+- Rarely-accessed, high-intensity memories stabilize slowly → they stay in the "needs review" zone longer
+- The system converges to per-memory review intervals optimized for actual usage patterns
 
-The biggest gap is **spreading activation from context**. When a user resolves `user/investment/context` (tagged: investment, risk, portfolio), the memory `user/risk/tolerance` (tagged: investment, risk) should receive a context-dependent activation boost through shared tags — regardless of when it was last accessed. The DAG captures structural relationships, but activation should also be **context-dependent**.
+**FSRS performance data:** On 1.7B reviews from 20K users, FSRS v6 achieves 84% less prediction error than SM-2 and requires 20-30% fewer reviews for the same retention level. Parameter optimization starts outperforming defaults at just 16 reviews per card.
 
-The second gap is the **decay function itself**. ACT-R uses power-law decay `t^(-d)` with d typically 0.5. CodeMemory uses exponential `0.5^(t/half_life)`. These behave differently:
-- Power-law: long tail, preserves signal of sustained historical importance
-- Exponential: sharp initial decay, near-zero after ~4-5 half-lives
+### 2.2 Ebbinghaus Forgetting Curve — Content-Type Differentiation
 
-For a memory accessed 1000 times 2 years ago:
-- Exponential: `1000 * 0.5^(730/14) = 1000 * 2.0e-16 ≈ 0` (completely erased)
-- Power-law (d=0.5): `1000 * (731)^(-0.5) ≈ 1000 * 0.037 = 37` (still meaningful)
+The 2024 Radvansky et al. meta-analysis (Psychonomic Bulletin & Review) provides the strongest evidence yet that different content types require different mathematical models of forgetting:
 
-The power-law better preserves the signal of sustained historical engagement.
+**Finding 1: Content type determines best-fit function.**
 
-### 1.4 Human User vs AI Agent — Design Collapse Points
+| Content Type | Dominant Decay Function | Half-Life (Unreinforced) | With Spaced Practice |
+|---|---|---|---|
+| **Facts** (declarative, rote) | Exponential / Exponential-power | ~1-7 days | Weeks to months |
+| **Concepts** (semantic, meaningful) | Logarithmic / Linear | Weeks to months | Months to years |
+| **Skills** (procedural) | Slow power-law / Plateau | Months to years | Years (near-permanent) |
 
-If a human user opens CodeMemory directly (not through an AI agent), these assumptions break:
+**Finding 2: Concepts decay differently because they support reconstruction.** Fisher & Radvansky (2022a, 2022b) found that well-learned conceptual information is best fit by a linear function, explained by the RAFT computational model — concepts allow partial reconstruction from related knowledge, which produces a shallower apparent decay curve. Facts don't benefit from reconstruction and thus show steeper exponential-like decay.
 
-1. **Resolution = Token budget.** Humans don't think in token budgets. They think in "give me the gist" vs "show me everything." The `--budget` parameter is an agent-optimized concept.
+**Finding 3: Murre (2023) averaging artifact.** Averaging individual exponential forgetting curves produces artifact power functions. This means observing power-law behavior in aggregate data does not prove power-law decay at the individual level — a critical methodological insight for any system that models individual memory decay.
 
-2. **Overview as injection format.** `--format inject` produces `[id](type, heat:N)` — optimized for LLM system prompts. A human would want cards, timelines, or network views.
+**Finding 4: Interleaving vs. blocking.** A 2024 study (PMC, JARMAC) found that interleaved presentation enhances category generalization (concept learning), while blocked presentation improves memory for specific episodic details (fact learning). Category knowledge remained stable over time; episodic details declined. This maps to CodeMemory's tag structure: concept-tagged memories should have longer effective stability than fact-tagged memories.
 
-3. **No temporal-first navigation.** Humans think in timelines: "what was I working on last Tuesday?" The system has `created`/`updated` fields, but no "browse by date" interface.
+### 2.3 Recommender Systems — Collaborative Memory Discovery
 
-4. **No collaboration primitives.** `evidence.contributors` and `source.created_by` exist but are vestigial — no multi-user conflict detection, no shared ownership.
+Three recommender system paradigms transfer directly to CodeMemory's memory discovery and surfacing operations:
 
-5. **CLI semantics leak into UI.** `--depth required|recommended|full` is a CLI parameter. In the management panel, it maps to a Budget slider — a vastly different interaction model.
+**Technique 1: Memory Co-Occurrence Matrix (Item-Item Collaborative Filtering).**
+When a user resolves memory A and memory B appears in the same DAG, increment a co-occurrence score. Over time, a memory-memory co-occurrence matrix emerges. This is implicit feedback — "memories that are frequently resolved together." Unlike the explicit imports DAG (what the author thought was related), co-occurrence encodes what the reader actually found useful together.
 
----
+Formula: `cooccurrence_score(A, B) = cooccurrence_count(A, B) * 0.5^(days_since_cooccurrence / stability)`
 
-## Phase 2: Adjacent Domain Research
+**Technique 2: Tag-Based TF-IDF Weighting.**
+Treat tags as "terms" and memories as "documents." Compute tag-memory TF-IDF scores. Rare tags (e.g., "options-trading") have higher IDF weight than common tags (e.g., "investment"). When resolving a memory with rare tags, boost the heat of other memories sharing those rare tags — higher-signal associations.
 
-### 2.1 Domain 1: Cognitive Architectures (ACT-R, SOAR)
+**Technique 3: CF-KAN for Continual Learning (Park, Kim, Shin, 2024).**
+Kolmogorov-Arnold Networks applied to collaborative filtering demonstrate inherent robustness to catastrophic forgetting — the tendency of recommenders to "forget" old user preferences when new data arrives. Applied to CodeMemory: the overview ranking could use KAN-inspired weight preservation to ensure that memories from less-active domains (e.g., "software-architecture" when the user is deep in "investment") don't drop to zero heat.
 
-**Key sources:** ACT-R 7 reference (Carnegie Mellon), Pavlik & Anderson (2005) "Practice and Forgetting Effects," Laird (2022) "An Analysis and Comparison of ACT-R and Soar," Fisher, Houpt et al. (2025) "SFT-GMA framework for testing ACT-R core assumptions," MDPI Applied Sciences (2025) "Retrieving Memory Content from a Cognitive Architecture by Impressions from Language Models for Use in a Social Robot."
+**Technique 4: Knowledge Graph + Collaborative Filtering Hybrid.**
+The 2024 hybrid model from Ain Shams Engineering Journal combines knowledge graph embeddings (TransE) with neural collaborative filtering, achieving ~6% F1 improvement over baselines. CodeMemory already has a knowledge graph (DAG). Adding collaborative signals (co-occurrence, shared access patterns) on top of the structural graph would produce a hybrid recommendation — "memories you should review based on what similar memories you've been reviewing."
 
-**Findings:**
+### 2.4 Cross-Domain Synthesis: The Three-Axis Memory State (Updated for R13)
 
-1. **Power-law vs exponential decay.** ACT-R's canonical base-level activation is `B_i = ln(Σ t_j^(-d))` — a power-law sum over all past accesses. CodeMemory's single-exponential `0.5^(days_since/14)` decays faster initially. The power-law form has stronger empirical support for human memory.
-
-2. **Pavlik-Anderson recursive decay (the spacing effect).** In the most important ACT-R variant, decay rate is NOT constant. `d_k = c * e^(m_(k-1)) + alpha` — decay **accelerates** when activation is high (producing the spacing effect: you need longer gaps between reviews). This creates a natural optimization: review items right before they are forgotten. CodeMemory has no mechanism to adjust decay rate based on current activation state.
-
-3. **SOAR's explicit episodic memory.** SOAR separates episodic (temporal sequences) from semantic (general facts) memory. This maps to CodeMemory's TransientDAG (episodic) vs persistent atoms (semantic). SOAR's key mechanism: episodic traces are **mined** to create semantic knowledge through analogical generalization — exactly the pattern TransientDAG cannot currently do.
-
-4. **SOAR's impasse-driven learning.** When SOAR doesn't know what to do, an "impasse" triggers subgoal reasoning and automatic knowledge creation (chunking). CodeMemory has no equivalent self-awareness — it cannot detect knowledge gaps in the memory graph.
-
-5. **ACT-R + LLM integration (2025).** Recent research uses LLM-generated keywords to trigger ACT-R chunk retrieval in social robots. The LLM produces "impressions"; ACT-R retrieves matching chunks; this reduces hallucination. This is structurally similar to how CodeMemory could use an LLM to produce context keywords that then trigger spreading activation.
-
-**Transferable patterns for CodeMemory:**
-
-| Pattern | Source | Application |
-|---------|--------|-------------|
-| Spreading activation from buffer contents | ACT-R | Context-dependent heat boost: shared tags between current task and memory |
-| Power-law activation `ln(Σ t_j^(-d))` | ACT-R | Replace exponential decay with power-law sum for more realistic long-tail behavior |
-| Adaptive decay rate `d_k = c*e^m + alpha` | Pavlik-Anderson | Per-memory half-life that adjusts with access patterns |
-| Episodic -> Semantic mining | SOAR | Auto-propose atom creation from recurring TransientDAG patterns |
-| Impasse detection / knowledge gap | SOAR | Detect domains with high reference count but zero memories ("you depend on X but know nothing about it") |
-| Chunking (compile subgoal solutions) | SOAR | Auto-collapse repeated resolve patterns into composite atoms |
-
-### 2.2 Domain 2: Human Memory & Spaced Repetition (FSRS, SM-2, Leitner)
-
-**Key sources:** Open Spaced Repetition community / FSRS-4.5 (2024), Jarrett Ye et al., Ebbinghaus (1885), Leitner (1972), Wozniak / SuperMemo, DRL-SRS (Xiao & Wang, 2024, Applied Sciences), DKVMN&MRI (PLoS ONE, 2024), "AI, Memorization, and Forgetting" (IERJ, 2024).
-
-**Findings:**
-
-1. **FSRS DSR model (Difficulty-Stability-Retrievability).** Each memory item has three continuous parameters:
-   - **D (Difficulty):** [1, 10] — inherent difficulty, converges through practice
-   - **S (Stability):** [0, +inf) — days for retrieval probability to drop from 1.0 to 0.9
-   - **R (Retrievability):** [0, 1] — current probability of successful recall, `R(t) = 0.9^(t/S)`
-
-   After each review, stability is updated: `S' = S * (1 + exp(-0.2*D) * gain(R_at_review))`. The gain is largest when R is moderate (~0.7-0.8) — the "desirable difficulty" sweet spot. This is the most validated open-source spaced repetition model, integrated into Anki as the default alternative scheduler.
-
-2. **The counterintuitive optimization.** FSRS discovers that **reviewing when R is LOW maximizes stability gain, but also maximizes forgetting risk.** The optimal review balances these forces. For CodeMemory, this inverts current logic: a memory that is "cold" (low access, long gap since last access) might be at the **optimal review point**. The system should surface it for re-engagement, not bury it further.
-
-3. **Leitner box model** — the simplest possible model: 5 boxes, correct answer moves up (longer interval), incorrect moves back to box 1. Creates an elegant self-correcting schedule with zero mathematical complexity. Formal queueing network analysis reveals sharp phase transitions in learning outcomes when new item introduction exceeds review capacity.
-
-4. **DRL-SRS (2024).** Deep reinforcement learning (DQN) applied to spaced repetition scheduling — uses Ebbinghaus forgetting curve parameterization as the reward function. Achieves state-of-the-art schedule optimization. Validates that learning the optimal review policy per item is possible.
-
-5. **Deep Knowledge Tracing + Ebbinghaus (2024).** DKVMN&MRI incorporates the Ebbinghaus forgetting curve directly into a neural knowledge tracing architecture, showing significant AUC improvements. Demonstrates that parameterized forgetting functions are essential for accurate memory modeling.
-
-**Transferable patterns for CodeMemory:**
-
-| Pattern | Source | Application |
-|---------|--------|-------------|
-| Per-memory Stability S | FSRS | Replace global 14-day half-life with learnable per-memory stability |
-| Retrievability R(t) = 0.9^(t/S) | FSRS | Replace binary access_count with continuous probability of "being remembered" |
-| Desirable difficulty scheduling | FSRS | Wander should target R ≈ 0.7 (optimal review), not just R ≈ 0 (coldest) |
-| Leitner boxes as explicit tiers | Leitner | Implement Hot/Warm/Cold/Cool/Frozen tiers with clear transition rules |
-| Phase transition in capacity | Leitner queueing | Warn when memory creation rate exceeds review capacity |
-| Per-item difficulty estimation | FSRS | Track "forgetting rate": if a memory requires frequent re-access, it's "difficult" (low stability) |
-
-### 2.3 Domain 3: Knowledge Graphs (Property Graph vs RDF)
-
-**Key sources:** Neo4j knowledge graph documentation (2024), University of Murcia / L3S Hannover benchmark study (2024), Amazon Neptune Statement Graphs, ISO GQL standard (2024), Unified Knowledge Graph Model (Plain English, 2024).
-
-**Findings:**
-
-1. **Property graph model maps directly to CodeMemory's DAG.** Nodes = atoms/schemas (with properties: type, summary, tags, intensity, maturity). Edges = imports (with properties: strength, pin version, reason). CodeMemory's edge model is actually richer than basic property graphs by distinguishing three edge strengths — but edges still lack temporal metadata (added_date, deprecated_date) and are not independently queryable.
-
-2. **Performance findings (2024 benchmark).** Neo4j (property graph) outperformed GraphDB (RDF) for simple-to-moderate queries with lower memory consumption. GraphDB was more memory-efficient for complex subgraph traversals. Key finding: query complexity impacts performance more than graph size. For CodeMemory, most queries (overview, wander, resolve) are moderate complexity — property graph approach is well-suited.
-
-3. **Edges as first-class citizens.** Property graph databases store edges with independent properties, metadata, and identity. CodeMemory stores edge data in frontmatter (file-level) but the index flattens imports to raw dicts — edge metadata is preserved in the file but not queryable from the index. You cannot query "all required imports that were pinned and are now behind by 3+ versions."
-
-4. **The "unified model" trend (RDF*, Statement Graphs, Domain Graphs).** The research community is converging toward models that treat both nodes and edges as first-class with independent properties. CodeMemory's architecture (nodes in index, edges in frontmatter) is a split model — unifying them would align with the trend.
-
-5. **Transitive closure as precomputation.** RDF stores support ontological reasoning (transitive inference). CodeMemory's DAG traversal computes transitive dependencies at resolve time but never **precomputes** them. A materialized transitive closure would make overview/wander/validate O(1) for dependency queries rather than O(n) BFS.
-
-**Transferable patterns for CodeMemory:**
-
-| Pattern | Source | Application |
-|---------|--------|-------------|
-| First-class edge properties with independent metadata | Property Graph | Index imports as separate entities with added_date, deprecation status, pin history |
-| Incremental indexing (change detection) | Graph DB | Reindex only changed files using hash-based change detection |
-| Transitive closure precomputation | RDF Inference | Precompute "all ancestors" and "all descendants" for each node |
-| Graph query language (Cypher/GQL) | ISO GQL | `codememory query "MATCH (a)-[:required]->(b) WHERE b.maturity='proven'"` |
-| Graph-native storage backend | Neo4j/DuckDB | Research: replace index.json with embedded graph database at 10k+ memory scale |
-
-### 2.4 Cross-Domain Synthesis: Three Axes of Memory State
-
-Synthesizing across all three domains, a memory's state is best characterized along three independent axes:
+R12 proposed a three-axis model (Structural x Temporal x Stability). R13 partially implemented one axis (temporal decay via stability-anchored exponential) but left the other two unaddressed:
 
 ```
                     STRUCTURAL IMPORTANCE
-                    (how connected? weighted
-                     incoming edges + PageRank)
+                    (weighted incoming edges
+                     + PageRank on DAG)
                          ▲
                         /|\
                        / | \
-                      /  |  \
-                     /   M   \
-                    /    E    \
+                      /  |  \   ← R13: stability added but STATIC
+                     /   M   \     No per-memory differentiation.
+                    /    E    \    No spreading activation.
                    /     M     \
-                  /      O      \
-                 /       R       \
-                /        Y        \
+                  /      O      \     R13: M3 precomputes days_since,
+                 /       R       \    M1 unifies formula. But
+                /        Y        \   plumbing bug blocks overview.
                ◄───────────────────►
           TEMPORAL RECENCY       KNOWLEDGE STABILITY
-      (FSRS retrievability:     (how fast does it fade?
-       R = 0.9^(days/S))         per-memory S parameter)
+      (M3: precomputed days)     (M4: stability=14.0 static)
 ```
 
-| Axis | Current Model (R12) | Rich Model (from research) |
-|------|---------------------|---------------------------|
-| **Structural** | `dependents * 10` (flat count, no strength weighting) | Weighted incoming edges: required=5, recommended=3, related=1 + transitive PageRank on DAG |
-| **Temporal** | `access * 0.5^(days/14)` (exponential, global half-life) | FSRS retrievability `R = 0.9^(days/S)` with per-memory stability S |
-| **Stability** | Not modeled (constant 14-day half-life for all) | Per-memory S, updated on each access via FSRS formula; converges to domain-specific value |
+The three axes create four operational zones that each demand different system behaviors:
 
-**The operational sweet spot:** Each axis creates distinct "attention zones" for different system behaviors:
-
-- High structural + High temporal + High stability = **Pillars** (core of current work — always surfaced)
-- High structural + Low temporal + Low stability = **Review targets** (important but fading — needs re-engagement)
-- Low structural + Low temporal + High stability = **Fragile gems** (important to someone, but unlinked — needs imports)
-- Low structural + Low temporal + Low stability = **Candidates for archiving** (not connected, not accessed, not stable)
+| Zone | Structural | Temporal (R) | Stability | Behavior |
+|------|-----------|-------------|-----------|----------|
+| **Pillars** | High | High | High | Always surfaced. Core of current work. |
+| **Review Targets** | High | Low | Low | Important but fading. Needs re-engagement. Optimal wander targets. |
+| **Fragile Gems** | Low | Low | High | Important to someone, but unlinked. Needs imports. |
+| **Archive Candidates** | Low | Low | Low | Not connected, not accessed, not stable. Archive proposal. |
 
 ---
 
-## Phase 3: Logical Completeness
+## Phase 3: Logical Completeness Analysis
 
-### 3.1 Conceptual Coherence After R12
+### 3.1 Data Plumbing Bug: Overview Decay Formula Never Activates (CRITICAL)
 
-Time-decay activation (R12-UX5) changed overview output's semantic meaning while leaving wander, stale detection, and validate unchanged. This creates inconsistencies:
+**Location:** `handlers.py` line 258, `handle_overview()`.
 
-| Component | Pre-R12 Logic | Post-R12 Logic | Coherence Gap |
-|-----------|--------------|----------------|---------------|
-| **Overview** | Top 5 by dependents + raw access | Top 5 by `deps*10 + access*decay` | Internally consistent; ranks recency over raw frequency |
-| **Wander (cool)** | Weighted by `1/(access_count+1)` | Unchanged — uses raw access_count | Wander ignores time decay. A memory accessed 50 times 2 years ago (heat ~0) is treated as "hot" and excluded from cool mode. Inconsistent. |
-| **Stale detection** | body hash mismatch flag | Unchanged | Stale flag doesn't affect heat. A stale memory with high dependents ranks high in overview despite being out-of-date. No feedback loop. |
-| **Validate (decay)** | 30-day threshold in `_check_decay()` | Unchanged — hardcoded 30-day window | Uses a binary 30-day window while overview uses a continuous exponential function. Two different decay models in one system. |
-| **Maturity auto-upgrade** | access_count >= 3 -> verified | Unchanged — uses raw access_count | No recency consideration. 3 accesses in one day (burst) triggers "verified." 2 accesses over 3 years stays "draft." |
+**Root cause:**
+```python
+# Line 256-258: entry IS a MemoryEntry (has .days_since_last_access)
+entry = index.memories.get(mid)
+stability = entry.stability if entry else 14.0
+days_since = r.get("days_since_last_access") if isinstance(r, dict) else getattr(r, "days_since_last_access", None)
+```
 
-**Critical inconsistency:** `validate.py:_check_decay()` uses `last_access > now - 30 days` as a binary threshold. `handle_overview` uses `0.5^(days_since/14)` as a continuous decay. If the decay formula is the chosen model, validate should derive its warning from it — e.g., `retrievability < 0.3` rather than `days > 30`.
+`r` is a dict returned by `search()` (search.py lines 73-85). The search function builds result dicts that include `access_count`, `last_access`, `dependents` — but NOT `days_since_last_access`. The field exists on `entry` (the MemoryEntry object at line 256) but the handler reads from `r`, where it is always `None`.
 
-### 3.2 Extreme Scenario Analysis
+**Effect:**
+```python
+# Line 259-264: days_since is always None from search results
+if access > 0 and days_since is not None:  # Always False
+    days_since = max(0, days_since)
+    decay = math.pow(0.5, days_since / stability)  # NEVER REACHED
+    access_bonus = access * decay
+else:
+    access_bonus = access * 0.1  # ALWAYS TAKEN — pre-R13 flat 10% multiplier
+```
 
-**Scenario 1: All-zero-access memories (fresh dataset import).**
-- Heat = deps * 10 + 0 (access_bonus = 0 * 0.1 = 0)
-- All memories rank by structure only. This is defensible.
-- But: after first resolve, one memory gets access_count=1 with fresh last_access. Its heat jumps `deps*10 + 1.0`. This is a discontinuity — the access_bonus goes from 0 to 1 in one access. Better: give zero-access memories a floor of 0.5 rather than 0.
+The entire R13 decay model is inert in the most-used code path. The `0.5^(days/stability)` formula never executes for overview.
 
-**Scenario 2: One memory accessed 1000 times, 2 years ago.**
-- Exponential: `1000 * 0.5^(730/14) = 1000 * 2.0e-16 ≈ 0` — completely erased
-- The memory may have been genuinely important for 2 years. A power-law `1000 * (731)^(-0.5) ≈ 37` preserves the signal.
-- Implication: exponential decay over-erases sustained historical importance. Consider power-law or a hybrid (exponential for recent, power-law tail for historical).
+**Why the eval didn't catch it:** The eval verified heat values as 31, 31, 21, 21, 20 for the investment dataset. Under the bug, heat = `deps*10 + access*0.1`:
+- risk-tolerance: `3*10 + 10*0.1 = 31` ✓
+- semiconductor-thesis: `3*10 + 10*0.1 = 31` ✓
+- nvidia-earnings: `2*10 + 10*0.1 = 21` ✓
+- soxl-composition: `2*10 + 10*0.1 = 21` ✓
+- february-buy: `2*10 + 0*0.1 = 20` ✓
 
-**Scenario 3: 10,000 memories, frequent overview calls.**
-- Current loop: search (O(n) tag matching) -> for each result: datetime.fromisoformat + math.pow -> sort -> take top k.
-- At 10k memories with rich tags, search could return 5k matches. datetime.fromisoformat per memory is the bottleneck.
-- Mitigation options: (a) precompute days_since_last_access as an integer in the index, (b) two-phase approach: compute heat only for top 50 structurally-ranked results, (c) cache heat values until next access event.
+All eval heat values are consistent with the **old** formula. The eval verified the old behavior was preserved — not that the new behavior was active.
 
-**Scenario 4: Circular dependency + time decay interaction.**
-- A 3-node cycle A->B->C->A gives each node `dependents = 1`, multiplied by 10 = 10 heat structural contribution.
-- But these are structurally broken — none are resolvable in practice. Dependents count should exclude cycle participants.
+If the decay formula were active (assuming `days_since=0` for recently reindexed data with resolved memories): risk-tolerance heat would be `30 + 10*1.0 = 40`, not 31. The eval would have caught this discrepancy — **if** the formula were active.
 
-### 3.3 Operational Gaps
+**Fix:**
+```python
+# Line 258: read from entry, not from r
+days_since = entry.days_since_last_access if entry else None
+```
 
-| Operation | Current | Gap |
-|-----------|---------|-----|
-| **Overview with --tags** | Filters search, computes heat | Heat formula is tag-agnostic. Matching tags should provide context boost (spreading activation). |
-| **Wander mode=cool** | `1/(access_count+1)` weight | Should use decayed access, not raw — otherwise old high-frequency memories are never surfaced |
-| **Validate decay check** | Hard 30-day binary threshold | Should use the same decay formula as overview (retrievability threshold) |
-| **Reindex** | Full directory scan every time | Should be incremental: hash file mtime + body, only reparse changed files |
-| **Focus --resolve** | Delegates to resolve(depth=recommended) | Should include active transient session nodes if a session is in progress |
-| **Snapshot** | Flattens TransientDAG to single file | Should preserve internal DAG topology as structured imports in the snapshot |
-| **Suggest-deps** | score = tag_overlap*3 + schema_score*5 + dependents | Should incorporate heat: higher-heat candidates are more "active" and thus better deps |
+One line. **Impact: Unlocks the entire R13 decay model for overview.**
 
-### 3.4 Evolution Bottlenecks
+**Contrast with wander:** `handle_wander()` line 345 correctly reads:
+```python
+days_since = getattr(entry, 'days_since_last_access', None)
+```
+This reads from the MemoryEntry object, which has the precomputed field. Wander's decay weighting works correctly. This is why the eval's wander-related tests didn't expose the issue.
 
-**Bottleneck 1: Index.json as single serialization point.** Every resolve increments access_count and saves the entire index. At 10k memories with rich metadata, index.json could reach 5-10 MB. Every access event triggers a full save. Solution: batch access_count writes or use an append-only journal.
+### 3.2 Stability Edge Cases
 
-**Bottleneck 2: No version history in the graph view.** When a memory is updated (v2 -> v3), old imports may be removed. The v2 DAG topology is lost — only the current index reflects current imports. This prevents graph diffs and temporal queries like "what did my dependency structure look like in January?"
+**Case: stability = 0** → `math.pow(0.5, days_since / 0)` → `ZeroDivisionError` → **CRASH** in overview, wander, and validate. No guard exists in any of the three code paths.
 
-**Bottleneck 3: Single-machine, single-user by design.** File-based architecture assumes local filesystem. No multi-user collaboration path, no sync. The MCP server runs locally. Deliberate constraint (portability over collaboration) but limits future market.
+**Case: stability < 0** → `0.5^(positive / negative) = 0.5^(negative) = 2^(positive) > 1.0`. Decay exceeds 1.0 — the memory appears to "strengthen" over time. Nonsensical. No guard exists.
+
+**Case: stability very large (e.g., 10000)** → `0.5^(days/10000) ≈ 1.0` for any practical days. Memory is effectively immortal. May be intentional for "eternal" memories but should be explicit — either a `stability = float('inf')` sentinel or a check: if `days_since / stability < 0.001`, skip computation and set decay=1.0.
+
+**Case: days_since_last_access = None** → Three different behaviors across three code paths:
+
+| Code Path | None Handling | Behavior | Intentional? |
+|-----------|--------------|----------|-------------|
+| **Overview (broken)** | `access > 0 and days_since is not None` → False | `access_bonus = access * 0.1` (flat 10%) | Accidental — falls through due to bug |
+| **Wander cool mode** | `entry.access_count > 0 and days_since is not None` → False | `weight = 1.0` (max cool weight) | Intentional — unaccessed = maximally cool |
+| **Validate _check_decay** | Falls back to `datetime.fromisoformat(entry.last_access)` | Computes days_since from last_access | Defensive — safety net for un-reindexed data |
+
+The EVAL.md Section 8 already flagged this ambiguity as pitfall R13-M3: "None means never accessed vs 0 means just accessed. Current code treats both similarly but future wander may need to distinguish."
+
+### 3.3 Interaction Between Decay and Other Systems
+
+**Decay vs. Stale Detection:**
+- Stale = body hash mismatch (content changed without reindex). Decay = access-based (not accessed recently).
+- They operate independently. A stale-but-frequently-accessed memory appears in overview with high heat AND a stale warning. A fresh-but-never-accessed memory appears with low heat and no warning.
+- No combined risk score exists. A "stale AND decayed" memory is double-at-risk but both systems fire independently with no synthesis.
+
+**Decay vs. Maturity Auto-Upgrade:**
+- `resolve.py:323-339`: `access_count >= 3` → draft→verified. `access_count >= 10 + has dependents` → verified→proven.
+- These thresholds use lifetime access count with no recency weighting. A memory accessed 3 times in one day triggers "verified." A memory accessed 3 times over 3 years also triggers "verified."
+- With the decay model active, maturity should require *recent* access: `access_count >= 3 AND max(R_at_access_times) > 0.5` or similar recency gate.
+
+**Decay vs. Search:**
+- `search()` does not use decay at all. Results sorted by `(-dependents, -access_count, id)`. No recency factor.
+- Even after fixing the overview bug, search remains decay-unaware. A user searching for "investment" gets the most-connected and most-accessed results — regardless of recency.
+
+**Decay vs. Intensity (protection):**
+- `validate.py:_check_decay` line 88: memories with `intensity >= 8` are exempt from decay warnings.
+- This is the only place intensity interacts with decay. Overview and wander apply decay regardless of intensity.
+- Should high-intensity memories get proportionally higher effective stability? Currently no. An intensity=10 memory and intensity=1 memory with the same stability=14.0 decay identically.
+
+**Decay vs. Overview `--with-recall` flag:**
+- `handle_overview()` lines 292-307: `with_recall` sorts candidates by `access_count` (ascending), takes the lowest third, picks randomly.
+- The comment says "use unified decay formula for cool wander weighting" but the code does no such thing — it sorts by raw access_count. The comment is aspirational, not actual.
+
+### 3.4 Wander Cool Mode — Correctly Implemented But Could Be Stronger
+
+The wander cool mode (handlers.py lines 332-352) correctly:
+1. Filters for `intensity < 8` (respects protection)
+2. Reads `entry.days_since_last_access` from MemoryEntry (not from search dict — correct!)
+3. Computes `decay = 0.5^(days/stability)`
+4. Computes `weight = 1/(access_count * decay + 1)`
+5. Uses `random.choices()` with these weights
+
+This means wander correctly gives high weight to cold (unaccessed, long days_since) memories. The formula works as designed for the wander path.
+
+**The limitation:** The max weight is 1.0 (for unaccessed memories). All unaccessed memories receive equal weight. Within the unaccessed pool, wander is random — no differentiation by tags, creation date, type, or structural position. The "coolness" is purely a function of access frequency weighted by recency. Structural coolness (low dependents, orphan status) is not considered, despite the handler's orphan annotation display (line 404-405) suggesting it should be.
+
+### 3.5 Search Result Dict Field Coverage Gap
+
+`search()` (search.py lines 73-85) builds result dicts. The fields included are:
+`id, type, summary, status, tags, path, intensity, access_count, last_access, dependents, maturity`
+
+Fields in MemoryEntry but **not** in search results:
+`version, created, updated, schema, imports, stability, days_since_last_access, protected, change_note, change_log, source, evidence, summary_hash`
+
+The missing `stability` and `days_since_last_access` are now critical compute inputs for R13. The missing `schema` prevents search-based consumers from displaying schema references. The missing `imports` prevents lightweight dependency queries without loading the full index.
 
 ---
 
-## Phase 4: Alternative Design Proposals
+## Phase 4: Alternative Design Proposals (Inspiration Bombs)
 
-### 4.1 Core Mechanism Alternatives
+### Bomb 1: Domain-Calibrated Stability Presets (Low Effort, High Impact)
 
-#### Alternative A: FSRS-Style Stability Model (Replaces time decay)
+**Current state:** All memories share `stability=14.0`. User must manually change it.
 
-**Current (R12):**
-```python
-heat = deps * 10 + access * 0.5^(days_since / 14)
-```
+**Proposal:** Auto-assign stability based on detectable memory characteristics during `create`:
 
-**Proposed (FSRS-inspired):**
-```python
-# New fields on MemoryEntry
-stability: float = 14.0       # days for R to drop from 1.0 to 0.9 (initially = half-life)
-difficulty: float = 5.0       # [1, 10], converges through access patterns
+| Heuristic | Assigned Stability | Rationale |
+|-----------|-------------------|-----------|
+| Tag contains "fact" / "data" / "earnings" / "price" | 7 days | Declarative fact — fast decay per Ebbinghaus |
+| Tag contains "concept" / "architecture" / "pattern" / "principle" | 30 days | Conceptual — slow, schema-aided decay per Radvansky (2024) |
+| Tag contains "decision" / "trade" / "buy" / "sell" | 14 days | Time-sensitive decision — current default |
+| `type: schema` | 90 days | Structural template — near-immortal |
+| `intensity >= 8` | stability * 2.0 | High-importance memories decay slower |
+| Has imports (serves as dependency for others) | stability * 1.5 | Referenced memories are reinforced by backlinks |
+| `maturity: proven` | stability * 2.0 | Proven knowledge is consolidated; slower decay |
 
-# On each access, update stability:
-R_at_review = 0.9^(days_since / stability)
-post_stability = stability * (1 + exp(-0.2 * difficulty) * 10 * max(0, 1 - R_at_review))
-difficulty = difficulty - 0.1 * (access_quality - 3)  # 1=forced, 3=neutral, 5=organic
+**Implementation:** A `suggest_stability(tags, type_, intensity, has_imports, maturity) -> float` function. Called during `create` to auto-set the field with an `[auto]` annotation. Existing memories keep manually-set stability. Validate can suggest changes for mismatched stability values.
 
-# Heat becomes:
-retrievability = 0.9^(days_since / stability)
-heat = deps * 10 + stability * retrievability
-```
+**Impact:** Makes the stability field semantically meaningful immediately. Users see different decay rates for different memory types, which communicates the concept better than a uniform default. The heuristics are transparent and overridable.
 
-**Why better:**
-- Personalized per memory — investment research fades differently than software architecture
-- Burst access handled naturally: multiple accesses in one day produce minimal gain (R was already near 1.0)
-- "Desirable difficulty": reviewing when R is moderate maximizes stability gain
-- Produces a "next review" date: `next_review = now + stability * ln(0.9) / ln(target_R)`
-- FSRS has strong empirical validation (20-30% fewer reviews for same retention vs SM-2)
+### Bomb 2: FSRS-Inspired Adaptive Stability (Medium Effort, Transformative)
 
-**Cost:** +2 float fields on MemoryEntry, per-access stability update logic, slightly more complex overview computation.
+**Current state:** Stability is static. Never changes unless manually edited.
 
-#### Alternative B: Leitner Box Model (Replaces continuous heat with discrete tiers)
-
-**Proposed:**
-```python
-# 5 explicit tiers
-Tier 1 (Hot):   active in current session, auto-resolved on startup
-Tier 2 (Warm):  accessed in last 7 days, full attention
-Tier 3 (Cool):  accessed in last 30 days, summary only
-Tier 4 (Cold):  accessed 30+ days ago, wander/search only
-Tier 5 (Frozen): archived/superseded, never surfaced automatically
-
-# Transition rules:
-# - On access: promote one tier (ceil)
-# - No access for threshold[tier] days: demote one tier
-thresholds = {1: 2, 2: 7, 3: 30, 4: 90, 5: float('inf')}
-```
-
-**Why better:**
-- Drastically simpler for users: no heat numbers, just "this lives in your Warm box"
-- Gamification natural: "You have 12 memories in Cold. Review 3 to warm them."
-- Self-correcting: predictable, debuggable behavior
-- Distinct visual treatment per tier in the management panel
-
-**Why worse:**
-- Loses fine-grained ranking within tiers
-- Hard boundaries create edge effects (29 vs 31 days = tier change)
-- Less mathematically grounded
-
-**Verdict:** Use FSRS as the mathematical engine, Leitner tiers as the presentation metaphor. Compute per-memory stability and retrievability via FSRS, but display them as "Hot (5) / Warm (12) / Cold (8) / Frozen (3)."
-
-#### Alternative C: Graph-Native Storage (Replaces files with embedded graph DB)
-
-**Proposed:** Store memories in an embedded graph database (SQLite + graph extension or DuckDB with recursive CTEs). Memories and imports are nodes and edges directly. No reindex step, no file parsing, native graph queries.
-
-**Why better:**
-- Incremental updates (only changed nodes/edges recomputed)
-- "Find all nodes transitively depending on X" = one query
-- Edge properties first-class and queryable
-- Scales to 100k+ memories
-
-**Why worse:**
-- Loses filesystem portability (can't `ls`, `git diff` individual memories)
-- Adds a dependency (embedded graph DB)
-- Breaks "each .md is a memory" simplicity
-
-**Verdict:** This is a Phase 3 (distant future) consideration. The file model is strategically important now. But the system should be designed with a pluggable storage abstraction so the backend can be swapped without changing the cognitive model.
-
-### 4.2 Conceptual Reorganization: Three-Dimensional Memory State
-
-Replace the single `heat` integer with a state triple:
+**Proposal:** On each `resolve` or `focus`, update stability using a simplified FSRS SInc formula:
 
 ```python
-class MemoryState(BaseModel):
-    structural_score: float     # weighted incoming edges + PageRank
-    retrievability: float       # R = 0.9^(days_since / stability)
-    stability: float           # learned half-life from FSRS
+def update_stability(memory: MemoryEntry, access_quality: int = 3) -> float:
+    """Update stability after an access. access_quality: 1=forced, 3=normal, 5=organic."""
+    days_since = memory.days_since_last_access or 0
+    R_at_access = 0.5 ** (days_since / memory.stability)  # retrievability at access time
+
+    # FSRS-inspired: gain is maximal when R is moderate (~0.5-0.7)
+    # Low R (nearly forgotten) -> larger gain (spacing effect)
+    # High R (just accessed)  -> smaller gain (massed practice penalty)
+    retrievability_gain = max(0, 1 - R_at_access) ** 0.5
+
+    # Difficulty from intensity: higher intensity = harder (D ∈ [0.1, 1.0])
+    difficulty = memory.intensity / 10.0
+
+    # Stability increase factor
+    s_inc = 1 + (1 - difficulty) * retrievability_gain * 0.5
+
+    # Quality adjustment
+    quality_bonus = 1 + (access_quality - 3) * 0.1
+
+    return memory.stability * s_inc * quality_bonus
 ```
 
-Each operation uses a different projection:
+**How this converges:**
+- Memory accessed daily: `days_since=0 → R=1.0 → gain=0 → S' ≈ S * 1.0`. Stability barely changes. The system signals "this is massed practice — no learning benefit."
+- Memory accessed at `days_since=14` (R=0.5): `gain=0.71 → S' ≈ S * 1.2`. 20% stability increase. The system signals "good spacing — memory is consolidating."
+- Memory accessed at `days_since=46` (R≈0.1): `gain=0.95 → S' ≈ S * 1.3`. 30% increase. The system signals "near-forgotten but recovered — strongest consolidation signal."
 
-| Operation | State Projection | Rationale |
-|-----------|-----------------|-----------|
-| **Overview (surfacing)** | structural_score * retrievability | Surface well-connected, currently relevant memories |
-| **Wander (cool recall)** | 1 / retrievability | Find memories at risk of being forgotten |
-| **Wander (optimal review)** | retrievability ≈ 0.7 | Find memories at FSRS optimal review point |
-| **Resolve (ordering)** | structural_score (deps before dependents) | Topological order with strength weighting |
-| **Validate (decay)** | retrievability < 0.3 AND structural_score < 0.2 | At-risk memories for archiving or re-linking |
-| **Focus (context display)** | All three dimensions shown | Full state awareness |
-| **Suggest-deps** | structural_score weighted by retrievability | Active, well-connected memories are better dependency candidates |
+**Why transformative:**
+1. Stability converges to each memory's natural review interval
+2. Frequently-accessed memories stabilize rapidly (less need to surface them)
+3. Rarely-accessed but high-intensity memories stay in the "needs review" zone longer
+4. The system learns from actual usage patterns rather than imposing a priori defaults
+5. FSRS research shows: with 16+ reviews, personalized parameters outperform defaults; CodeMemory's `access_count` already tracks this
 
-### 4.3 Memory Lifecycle with Demotion
+**Requirements:** `stability` field already exists. Need to call `update_stability()` in `resolve.py` after line 320 (where `days_since_last_access` is already set to 0). Need a minimum `access_count` threshold (~3) before adaptive updates begin, to avoid overfitting to early noise.
 
-Current model: draft -> verified -> proven (forward only).
+### Bomb 3: Collaborative Memory Graph for Associative Wander (Medium Effort, Novel)
 
-Proposed lifecycle with demotion paths:
+**Current state:** Wander's cool mode picks from low-access memories randomly. No relationship to current work context.
 
-```
-[Create] ──> DRAFT ──access≥3──> VERIFIED ──access≥10+deps>0──> PROVEN
-                ▲                    ▲         ▲                        │
-                │                    │         │                        │
-                │   imports broken   │  18mo   │   all deps            │  12mo
-                │   or body stale    │  no     │   superseded           │  no
-                │                    │  access │                        │  access
-                │                    │         │                        │
-                └────────────────────┴─────────┴────────────────────────┘
-                                    DEMOTION PATHS
-```
+**Proposal:** Build a memory-memory co-occurrence matrix from resolve history. When memory A is resolved and memory B appears in the same DAG, increment `cooccurrence[A][B]`. Over time, this produces "memories frequently resolved together" — an implicit relevance signal orthogonal to the explicit imports DAG.
 
-Demotion rules:
-- PROVEN -> VERIFIED: 12 months without access (validate warns at 365 days already)
-- VERIFIED -> DRAFT: all imports broken or summary stale for 90+ days
-- Any -> SUPERSEDED: explicit user action (already exists)
-- SUPERSEDED -> ACTIVE: explicit user re-activation
+**Application to a new `wander --mode associative`:**
 
-This makes maturity a true lifecycle reflecting the marriage of structural integrity and temporal engagement.
-
-### 4.4 Tradeoff Matrix
-
-| Dimension | Current (R12) | Alt A: FSRS Stability | Alt B: Leitner Tiers | Alt C: Graph DB |
-|-----------|---------------|----------------------|----------------------|-----------------|
-| Implementation cost | Baseline | +2 fields, stability math (~50 LOC) | +1 tier field, threshold logic (~30 LOC) | New storage layer (~500+ LOC) |
-| Mathematical grounding | Medium (ACT-R inspired) | High (FSRS, peer-reviewed) | Low (heuristic) | N/A (storage only) |
-| User understandability | Medium (heat number) | Low (stability is abstract) | High (boxes are intuitive) | Transparent |
-| Personalization | None (global half-life) | High (per-memory stability) | Low (global thresholds) | N/A |
-| Portability/Git-friendliness | High | High (same file model) | High (same file model) | Low (binary DB) |
-| 10k+ memory scalability | Medium (O(n) per overview) | Medium (more computation per item) | Medium (less computation per item) | High (native queries) |
-| Backward compatibility | — | High (additive fields) | High (additive field) | Low (migration) |
-| Synergy with DAG resolution | Medium | Medium | Medium | High (native graph traversal) |
-
-**Recommended path:** Adopt Alternative A (FSRS) as the math engine, present results through Alternative B (Leitner-style tiers) in the UI. This gives mathematical rigor under the hood with user-friendly presentation on the surface.
-
-### 4.5 Inspiration Bombs
-
-#### Bomb 1: The Memory Compiler
-
-**Core idea:** The DAG is not a visualization. It is a **program**. Resolution is compilation.
-
-In a compiler pipeline: source files (.md) → AST (index) → dependency analysis (imports) → linking + optimization (topological sort + token budget) → executable output (system prompt).
-
-**What this changes:**
-- **Type checking:** A memory tagged `decision` importing only `observation` memories (missing `analysis` or `criterion`) = type error. The compiler suggests missing dependency types.
-- **Dead code elimination:** Orphaned low-intensity memories are "unreachable code." The compiler warns.
-- **Optimization passes beyond token budget:** inline expansion (embed dependency summaries), constant folding (precompute stable cross-references), loop detection (cyclic imports = infinite loop).
-- **Linking errors:** Importing a non-existent memory = undefined symbol error at "compile time" (validate already does this, but the metaphor unifies it).
-- **Hot reload:** When a dependency updates, all dependents marked stale = incremental build (Makefile semantics).
-
-**Killer feature:** `codememory build` — compile the entire graph into a single optimized, type-checked system prompt in one command. Fail with clear compiler-style error messages if the graph doesn't compile.
-
-#### Bomb 2: Forgetfulness as a Feature
-
-**Core idea:** Current assumption: forgetting is failure, should be prevented. Counter-assumption: **intelligent forgetting is essential for knowledge quality.**
-
-Cognitive science (ACT-R, SOAR) shows forgetting serves critical functions:
-- **Abstraction:** Forgetting details forces generalization — the principle is remembered, not the specifics
-- **Resource allocation:** Not everything deserves to be remembered
-- **Reconsolidation:** Each recall slightly modifies the memory; over time, memories become more useful (and less perfectly accurate)
-
-**What this changes:**
-- **Auto-archive by retrievability:** When R < 0.05 for 90 consecutive days, propose archiving with user notification
-- **Summary distillation:** Before archiving, generate a 3-line "essence" and inject it as a `derived_from` note into all memories that imported the archived one. The detail is forgotten; the insight is preserved.
-- **Reconsolidation tracking:** Version updates record not just "what changed" but "how my understanding shifted" — this becomes the most valuable content
-- **Forgetting curve as audit trail:** R(t) for each memory reveals which memories were "sticky" vs "brittle." The system learns which types of memories tend to persist.
-
-**Killer feature:** `codememory distill <id>` — extract essence from an archived memory, inject it into dependent memories, then remove the original. Signal preserved, noise discarded.
-
-#### Bomb 3: Context-Aware Activation (Spreading Activation Engine)
-
-**Core idea:** The heat formula is static. Every memory has one heat score. But a memory's relevance depends on what the user is currently working on. A memory about risk tolerance should be "hotter" when the user resolves `investment/context`.
-
-**Implementation sketch:**
 ```python
-def context_aware_heat(memory, active_context_tags, active_context_memories):
-    base_heat = deps * 10 + access * 0.5^(days_since / stability)
-
-    # Spreading activation from context
-    context_boost = 0
-    for context_memory_id in active_context_memories:
-        if memory.id in index.memories[context_memory_id].imports:
-            # This memory is a dependency of what the user is working on
-            context_boost += 5  # structural relevance
-
-    # Tag overlap with current context
-    tag_overlap = len(set(memory.tags) & active_context_tags)
-    context_boost += tag_overlap * 3
-
-    # Context-referenced memories get a boost
-    context_boost += _count_context_references(memory, active_context_memories) * 2
-
-    return base_heat + context_boost
+# Step 1: Start from the most-recently-resolved memory (the "seed")
+# Step 2: With probability p, jump to a co-occurring memory from the seed
+# Step 3: With probability (1-p), jump to an imported memory from the seed
+# Step 4: Repeat for 3-5 steps, decaying jump probability (random walk with teleport)
+# Step 5: Output the landing memory — serendipitous but contextually-connected discovery
 ```
 
-This makes overview/wander/resolve **situationally aware** — the same memory has different activation depending on what the agent or user is currently doing. This is exactly what ACT-R's spreading activation component provides and what CodeMemory currently lacks.
+**Why this is novel:** No existing PKM tool combines explicit dependency graphs with implicit co-occurrence for memory discovery. Obsidian's graph view shows explicit links. Anki's FSRS schedules reviews. CodeMemory could be the first to do associative wandering through a learned co-occurrence graph on top of explicit imports — modeling how human memory works (one thought triggers another through associative links).
 
-#### Bomb 4: Memory as a Garden Ecosystem
+**Storage:** The co-occurrence matrix is sparse (most memory pairs never co-occur). Store as a JSON dict in `.codememory/cooccurrence.json`. Update during `resolve()` in a fire-and-forget pattern (don't block resolution for co-occurrence tracking).
 
-**Core idea:** Replace the library-catalog metaphor with a **garden ecosystem** metaphor. Memories are not books to be catalogued — they are plants in various states of growth.
+### Bomb 4: Per-Memory-Type Decay Curves (High Effort, Research-Grade)
 
-In a garden:
-- Some plants are in season (hot, actively growing — need daily attention)
-- Some are dormant (cold, alive but not growing — check occasionally)
-- Some cross-pollinate (new imports between domains = cross-pollination)
-- Some die and become compost (archived, their nutrients feed new growth)
-- The gardener walks through and **observes** — they don't "search" a catalog
+**Current state:** Single formula `0.5^(t/S)` for all memories. Stability is the only tunable parameter.
 
-**What this changes:**
-- The overview becomes "the state of your garden" — not a query result, but ambient awareness
-- Access count becomes a growth metric, not a frequency counter
-- Wander becomes seasonal rotation — different memory domains come into focus on weekly cycles
-- Archive becomes composting — essence extracted, injected into dependents, original decomposed
+**Proposal:** Add a `decay_curve` field to MemoryEntry that selects the mathematical function, not just its parameter:
 
-**Killer feature:** "Weekly Memory Digest" — an auto-generated report: which memories grew (new versions), which were pruned (archived), which cross-pollinated (new imports between domains), which are wilting (need review), and which sprouted (newly created).
+```python
+# New field on MemoryEntry
+decay_curve: str = Field(default="exponential",
+    description="exponential | power | logarithmic | linear | step")
+
+def compute_decay(days_since: float, stability: float, curve: str) -> float:
+    if curve == "exponential":
+        return 0.5 ** (days_since / stability)
+    elif curve == "power":
+        # Power-law: (1 + t/S)^(-tau), tau=0.5 default
+        return (1 + days_since / stability) ** (-0.5)
+    elif curve == "logarithmic":
+        # Logarithmic: 1 - a * ln(1 + t/S)
+        return max(0.0, 1.0 - 0.15 * math.log(1 + days_since / stability))
+    elif curve == "linear":
+        # Linear decay to zero at t = stability
+        return max(0.0, 1.0 - days_since / stability)
+    elif curve == "step":
+        # Binary: 1.0 until stability days, then 0.0
+        return 1.0 if days_since <= stability else 0.0
+    else:
+        return 0.5 ** (days_since / stability)
+```
+
+**Rationale from research:**
+
+| Curve | Best For | Empirical Support |
+|-------|----------|-------------------|
+| Exponential | Rote facts, volatile data | Ebbinghaus (1885), HLR (2016) |
+| Power-law | General declarative, mixed types | Wixted & Carpenter (2007), ACT-R |
+| Logarithmic | Concepts, semantic knowledge | Radvansky et al. (2024) — best fit for non-autobiographical |
+| Linear | Well-learned complex material | Fisher & Radvansky (2022) — RAFT model |
+| Step | Decisions with explicit expiry | Practical heuristic (no research backing yet) |
+
+**Why research-grade:** This directly implements the 2024 meta-analysis finding that no single function fits all forgetting. It makes CodeMemory's decay model a composable function rather than a single formula — a defensible design position against future competitors. The challenge: users shouldn't need to choose a decay curve. The `suggest_stability()` function (Bomb 1) should also suggest the curve based on detectable memory characteristics.
+
+### Bomb 5: Context-Aware Activation (Spreading Activation Engine)
+
+**Current state:** Heat is computed from the memory's own properties — structural position (`deps`) and temporal recency (`access * decay`). No awareness of what the user is currently doing.
+
+**Proposal:** Add a second heat component — spreading activation from the current context:
+
+```python
+def compute_context_heat(memory, context_tags, context_memories, index):
+    """Spreading activation from current task context."""
+    boost = 0
+
+    # Tag overlap with current working context
+    shared_tags = set(memory.tags) & context_tags
+    # Weight rare tags higher (IDF-like): rare tags are more informative
+    for tag in shared_tags:
+        tag_frequency = sum(1 for m in index.memories.values() if tag in m.tags)
+        boost += 3 * math.log(1 + len(index.memories) / max(tag_frequency, 1))
+
+    # Direct dependency: is this memory imported by what the user is working on?
+    for ctx_id in context_memories:
+        ctx_entry = index.memories.get(ctx_id)
+        if ctx_entry:
+            ctx_imports = ctx_entry.imports
+            if isinstance(ctx_imports, dict):
+                for strength in ("required", "recommended"):
+                    for ref in ctx_imports.get(strength, []):
+                        ref_id = ref if isinstance(ref, str) else ref.get("id", "")
+                        if ref_id == memory.id:
+                            weight = 5 if strength == "required" else 3
+                            boost += weight
+
+    return boost
+```
+
+This makes overview context-dependent: `heat = deps*10 + access*decay + context_heat`. The same memory has different activation depending on what the agent or user is currently doing. This is exactly ACT-R's spreading activation component — the single largest missing piece identified in the R12 research audit.
 
 ---
 
 ## Prioritized Research Directions
 
-### High-Impact, Low-Effort
+### Critical (blocking issues)
 
-**1. Unify decay models across overview, wander, and validate.**
-Replace the hard 30-day threshold in `validate.py:_check_decay()` with the same exponential/power-law formula used in overview. Replace wander's raw `access_count` weight with decayed access from the same formula. One decay model, used everywhere. ~20 LOC change across two files.
+- **[R-RED-1] Fix overview data plumbing bug.** `handle_overview()` line 258 reads `days_since_last_access` from search result dict instead of from MemoryEntry object. Decay formula never activates. One-line fix: `days_since = entry.days_since_last_access if entry else None`. Also add `days_since_last_access` and `stability` to the search result dict (search.py lines 73-85) for API consumers. **Impact: Unlocks the entire R13 decay model for the most-used code path.**
 
-**2. Exclude cycle participants from dependents count.**
-In `_count_dependents()` (search.py) and `handle_overview()`: when counting incoming references, skip nodes that participate in a cycle with the target. Prevents structurally misleading heat scores for unresolvable memories. ~15 LOC change.
+### High Priority (should address next round)
 
-**3. Precompute `days_since_last_access` in the index.**
-Store as integer in `MemoryEntry`, updated on each access. Avoids the most expensive operation in the overview O(n) loop — datetime.fromisoformat per memory. ~5 LOC for the field, ~3 LOC for the update, ~1 LOC replacement in overview.
+- **[R-RED-2] Add stability validation.** Enforce `stability > 0` in a Pydantic `@field_validator` on `MemoryEntry.stability`. Guard against division by zero (crash) and negative stability (nonsensical decay > 1.0). Consider a minimum of 0.1 days (2.4 hours) as a practical lower bound. **Impact: Prevents crash and undefined behavior.**
 
-**4. Add a `stability` field to MemoryEntry (default 14.0).**
-This single field enables per-memory half-life without changing the core formula: `heat = deps*10 + access * 0.5^(days_since / stability)`. Initially all 14.0 (backward compatible). Migrate to per-memory values in future rounds. ~5 LOC for field definition, ~3 LOC formula change in overview.
+- **[R-RED-3] Resolve `days_since_last_access=None` semantics.** Define a clear contract: `None` = never accessed (distinct from `0` = just accessed). Update all three consumption points (overview, wander, validate) to handle both cases consistently. Specifically: in overview, never-accessed memories should get a small but non-zero access bonus (e.g., 0.5) to avoid the current accidental 0.0. **Impact: Fixes the semantic ambiguity flagged in EVAL.md Section 8.**
 
-### High-Impact, High-Effort
+- **[R-RED-4] Include fields in search results.** Add `stability` and `days_since_last_access` to the search result dict. Consider also adding `schema` and `imports` (or at least import count) — consumers increasingly need these fields. **Impact: Makes R13 fields available to API consumers and the `with_recall` path.**
 
-**5. Implement spreading activation from tag context.**
-When `overview --tags "investment,risk"` is called, boost heat for memories that share those tags: `context_boost = shared_tags * 5`. This adds the spreading activation dimension from ACT-R. Requires tag comparison in the overview loop. ~30 LOC.
+### Medium Priority (design exploration)
 
-**6. Build FSRS-style per-memory stability updates.**
-On each access (resolve, focus, explicit review), update memory.stability and memory.difficulty using the FSRS-4.5 formulas. Over time, frequently-reviewed memories develop high stability (slow decay) and rarely-reviewed critical memories show low stability (fast decay — needs check-ins). Most transformative improvement. ~80 LOC across handlers and models. Requires schema migration for two new fields.
+- **[R-YLW-1] Domain-calibrated stability presets (Bomb 1).** Implement tag/type-based stability suggestion during `create`. Train on existing datasets as calibration data. **Impact: Makes stability immediately meaningful across datasets without requiring manual tuning. ~50 LOC in create.py.**
 
-**7. Memory tier visualization (Hot/Warm/Cold/Frozen).**
-Compute FSRS retrievability and map to explicit tiers with distinct visual treatments in the management panel: Hot (R > 0.7, auto-surfaced), Warm (0.3 < R <= 0.7, summary display), Cold (0.1 < R <= 0.3, wander/search only), Frozen (R <= 0.1, archived or dormant). Bridges mathematical model with user-friendly metaphor. ~100 LOC frontend + ~30 LOC backend.
+- **[R-YLW-2] Add recency factor to search ranking.** Sort search results with a recency multiplier: `score = dependents_rank + access_count * 0.5^(days_since/stability)`. This makes search time-aware — recently-accessed memories rank higher for equal structural importance. **Impact: Search becomes decay-aware. ~15 LOC in search.py.**
 
-### Thought-Provoking
+- **[R-YLW-3] Decay-aware maturity upgrade.** Require recent access for draft→verified transitions: `access_count >= 3 AND max_days_since_last_access_at_upgrade_times <= 60`. Prevents "maturity inflation" from old, unreviewed memories. **Impact: Makes maturity reflect actual engagement quality. ~10 LOC in resolve.py.**
 
-**8. The Memory Compiler metaphor.** Reframe `resolve` as `compile` — a pipeline with type checking, linking, optimization, and executable output. Unifies validate (type checking), resolve (compilation), and stale detection (incremental build). Opens design space for optimization passes beyond token budget. Primarily a metaphor/positioning shift with architectural implications.
+- **[R-YLW-4] Apply decay to `--with-recall` path.** In `handle_overview()` lines 292-307, use the decay formula for sorting candidates rather than raw access_count. Currently the comment says "use unified decay formula" but the code uses raw access_count. **Impact: Aligns with_recall behavior with the unified model. ~5 LOC.**
 
-**9. Episodic-to-semantic mining.** Track recurring TransientDAG patterns. When the same reasoning chain appears N times across sessions, propose creating a schema atom that formalizes it. SOAR's chunking mechanism applied to CodeMemory. Requires TransientDAG pattern storage (not currently persisted).
+- **[R-YLW-5] Unify intensity-decay interaction.** Currently only `validate._check_decay` exempts `intensity >= 8` memories from decay warnings. Overview and wander apply decay regardless of intensity. Decide: should high-intensity memories get a stability multiplier (e.g., `effective_stability = stability * (intensity / 5)`)? Or should intensity only affect the decision to warn, not the decay computation? **Impact: Consistent semantics across all decay consumers.**
 
-**10. Demotion path for maturity.** Add explicit downgrade: proven -> verified (12 months no access, already warned by validate), verified -> draft (all imports broken for 90 days). Makes maturity a true lifecycle reflecting both structural integrity and temporal engagement. Requires ~30 LOC in maturity check logic + frontend indicator.
+### Exploratory (future rounds)
 
-### Wild Ideas
+- **[R-GRN-1] FSRS-inspired adaptive stability (Bomb 2).** Stability updates on each resolve/focus using simplified SInc formula. Requires `access_count >= 3` before adaptive updates begin. **Impact: Self-tuning memory lifecycle. ~60 LOC across handlers.py and resolve.py.**
 
-**11. Auto-archiving with essence distillation.** When R < 0.05 for 90 consecutive days, automatically propose archiving. Before archiving, use the MCP-connected LLM to generate a 3-line essence of the memory body. Inject this essence as a `derived_from` note into all memories that import the archived one. The detail is forgotten; the insight is preserved. Intelligent forgetting as resource management.
+- **[R-GRN-2] Collaborative memory graph for associative wander (Bomb 3).** Co-occurrence matrix from resolve history. New `wander --mode associative` command. **Impact: Novel PKM feature with no known competitor. ~150 LOC across new module + handlers.py.**
 
-**12. Weekly Memory Digest.** Auto-generated report (markdown, optionally injected into agent context): which memories grew this week (new versions), which cross-pollinated (new inter-domain imports), which are wilting (R dropping below 0.3), and which sprouted (newly created). Transforms CodeMemory from a passive store into an active cognitive partner that reflects the user's own thinking patterns back at them.
+- **[R-GRN-3] Per-memory-type decay curves (Bomb 4).** `decay_curve` field with exponential/power/logarithmic/linear/step options. Auto-suggested during create. **Impact: Makes CodeMemory's decay model research-grade and defensible. ~80 LOC across models.py + core.py + handlers.py.**
+
+### Inspiration Bombs (backlog)
+
+- **[R-BOMB-1] Context-aware activation (Bomb 5).** Spreading activation from current task tags and active resolve targets. Context-dependent heat component. **Novelty: ACT-R spreading activation applied to PKM — no existing tool does this.**
+
+- **[R-BOMB-2] Forgetting-as-feature.** Surface "what you're about to forget" — memories with `R` near the decay warning threshold (0.1-0.2). A "Rescue Queue" in Dashboard showing 3-5 memories at risk of effective forgetting. Turn the decay model into a proactive UX feature. **Novelty: Transforms decay from backend mechanism to user-facing product feature.**
+
+- **[R-BOMB-3] Stability inheritance through the DAG.** When memory A imports memory B, A partially inherits B's stability. A concept depending on a well-established memory should be more stable than one depending on a volatile memory. Weighted by import strength. **Novelty: Makes DAG topology influence decay dynamics — uniquely CodeMemory.**
+
+- **[R-BOMB-4] Duolingo HLR-style trained stability.** Train per-memory stability from access history using maximum likelihood estimation (like half-life regression). Requires 16+ accesses per memory for statistical significance (per FSRS optimization research). **Novelty: Treats stability as a learned parameter, not a configured one.**
 
 ---
 
-*End of research audit report. Generated 2026-05-07. Adjacent domains researched: ACT-R/SOAR cognitive architectures (base-level activation, spreading activation, Pavlik-Anderson recursive decay, episodic/semantic separation), FSRS/spaced repetition/forgetting curves (DSR model, Leitner boxes, Ebbinghaus parameterization, DRL-SRS), property graph vs RDF knowledge graph models (performance benchmarks, edge-first-class, transitive closure, unified models).*
+## Appendix A: CodeMemory-FSRS v6 Concept Mapping
+
+| CodeMemory R13 | FSRS v6 | Compatibility | Migration Difficulty |
+|---|---|---|---|
+| `stability` (half-life, days to R=50%) | Stability S (days to R=90%) | Direct mapping: S_cm ≈ 6.6 * S_fsrs | Trivial — rename and rescale if desired |
+| `intensity` [1,10] | Difficulty D [1,10] | Same numeric range; different semantics | Medium — intensity is importance, D is inherent difficulty learned from outcomes |
+| `0.5^(t/S)` | `(1 + F*t/S)^C` (v4-5) or `(1 + factor*t/S)^(-w20)` (v6) | Both are continuous decay | Low — replace formula, keep field. v6's trainable w20 enables personalized curve shape |
+| `access_count` | Review count | Same concept | None — already tracked |
+| `days_since_last_access` | t (elapsed days since last review) | Same concept | None — already tracked (day resolution vs FSRS's second resolution) |
+| NOT PRESENT | SInc (stability increase after review) | No analog | High — new logic needed; ~60 LOC |
+| NOT PRESENT | Desired retention r | No analog | Low — add config field |
+| NOT PRESENT | w8-w20 (21 trainable parameters) | No analog | Very high — requires ML optimization pipeline |
+| NOT PRESENT | Same-day review modeling (w19) | No analog | Medium — requires sub-day timestamp resolution |
+| NOT PRESENT | Post-lapse stability (S_f) | No analog | Medium — would model "forgetting after a failed recall" |
+
+## Appendix B: Decay Formula Behavior Under Edge Cases
+
+| days_since | stability | `0.5^(days/stability)` | Practical Meaning | Issue |
+|---|---|---|---|---|
+| 0 | 14.0 | 1.0 | No decay — just accessed | Correct |
+| 14 | 14.0 | 0.5 | One half-life — 50% retrieval prob | Expected |
+| 46 | 14.0 | ~0.098 | ~3.3 half-lives — below validate warning threshold | Triggers DECAY-WARN |
+| 90 | 14.0 | ~0.011 | ~6.4 half-lives — near-zero | May be too aggressive for concepts |
+| 180 | 14.0 | ~0.00012 | ~12.8 half-lives — effectively zero | Definitely too aggressive for anything but rote facts |
+| 0 | 0 | `0.5^(0/0)` → ZeroDivisionError | **CRASH** | No Pydantic guard, no runtime guard |
+| 14 | 0 | `0.5^(14/0)` → ZeroDivisionError | **CRASH** | Same — any non-zero days with stability=0 crashes |
+| 14 | -7 | `0.5^(14/-7) = 0.5^(-2) = 4.0` | Decay > 1.0 — memory "strengthens" with time | Nonsensical; need Pydantic `gt=0` |
+| None | 14.0 | (overview, broken path) | Falls to `access*0.1` (pre-R13 default) | Accidental; differed from wander |
+| None | 14.0 | (wander, correct path) | `weight = 1.0` (max cool weight) | Intentional; matches "never accessed = cool" semantics |
+| None | 14.0 | (validate, fallback) | Computes from `datetime.fromisoformat(last_access)` | Defensive; safety net for un-reindexed data |
+
+## Appendix C: Summary of Changes Since R12 Research Audit
+
+| R12 Recommendation | R13 Status | Notes |
+|---|---|---|
+| 1. Unify decay models (overview/wander/validate) | **IMPLEMENTED (R13-M1)** | Single formula `0.5^(t/S)` across all three. But overview path broken by plumbing bug. |
+| 2. Exclude cycle participants from dependents count | **IMPLEMENTED (R13-M2)** | `find_cycle_participants()` precomputed in overview; cycle member deps=0. |
+| 3. Precompute `days_since_last_access` | **IMPLEMENTED (R13-M3)** | Integer precomputed at reindex + set to 0 on resolve. Day resolution only. |
+| 4. Add `stability` field to MemoryEntry | **IMPLEMENTED (R13-M4)** | `stability: float = 14.0`. Static. No adaptive update. No Pydantic `gt=0` guard. |
+| 5. Spreading activation from tag context | **NOT IMPLEMENTED** | Deferred to future round. Research audit now provides concrete implementation sketch. |
+| 6. FSRS-style per-memory stability updates | **NOT IMPLEMENTED** | Stability field exists but is static. Bomb 2 provides concrete adaptive formula. |
+| 7. Memory tier visualization (Hot/Warm/Cold/Frozen) | **NOT IMPLEMENTED** | Deferred. R13 decay model provides the mathematical foundation for tier boundaries. |
+| 8. Demotion path for maturity | **NOT IMPLEMENTED** | Maturity still forward-only. Decay model now provides the R<0.1 threshold for demotion suggestions. |
+
+---
+
+*End of research audit report. Generated 2026-05-07. Adjacent domains researched: FSRS v4-v6 (DSR model, SInc update formula, 21-parameter optimization, 1.7B-review benchmark), Ebbinghaus/Radvansky 2024 meta-analysis (916 datasets, exponential-power/logarithmic/linear/power best-fit functions, Memory Phases Framework, content-type differentiation), Duolingo HLR half-life regression (lexeme-specific stability, MLE training, 45% error reduction), recommender systems (CF-KAN catastrophic forgetting mitigation, knowledge-graph collaborative filtering hybrids, item-item co-occurrence, TF-IDF tag weighting).*

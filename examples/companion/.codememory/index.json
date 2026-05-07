@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-05-07T11:59:25.228914",
+  "updated": "2026-05-07T12:57:49.281349",
   "memories": {
     "user/context": {
       "type": "atom",
@@ -17,7 +17,7 @@
       "path": "user/context.md",
       "access_count": 1,
       "last_access": "2026-04-29T18:12:26.280540",
-      "days_since_last_access": null,
+      "days_since_last_access": 7,
       "created": "2026-04-27",
       "updated": "",
       "imports": {
@@ -59,8 +59,8 @@
       "intensity": 6,
       "version": 1,
       "path": "user/beliefs/friendship-view.md",
-      "access_count": 17,
-      "last_access": "2026-05-07T11:59:25.228742",
+      "access_count": 20,
+      "last_access": "2026-05-07T12:57:44.725363",
       "days_since_last_access": 0,
       "created": "2026-04-22",
       "updated": "",
@@ -72,19 +72,8 @@
       "change_note": null,
       "change_log": [],
       "source": null,
-      "maturity": "proven",
-      "evidence": {
-        "verified_in": [
-          {
-            "version": 1,
-            "date": "2026-05-07"
-          },
-          {
-            "version": 1,
-            "date": "2026-05-07"
-          }
-        ]
-      }
+      "maturity": "draft",
+      "evidence": null
     },
     "user/beliefs/life-pace": {
       "type": "atom",
@@ -102,7 +91,7 @@
       "path": "user/beliefs/life-pace.md",
       "access_count": 1,
       "last_access": "2026-04-29T18:12:26.280540",
-      "days_since_last_access": null,
+      "days_since_last_access": 7,
       "created": "2026-04-27",
       "updated": "",
       "imports": {
@@ -135,8 +124,8 @@
       "intensity": 7,
       "version": 1,
       "path": "user/feelings/burnout-april.md",
-      "access_count": 15,
-      "last_access": "2026-05-07T11:59:25.228742",
+      "access_count": 18,
+      "last_access": "2026-05-07T12:57:44.725363",
       "days_since_last_access": 0,
       "created": "2026-04-14",
       "updated": "",
@@ -152,15 +141,8 @@
       "change_note": null,
       "change_log": [],
       "source": null,
-      "maturity": "proven",
-      "evidence": {
-        "verified_in": [
-          {
-            "version": 1,
-            "date": "2026-05-07"
-          }
-        ]
-      }
+      "maturity": "verified",
+      "evidence": null
     },
     "user/feelings/proud-moment": {
       "type": "atom",
@@ -176,8 +158,8 @@
       "intensity": 6,
       "version": 1,
       "path": "user/feelings/proud-moment.md",
-      "access_count": 15,
-      "last_access": "2026-05-07T11:59:25.228742",
+      "access_count": 18,
+      "last_access": "2026-05-07T12:57:44.725363",
       "days_since_last_access": 0,
       "created": "2026-04-26",
       "updated": "",
@@ -193,19 +175,8 @@
       "change_note": null,
       "change_log": [],
       "source": null,
-      "maturity": "proven",
-      "evidence": {
-        "verified_in": [
-          {
-            "version": 1,
-            "date": "2026-05-07"
-          },
-          {
-            "version": 1,
-            "date": "2026-05-07"
-          }
-        ]
-      }
+      "maturity": "draft",
+      "evidence": null
     },
     "user/moments/rainy-sunday": {
       "type": "atom",
@@ -221,8 +192,8 @@
       "intensity": 4,
       "version": 1,
       "path": "user/moments/rainy-sunday.md",
-      "access_count": 14,
-      "last_access": "2026-05-07T11:59:25.228742",
+      "access_count": 17,
+      "last_access": "2026-05-07T12:57:44.725363",
       "days_since_last_access": 0,
       "created": "2026-04-19",
       "updated": "",
@@ -238,19 +209,8 @@
       "change_note": null,
       "change_log": [],
       "source": null,
-      "maturity": "proven",
-      "evidence": {
-        "verified_in": [
-          {
-            "version": 1,
-            "date": "2026-05-07"
-          },
-          {
-            "version": 1,
-            "date": "2026-05-07"
-          }
-        ]
-      }
+      "maturity": "draft",
+      "evidence": null
     },
     "user/people/best-friend-li": {
       "type": "atom",
@@ -267,7 +227,7 @@
       "path": "user/people/best-friend-li.md",
       "access_count": 2,
       "last_access": "2026-05-06T11:21:29.157647",
-      "days_since_last_access": null,
+      "days_since_last_access": 0,
       "created": "2026-04-25",
       "updated": "",
       "imports": {
@@ -301,7 +261,7 @@
       "path": "user/people/mom-weekly-call.md",
       "access_count": 1,
       "last_access": "2026-04-29T18:12:26.280540",
-      "days_since_last_access": null,
+      "days_since_last_access": 7,
       "created": "2026-04-18",
       "updated": "",
       "imports": {
@@ -332,8 +292,8 @@
       "intensity": 5,
       "version": 1,
       "path": "user/preferences/dislike-crowds.md",
-      "access_count": 15,
-      "last_access": "2026-05-07T11:59:25.228742",
+      "access_count": 18,
+      "last_access": "2026-05-07T12:57:44.725363",
       "days_since_last_access": 0,
       "created": "2026-04-10",
       "updated": "",
@@ -345,19 +305,8 @@
       "change_note": null,
       "change_log": [],
       "source": null,
-      "maturity": "proven",
-      "evidence": {
-        "verified_in": [
-          {
-            "version": 1,
-            "date": "2026-05-07"
-          },
-          {
-            "version": 1,
-            "date": "2026-05-07"
-          }
-        ]
-      }
+      "maturity": "draft",
+      "evidence": null
     },
     "user/preferences/morning-coffee": {
       "type": "atom",
@@ -372,8 +321,8 @@
       "intensity": 5,
       "version": 1,
       "path": "user/preferences/morning-coffee.md",
-      "access_count": 15,
-      "last_access": "2026-05-07T11:59:25.228742",
+      "access_count": 18,
+      "last_access": "2026-05-07T12:57:44.725363",
       "days_since_last_access": 0,
       "created": "2026-04-10",
       "updated": "",
@@ -385,15 +334,8 @@
       "change_note": null,
       "change_log": [],
       "source": null,
-      "maturity": "proven",
-      "evidence": {
-        "verified_in": [
-          {
-            "version": 1,
-            "date": "2026-05-07"
-          }
-        ]
-      }
+      "maturity": "verified",
+      "evidence": null
     },
     "user/test/audit-test": {
       "type": "atom",

@@ -940,3 +940,101 @@ PYTHONPATH=src python tests/integration_test.py
 - 多选 + 批量操作 / 保存过滤视图 / 快速捕获 API / Tabbed 检查 / 子图提取 / 快捷键速查表 / Git 集成指南（进化策略师 Nice-to-have N1-N7）
 - DAG-Aware 编辑 / 记忆提醒 / 图 Diff / 设置面板扩展 / 命令面板（体验官 Feature Ideas #10-#14）
 - 扩散激活 / 记忆层级可视化 / 降级成熟度路径 / memory compiler / episodic-to-semantic mining（研究员 #5-#10）
+
+
+## 第 14 轮追加任务
+
+> **日期**：2026-05-07
+> **上轮评估**：Round 13 — 10/11 FULL PASS + 1 PARTIAL PASS (R13-A1 模态退场动画)，86/86 测试通过，零回归。但研究员发现 CRITICAL bug：统一衰减公式从未在 overview 路径中激活。
+> **主题**：Bug 修复与完工 — 修复 Critical 数据管道 bug、完成 R13 遗留工作、添加安全防护
+> **筛选原则**：核心指令："修复、完工、防护。不建新功能。"所有大型功能（Playwright 测试、FSRS 自适应稳定性、全文搜索、可写 MCP 工具）延期至 R15+。
+
+### 第一梯队：Critical — 修复阻塞正确性的 Bug
+
+- [x] R14-C1: 修复 overview 衰减公式管道 bug
+  - 目标：`handle_overview()` 从 search 结果字典而非 MemoryEntry 对象读取 `days_since_last_access`——但 `search()` 不在输出中包含此字段。统一衰减公式 `0.5^(days/stability)` 从未在 overview 路径中激活——所有被访问过的记忆回退到 R13 之前的 `access * 0.1` 常量乘数。修复：确保 overview 从 MemoryEntry 对象读取数据；同时在 search 输出字典中添加 `days_since_last_access` 和 `stability` 字段以永久闭合该缺口。
+  - 验收：对有非零 `days_since_last_access` 的记忆运行 `codememory overview`——热力值与 R13 eval 报告中记录的旧公式输出不同（衰减已激活）；search 命令输出包含 `days_since_last_access` 和 `stability` 字段；wander 和 validate 的衰减行为不变（它们未受影响，已从正确来源读取）；86/86 现有测试通过 + 新增 1 个测试验证衰减公式激活
+  - 来源：研究员 Critical R-RED-1（"handle_overview() reads days_since_last_access from search result dict... decay formula never activates in the overview path... the eval heat values passed because they match the old formula, not the new formula."）
+
+- [x] R14-C2: 添加 stability 边界防护
+  - 目标：(a) `stability=0` 导致 `ZeroDivisionError` 崩溃——在 `MemoryEntry.stability` 上添加 Pydantic `@field_validator(gt=0)`（建议最小 0.1 天 = 2.4 小时）；(b) `stability<0` 产生 `decay>1.0` 无意义输出——由 gt=0 验证器拦截；(c) `days_since_last_access=None` 语义在 overview（意外回退到旧公式）和 wander（有意的最大冷却权重）之间不一致——在三个衰减消费点（overview、wander、validate）中定义明确的合约并统一 None 处理。本轮不改变行为——仅统一处理并文档化。
+  - 验收：设置 `stability=0` 在 Pydantic 验证时被拒绝（不崩溃）；设置 `stability=-1` 被拒绝；`days_since_last_access=None` 的记忆在 overview、wander、validate 中收到一致的衰减处理；`stability=14.0`（默认）行为不变；86/86 现有测试通过
+  - 来源：研究员 Critical R-RED-2 + R-RED-3（"stability=0 crash vector waiting for a user to set it... None vs 0 semantics diverge between overview and wander"）
+
+- [x] R14-C3: 在 API 响应中暴露衰减字段
+  - 目标：在 search 输出字典中添加 `stability` 和 `days_since_last_access` 字段；在 `/api/memories` 响应中扩展字段集合以包含 `access_count`、`last_access`、`days_since_last_access`、`stability`（当前硬编码为排除这些字段的 10 字段子集）；在 `/api/stats` 中添加 `decay_risk` 数组——`R < 0.1` 阈值的记忆列表（使用统一衰减公式）。R13 的衰减模型完全是服务器端且对前端/API 消费者不可见。
+  - 验收：`/api/memories` 响应中每条记忆条目包含 `access_count`、`last_access`、`days_since_last_access`、`stability` 字段；`/api/stats` 响应包含 `decay_risk` 数组（记忆 ID + 衰减值）；search API 输出包含 `stability` 和 `days_since_last_access`；前端类型定义同步更新以匹配新的响应形状（无 TypeScript 错误）；现有 API 测试通过
+  - 来源：体验官 Yellow #4 + 研究员 R-RED-4（"The decay model exists but is invisible... The /api/memories response shape is hard-coded to a 10-field subset"）
+
+### 第二梯队：Important — 完成 R13 未竟的承诺
+
+- [x] R14-I1: 接线模态退场动画
+  - 目标：将 `useExitAnimation` hook 导入 Dashboard.tsx 的 `Modal()` 内联函数、App.tsx 中的 Archive 确认模态、以及 HelpPanel 组件。在关闭时应用 `modal-fade-exit` / `backdrop-fade-exit` CSS 类（已存在于 index.css 中，但目前为死代码——从未被任何组件引用）。`useExitAnimation` hook 已在 MemoryDetail/Settings/MemoryForm 三个面板上证明可用；Modal 函数需要重构以接收 closing 状态或内部集成 hook。
+  - 验收：关闭 Wander 模态时可见 250ms fade-out + scale-down 退场动画（非立即 DOM 消失）；关闭 Validate 模态同理；关闭 Archive 确认模态同理；关闭 HelpPanel 时可见 slide-out 退场动画；遮罩背景与模态内容同步退场；Escape 键触发的关闭同样播放退场动画；退场动画播放期间不可与正在关闭的组件交互
+  - 来源：体验官 Critical #1 + 进化策略师 C2 + EVAL R13-A1 PARTIAL PASS（"The CSS infrastructure is complete; only component wiring is missing. This is a half-day fix."）
+
+- [x] R14-I2: 修复所有 sub-12px 字体（含 Search Resolve 按钮）
+  - 目标：提升所有 7 处残留 sub-12px 元素：(1) HelpPanel 键帽标签 9px→11px；(2) HelpPanel 快捷键描述文本 9px→11px；(3) MemoryDetail "No additional context" 文本 9px→11px；(4) SearchBar Resolve 按钮 10px→12px + padding 1px 8px → 3px 12px；(5) 视图快捷键提示（"1"/"2"/"3"）10px→11px（装饰性，维持低显著性）；(6) SearchBar 搜索片段文本 11px→12px；(7) Undo toast 详情文本 11px→12px（等宽字体，可在视觉上保持较小）。R13-A2 在 EVAL 中被标记为 PASS，但体验官的逐像素审查发现了 7 个残留项——其中 3 个为 9px（不可读）。
+  - 验收：UI 中无元素 `fontSize < 11px`（无 9px 或 10px 文本）；无交互元素（按钮、链接、可点击文本）`fontSize < 12px`；Search Resolve 按钮在 12px 且 padding 3px 12px 下可读且可点击；HelpPanel 快捷键参考表在正常观看距离下可读；深色模式适用；布局不破损；TypeScript 构建零错误
+  - 来源：体验官 Critical #2 + #3（"The remaining stragglers at 9px... are worse than nothing — they suggest quality was checked in some files but not others. The Search Resolve button at 10px ships a new feature at a deprecated size."）
+
+### 第三梯队：Nice to Have — 小范围高价值改进（容量允许）
+
+- [x] R14-N1: 在 Dashboard 中暴露衰减风险
+  - 目标：在 Dashboard 统计部分添加"衰减风险"卡片：显示 `R < 0.1`（低于衰减阈值）的记忆数量、距离阈值最近的 top 3 记忆（ID + 检索概率 R）。这是让 R13 衰减模型对用户可见的最小前端改动——仅展示数量，不需要图表或完整列表。复用现有统计卡片组件模式。
+  - 验收：Dashboard 在现有统计卡片旁或下方显示衰减风险区域；显示有衰减风险的记忆数量（"3 memories at decay risk"）；列出距离阈值最近的 3 条记忆及其 R 值；数据来自 `/api/stats` 的 `decay_risk` 字段（R14-C3）；亮色和深色模式适用；加载状态适配（stats 加载时显示骨架）
+  - 来源：进化策略师 I5 + 体验官 Proposal 1 最小可行版（"Top 5 memories closest to decay threshold... transforms Dashboard from passive stats to active knowledge maintenance."）
+
+- [x] R14-N2: 图节点右键菜单添加 Resolve
+  - 目标：在 GraphCanvas 图节点右键菜单中添加"Resolve"选项。点击后打开 MemoryDetail 面板并自动对该节点触发 resolve（使用默认 depth 和 budget）。图视图目前完全无 Resolve 流程路径——用户必须离开图视图切换到 List 或 Search 才能解析。
+  - 验收：右键点击图节点时，右键菜单包含"Resolve"选项（与现有的"Edit"和"Delete"并列）；点击"Resolve"后 MemoryDetail 面板打开并显示该记忆的解析上下文；resolve 加载期间显示骨架动画（复用 R13-D3）；在 Graph 视图中保持上下文——不引起视图切换
+  - 来源：体验官 Yellow #5（"The graph view has no path to the Resolve flow. A user looking at a node in the graph must navigate to List view or Search to resolve it."）
+
+- [ ] R14-N3: 移除 List 视图本地过滤条
+  - 目标：从 MemoryList.tsx 中移除重复的本地过滤 UI（按 type/status/maturity/tags/text query 过滤）。本地过滤条 80% 与全局 SearchBar 功能重叠但产生不同结果——客户端子串匹配 vs 服务器端模糊匹配。这种重复让用户困惑并占用约 40px 的垂直屏幕空间。
+  - 验收：List 视图不再显示本地过滤条 UI；全局 SearchBar 仍可正常过滤记忆（通过后端搜索 API）；List 视图的垂直空间增加（无 40px 过滤条开销）；记忆列表正常显示未经过滤的全部记忆；移除不破坏列排序功能
+  - 来源：体验官 Green #8（"Two filter UIs with overlapping behavior create user confusion about which one to use. The local filter gives different results than SearchBar."）
+
+---
+
+### 本轮延期项目（下轮评估）
+
+- **全文正文搜索**（进化策略师 C1/C4）—— 最大功能缺口，需搜索管道变更 + 前端接线，留给搜索聚焦轮次
+- **Playwright 冒烟测试**（进化策略师 C3）—— **约束性承诺：R15 首个任务，在任何新功能代码之前**。连续第三次延期（R12/R13/R14），若 R15 首日未交付应升级为 Critical blocker
+- **FSRS 自适应稳定性更新**（研究员 R-GRN-1）—— 依赖 R14 C1-C2 先使衰减公式正确运行
+- **可写 MCP 工具**（进化策略师 I1）—— 闭合 agentic 闭环，约 150 LOC，需安全边界设计
+- **衰减热力图 Dashboard 完整版**（体验官 Proposal 1）—— 依赖 R14 C1+C3 先完成，R15 自然议程
+- **交互式 onboarding / "Demo Resolve" 按钮**（进化策略师 I3）—— 约 50 LOC + 3 个 .md 文件，R15 评估
+- **时间快照对比**（体验官 Proposal 3）—— 3-4 天，需新建前端组件 + diff 算法
+- **图漫步模式**（体验官 Proposal 4）—— 3 天，大规模 D3/Cytoscape 动画工作
+- **多级撤销栈**（进化策略师 I6）—— 跨组件状态管理重构
+- **Per-memory 稳定性 UI**（进化策略师 I2）—— 衰减模型正确后的 R15 自然下一步
+- **每种记忆类型的衰减曲线**（研究员 R-GRN-3）—— 研究级，需新字段 + 5 种数学函数
+- **扩散激活引擎**（研究员 R-BOMB-1）—— 需上下文模型 + DAG 遍历，大型设计密集任务
+
+### 本轮拒绝项目（修复轮次不引入新架构或依赖）
+
+- **Playwright**（新 dev 依赖 ~200MB）—— 延期至 R15（约束性承诺）
+- **CSS 设计 token 系统**（架构级重构，覆盖 14 个组件）
+- **语义/嵌入搜索**（新管道，数月非数天）
+- **图键盘导航**（Cytoscape 事件绑定 + focus 管理，涉及面广）
+- **Markdown 预览**（需新建 UI 组件）
+
+### 新增陷阱（本轮结束后追加至 pitfalls.md）
+
+- **[R14-C1] 修复 overview 管道 bug 将改变热力值输出。** 对于任何有 `days_since_last_access > 0` 的记忆，修复后将产生不同于 R13 eval 报告中记录的热力值。这是预期行为——旧值是基于错误公式计算得出的。验证时需要将新热力值与手算的 `0.5^(days/stability)` 对比，而非与 R13 eval 对比。
+
+- **[R14-I1] 内联 Modal 函数无法复用 useExitAnimation hook 详见 R13 审计。** Dashboard.tsx 中的 `Modal({ children, onClose })` 是本地纯函数组件——需要重构以接收 `closing` prop 或内部集成 `useExitAnimation`。参见 EVAL.md 第 8 节陷阱文档。
+
+- **[R14-C2] stability 的 gt=0 验证器可能拒绝已有数据。** 如果任何现有数据集包含 `stability=0`（当前没有），Pydantic 验证器将在加载时拒绝。在添加验证器之前验证所有 4 个数据集（companion、investment、software-architecture、quant_operators）均具有 `stability=14.0`。
+
+- **[R14-C3] /api/memories 响应形状变更需要前端类型同步。** 当前响应形状在 server.py 中硬编码为一个 10 字段子集。添加 4 个新字段需要同步更新前端 TypeScript 接口定义。遗漏此项将导致 TypeScript 类型错误。
+
+### 长期 Backlog 新增（本轮审计中识别的新项目）
+
+- **衰减即功能（Forgetting-as-feature）**：在 Dashboard 中展示"你即将遗忘的内容"——R 值接近衰减警告阈值（0.1-0.2）的记忆。"救援队列"将衰减模型从后端机制转化为主动 UX 功能。概念新颖性：无已知 PKM 工具将遗忘作为用户可见功能。（研究员 R-BOMB-2）
+- **DAG 稳定性继承**：当记忆 A 导入记忆 B 时，A 部分继承 B 的稳定性。一个依赖稳定记忆的概念应比依赖易变记忆的概念更稳定。按导入强度加权。概念新颖性：使 DAG 拓扑影响衰减动态——CodeMemory 独有。（研究员 R-BOMB-3）
+- **"自您上次访问以来"的上下文注入**：当解析一个 30 天未触碰的记忆时，注入摘要块显示依赖链中的变化。唯一可行，因为 CodeMemory 同时追踪结构（DAG）和时间（衰减）。（进化策略师 N3）
+- **搜索衰减感知排名**：对搜索结果排序应用衰减乘数。最近访问的记忆在同等结构重要性下排名更高。约 15 LOC。（研究员 R-YLW-2）
+- **领域校准稳定性预设**：在 create 期间基于标签/类型/maturity 建议稳定性值。投资事实 7-14 天，软件架构概念 30-60 天，量化操作员公式 60-180 天。约 50 LOC。（研究员 R-YLW-1 / Bomb 1）
+- **Git 集成指南 + GitHub Action**：为开发者受众提供文档化的 .md 数据集版本控制工作流。在 push 时运行 validate 的 GitHub Action。"代码式记忆"叙事。（进化策略师 N3）

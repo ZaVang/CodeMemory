@@ -627,7 +627,7 @@ export default function MemoryDetail({ memoryId, onClose, onResolve, onClearReso
                     </code>
                     <span
                       style={{
-                        fontSize: 9,
+                        fontSize: 11,
                         fontWeight: 600,
                         textTransform: 'uppercase',
                         letterSpacing: '0.04em',

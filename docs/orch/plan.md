@@ -1,91 +1,65 @@
-# Round 13 任务计划 — 产品品质打磨
+# Round 14 任务计划 — Bug Fix & Polish Completion
 
 **生成日期：** 2026-05-07
-**上轮评估：** Round 12 — 15/15 PASS，零回归（86/86 测试通过），首次零 Critical 缺陷
-**本轮主题：** 完成未竟的打磨 + 统一衰减模型 + 消除概念断层
+**上轮评估：** Round 13 — 10/11 FULL PASS + 1 PARTIAL PASS，86/86 测试通过，零回归。但研究员发现 CRITICAL bug: 统一衰减公式从未在 overview 路径中激活。
+**本轮主题：** 修复致命 bug + 完成 R13 遗留工作 + 添加安全防护。不做大型功能、不添新依赖。
 
 ---
 
 ## 一、本轮聚焦
 
-Round 12 是产品历史上最成功的打磨轮次。本轮不做大型功能、不改架构、不加依赖。目标是**用最小代价消除 Reviewer 三份报告交集的断层——把"85% 完成"的事情推进到 100%，把三套并行的衰减模型统一为一套，让产品在审美一致性和概念自洽性上达到可展示的标准。**
+Round 13 的 eval 结果看似优秀（10/11 PASS），但研究员的深度代码审查揭示了一个 CRITICAL bug：`handle_overview()` 从搜索结果字典中读取 `days_since_last_access`，而 `search()` 函数从未在输出中包含此字段。结果：R13 的旗舰功能——统一衰减公式 `0.5^(days/stability)`——在 overview 路径中从未被激活。所有被访问过的记忆回退到 R13 之前的 `access * 0.1` 常量乘数。86 个测试通过是因为它们验证的是旧公式的输出，而非新公式。
 
-本轮任务按两个原则筛选：
-1. **修复成本低**（不超过 50 行变更，不牵涉架构改动）
-2. **用户感知价值高**（直接影响第一印象、日常操作流、或概念一致性）
+同时，体验官确认三项 R13 承诺仍未完成：模态退场动画（Wander/Validate/Archive）、9px 字体残留（HelpPanel 2 处 + MemoryDetail 1 处）、Search Resolve 按钮以 10px 字号发布。进化策略师建议"先关缺口再深挖功能"。
+
+**本轮核心指令：修复、完成、防护。不建新功能。**
 
 ---
 
 ## 二、任务清单
 
-### 第一梯队：审美完成（完成 R12 未竟的打磨）
+### 第一梯队：Critical — 修复阻塞正确性的 Bug
 
 | # | 任务 | 说明 | 成本 | 来源 |
 |---|------|------|------|------|
-| A1 | 退场动画接线 | 入场动画 CSS 已写完，但 `panel-slide-exit` / `modal-fade-out` / `backdrop-fade-out` 从未被组件引用——退场动画是死代码。创建一套复用机制让关闭动作触发退场动画后再卸载 DOM。 | 低 | 体验官 Important #1 |
-| A2 | 修复残余 sub-12px 字号 | 三处：详情面板徽章（StatusBadge/MaturityBadge 缺少 fontSize 覆写）、搜索栏微标签（fuzzy matches 9px、match quality badge 9px）。 | 极低 | 体验官 Important #2 |
-| A3 | 搜索下拉框动画 | 搜索下拉框出现时添加 fade-in 动画（150ms），与面板/模态动画语言一致。 | 极低 | 体验官 Nice-to-have #5 |
+| **C1** | 修复 overview 衰减公式管道 bug | `handle_overview()` 从 search 结果字典而非 MemoryEntry 对象读取 `days_since_last_access`——但 `search()` 不在输出中包含此字段。统一衰减公式 `0.5^(days/stability)` 从未在 overview 路径中激活。所有被访问过的记忆回退到正确的 R13 之前的 `access * 0.1`。修复：确保 overview 从 MemoryEntry 对象读取数据；同步在 search 输出字典中添加 `days_since_last_access` 和 `stability`。 | 极低（~3 行） | 研究员 Critical（R-RED-1） |
+| **C2** | 添加 stability 边界防护 | 三个未防护的边界情况：(a) `stability=0` 导致 `ZeroDivisionError` 崩溃，(b) `stability<0` 产生 `decay>1.0`（无意义——记忆随时间的推移"增强"），(c) `days_since_last_access=None` 在 overview（意外回退到旧公式）和 wander（有意的最大冷却权重）之间语义不一致。修复：对 `stability` 添加 Pydantic 验证器（`gt=0`，建议最低 0.1）；在所有三个消费点（overview、wander、validate）中统一 `None` 语义。 | 低（~8 行） | 研究员 Critical（R-RED-2, R-RED-3） |
+| **C3** | 在 API 响应中暴露衰减字段 | 在 search 输出字典中添加 `stability` 和 `days_since_last_access`。在 `/api/memories` 响应中添加 `access_count`、`last_access`、`days_since_last_access`、`stability`。在 `/api/stats` 中添加 `decay_risk` 数组（R < 0.1 的记忆）。衰减模型完全不可见——仅存在于后端。不暴露这些字段，任何"记忆健康"功能都无法构建。 | 低（~15 行） | 体验官（Yellow #4）、研究员（R-RED-4） |
 
-### 第二梯队：发现路径缩短（让"aha moment"触手可及）
-
-| # | 任务 | 说明 | 成本 | 来源 |
-|---|------|------|------|------|
-| D1 | 搜索结果添加"Resolve"动作 | 全局搜索下拉框中每条结果旁添加"Resolve →"按钮。点击后关闭搜索、切换到 Graph 视图、自动触发 resolve。将 aha moment 从 4 次点击缩短为 2 次。 | 低 | 体验官 Important #3 |
-| D2 | 视图切换按钮添加快捷键提示 | Graph/List/Dashboard 按钮标签旁显示小号 "1"/"2"/"3" 提示，让用户自然发现快捷键。 | 极低 | 体验官 Important #4 |
-| D3 | Resolve 加载状态 | 点击 Resolve 后 UI 冻结 1-3 秒无反馈。在 resolve 结果区域添加加载骨架或旋转指示器。 | 低 | 进化策略师 Critical #C3 |
-
-### 第三梯队：衰减模型统一（消除概念断层）
+### 第二梯队：Important — 完成 R13 未竟的承诺
 
 | # | 任务 | 说明 | 成本 | 来源 |
 |---|------|------|------|------|
-| M1 | 统一 overview/wander/validate 的衰减模型 | 当前三套并行逻辑：overview 用 `0.5^(days/14)`，wander 用原始 access_count，validate 用 30 天硬阈值。统一为同一套连续衰减公式。 | 低 | 研究员 High-Impact #1 |
-| M2 | 排除循环参与者从 dependents 计数 | 当节点属于不可解析的循环时，其 dependents 计数被纳入 heat 公式，产出误导性热力评分。在计算 dependents 时跳过循环成员。 | 极低 | 研究员 High-Impact #2 |
-| M3 | index 中预计算 days_since_last_access | 将 `datetime.fromisoformat` 从 overview O(n) 热循环中移除，改为在索引中存储整数天数差。 | 极低 | 研究员 High-Impact #3 |
-| M4 | 添加 stability 字段（默认 14.0） | 在 MemoryEntry 上新增可选的 per-memory half-life 字段。初始值 14.0 保持向后兼容——行为不变。为未来 per-memory 衰减铺路。 | 极低 | 研究员 High-Impact #4 |
+| **I1** | 接线模态退场动画 | 将 `useExitAnimation` 导入 Dashboard Modal 函数和 App.tsx 中的 Archive 确认模态。在关闭时应用 `modal-fade-exit` / `backdrop-fade-exit` CSS 类。也接入 HelpPanel。 | 低（~25 行） | 体验官 Critical #1、进化策略师 C2 |
+| **I2** | 修复所有 sub-12px 字体 | 提升：HelpPanel 键帽（9px→11px）、HelpPanel 描述（9px→11px）、MemoryDetail 空文本（9px→11px）、Search Resolve 按钮（10px→12px）、视图快捷键提示（10px→11px）、搜索片段（11px→12px）、撤销 toast 详情（11px→12px）。 | 极低（~7 行） | 体验官 Critical #2、#3 |
 
-### 第四梯队：基础设施
+### 第三梯队：Nice to Have — 小范围高价值改进（容量允许）
 
 | # | 任务 | 说明 | 成本 | 来源 |
 |---|------|------|------|------|
-| I1 | 启用 OpenAPI /docs 端点 | FastAPI 自动生成的交互式 API 文档当前未暴露。开启为开发者提供自文档化 API。零代码变更，纯配置打开。 | 极低 | 进化策略师 Critical #C2 |
+| **N1** | 在 Dashboard 中暴露衰减风险 | 在 Dashboard 统计中添加"衰减风险"部分：R < 0.1 的记忆数量，距离阈值最近的 top 3 记忆。这是让衰减模型变得可见的最小前端改动。 | 低（~30 行） | 体验官 Proposal 1、进化策略师 I5 |
+| **N2** | 图节点右键菜单添加 Resolve | 在图节点右键菜单中添加"Resolve"选项，打开 MemoryDetail 面板并附带已解析的上下文。图视图目前无 Resolve 路径。 | 低（~15 行） | 体验官 Yellow #5 |
+| **N3** | 移除 List 视图本地过滤条 | 移除 MemoryList.tsx 中重复的过滤 UI。本地过滤条 80% 与全局 SearchBar 功能重叠，但产生不同结果（客户端子串匹配 vs 服务器端模糊匹配）。 | 极低（~1 小时） | 体验官 Green #8 |
 
 ---
 
-## 三、明确延期或拒绝的项目
-
-### 延期到下轮评估
+## 三、明确延期至 Round 15+ 的项目
 
 | 项目 | 理由 |
 |------|------|
-| **全文正文搜索**（进化策略师 C1/C4） | 最大的功能缺口，但涉及搜索管道变更 + 前端双向接线。成本中等，非"低投入"范畴。留给搜索聚焦轮次。 |
-| **多级撤销栈**（进化策略师 I1） | 涉及跨组件状态管理重构和 Ctrl+Z 全局快捷键注册。超出本轮单体任务上限。 |
-| **交互式 onboarding demo**（进化策略师 I5） | 需内嵌可交互 Cytoscape 实例。成本中等。 |
-| **版本 diff 查看器**（进化策略师 I2） | 需新建前端组件、diff 算法集成。成本中等。 |
-| **图键盘导航**（进化策略师 I3） | 需 Cytoscape 事件绑定 + focus 管理。涉及面广。 |
-| **Playwright 冒烟测试**（进化策略师 I6） | 需要新的 dev 依赖（Playwright ~200MB），首次配置成本不可忽略。 |
-| **视图切换过渡**（体验官 Nice-to-have #6） | 低投入但可复用 A1 的动画模式——等退场动画机制稳定后再做。 |
-| **图节点 hover 微动画**（体验官 Nice-to-have #7） | Canvas 动画模式与 DOM 动画不同，不能复用本轮建立的机制。 |
-| **FSRS 完整稳定性更新**（研究员 High-Effort #6） | 需要 schema 迁移 + per-access 数学更新。依赖 M4 先落地。 |
-| **记忆层级可视化**（研究员 High-Effort #7） | 前端 100+ 行 + 后端 30 行，依赖 FSRS 先落地。 |
-
-### 拒绝本轮（需要架构变更或新依赖）
-
-| 项目 | 理由 |
-|------|------|
-| **CSS 设计 token 系统**（进化策略师 I4） | 覆盖 14 个组件的架构级重构——不是打磨任务。 |
-| **扩散激活引擎**（研究员 High-Effort #5） | 需要先明确上下文模型设计，非本轮可完成。 |
-| **移除 List 本地过滤条**（体验官 Nice-to-have #8） | 需要全局搜索接口功能扩展，涉及搜索重构。 |
-| **Markdown 预览**（体验官 Nice-to-have #9） | 需要新建 UI 组件，成本中等。 |
-
-### 长期留在 Backlog（大型功能，架构变更，或需新依赖）
-
-- 协作 resolve / WebSocket（全新基础设施）
-- MCP 写入工具（新 MCP tool 设计 + 安全边界）
-- VS Code 扩展（独立产品）
-- 自动归档 + 精华蒸馏（依赖 LLM gateway）
-- 周度记忆摘要（依赖 LLM gateway + 调度）
-- 图原生存储后端（架构变更，Phase 3）
-- 记忆编译器隐喻（定位/营销层，非代码任务）
+| **全文正文搜索**（进化策略师 C1/C4） | 与所有竞品相比最大的功能缺口。需要搜索管道变更 + 前端接线。需要独立搜索轮次（3-5 天）。由产品审查员和进化策略师双方延期。 |
+| **Playwright 冒烟测试（5 个测试）** | 进化策略师标记为 C3 纳入本轮，但新增开发依赖 + 配置 Playwright + 编写 5 个测试超出修复/完工轮次的范围。需独立基础设施轮次或作为 R15 首个任务。 |
+| **FSRS 自适应稳定性（per-memory SInc）** | 高研究价值，但需要 resolve/focus 中的新更新逻辑（约 60 LOC）+ 行为变更。稳定性字段已存在；自适应更新应在基础管道验证正确后进行。 |
+| **可写 MCP 工具（create_memory, update_memory）** | 闭合 agentic 闭环（对 Mem0 的重大差异化优势）。需要 MCP 工具设计 + 安全边界（propose_* 暂存模式）。约 150 LOC。中等投入。 |
+| **衰减热力图 Dashboard（完整可视化）** | 产品审查员 Proposal 1 — 未构建的最高影响力产品功能。需要 2-3 天。需先完成 C1（Bug 修复）和 C3（API 暴露）作为前提。 |
+| **时间快照对比 / 图漫步模式** | 产品审查员 Proposal 3、4 — 各需 3+ 天。大型新前端组件需独立轮次。 |
+| **多级撤销栈** | 数据模型存在，但完整的 Ctrl+Z/Ctrl+Shift+Z 接入需要跨组件状态管理重构。 |
+| **交互式 onboarding / "Demo Resolve" 按钮** | 进化策略师 I3 — 巧妙低成本（约 50 LOC），但优先级低于修复实际 Resolve 可发现性问题（N1/N2）和完成退出动画（I1）。 |
+| **每种记忆类型的衰减曲线（Bomb 4）** | 研究级。需要新 `decay_curve` 字段 + 5 种数学函数 + 自动建议逻辑。对修复轮次太具推测性。 |
+| **扩散激活引擎（Bomb 5）** | 需要上下文模型 + 标签 IDF 计算 + 用于激活传播的 DAG 遍历。大型、重设计。 |
+| **语义/嵌入搜索** | 需要新管道（向量数据库或 ONNX 本地嵌入）。数月，非数天。 |
+| **CSS 设计 token 系统** | 覆盖 14 个组件的架构级重构。 |
+| **图键盘导航** | Cytoscape 事件绑定 + focus 管理交互。 |
 
 ---
 
@@ -93,35 +67,39 @@ Round 12 是产品历史上最成功的打磨轮次。本轮不做大型功能�
 
 | 梯队 | 核心验证 |
 |------|---------|
-| 第一梯队 | 关闭任意面板/模态可见退场动画（非立即消失）；详情面板徽章字号 >= 12px；搜索栏微标签 >= 11px；搜索下拉框有 150ms fade-in |
-| 第二梯队 | 搜索结果条目旁有 "Resolve →" 按钮——点击后切换到 Graph 并自动 resolve；视图切换按钮旁有 1/2/3 提示；Resolve 运行期间有可见加载反馈 |
-| 第三梯队 | overview、wander(cool)、validate 使用同一衰减公式；循环成员不被计入 dependents 计数；index.json 包含 precomputed days_since 字段；MemoryEntry 有 stability 字段（所有记忆默认 14.0） |
-| 第四梯队 | `/docs` 返回交互式 Swagger 页面 |
+| **第一梯队（Critical）** | 对有非零 `days_since_last_access` 的记忆运行 `codememory overview`——热力值与旧公式不同（衰减激活）；`stability=0` 被拒绝（不崩溃）；`days_since_last_access=None` 在 overview/wander/validate 中表现一致；`/api/memories` 包含 `stability`、`days_since_last_access`；`/api/stats` 包含 `decay_risk` |
+| **第二梯队（Important）** | 关闭 Wander 模态显示 fade-out + scale-down 动画；关闭 Validate 相同；关闭 Archive 确认相同；HelpPanel 滑出；无元素 `fontSize < 11px`（UI 中无小于 11px 的文本）；无交互元素 `fontSize < 12px` |
+| **第三梯队（Nice to Have）** | Dashboard 显示衰减风险计数 + top 3 有风险记忆；图节点右键菜单包含"Resolve"；List 视图无重复过滤条 |
+| **全局回归** | 86/86 测试通过（57 单元 + 24 集成 + 5 API）；TypeScript 零错误；Vite 构建成功；4 个数据集可 reindex |
 
 ---
 
 ## 五、不做什么
 
-- 不改架构、不加新依赖
-- 不碰 CLI、MCP 服务端、harnesslib、llm_gateway
-- 不做前端测试框架搭建（本轮不带 Playwright）
-- 不引入新的设计概念（FSRS 全套、扩散激活、层级等——仅铺字段不改变行为）
-- 不做任何需要超过 50 行变更的单体任务
+- 不建新功能（本轮的职责是修复和完工）
+- 不添加新依赖（Playwright 延期至 R15）
+- 不改架构、不碰 harnesslib、llm_gateway
+- 不碰 CLI、MCP 服务端（除非 C1/C2 修复涉及共享 handlers.py 代码）
+- 不做任何需要架构级设计的新概念（FSRS 自适应、扩散激活、每种类型的衰减曲线）
 
 ---
 
-## 六、相关陷阱（从 pitfalls.md 筛选）
+## 六、相关陷阱（来自本轮审计）
 
-- **[R12-UX2] 入场 CSS 可复用，退场需 closing 状态 + onAnimationEnd 延迟卸载** —— A1 的核心技术挑战。React conditional rendering 模式不支持退出动画——组件在状态变为 false 时立即卸载。通用解决方案：维护一个 closing 状态 flags，在关闭时先设置 closing=true 应用退场 CSS class，animationend 事件触发后再真正卸载。一次实现，7 处应用。
+- **[R13-A1] 内联 Modal 函数无法复用 useExitAnimation hook。** Dashboard.tsx 中的 `Modal({ children, onClose })` 是本地纯函数组件——它无法接收表示"正在关闭"的 prop，因此无法在关闭时切换 CSS 类。当多个模态（Wander/Validate）共享同一个 Modal 组件时，模态的打开/关闭状态在父组件中管理，Modal 需要接收额外的 `closing` prop 或自身集成 `useExitAnimation`。
 
-- **[R12-UX5] handlers.py 中两处 datetime import** —— M1/M3 涉及 handlers.py 的变更时需注意：模块级 `from datetime import datetime, timezone` (line 15) 和函数作用域 `from datetime import datetime as _dt` (line 440)。批量替换相关代码时避免破坏函数作用域缩进。
+- **[R13-M3] days_since_last_access 的 None vs 0 语义区别。** `None` 表示"从未被访问"（应使用保守的 days=0 或忽略衰减），`0` 表示"刚刚访问过"。当前代码使用 `max(0, days_since or 0)` 处理 None——两者都产生相同结果。未来可能需要区分"从未访问"（高冷却）和"刚刚访问"（低冷却）。本轮（C2）应统一处理但不改变行为。
 
-- **M4（stability 字段）的向后兼容** —— 旧 index.json 中没有 stability 字段的记忆在 Pydantic 加载后应自动获取默认值 14.0。Pydantic v2 的 `Field(default=14.0)` 自然处理此场景。需验证 reindex 后旧记忆的 stability 字段正确写入 index.json。
+- **[R13-I1] /docs 中间件豁免创建新的绕过路径。** 数据集头部中间件现在豁免 `/docs` 和 `/openapi.json` 从 `X-Codememory-Dataset` 要求。任何未来不需要数据集的端点必须显式添加到豁免列表——一个手动维护点。
 
-- **D1（搜索 Resolve）的视图切换时机** —— Resolve 操作依赖 Cytoscape 图实例已挂载。如果从非 Graph 视图触发 resolve，需先完成视图切换并确保图实例可用后再调用 resolve。视图切换和 resolve 调用之间需要渲染间隙。
-
-- **本轮不触发 stale** —— M3/M4 涉及 index 数据模型扩展，不影响 .md 文件 body hash，不会触发 stale 检测。但 reindex 应作为验收步骤运行。
+- **[R13-M1 新] 修复 C1 将改变 overview 热力值。** 对于任何有 `days_since_last_access > 0` 的记忆，修复管道 bug 将在 overview 中产生不同的热力值。这是正确行为——旧值完全是错误的。（对于 `days_since_last_access=0` 或 `None` 的记忆，行为不变。）
 
 ---
 
-*计划结束。详细回应见 docs/orch/negotiation.md。*
+## 七、对 Generator 的说明
+
+1. **C1 是本轮最高优先级的单一任务。** 其余均为次要。先修复 C1，验证，再继续。
+2. 研究员为 C1 提供了精确代码位置：`handlers.py` 第 258 行和 `search.py` 第 73-85 行。详见研究审计报告 Phase 3.1 的根本原因分析。
+3. C2 的 stability `gt=0` 验证器应使用合理的下限（建议 0.1 天 = 2.4 小时）——不允许零或负稳定性。
+4. 本轮不授权新依赖。Playwright 延期至 R15。
+5. 进化策略师明确建议"先关缺口再深挖功能"——不要让范围蔓延导致本打算作为修复轮次的回合变成大型新功能构建。修复、完工、防护。这是指令。

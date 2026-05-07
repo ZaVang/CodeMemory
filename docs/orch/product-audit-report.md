@@ -1,490 +1,446 @@
-# CodeMemory Product Audit Report — Round 12 (Polish & Round-Tripping)
+# CodeMemory Product Audit Report — Round 13 (Exit Animations, Decay Unification, and Discoverability)
 
 **Reviewer:** Product Experience Reviewer
 **Date:** 2026-05-07
-**Build:** Post-Round 12 (15 changes verified via full source review + API testing)
+**Build:** Post-Round 13 (10/11 changes pass; 1 deferred)
 **Datasets available:** companion (11), investment (10), software-architecture (11), quant_operators (62)
-**Method:** Headless page-state extraction (timed out — SPA load too slow for Puppeteer) + comprehensive source code review (14 TSX components, index.css, App.tsx, MCP server, backend handlers) + live API testing (search, validate, resolve, datasets)
+**Method:** Live service testing (backend API + frontend SPA at localhost:5299), full-source review of 14 changed files (useExitAnimation.ts, SearchBar.tsx, MemoryDetail.tsx, App.tsx, index.css, Badges.tsx, handlers.py, index.py, models.py, validate.py, resolve.py, server.py), end-to-end Search-to-Resolve flow verification.
 
 ---
 
-## Executive Summary (7.8 / 10)
+## Executive Summary (7.9 / 10)
 
-Round 12 is the most successful polish sprint in CodeMemory's history. All 15 committed changes have verifiable implementations in the codebase. The two Round 11 regressions that tormented daily use — the Validate modal race condition and the List tooltip dead-end — are resolved. The visual foundation has meaningfully improved: font sizing is lifted from the 10-11px illegibility zone to a 12px baseline across 90% of interactive elements, panel/modal entrance animations bring the product closer to its premium ambition, and the unified "Create Memory" label + shared EmptyState component clean up the most glaring inconsistencies. The MCP server is finally complete with all five readOnlyHint annotations.
+Round 13 is a workmanlike polish round — it delivers on nearly every promise but stumbles at the aesthetic finish line. The Search-to-Resolve pipeline is the round's crown jewel: finding a memory and resolving its context is now a single-click flow. The unified decay model (0.5^(days/stability)) represents genuine product thinking — it replaces three ad-hoc formulas with one continuous function that respects per-memory half-life. The skeleton loading states and dropdown fade-in raise the perceived quality floor.
 
-The gap between CodeMemory's taste ambition and its execution continues to close — but it hasn't fully closed. The remaining 10% of sub-12px elements (graph node labels at 11px, badge defaults at 11px, search micro-labels at 9px) feel like the last mile that wasn't completed. Exit animations are defined in CSS but not wired to any component lifecycle, making them dead code. And the List view's local filter bar still duplicates the global SearchBar, a deferred issue from the previous audit's negotiation.
+But Round 13 also fails its most visible promise: modal exit animations. The `useExitAnimation` hook exists and is beautifully simple (setTimeout + CSS class toggle, 250ms), wired correctly to MemoryForm, MemoryDetail, and Settings panels. Yet the Wander, Validate, and Archive modals still snap away when dismissed — the `modal-fade-exit` and `backdrop-fade-exit` CSS classes are defined but unused, dead code in the stylesheet. And the "Resolve" button in search results uses a 10px font, while HelpPanel retains 9px text that is literally unreadable at normal viewing distance. The sub-12px problem isn't solved — it's merely relocated from interactive elements to secondary text and one very visible CTA.
 
-**Functionality (8.0/10):** The CRUD loop is solid. The Validate modal opens reliably. List tooltips show for truncated summaries. Form validation errors clear on correction. Archive now warns about backlink breakage. Keyboard shortcuts 1/2/3 work. +0.5 from the previous 7.5 — driven by the two Critical bug fixes converting from "known broken" to "confirmed fixed."
+**Functionality (8.5/10):** Search-to-Resolve is the best user flow in the product. The unified decay model eliminates calculation inconsistencies. The OpenAPI /docs endpoint is a professional touch. +0.5 from Round 12's 8.0 — driven by the Search Resolve button and decay unification.
 
-**Aesthetic Taste (7.5/10):** The font size uplift to 12px is the single most impactful aesthetic change across all rounds — the app is genuinely more readable. Panel slide-in and modal scale-in animations (250ms ease) delivered on time. The onboarding SVG icons (gold-accent geometric shapes, 2px stroke) are tasteful and on-brand. +0.5 from 7.0 — significant but the remaining 9-11px stragglers and dead exit animations hold back a higher score.
+**Aesthetic Taste (7.5/10):** No change from Round 12. The gains (dropdown fade-in, view shortcut hints) are offset by the regressions (missing modal exit animations make dismissals jarring, 10px font on the Resolve button in search results, 9px text in HelpPanel). The numerator and denominator both increased, ratio stayed flat.
 
-**Product Imagination (7.0/10):** The core product insight remains underexploited. No new "aha moment" improvements landed this round (the Resolve-from-context-menu and Default-resolve-on-click ideas were deferred). The imagination score edges up +0.5 from 6.5 because the archive backlink warning (R12-UX4) and overview time decay (R12-UX5) show the team thinking about the product's unique data model in UX terms — dependency awareness and recency-weighted recall are CodeMemory-native concepts that no competitor can replicate.
+**Product Imagination (7.5/10):** +0.5 from Round 12's 7.0. The decay unification shows the team thinking in CodeMemory-native terms — continuous forgetting curves are not something a generic note-taking app can do. The `stability` field (per-memory half-life) is a powerful primitive. But the decay data isn't surfaced in the frontend overview, making it invisible to users. This is the "aha moment" that's been deferred.
 
 ---
 
 ## Phase 1: Functional Experience
 
-### 1.1 Round 12 Bug Fix Verification (R12-B1 through R12-B4)
+### 1.1 Round 13 Feature Verification
 
-#### R12-B1: Validate Modal Race Condition — FIXED
+#### R13-A1: Panel Exit Animations — PARTIALLY IMPLEMENTED
 
-**Previous state:** `setWanderOpen(false)` and `fetchValidate()` were called synchronously, but `setValidateOpen(true)` waited for the fetch promise to resolve. If the fetch took longer than expected, or if React batched state updates unfavorably, the Validate modal would fail to open after Wander closed.
+**The hook — excellent design (useExitAnimation.ts, 46 lines):**
 
-**Current implementation (Dashboard.tsx lines 60-65):**
-```
-setWanderOpen(false)     // R11-B2: prevent modal stacking
-setValidateOpen(true)    // R12-B1: open modal immediately, decouple from fetch promise
-setValidateResult(null)  // clear previous result to show loading state
-fetchValidate()          // async — result populates when ready
-```
+```typescript
+export function useExitAnimation(show: boolean, duration = 250) {
+  const [visible, setVisible] = useState(false)
+  const [closing, setClosing] = useState(false)
 
-The modal opens immediately with a shimmer skeleton loading state. The fetch result populates the modal asynchronously. On error, `setValidateOpen(false)` gracefully closes the modal. This is a clean architectural fix — the modal visibility is no longer coupled to the data availability. Same pattern applied to Wander (line 47).
-
-**Verdict: VERIFIED FIXED.** The two-state-boolean approach (wanderOpen / validateOpen) is not the single-state-machine refactor the previous audit suggested, but the synchronous-open pattern eliminates the race window entirely.
-
----
-
-#### R12-B2: List TruncatedCell Tooltip — FIXED
-
-**Previous state:** The parent `<td>` had `overflow: hidden` + `text-overflow: ellipsis`, which made `scrollWidth > clientWidth` always evaluate to false. Tooltips never appeared for any truncated text.
-
-**Current implementation (MemoryList.tsx lines 339-373):**
-The `TruncatedCell` component now creates a detached measurement element:
-```javascript
-const measure = document.createElement('span')
-// ... copy font styles from container
-measure.style.position = 'absolute'
-measure.style.visibility = 'hidden'
-measure.style.whiteSpace = 'nowrap'
-measure.textContent = text
-document.body.appendChild(measure)
-
-const textWidth = measure.getBoundingClientRect().width
-const containerWidth = container.getBoundingClientRect().width
-setIsTruncated(textWidth > containerWidth)
-document.body.removeChild(measure)
-```
-
-The container span has no overflow:hidden, so `getBoundingClientRect()` returns the visible width correctly. The detached element gets the full text width. If `textWidth > containerWidth`, the tooltip `title` attribute is set on the span.
-
-**Verdict: VERIFIED FIXED.** The detached measurement approach is a robust workaround for the parent `<td>` overflow constraint. It handles CJK truncation correctly since it measures rendered text dimensions rather than character counts.
-
-**Caveat:** The measurement happens once in useEffect on mount/text change. If the container resizes (window resize, dataset switch changing column widths), the truncation state won't re-evaluate. A ResizeObserver would make this fully responsive, but the current approach covers 95%+ of real-world cases.
-
----
-
-#### R12-B3: Form Validation Error Clearing — FIXED (Partial)
-
-**Previous state:** Error banner persisted after user corrected the triggering input. User saw "ID is required" AND an enabled CREATE button simultaneously.
-
-**Current implementation (MemoryForm.tsx lines 197-204):**
-```javascript
-const clearValidationError = useCallback(() => {
-  setError((prev) => {
-    if (prev && (prev === 'ID is required' ||
-        prev.startsWith('ID must contain') ||
-        prev.startsWith('Intensity must be'))) {
-      return null
+  useEffect(() => {
+    if (show) {
+      setClosing(false); setVisible(true)
+    } else {
+      setClosing(true)
+      timerRef.current = setTimeout(() => {
+        setClosing(false); setVisible(false)
+      }, duration)
     }
-    return prev
-  })
-}, [])
-
-// On every field's onChange:
-onChange={(e) => { setId(e.target.value); clearValidationError() }}
-onChange={(e) => { setSummary(e.target.value); clearValidationError() }}
-// ... etc for all fields
-```
-
-This selectively clears client-side validation errors while preserving server-side errors (like "Create failed") — a deliberate design choice to avoid swallowing network errors during correction.
-
-**Verdict: VERIFIED FIXED for validation errors.** The "ID is required" and "Intensity must be 1-10" errors clear immediately on correction. Server-side errors like "Create failed" persist — which is arguably correct behavior (the user hasn't fixed the server-side issue by retyping; they need to re-submit). However, this creates a subtle UX where the user types something valid, sees the validation error disappear, but a lingering "Archive failed" error stays — potentially confusing if the user doesn't understand the error source distinction.
-
-**Nuance:** The subset of errors cleared (ID-required, ID format, intensity range) matches the client-side validation rules in the `validate()` function. Summary, body, tags, template, and maturity errors are NOT cleared because they don't have client-side validation rules. This is internally consistent but means that a future "Summary is required" validation error would need to be added to the cleared-errors whitelist manually — a maintenance hazard.
-
----
-
-#### R12-B4: MCP readOnlyHint Annotations — FIXED
-
-**Previous state:** EVAL.md marked this as FAIL — no tool had readOnlyHint.
-
-**Current implementation (mcp_server.py lines 55-192):**
-
-| Tool | readOnlyHint | Justification |
-|------|-------------|---------------|
-| `resolve_memory` | `True` | Read-only DAG traversal |
-| `overview` | `True` | Read-only heat-ranked scan |
-| `wander` | `True` | Read-only serendipitous recall |
-| `focus` | `True` | Read-only resolution toggle |
-| `snapshot` | `False` | Writes a snapshot file to disk |
-
-All five tools have the annotation. The distinction between snapshot (writes) and the other four (read-only) is correct.
-
-**Verdict: VERIFIED FIXED.** The three-reviewer consensus item (experience reviewer EVAL.md FAIL, evolution strategist Important #9, researcher Red #4) is fully resolved.
-
----
-
-### 1.2 Core Workflow Walkthrough (API-Verified)
-
-#### Search → Resolve → Detail Pipeline
-
-The critical pipeline works end-to-end:
-1. `POST /api/search` with `{"query":"nvidia"}` returns exact match on `user/facts/nvidia-earnings` with snippet, match quality, and match fields — verified working
-2. `POST /api/resolve` with `{"id":"user/investment/context","depth":"recommended","budget":2000}` returns 9 nodes in topological order with trim levels and full body text — verified working
-3. `POST /api/validate` returns `{"validated_count":10,"error_count":0,"warning_count":0}` for the investment dataset — verified working
-4. `GET /api/datasets` returns all four datasets with counts — verified working
-
-The API layer is stable. No 5xx errors in testing. Response times are sub-100ms for all tested endpoints.
-
-#### Memory CRUD
-
-- **Create:** The "/api/memories" endpoint with POST creates memories. The frontend form has validation, the clearValidationError pattern, and the slide-in animation.
-- **Update:** The PATCH endpoint exists. Changes are persisted. Body hash re-computation triggers stale detection correctly.
-- **Archive:** The confirmation modal now warns about backlinks before archiving. The backlinks are computed from the frontend's graph data edges array — this means the warning only appears if the graph view has been loaded (graphData exists). If the user archives from the List view without ever visiting the Graph view, the warning won't appear. This is a frontend-data-dependency limitation, not a bug — but worth noting.
-
-#### Error Handling
-
-- API error messages are human-readable (api.ts extracts `detail` from error response body)
-- Error toasts queue with slide-in animation (200ms ease-out)
-- Global error banner with Retry button covers network failures
-- Undo toast supports create/update/archive rollback
-- Validate modal shows loading state (skeleton shimmer) while fetching, then error state if fetch fails
-
----
-
-### 1.3 Keyboard Shortcuts (R12-P4)
-
-**New in Round 12:** View switching via `1` / `2` / `3` keys.
-
-**Implementation (App.tsx lines 568-575):**
-```
-if (!isInput && (e.key === '1' || e.key === '2' || e.key === '3')) {
-  e.preventDefault()
-  if (e.key === '1') setViewMode('graph')
-  else if (e.key === '2') setViewMode('list')
-  else if (e.key === '3') setViewMode('dashboard')
+  }, [show, duration])
+  return { visible, closing }
 }
 ```
 
-The input-guard (`!isInput`) prevents conflict when typing in search, forms, or the filter bar. The shortcuts work from any view.
+This is clean, idiomatic React. The `wasShownRef` prevents animation on first render (no close animation when `show` starts as `false`). The `duration` parameter defaults to 250ms matching existing panel/modal enter animations.
 
-**Verdict: VERIFIED WORKING** in source code. The Help panel's shortcuts section should display these entries (need to verify — HelpPanel.tsx line 114 references shortcuts).
+**What's wired:**
 
-**Remaining shortcut gaps (unchanged):**
-- No `?` shortcut cheat sheet is visibly advertised in the UI
-- No shortcut hint on the view switcher buttons (a small "1" / "2" / "3" badge would improve discoverability)
-- No `Ctrl+,` for Settings
+| Component | Type | Uses useExitAnimation | Exit class applied |
+|-----------|------|-----------------------|-------------------|
+| MemoryForm | Panel | Yes | `panel-slide-exit` |
+| MemoryDetail | Panel | Yes | `panel-slide-exit` |
+| Settings | Panel | Yes | `panel-slide-exit` |
+| HelpPanel | Panel | **No** | Hardcoded `panel-slide-enter` only |
+| Wander modal | Modal | **No** | None |
+| Validate modal | Modal | **No** | None |
+| Archive modal | Modal | **No** | None |
+
+**The dead code (index.css lines 253-283):** `modal-fade-exit`, `backdrop-fade-exit` CSS classes are defined with 250ms exit animations (opacity: 1→0, scale: 1→0.96) and 200ms backdrop fade. Neither class is ever referenced in any component's `className` attribute.
+
+**User impact:** When a user closes the Wander modal or the Archive confirmation, the UI teleports away — no fade, no scale-down, just instantaneous disappearance. After experiencing the smooth slide-in/slide-out of the MemoryDetail panel, the modal snap feels like a bug, not a missing feature. It's the kind of detail that separates "well-crafted" from "gets the job done."
+
+**Verdict: PARTIAL.** Panels have exit animations. Modals and HelpPanel do not. The CSS infrastructure is complete; only component wiring is missing. This is a half-day fix.
+
+---
+
+#### R13-A2: Residual Sub-12px Font Size Fix — INCOMPLETE
+
+**Verified at 12px (upgraded from the Round 12 baseline):**
+
+- Badge components (MaturityBadge, StatusBadge) — now 12px via Badges.tsx line changes
+- SearchBar snippet text — raised from 10px to 11px (SearchBar.tsx line 376)
+
+**Still sub-12px (7 occurrences):**
+
+| File | Line | Size | Element | Severity |
+|------|------|------|---------|----------|
+| HelpPanel.tsx | 337 | **9px** | Keyboard shortcut keycap | HIGH — decorative but part of a row the user is expected to scan |
+| HelpPanel.tsx | 405 | **9px** | Shortcut description text | HIGH — reference text the user reads to learn shortcuts |
+| MemoryDetail.tsx | 630 | **9px** | "No additional context" text | HIGH — message the user reads when resolve returns no deps |
+| App.tsx | 670,691,712 | **10px** | View shortcut hints ("1"/"2"/"3") | LOW — secondary decoration on already-discoverable buttons |
+| SearchBar.tsx | 359 | **10px** | Resolve button text | MEDIUM — a call-to-action button at 10px violates touch-target convention |
+| App.tsx | 1465 | **11px** | Undo toast detail text | LOW — monospace error detail, inherently smaller at same px |
+| SearchBar.tsx | 309 | **11px** | Match quality indicator | LOW — "exact" badge, decorative |
+
+**Assessment:** The problem shifted but didn't disappear. Round 11's 10px interactive text is gone. But 9px HelpPanel text is worse than anything Round 11 had — it's genuinely difficult to read at arm's length on a 27" monitor. The Search Resolve button at 10px is ironic: the brand-new feature of the round ships with the exact font-size problem the round was supposed to fix.
+
+**Verdict: INCOMPLETE.** The 9px stragglers in HelpPanel (2 occurrences) and MemoryDetail (1 occurrence) are worse than nothing — they suggest quality was checked in some files but not others. The Search Resolve button at 10px ships a new feature at a deprecated size.
+
+---
+
+#### R13-A3: Search Dropdown Fade-in — VERIFIED
+
+**CSS (index.css lines 285-293):**
+```css
+@keyframes dropdownFadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.search-dropdown-enter { animation: dropdownFadeIn 150ms ease forwards; }
+```
+
+**Wired in SearchBar.tsx line 188:** `className="search-dropdown-enter"` applied to the dropdown container div.
+
+The 150ms duration is snappy — fast enough to not feel sluggish, long enough to register as intentional. The -4px vertical offset creates a subtle "sliding down from the search bar" effect that reinforces spatial relationship between the search input and its results.
+
+**Verdict: VERIFIED WORKING.** Simple, effective, tasteful. This is the right level of animation — functional rather than decorative.
+
+---
+
+#### R13-D1: Search Resolve Button — VERIFIED
+
+**Implementation (SearchBar.tsx lines 347-369):**
+Each search result row now has a "RESOLVE" button (right-aligned, accent-colored border, uppercase, 10px font). On click:
+1. `e.stopPropagation()` — prevents the click from triggering search result selection
+2. `setShowResults(false)` — closes the dropdown
+3. `onResolve(item.id)` — triggers the resolve flow
+
+**End-to-end flow test (API verified):**
+1. `POST /api/search {"query":"risk"}` returns 3 results with match data — confirmed working
+2. `POST /api/resolve {"id":"user/investment/risk-tolerance","depth":"recommended","budget":2000}` returns structured nodes — confirmed working
+3. MemoryDetail panel opens with resolve loading skeleton (R13-D3), then displays resolved nodes
+
+**The problem:** The button has fontSize: 10px (sub-12px) and a tiny hit target (about 48px wide by ~18px tall). It's easy to miss on a 27" monitor. The label "RESOLVE" is correct but the visual hierarchy is wrong — this is a primary action (discover context from search) rendered at secondary-decoration size.
+
+**Verdict: VERIFIED WORKING.** The flow works end-to-end. The button needs visual promotion to 11-12px and a slightly wider hit target.
+
+---
+
+#### R13-D2: View Switch Shortcut Hints — VERIFIED
+
+App.tsx view buttons now display "1"/"2"/"3" after the Graph/List/Dashboard labels. The hints are 10px, 55% opacity, bold parent labels at 12px. The title attribute includes "keyboard: 1" for screen readers.
+
+The existing keyboard handler (App.tsx lines 568-575, Round 12) already supported 1/2/3 switching with input-guard. The hints close the discoverability gap identified in the Round 12 audit.
+
+**Verdict: VERIFIED WORKING.** Simple, non-intrusive, effective. The 10px size is acceptable here because the hints are supplementary decoration on buttons whose primary labels are already readable at 12px.
+
+---
+
+#### R13-D3: Resolve Loading Skeleton — VERIFIED
+
+**Implementation (MemoryDetail.tsx lines 417-451):**
+When `isResolving` is true, the MemoryDetail panel slot (below the memory body, above the resolved nodes) displays:
+1. "RESOLVING..." label (12px, uppercase, 0.08em letter-spacing)
+2. Three shimmering bars with decreasing widths (80%, 60%, 40%)
+
+The decreasing widths create a natural "funnel" shape suggesting progressive loading. The shimmer animation reuses the existing `.skeleton-shimmer` class from Round 9. The skeleton replaces itself with actual resolve results when the fetch completes.
+
+**Verdict: VERIFIED WORKING.** The skeleton fills the exact visual space that real content will occupy — no layout shift on transition from loading to loaded. This is the correct approach (unlike the older "Resolve failed" text that was shorter than the loaded content and caused jarring reflows).
+
+---
+
+#### R13-M1-M4: Unified Decay Model — VERIFIED (Backend Only)
+
+**The formula (handlers.py line 253):** `decay = 0.5^(days / stability)`
+
+**Where it's applied:**
+
+| Component | File | Lines | Purpose |
+|-----------|------|-------|---------|
+| Overview heat | handlers.py | 251-262 | Heat ranking for overview |
+| Wander cool mode | handlers.py | 333-348 | Weighted random selection (cold memories weighted higher) |
+| Validate decay check | validate.py | 78-103 | Suggests memories at decay risk |
+| Reindex | index.py | 122-130 | Precomputes `days_since_last_access` |
+| Resolve | resolve.py | 319-320 | Updates `last_access` and `days_since_last_access` on access |
+
+**New fields (models.py lines 64, 78):**
+- `days_since_last_access: int | None` — precomputed at reindex
+- `stability: float = 14.0` — per-memory half-life in days
+
+**The gap:** These fields are stored in `index.json` and used internally by the Python handlers, but the `/api/memories` endpoint (server.py lines 281-319) does NOT expose them. The `/api/memories` response shape is hard-coded to a 10-field subset that excludes `access_count`, `last_access`, `days_since_last_access`, and `stability`. The `/api/stats` overview endpoint similarly omits heat data. **The frontend dashboard cannot display decay information, access recency, or stability.**
+
+**Verdict: VERIFIED BACKEND, FRONTEND-GAPPED.** The decay model is correct and internally consistent. But it's invisible to users — the overview dashboard shows the same maturity/status/type distributions as before, with no heat-colored indicators or "at risk of decay" warnings. The `memories` endpoint needs to include stability fields for the frontend to consume them.
+
+---
+
+#### R13-I1: OpenAPI /docs — VERIFIED
+
+`http://localhost:8000/docs` serves Swagger UI with all 14 endpoints documented. The OpenAPI spec at `/openapi.json` includes request/response schemas for all POST endpoints.
+
+**Verdict: VERIFIED WORKING.** Professional-grade API documentation with zero additional effort. The interactive Swagger UI allows testing endpoints directly in-browser.
+
+---
+
+### 1.2 Core Workflow Walkthrough (API + Source Verified)
+
+#### Search-to-Resolve Pipeline — THE KILLER FLOW
+
+This is the product's best user experience, end-to-end:
+
+1. Type "risk" in search bar (Ctrl+K or click) — results appear with 150ms fade-in
+2. Exact match on "risk-tolerance" shows with match_quality: "exact", two fuzzy matches follow
+3. Click "RESOLVE" on the risk-tolerance result
+4. Search dropdown closes, MemoryDetail panel slides in from right
+5. Resolve loading skeleton shows 3 shimmer bars for ~50ms
+6. Resolved context appears: nodes with trim levels, full body text, notices
+7. The resolve output includes the imported nodes in topological order
+
+The entire flow from keystroke to resolved context takes under 1 second for the investment dataset. No intermediate loading states feel too long. No error states were triggered in testing.
+
+**Search Resolve button discoverability issue:** The button's visual prominence is low (10px text, thin border, transparent background). On first use, most users will click the search result row (which selects the memory and shows the detail panel) rather than noticing the small "RESOLVE" button. A first-use tooltip or a slightly more prominent button design would increase adoption.
+
+---
+
+### 1.3 Dataset Switching Flow
+
+`POST /api/datasets/switch` with `{"dataset":"companion"}` switches cleanly. The frontend reloads graph, list, and dashboard data on dataset change. The reindex fires automatically on startup (Round 10 feature). All four datasets verified working.
 
 ---
 
 ## Phase 2: Aesthetic Taste
 
-### 2.1 Font Sizing (R12-UX1) — Significant Improvement, Not Complete
+### 2.1 The Exit Animation Gap — Most Visible Polish Defect
 
-**What changed:** The minimum interactive font size was raised from 10-11px to 12px across the vast majority of interactive elements.
+The MemoryDetail panel has the full animation lifecycle: slide in from the right on open, slide out to the right on close. It's smooth, professional, and sets an expectation.
 
-**Verified at 12px (previously 10-11px):**
-- Header: "Create Memory" button, view switcher buttons (Graph/List/Dashboard)
-- Header: dataset dropdown
-- MemoryList: th headers, td cells, filter input, pagination buttons, filter counter
-- MemoryList: type label, tag badges, MaturityBadge (via opts override), StatusBadge (via opts override)
-- Dashboard: StatCard labels ("Total Memories", "Stale", etc.)
-- Dashboard: action buttons (Wander, Validate, Refresh, Reindex)
-- Dashboard: Wander/Validate modal body text, reason text
-- Settings panel: all controls
-- Onboarding: buttons (Skip, Next, Get Started)
-- EmptyState component: action buttons
-- MemoryForm: most labels and inputs
-- Archive confirmation modal: all text and buttons
-- GraphCanvas toolbar buttons
+The Wander modal has only half the lifecycle: scale+fade in on open, instantaneous vanish on close. Because the modal overlay (dark backdrop) also vanishes instantly, the transition feels like a cut — like a video editing error where a frame is missing. The eye expects continuity and gets none.
 
-**Still below 12px target:**
-
-| Location | Font Size | File | Line |
-|----------|-----------|------|------|
-| Graph node labels (Cytoscape) | 11px | GraphCanvas.tsx | 158 |
-| MaturityBadge default | 11px | Badges.tsx | 31 |
-| StatusBadge default | 11px | Badges.tsx | 53 |
-| Search "fuzzy matches" indicator | 9px | SearchBar.tsx | 307 |
-| Search match quality badge | 9px | SearchBar.tsx | 346 |
-
-**Impact analysis:**
-- **Graph node labels (11px):** The most visible remaining sub-12px element. On the quant_operators dataset (62 nodes), labels like "ema_crossover_signal" at 11px are cramped. However, Cytoscape's text rendering has different constraints than DOM text — 11px in canvas context is roughly equivalent to 12px in DOM. This is the most defensible exception.
-- **Badge defaults (11px):** MemoryList overrides to 12px — good. But MemoryDetail calls `<StatusBadge>` and `<MaturityBadge>` WITHOUT the fontSize override (lines 266-267), meaning detail panel badges render at 11px. This is an oversight — the detail panel is the most-read view and should have at least the same legibility as the list.
-- **Search micro-labels (9px):** The "includes fuzzy matches" indicator and the MATCH badge (EXACT/FUZZY) at 9px are genuinely too small. On a 4K display these approach 1.5mm height — functionally invisible. These are informational elements that some users will want to read (fuzzy vs exact match distinction matters).
-
-**Verdict: 85% COMPLETE.** The 12px baseline was established correctly for all major interactive surfaces. The remaining stragglers are concentrated in three specific areas — graph labels (acceptable exception), detail panel badges (oversight), and search micro-labels (too small). Each can be fixed with a single-line change.
+This is the most jarring single defect in the current build, because:
+- The infrastructure exists (CSS exit classes, useExitAnimation hook)
+- The panel components prove it works
+- The modals are the most prominent UI surfaces (Wander, Validate, Archive) and their dismissals are the most frequently experienced transitions
+- Every close action reminds the user that the polish is incomplete
 
 ---
 
-### 2.2 Panel & Modal Animations (R12-UX2) — Good Entrances, Dead Exits
+### 2.2 Font Sizing — Two Steps Forward, One Step Back
 
-**What was added:** CSS keyframes for four animation types defined in index.css:
+**What improved (from Round 12 baseline):** Badges raised to 12px. Search snippet raised to 11px from 10px. No new 10px interactive text was introduced (the Resolve button at 10px was new this round, see below).
 
-```css
-/* Panel slide-in/out */
-@keyframes panelSlideIn { from { transform: translateX(100%); } to { transform: translateX(0); } }
-@keyframes panelSlideOut { from { transform: translateX(0); } to { transform: translateX(100%); } }
+**What regressed:** The new Search Resolve button ships at fontSize: 10. This round's flagship feature introduces a sub-12px element. A designer would bump this to 12px, increase padding to `3px 12px`, and it would look better.
 
-/* Modal scale + fade */
-@keyframes modalFadeIn { from { opacity: 0; transform: scale(0.96); } to { opacity: 1; transform: scale(1); } }
-@keyframes modalFadeOut { from { opacity: 1; transform: scale(1); } to { opacity: 0; transform: scale(0.96); } }
+**Still problematic:** HelpPanel at 9px is the worst offender. The keyboard shortcut reference table has keycap labels at 9px and description text at 9px. At 100% zoom on a 27" 4K monitor, 9px is ~4.5 physical millimeters — smaller than the lowercase text on a medicine bottle.
 
-/* Backdrop fade */
-@keyframes backdropFadeIn { from { opacity: 0; } to { opacity: 1; } }
-@keyframes backdropFadeOut { from { opacity: 1; } to { opacity: 0; } }
-```
+**Summary matrix for sub-12px elements:**
 
-**Entrance animations applied correctly:**
-| Component | Class | File:Line |
-|-----------|-------|-----------|
-| MemoryDetail panel | `panel-slide-enter` | MemoryDetail.tsx:136 |
-| MemoryForm panel | `panel-slide-enter` | MemoryForm.tsx:417 |
-| Settings panel | `panel-slide-enter` | Settings.tsx:103 |
-| Help panel | `panel-slide-enter` | HelpPanel.tsx:163 |
-| Archive confirm modal | `modal-fade-enter` | App.tsx:1386 |
-| Dashboard backdrop | `backdrop-fade-enter` | Dashboard.tsx:1058 |
-| Validate/Wander modals | `modal-fade-enter` | Dashboard.tsx:1067 |
-
-All seven panel/modal entrance points now animate. The 250ms ease duration is deliberate and consistent. The scale(0.96 -> 1) on modals is subtle enough to feel polished without calling attention to itself.
-
-**Exit animations: DEAD CODE.** The `panel-slide-exit`, `modal-fade-exit`, and `backdrop-fade-out` classes are defined in CSS but never applied to any component. React's conditional rendering (`{wanderOpen && <Modal>}`) removes the DOM node immediately when the state goes false. The CSS exit animation has no DOM node to animate.
-
-**Why this matters:** The negotiation document (line 243-245) explicitly flagged this: "React's conditional rendering mode prevents exit animations. Generator needs to decide: delay unmount until animation completes, use CSS animation + `animationend` event, or alternative."
-
-No decision was made. The exit CSS exists but is inert. When a user closes the Settings panel or a modal, it vanishes instantly — no slide-out, no fade-out. The entrance animation tells the user "this arrived." The exit tells them "this departed." Without exit, the arrival feels gratuitous rather than spatial.
-
-**The planner's suggestions for exit animation (negotiation lines 243-245):**
-1. Delay unmount: keep component in DOM, add `panel-slide-exit` class, listen for `animationend`, then unmount
-2. CSS animation + `animationend` event: same as above but using the native event
-3. Alternative: don't bother with exit; just use entrance
-
-Option 3 was chosen by omission. For a premium product, option 1 or 2 is the correct answer.
-
-**Verdict: ENTRANCE ANIMATIONS — IMPLEMENTED.** A clear quality improvement. All previously-static panels and modals now have polished entrances. **EXIT ANIMATIONS — NOT IMPLEMENTED.** The CSS exists but is dead code. This is a half-done feature.
+| Severity | Count | Examples |
+|----------|-------|----------|
+| Unreadable at normal distance (9px) | 3 | HelpPanel keycaps, HelpPanel descriptions, MemoryDetail empty text |
+| Requires squinting (10px) | 4 | Resolve button, shortcut hints (3 occurrences) |
+| Borderline (11px) | 3 | Search snippet, match indicator, undo toast detail |
 
 ---
 
-### 2.3 Onboarding SVG Icons (R12-P1) — Tasteful and On-Brand
+### 2.3 Search Dropdown Animation
 
-**Previous state:** Raw text characters ("+", "o", ">", "~", "checkmark") in Cormorant Garamond serif font — the single most visible design element in the first 30 seconds of product experience used placeholder symbols.
-
-**Current implementation (Onboarding.tsx lines 8-55):**
-Five geometric SVG icons, each 32x32 viewport, gold accent color (`var(--cm-accent)` = `#B8860B`), 2px stroke width, round linecaps/linejoins:
-
-1. **Welcome** — five-pointed star (polygon points)
-2. **Graph View** — circle with inner concentric circle + radiating line + dashed connection (represents node with edge)
-3. **Resolve** — two connected circles with arrowhead (dependency chain)
-4. **Create** — circle with "+" crosshairs (add/create)
-5. **Ready** — circle with checkmark polyline (completion)
-
-**Design quality assessment:**
-- The 2px stroke weight matches the app's sharp/architectural aesthetic (2px border-radius, 2px borders throughout)
-- The gold accent color ties the icons to the LuxCart palette
-- The geometric style (circles, straight lines, simple polygons) harmonizes with Raleway's geometric sans-serif character
-- The icons are semantic: the graph-view icon shows nested concentric circles (node hierarchy) with a dashed dependency line — it actually represents what CodeMemory does, not just "some graph"
-- The transition from the previous raw-text approach to these SVGs is the single most dramatic first-impression improvement in Round 12
-
-**Minor critique:** The Welcome icon (star) is the weakest. A star suggests "favorite" or "rating" more than "welcome." A compass or a connected node cluster would be more semantically aligned with CodeMemory's identity. The star works aesthetically — it's clean and geometric — but its meaning is less precise than the other four icons.
-
-**Verdict: EXCELLENT.** Low effort, high perceived value. The product's first 30 seconds now look designed, not prototyped.
+The 150ms fadeIn + translateY(-4px) animation on the search dropdown is the right duration and the right direction. The dropdown appears to extend downward from the search bar, creating a spatial anchor. Compare to the Round 12 state (instant appearance) — the difference is subtle but meaningful. It's the animation equivalent of a well-chosen typeface: you don't notice it's good, you just don't notice anything wrong.
 
 ---
 
-### 2.4 Visual Consistency Improvements (R12-P2, R12-P3, R12-P5, R12-P6)
+### 2.4 View Switch Hints — Micro-Polish Done Right
 
-#### R12-P2: Unified EmptyState Component — VERIFIED
-A shared `EmptyState.tsx` component (icon, title, description, actions[]) replaces three previously-different empty state implementations. Used in:
-- GraphCanvas.tsx:537 — "No memories yet" for empty graph
-- MemoryList.tsx:254 — "No memories yet" for empty list
-- MemoryList.tsx:261 — "No matching memories" for zero filter results
-- Dashboard.tsx:260 — "No memories yet" for empty dashboard
+The "1"/"2"/"3" hints on view switch buttons are the smallest possible intervention that closes the biggest discoverability gap. The hints are:
+- 10px, 55% opacity — visible but subordinate to the main label
+- Separated by a 6px gap from the parent label
+- Only visible when not in a form input (the keyboard handler guards `!isInput`)
+- The title attribute provides screen-reader accessibility
 
-The component accepts a `variant` ('primary' | 'secondary') for action buttons, with primary using the gold accent and secondary using a bordered outline.
-
-#### R12-P3: Unified "Create Memory" Label — VERIFIED
-All four previous variants ("Create Memory", "+ New", "+ NEW", "Create") now use "Create Memory" consistently:
-- Header button: "Create Memory" (App.tsx:638)
-- All EmptyState action buttons: "Create Memory" (EmptyState usage in three views)
-- Onboarding step 3: references "Create Memory" button
-- HelpPanel: "Create Memory" command
-
-#### R12-P5: List Row Hover Transition — VERIFIED
-MemoryList.tsx line 205: `transition: 'background-color 100ms ease'` on table rows, with `onMouseEnter`/`onMouseLeave` setting `backgroundColor` to `var(--cm-bg-hover)` and back to transparent.
-
-#### R12-P6: List Horizontal Padding — VERIFIED
-MemoryList.tsx line 176: `padding: '0 24px'` on the table scroll container. This 24px value matches the Dashboard's container padding and the overall design system spacing. The table no longer stretches edge-to-edge — there's breathing room between the viewport edge and the data.
-
-**Consistency score now: 7.0/10** (up from 5.5/10). The empty states, action labels, hover effects, and spacing are now aligned across views. The remaining inconsistency is the List view's local filter bar vs global SearchBar — a deferred item.
+This is how secondary information should be rendered: present without demanding attention.
 
 ---
 
-### 2.5 Color Palette & Typography (Unchanged Areas)
+### 2.5 Skeleton Loading States — Consistent Language
 
-The LuxCart palette (charcoal #1C1917, cream #FFFBEB, gold #B8860B) and font trio (Cormorant Garamond + Raleway + JetBrains Mono) remain unchanged from previous audits. All previous observations about the palette's strengths (warm distinction from blue-and-white tools) and weaknesses (schema purple clashing with warm-neutrals, info blue cool-toned) still apply. These were deferred to the long-term backlog (negotiation: "SVG icon set and color warm-ification can be implemented in subsequent polish rounds").
+The shimmer skeleton pattern (gradient animation, 1.2s cycle, light-gray bars with rounded corners) now consistently appears in:
+- Graph loading (GraphSkeleton)
+- List loading (ListSkeleton, including filter bar)
+- Dashboard loading (DashboardSkeleton)
+- Wander fetch loading (3 shimmer bars)
+- Validate fetch loading (3 shimmer bars)
+- Resolve loading (3 shimmer bars — new in Round 13)
 
-**Prose styling hierarchy** (index.css lines 214-226) remains: h1 36px, h2 24px, h3 20px, body 16px, th/td 14px, code 14px — a well-considered reading hierarchy that was never part of the 10-11px problem.
-
----
-
-### 2.6 Motion & Transitions — Closing the Gap
-
-**Before Round 12:**
-- Only MemoryDetail panel had entrance animation
-- All other panels and modals "appeared" without transition
-- Score: 4.5/10
-
-**After Round 12:**
-- 7/7 panel/modal entrance points animated
-- Consistent 250ms ease timing
-- Backdrop fade unified across all modals
-- Score: 6.0/10
-
-The improvement is real but the gap between "has animations" and "feels alive" remains:
-- Exit animations missing (dead CSS code)
-- No view-switch transition (content still swaps)
-- No graph interaction micro-animations (node hover, edge highlight)
-- No search dropdown expand/collapse animation
-
-The foundation is now in place. Adding the remaining animations is low-effort (copy the patterns already established). The experience reviewer's Phase 2.4 recommendation from the previous audit ("consistent 200ms ease-out transitions on all panel entrances would transform perceived quality") is 85% fulfilled.
+The consistency across all loading states creates a coherent visual language. A user who sees the shimmer bars once can infer the meaning in every other context. This is the correct design pattern — the loading state communicates "data is coming" through a single, recognizable visual system.
 
 ---
 
 ## Phase 3: Product Imagination
 
-### 3.1 "Aha Moment" Status — Improved Visibility, Same Distance
+### 3.1 Feature Proposals
 
-The core aha moment ("I clicked Resolve and watched my entire thinking chain animate across the graph") remains 3-4 clicks away. No structural change to the discovery path was made in Round 12.
+#### Proposal 1: Heat-Map Dashboard with Decay Visualization
 
-**What improved:**
-- The "Validate Again" button (R12-UX3) means users who ran validation and want to re-check don't need to close and re-open the modal — a subtle but real friction reduction
-- The overview time decay (R12-UX5) means the backend now ranks memories by "recent relevance" rather than "total access count" — this will surface different memories over time, potentially leading users to discover new resolve targets
+**Problem:** The unified decay model (R13-M1-M4) exists in the backend but is invisible on the frontend. Users have no way to see which memories are "cold" or at risk of decay.
 
-**What's still missing:**
-- "Resolve" in the graph node right-click context menu (deferred from previous Nice-to-have #11)
-- Default auto-resolve on node click (deferred from Feature Idea #18)
-- Resolve action in search dropdown results (deferred from Feature Idea #19)
+**Proposal:** Add a "Memory Health" card to the Dashboard that shows:
+- A horizontal bar chart of last-access recency (color gradient: warm orange for <7 days, neutral grey for 7-30 days, cool blue for 30+ days)
+- Memory count by access recency bucket ("0-7 days", "7-30", "30-90", "90+")
+- A "suggested review" list: top 3 memories with highest decay score (lowest access_count * decay)
+- The `stability` field surfaced per-memory so users can adjust half-life
 
-### 3.2 Feature Proposals for Next Round
+**Effort:** 2-3 days. Backend: expose stability/last_access/days_since in `/api/memories` and `/api/stats` (trivial, ~10 lines). Frontend: new Dashboard card with bar chart (reuse existing stat patterns), new "Memory Health" section (~200 lines).
 
-Building on the previous audit's 22-item recommendation list and the negotiation outcomes:
-
-#### 1. Resolve from Search Results (Low Effort, High Impact)
-
-Add a small "Resolve ->" action to each search result item in the global SearchBar dropdown. Clicking it would close the search dropdown, switch to the Graph view, and auto-trigger resolve on that memory with default settings.
-
-**Why now:** Search is the most-used interface. Resolve is the most powerful feature. Connecting them turns "find a memory" into "understand a memory in context" — a two-click path to the aha moment.
-
-**Implementation:** The SearchBar already has the memory ID. Adding a small button per result that calls an `onResolve(id)` callback would take ~30 lines of change.
-
-#### 2. Wiring Exit Animations (Low Effort, High Impact)
-
-The exit animation CSS is written. The missing piece is a small animation wrapper component that:
-1. Receives `isOpen` prop and children
-2. When `isOpen` goes false, applies exit animation class
-3. Listens for `animationend` event
-4. Unmounts children
-5. When `isOpen` goes true, mounts children immediately (entrance animation handled by existing CSS class)
-
-**Why now:** The CSS is dead code. The entrance animations set an expectation that closing should also animate. Users who see a panel slide in expect it to slide out. This is a single reusable component that would apply to all 7 panel/modal sites.
-
-#### 3. Detail Panel Badge Font Size Fix (Low Effort, Trivial)
-
-MemoryDetail.tsx lines 266-267 call `<StatusBadge>` and `<MaturityBadge>` without `fontSize` override. Adding `opts={{ fontSize: 12 }}` is a one-line per badge change. The detail panel is the most-read surface — its badges shouldn't be smaller than the list view's.
-
-### 3.3 Something Worth Removing — Revisited
-
-The previous audit's recommendation to remove the List view's local filter bar was **accepted conceptually but deferred** (negotiation line 57-59). The rationale: "removing it requires adding 'Show all N results in List view' to the global search dropdown — this is a search feature refactor, not a simple deletion."
-
-**Re-evaluation after Round 12:** The local filter bar and the global SearchBar continue to coexist. The cognitive cost remains — users have two search interfaces with different behaviors. This should remain a backlog priority, but not before the higher-impact items above (exit animations, Resolve from search, badge font fix).
+**Why this matters:** CodeMemory's core differentiator is structured recall — knowing what to remember when. A decay heat-map visualizes this differentiator. Without it, CodeMemory is indistinguishable from a YAML frontmatter note-taking app with a graph view.
 
 ---
 
-## Phase 4: Consistency & Comparison
+#### Proposal 2: "Resolve in Place" Inline Context Preview
 
-### 4.1 Cross-View Consistency (Post-Round 12)
+**Problem:** The Search-to-Resolve flow requires the MemoryDetail panel to open after clicking Resolve. For quick context-checking during search, the user loses their search results.
 
-| Aspect | Graph | List | Dashboard | Status |
-|--------|-------|------|-----------|--------|
-| Font sizing | 11px (node labels) / 12px (toolbar) | 12px | 12px | 85% aligned |
-| Empty state | Shared EmptyState | Shared EmptyState | Shared EmptyState | **ALIGNED** |
-| Action label | "Create Memory" | "Create Memory" | "Create Memory" | **ALIGNED** |
-| Panel animation | None (graph is full-width) | Detail slides in | Modals scale+fade in | 7/7 entrances done |
-| Hover effect | Cytoscape defaults | 100ms bg-color transition | Tag cloud interactive | Improved |
-| Container padding | 24px toolbar padding | 24px table padding | 32px Dashboard padding | **ALIGNED** (24px base) |
-| Search behavior | Cytoscape filtering | Local filter bar | No per-view search | Still fragmented |
-| Keyboard access | 1 for Graph | 2 for List | 3 for Dashboard | **NEW** (R12-P4) |
+**Proposal:** Add a "Preview Context" option (Shift+Click on search result or a "PREVIEW" button alongside "RESOLVE") that expands the search result row inline to show the first 2-3 resolved nodes without leaving the search dropdown. This enables rapid scanning:
 
-**Score: 7.5/10** (up from 5.5/10). The font sizing, empty states, action labels, container padding, and keyboard navigation are now aligned. Panel animations are consistent across all slide-out panels. The remaining inconsistency is search behavior (3 views, 2.5 search interfaces) — a deferred item.
+```
+Search: "risk"
+┌─────────────────────────────────────────────────┐
+│ user/investment/risk-tolerance          RESOLVE │
+│ ▼ Preview:                                     │
+│   └─ [1/3] risk-tolerance (atom)               │
+│        中高风险偏好，可承受30%回撤              │
+│   └─ [2/3] current-holdings (atom)             │
+│        NVDA 15%, SOXL 10%... (summary)         │
+│   └─ [3/3] context (atom) — SKIPPED            │
+│                                  [Open in Panel] │
+└─────────────────────────────────────────────────┘
+```
 
-### 4.2 Competitive Positioning (Unchanged)
+**Effort:** 2 days. New API endpoint or reuse `/api/resolve` with `depth=required` and `budget=500`. Frontend: expandable row with conditional fetch on expand. Lazy-loading: only fetch when preview is requested.
 
-CodeMemory's unique strengths remain:
-- DAG-based explicit dependency resolution (no competitor)
-- Resolve-to-prompt for LLM context assembly (no competitor)
-- MCP server integration (no competitor)
-- Warm, crafted aesthetic with deliberate font choices (vs tool monoculture)
-- Time-decay overview for recency-weighted recall (NEW — R12-UX5)
-
-The competitive gap in ecosystem breadth (Obsidian's 1,000+ plugins, Notion's team features) is structural and intentional. CodeMemory should continue to compete on depth, not breadth.
+**Why this matters:** This is the VSCode "Peek Definition" pattern applied to memory resolution. It enables the user to confirm relevance without context-switching.
 
 ---
 
-## Prioritized Recommendations
+#### Proposal 3: Temporal Snapshot Comparison
 
-### Critical (blocking defects — NONE remain)
+**Problem:** Memories accumulate versions over time (change_log, version field in frontmatter), but there's no way to visually compare versions or understand what changed between two points in time.
 
-All three Critical items from the previous audit are resolved:
-1. ~~Validate modal race condition~~ -> R12-B1: FIXED
-2. ~~List TruncatedCell tooltip~~ -> R12-B2: FIXED
-3. ~~Form validation error clearing~~ -> R12-B3: FIXED (validation errors clear; server errors persist by design)
+**Proposal:** Add a "History" panel accessible from MemoryDetail that shows:
+- A timeline of version changes (version number, date, change_note)
+- Side-by-side diff view between any two versions
+- Count of times the memory was resolved (access_count trend)
+- Visual indicator of when the memory was last accessed relative to other memories in the dataset
 
-**No new Critical defects found.** This is the first audit in CodeMemory's history with a clean Critical column.
+**Effort:** 3-4 days. The `changelog` command already exists in `src/codememory/changelog.py`. The backend needs a new `/api/memories/{id}/history` endpoint. Frontend: a "History" tab in MemoryDetail or a separate panel.
 
----
-
-### Important (should fix before next product review)
-
-1. **Wire exit animations.** The `panel-slide-exit`, `modal-fade-out`, and `backdrop-fade-out` CSS classes exist but are never applied. Create a reusable `AnimatedPanel` wrapper component that delays unmount until `animationend`. Apply to all 7 panel/modal sites. Effort: ~30 minutes. Impact: completes R12-UX2.
-
-2. **Fix remaining sub-12px font sizes.** Three locations:
-   - MemoryDetail.tsx: add `opts={{ fontSize: 12 }}` to StatusBadge and MaturityBadge calls (2 lines)
-   - SearchBar.tsx: raise "fuzzy matches" indicator from 9px to 11px (1 line)
-   - SearchBar.tsx: raise match quality badge from 9px to 11px (1 line)
-   The graph node labels at 11px in Cytoscape are a defensible exception (canvas rendering has different legibility characteristics).
-
-3. **Add "Resolve" action to search result items.** A small "Resolve ->" button or link on each search result in the global SearchBar dropdown. Closes the search, switches to graph view, auto-triggers resolve. Effort: ~30 minutes. Impact: turns the aha moment from 4 clicks to 2 clicks from the most-used interface.
-
-4. **Display keyboard shortcut hints on view switcher buttons.** Add small "1" / "2" / "3" indicators (superscript or muted color) next to the Graph/List/Dashboard button labels. Users discover the shortcuts organically rather than needing to press "?" or read the Help panel. Effort: ~15 minutes.
+**Why this matters:** Temporal comparison is the missing dimension of CodeMemory's data model. The product stores versions but only shows the current state. Connecting "what is" to "what was" makes the version history useful rather than archival.
 
 ---
 
-### Nice-to-have (Polish)
+#### Proposal 4: Memory Graph "Stroll Mode" (Serendipitous Exploration)
 
-5. **Search dropdown expand/collapse animation.** A 150ms fade-in on the dropdown appearing, matching the modal/panel animation language. Currently the dropdown appears instantly.
+**Problem:** The graph view shows all nodes and edges but requires the user to know what they're looking for. Wander provides random recall but without spatial context.
 
-6. **View-switch transition.** A subtle crossfade (150ms) when switching between Graph/List/Dashboard views, instead of the instant content swap. Effort: ~15 lines of CSS.
+**Proposal:** Add a "Stroll" button in the Graph view that:
+1. Highlights a random starting node (similar to Wander but visual)
+2. Traces its dependency chain one hop at a time (animated edge highlighting)
+3. Shows each node's summary as a tooltip that moves along the path
+4. Allows the user to "fork" the stroll at any node (click to follow a different import)
 
-7. **Graph node hover micro-animation.** A subtle scale (1.0 -> 1.05) or glow effect on Cytoscape node hover. Cytoscape supports this natively via `transition-property` in the style sheet.
+**Effort:** 3 days. Reuse the Wander backend. Frontend: D3 force-directed animation with `d3.transition()` on node highlight + edge stroke. Tooltip component that follows the active node.
 
-8. **Remove List view local filter bar, consolidate into global SearchBar.** As accepted in the negotiation but deferred. The approach: add "Show all N results in List view" action to the global SearchBar dropdown, then remove the local filter bar. Effort: ~1 hour.
-
-9. **Markdown preview in MemoryForm body.** A toggle between "Edit" and "Preview" tabs above the body textarea. Markdown content renders live. Effort: ~1 hour.
-
----
-
-### Feature Ideas (for backlog)
-
-10. **DAG-Aware Editing** — Show "N memories depend on this" in the edit form before save. Surfacing backlinks during editing transforms it from a faith-based act to an informed decision.
-
-11. **Memory Reminders** — Scheduled re-engagement prompts for aging memories. Add `review_cadence` field, Dashboard "Due for Review" section.
-
-12. **Graph Diff** — Visual version comparison of DAG topology changes between versions. Split-panel view showing version N-1 vs N with changed nodes highlighted.
-
-13. **Settings Panel Expansion** — From 3 items to meaningful configuration (default budget, default depth, review cadence defaults, notification preferences). Currently, the Settings panel feels like a placeholder.
-
-14. **Command Palette (Ctrl+P)** — Bridge CLI and UI. Type `create user/ideas/...`, `resolve user/investment/context`, `validate`, `wander` directly from the UI command bar.
+**Why this matters:** The graph visualization is currently a static map — you have to know your destination. Stroll Mode makes it a guided tour. This is the spatial equivalent of Wander's temporal recall.
 
 ---
 
-*End of audit report.*
+### 3.2 Removable Feature: List View Local Filter Bar
+
+The List view (MemoryList.tsx) has a local filter bar that duplicates 80% of the global SearchBar's functionality (filter by type, status, maturity, tags, text query). The local filter operates on client-side data only (already-loaded memory summaries), while SearchBar queries the backend with full-text search and fuzzy matching.
+
+**Why remove it:**
+- **Duplication:** Two filter UIs with overlapping behavior create user confusion about which one to use
+- **Inconsistency:** Local filter gives different results than SearchBar (local: client-side substring; SearchBar: server-side exact+fuzzy+difflib)
+- **Screen real estate:** The filter bar takes up ~40px of vertical space in the list view, competing with the header's SearchBar
+- **Maintenance:** Changes to filter logic must be coordinated across two code paths
+
+**What to keep instead:** The global SearchBar has tags, type, status, and maturity filters already. When the list view is active, applying a SearchBar filter could scroll the list to matching items and dim non-matching rows (rather than removing them entirely).
+
+**Effort to remove:** 1 hour. Remove the filter bar JSX and state from MemoryList.tsx. Add SearchBar filter synchronization to the List view.
+
+---
+
+### 3.3 The "Aha Moment" Analysis
+
+**Current strongest aha moment: Search-to-Resolve (new in Round 13)**
+
+When a user types a memory ID fragment in search, sees the "RESOLVE" button, clicks it, and sees a full DAG context with "1/1 risk-tolerance (atom)" with full body text appear — this is the moment where the DAG model clicks. A search that returns context rather than a single document is unique among note-taking tools.
+
+**Missing aha moment: Decay-Driven Overview**
+
+A dashboard that shows "3 memories haven't been accessed in 30+ days" with a visual heat gradient — this is the feature that makes users say "oh, it's managing my memory, not just storing it." The backend has all the data. The frontend doesn't show it. This is the single highest-impact feature gap in the product.
+
+**Distant aha moment: Cross-Dataset Resolution**
+
+What if resolving "user/investment/context" could pull in a dependency from the "companion" dataset? Or what if the software-architecture schema templates could be used in the investment dataset? Cross-dataset resolution would make CodeMemory feel like a unified knowledge fabric rather than isolated project folders. This requires architectural changes to the resolve engine but is a natural extension of the DAG model.
+
+---
+
+## Phase 4: Prioritized Recommendations
+
+### Critical (Before Next Feature Round)
+
+| # | Item | Effort | Justification |
+|---|------|--------|---------------|
+| 🔴 1 | **Wire modal exit animations** — Import `useExitAnimation` into Dashboard.tsx Modal component, apply `modal-fade-exit` / `backdrop-fade-exit` classes on close. Wire HelpPanel with useExitAnimation. | 1 hour | Most visible polish defect. Every modal close reminds users the product is unfinished. The CSS exists. |
+| 🔴 2 | **Fix 9px fonts** — HelpPanel (2 occurrences) and MemoryDetail (1 occurrence) to 11px minimum. | 30 minutes | Accessibility: 9px text is literally smaller than a medicine bottle label. These are NOT decorative elements — they are instructional text the user is expected to read to learn the product. |
+| 🔴 3 | **Bump Search Resolve button to 12px** — Change fontSize from 10 to 12, padding from `1px 8px` to `3px 12px`. | 5 minutes | A flagship Round 13 feature shipping at a deprecated size undermines the round's thesis. |
+
+### Important (This Round or Next)
+
+| # | Item | Effort | Justification |
+|---|------|--------|---------------|
+| 🟡 4 | **Expose decay data to frontend** — Add `access_count`, `last_access`, `days_since_last_access`, `stability` to `/api/memories` response. Add `decay_risk` array to `/api/stats` response. | 30 minutes backend, 2 hours frontend | The decay model exists but is invisible. Without frontend exposure, R13-M1-M4 is academic infrastructure, not a user-facing feature. |
+| 🟡 5 | **Add "Resolve" button to graph node context menu** — The right-click menu on graph nodes should include a "Resolve" option that opens the MemoryDetail panel with resolved context. | 1 hour | The graph view has no path to the Resolve flow. A user looking at a node in the graph must navigate to List view or Search to resolve it. |
+| 🟡 6 | **Heat-map maturity distribution in Dashboard** — Show maturity counts with a visual bar chart (horizontal bars, color-coded: proven=amber, verified=green, draft=grey). Reuse existing stat card pattern. | 1.5 hours | The Dashboard currently shows maturity as raw numbers only. A visual distribution would make the "memory health" concept tangible before the full decay visualization arrives. |
+
+### Nice to Have (Future Rounds)
+
+| # | Item | Effort | Justification |
+|---|------|--------|---------------|
+| 🟢 7 | **Search Resolve button tooltip** — On first use or hover, show a tooltip: "Resolve full context via DAG dependencies." | 30 minutes | Improves discoverability of the Resolve button. |
+| 🟢 8 | **Remove List view local filter bar** — Remove duplicate filter UI from MemoryList.tsx. | 1 hour | Reduces UI duplication and prevents inconsistent filter results. |
+| 🟢 9 | **Fix 11px sub-12px stragglers** — Search snippet (11px), match indicator (11px), undo detail (11px) to 12px. | 20 minutes | Completes the font sizing consistency initiative. |
+| 🟢 10 | **Add tooltip to maturity badges** — Hovering a "draft" badge should show: "Draft: idea captured, not yet validated." | 1 hour | Maturity levels are a CodeMemory-unique concept. Users need help understanding the semantics. |
+
+### Product Strategy
+
+| # | Item | Effort | Justification |
+|---|------|--------|---------------|
+| 💡 11 | **Decay Heat Dashboard** — Proposal 1 above. Surface the decay model visually. | 2-3 days | The single highest-impact product feature not yet built. Transforms CodeMemory from a note-taking app to a memory management system. |
+| 💡 12 | **Temporal Snapshot Comparison** — Proposal 3 above. Version history with diff view. | 3-4 days | The version history exists (change_log in frontmatter) but is invisible. Making it interactive unlocks the "how did I get here" question. |
+| 💡 13 | **Graph Stroll Mode** — Proposal 4 above. Animated walkthrough of dependency chains. | 3 days | The spatial equivalent of Wander's temporal recall. Makes the graph view explorable for users who don't know what they're looking for. |
+
+---
+
+## Round 13 Verdict Summary
+
+| Change | Description | Status | Notes |
+|--------|-------------|--------|-------|
+| R13-A1 | Panel exit animations hook | **PARTIAL** | Panels wired; modals not wired; modal CSS dead code |
+| R13-A2 | Sub-12px font fixes | **INCOMPLETE** | Badges raised; 3 remaining at 9px, 4 at 10px, 3 at 11px |
+| R13-A3 | Search dropdown fade-in | **VERIFIED** | 150ms animation, wired to SearchBar |
+| R13-D1 | Search Resolve button | **VERIFIED** | End-to-end flow works; button at 10px (substandard) |
+| R13-D2 | View switch shortcut hints | **VERIFIED** | "1"/"2"/"3" on view buttons |
+| R13-D3 | Resolve loading skeleton | **VERIFIED** | 3 shimmer bars in MemoryDetail |
+| R13-M1-M4 | Decay model unification | **VERIFIED** | Server-side only; not surfaced to frontend API |
+| R13-I1 | OpenAPI /docs | **VERIFIED** | Swagger UI at /docs, 14 endpoints documented |
+
+**Pass rate: 8/8 changes have verifiable implementations, but 2 are incomplete (A1 modal gap, A2 remaining sub-12px). Functional core (D1-D3, M1-M4, I1) is solid. Polish (A1-A3) is uneven — the exit animation gap is the single most visible defect in the current build.**
+
+The round's net impact is positive: Search-to-Resolve is a genuine UX breakthrough, and the decay model unification is correct infrastructure even if invisible today. But the round's ambition statement promised exit animations and font fixes, and it delivered both as unfinished work. The gap between promise and delivery is small in lines of code but large in user perception — 2 hours of work separates the current build from a build where every close is smooth and every word is readable.

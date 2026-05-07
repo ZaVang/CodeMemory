@@ -174,9 +174,11 @@ export interface SearchResultItem {
   maturity: string
   status: string
   snippet: string
-  match_quality?: 'exact' | 'fuzzy'
+  match_quality?: 'exact' | 'fuzzy' | 'filter'
   match_score?: number
   match_fields?: string[]
+  days_since_last_access?: number | null
+  stability?: number
 }
 
 export interface SearchResultsResponse {

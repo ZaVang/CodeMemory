@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { fetchStats, fetchWander, fetchValidate, fetchReindex } from '../api'
 import type { StatsResponse, WanderResponse, ValidateResponse } from '../types'
+import { useExitAnimation } from '../useExitAnimation'
 import EmptyState from './EmptyState'
 
 interface Props {
@@ -21,6 +22,9 @@ export default function Dashboard({ onSelectMemory, onNavigateToFilter, refreshT
   const [validateOpen, setValidateOpen] = useState(false)
   const [wandering, setWandering] = useState(false)
   const [validating, setValidating] = useState(false)
+  // I1: exit animations for wander/validate modals
+  const { visible: wanderVisible, closing: wanderClosing } = useExitAnimation(!!wanderOpen)
+  const { visible: validateVisible, closing: validateClosing } = useExitAnimation(!!validateOpen)
   const [reindexing, setReindexing] = useState(false)
   const [reindexMessage, setReindexMessage] = useState<string | null>(null)
   const reindexTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -448,6 +452,74 @@ export default function Dashboard({ onSelectMemory, onNavigateToFilter, refreshT
             </SectionCard>
           )}
 
+          {/* N1: Decay risk section — memories approaching decay threshold */}
+          {stats.decay_risk && stats.decay_risk.length > 0 && (
+            <div style={{ marginBottom: 24 }}>
+              <SectionCard title={`Decay Risk (${stats.decay_risk.length})`}>
+                <p style={{
+                  fontSize: 12,
+                  fontFamily: 'Raleway, sans-serif',
+                  color: 'var(--cm-text-tertiary)',
+                  marginBottom: 12,
+                  lineHeight: 1.5,
+                }}>
+                  Memories with decay multiplier below 0.1. These have not been accessed recently relative
+                  to their stability half-life and may be at risk of knowledge loss.
+                </p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  {stats.decay_risk.slice(0, 3).map((risk) => (
+                    <div
+                      key={risk.id}
+                      onClick={() => onSelectMemory(risk.id)}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: '8px 12px',
+                        borderRadius: 2,
+                        cursor: 'pointer',
+                        backgroundColor: 'var(--cm-bg-warning-subtle)',
+                        borderLeft: '3px solid var(--cm-warning)',
+                      }}
+                    >
+                      <div>
+                        <div style={{
+                          fontSize: 13,
+                          fontFamily: 'Raleway, sans-serif',
+                          fontWeight: 600,
+                          color: 'var(--cm-text-primary)',
+                        }}>
+                          {risk.id}
+                        </div>
+                        <div style={{ fontSize: 12, fontFamily: 'Raleway, sans-serif', color: 'var(--cm-text-secondary)', marginTop: 2 }}>
+                          {risk.days_since_last_access}d since last access &middot; stability {risk.stability}d
+                        </div>
+                      </div>
+                      <span
+                        style={{
+                          padding: '2px 8px',
+                          borderRadius: 2,
+                          backgroundColor: 'var(--cm-bg-warning-subtle)',
+                          color: 'var(--cm-warning)',
+                          fontSize: 12,
+                          fontWeight: 600,
+                          fontFamily: 'JetBrains Mono, monospace',
+                        }}
+                      >
+                        R:{(risk.decay * 100).toFixed(1)}%
+                      </span>
+                    </div>
+                  ))}
+                  {stats.decay_risk.length > 3 && (
+                    <div style={{ fontSize: 12, fontFamily: 'Raleway, sans-serif', color: 'var(--cm-text-tertiary)', padding: '4px 12px' }}>
+                      +{stats.decay_risk.length - 3} more at risk
+                    </div>
+                  )}
+                </div>
+              </SectionCard>
+            </div>
+          )}
+
           {/* Status distribution */}
           <SectionCard title="Status Distribution">
             <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
@@ -490,8 +562,8 @@ export default function Dashboard({ onSelectMemory, onNavigateToFilter, refreshT
       )}
 
       {/* Wander modal — R12-B1: opens immediately with loading state */}
-      {wanderOpen && (
-        <Modal onClose={() => setWanderOpen(false)}>
+      {wanderVisible && (
+        <Modal onClose={() => setWanderOpen(false)} closing={wanderClosing}>
           <h2
             style={{
               fontSize: 20,
@@ -687,8 +759,8 @@ export default function Dashboard({ onSelectMemory, onNavigateToFilter, refreshT
       )}
 
       {/* Validate results modal — R12-B1: opens immediately with loading state */}
-      {validateOpen && (
-        <Modal onClose={() => setValidateOpen(false)}>
+      {validateVisible && (
+        <Modal onClose={() => setValidateOpen(false)} closing={validateClosing}>
           <h2
             style={{
               fontSize: 20,
@@ -1050,12 +1122,12 @@ function renderGroupedIssues(
   ))
 }
 
-function Modal({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
+function Modal({ children, onClose, closing = false }: { children: React.ReactNode; onClose: () => void; closing?: boolean }) {
   return (
     <>
       <div
         onClick={onClose}
-        className="backdrop-fade-enter"
+        className={closing ? 'backdrop-fade-exit' : 'backdrop-fade-enter'}
         style={{
           position: 'fixed',
           inset: 0,
@@ -1064,7 +1136,7 @@ function Modal({ children, onClose }: { children: React.ReactNode; onClose: () =
         }}
       />
       <div
-        className="modal-fade-enter"
+        className={closing ? 'modal-fade-exit' : 'modal-fade-enter'}
         style={{
           position: 'fixed',
           top: '50%',

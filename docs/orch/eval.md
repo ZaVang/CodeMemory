@@ -1,3 +1,286 @@
+# Evaluator Report — Iteration 14
+
+> **Date**: 2026-05-07
+> **Evaluator**: QA Evaluator (independent verification — all acceptance commands re-run from scratch)
+> **Method**: Zero trust; all acceptance commands, tests, endpoints, code inspections executed fresh against the current working tree
+> **Sprint**: Sprint 14, 第 14 轮追加任务
+
+---
+
+## 1. Checkbox 状态（逐项核对）
+
+| Task | Generator Claim | Evaluator Verdict | Evidence |
+|------|----------------|-------------------|----------|
+| R14-C1: Fix overview decay formula pipeline bug | [x] | **PASS** | `handlers.py:256` reads from `MemoryEntry` (not search dict). `handlers.py:260` reads `entry.days_since_last_access`. `search.py:85-86` now outputs `days_since_last_access` + `stability`. Heat values confirmed different from old formula via manual calculation (see section 3). |
+| R14-C2: Add stability boundary guards | [x] | **PASS** | `models.py:78`: `stability: float = Field(default=14.0, gt=0.0)`. `models.py:111-122`: `@field_validator("stability", mode="before")` rejects <=0, clamps <0.1 to 0.1. `handlers.py:257,346`: runtime `max(stability, 0.1)` safety clamps in overview + wander. |
+| R14-C3: Expose decay fields in API responses | [x] | **PASS** | `/api/memories`: access_count, last_access, days_since_last_access, stability present. `/api/stats`: decay_risk array present. `/api/wander`: stability + days_since_last_access present. `/api/search`: stability + days_since_last_access present. `types.ts`: DecayRiskEntry + decay_risk synced. |
+| R14-I1: Wire modal exit animations | [x] | **PASS** | `Dashboard.tsx` imports `useExitAnimation`, applies to wander/validate states. Modal accepts `closing` prop, applies `modal-fade-exit` / `backdrop-fade-exit` CSS classes. |
+| R14-I2: Fix all sub-12px fonts | [x] | **PASS** | Zero `fontSize: 9` or `fontSize: 10` in DOM UI text. All 7 documented violations fixed. HelpPanel badges 9->11px, MemoryDetail trim badge 9->11px, SearchBar Resolve 10->12px, view hints 10->11px. Interactive elements >=12px. |
+| R14-N1: Dashboard decay risk exposure | [x] | **PASS** | `Dashboard.tsx:455-515`: Decay Risk SectionCard reading `stats.decay_risk`, shows count + top 3 IDs with R values. |
+| R14-N2: Graph node right-click Resolve | [x] | **PASS** | `App.tsx:465`: `handleResolveFromContext` callback. `App.tsx:1326`: `<ContextMenuItem label="Resolve">`. |
+| R14-N3: Remove List view local filter bar | [ ] | **DEFERRED** | Intentionally skipped per plan. Not evaluated. |
+
+**Result: 7/8 tasks fully verified PASS. 1 task (R14-N3) intentionally deferred.**
+
+---
+
+## 2. Acceptance Command Rerun Results
+
+### TypeScript type check
+```
+cd frontend && npx tsc --noEmit
+(no output = zero errors)
+```
+**PASS** — Zero type errors reproduces Generator claim.
+
+### Frontend production build
+```
+cd frontend && npx vite build
+✓ built in 338ms
+dist/index.html                   0.48 kB
+dist/assets/index-DzG4uodV.css   14.80 kB
+dist/assets/index-Cyl4NFqr.js   998.97 kB
+```
+**PASS** — Build succeeds. File sizes match Generator report.
+
+### Python unit tests
+```
+PYTHONPATH=src python -m pytest tests/unit/ -v --tb=short
+============================= 57 passed in 0.28s ==============================
+```
+**PASS** — 57/57. Matches Generator.
+
+### Python integration tests
+```
+PYTHONPATH=src python tests/integration_test.py
+Results: 24/24 passed
+All tests PASSED
+```
+**PASS** — 24/24. Matches Generator.
+
+### API tests
+```
+PYTHONPATH=src python -m pytest tests/test_api.py -v --tb=short
+============================== 5 passed in 0.44s ==============================
+```
+**PASS** — 5/5. Matches Generator.
+
+### Backend endpoint regression
+
+| Endpoint | Status | Key findings |
+|----------|--------|--------------|
+| `GET /api/stats` | 200 | `decay_risk` present (empty array for companion — no memories below 0.1 threshold). total=11, validated_count=11. |
+| `POST /api/wander` | 200 | Returns `stability: 14.0`, `days_since_last_access: null` (no-access memory). |
+| `POST /api/validate` | 200 | validated_count=11, error_count=0, warning_count=1 (audit test memory decay — expected). |
+| `GET /docs` | 200 | Swagger UI accessible. |
+| `GET /api/memories?limit=2` | 200 | `access_count`, `last_access`, `days_since_last_access`, `stability` in every entry. |
+| `POST /api/search` | 200 | Results include `days_since_last_access` and `stability`. |
+
+**PASS** — All endpoints respond correctly with decay fields exposed.
+
+---
+
+## 3. CLI Overview Decay Validation (Heat Values + Analysis)
+
+### Companion dataset (`--root examples/companion overview --limit 5`)
+```
+user/feelings/burnout-april       atom  heat: 48 [active] [stale]
+user/preferences/dislike-crowds   atom  heat: 48 [active] [stale]
+user/beliefs/friendship-view      atom  heat: 40 [active] [stale]
+user/feelings/proud-moment        atom  heat: 38 [active] [stale]
+user/preferences/morning-coffee   atom  heat: 38 [active] [stale]
+```
+
+**Manual formula verification for `user/beliefs/friendship-view`:**
+- Data: access_count=20 (from /api/memories), days_since_last_access=0, stability=14.0
+- decay = 0.5^(0/14.0) = 1.0
+- access_bonus = 20 * 1.0 = 20
+- deps count from search: 2
+- Expected heat = 2*10 + 20 = 40
+- **Actual heat = 40. Exact match.**
+
+**R13 bug formula would have produced:** 2*10 + 20*0.1 = 22. Not observed.
+
+**Manual formula verification for `user/context`:**
+- Data: access_count=1, days_since_last_access=7, stability=14.0
+- decay = 0.5^(7/14.0) = 0.5^0.5 ≈ 0.707
+- access_bonus = 1 * 0.707 ≈ 0.7
+- heat = 0*10 + 0.7 = 0 (correctly ranks below top 5)
+
+### Investment dataset (`--root examples/investment overview --limit 5`)
+```
+user/investment/risk-tolerance        atom  heat:141 [active]
+user/investment/semiconductor-thesis  atom  heat:134 [active]
+user/facts/nvidia-earnings            atom  heat: 35 [active]
+user/facts/soxl-composition           atom  heat: 35 [active]
+user/investment/february-buy          atom  heat:118 [active]
+```
+
+Wide variance (35-141) confirms decay differentiation — completely unlike R13's compressed pattern (31,31,21,21,20).
+
+### Verdict
+
+**PASS — The unified decay formula `0.5^(days/stability)` IS correctly activated in the overview path.** The bug described in R-RED-1 (overview reading `days_since_last_access` from search dict which lacked the field, causing fallback to constant `access * 0.1`) is confirmed fixed. Heat values show real differentiation and the manual calculation cross-check matches.
+
+---
+
+## 4. API Decay Field Exposure Verification
+
+All endpoints verified via curl:
+
+| Field | /api/memories | /api/stats | /api/wander | /api/search |
+|-------|:--:|:--:|:--:|:--:|
+| access_count | Yes | -- | Yes | -- |
+| last_access | Yes | -- | Yes | -- |
+| days_since_last_access | Yes | -- | Yes | Yes |
+| stability | Yes | -- | Yes | Yes |
+| decay_risk | -- | Yes | -- | -- |
+
+Frontend type definitions confirmed synced:
+- `DecayRiskEntry` interface (`types.ts:110`): `id: string`, `decay: number`
+- `StatsResponse.decay_risk` (`types.ts:127`): `DecayRiskEntry[]`
+- `WanderResponse`: includes `stability`, `days_since_last_access`
+- `SearchResultItem` (`api.ts`): includes `days_since_last_access`, `stability`
+
+**PASS** — All decay fields exposed across all required API surfaces with frontend types synced.
+
+---
+
+## 5. Stability Boundary Guard Verification
+
+### models.py (lines 78, 111-122)
+```python
+stability: float = Field(default=14.0, gt=0.0, description="...")
+
+@field_validator("stability", mode="before")
+@classmethod
+def _clamp_stability(cls, v: object) -> float:
+    if v is None: return 14.0
+    val = float(v)
+    if val <= 0: raise ValueError(f"stability must be > 0, got {val}")
+    if val < 0.1: return 0.1
+    return val
+```
+
+**Defense layers:**
+1. Field-level: `gt=0.0` Pydantic constraint rejects <= 0 at model construction
+2. Validator: Rejects negative values with clear ValueError, clamps (0, 0.1) to 0.1
+3. Runtime: `handlers.py:257` and `handlers.py:346` apply `max(stability, 0.1)` in overview and wander
+4. None defaulting: Validator returns 14.0 for None input
+
+**PASS** — Defense in depth. Model validation prevents invalid data at rest; runtime clamps guard edge cases at compute time.
+
+---
+
+## 6. Modal Exit Animation Verification
+
+### Dashboard.tsx
+
+**Import and hook usage:**
+- `index.ts:4`: `import { useExitAnimation } from '../useExitAnimation'` (via barrel)
+- Line 26: `const { visible: wanderVisible, closing: wanderClosing } = useExitAnimation(!!wanderOpen)`
+- Line 27: `const { visible: validateVisible, closing: validateClosing } = useExitAnimation(!!validateOpen)`
+
+**Conditional rendering based on visible state:**
+- Wander Modal only renders when `wanderVisible` is true
+- Validate Modal only renders when `validateVisible` is true
+
+**Modal closing prop and CSS classes:**
+- Line 566: `<Modal onClose={...} closing={wanderClosing}>`
+- Line 763: `<Modal onClose={...} closing={validateClosing}>`
+- Line 1125: `function Modal({ children, onClose, closing = false })`
+- Line 1130: `className={closing ? 'backdrop-fade-exit' : 'backdrop-fade-enter'}`
+- Line 1139: `className={closing ? 'modal-fade-exit' : 'modal-fade-enter'}`
+
+**PASS** — The R13 PARTIAL PASS gap is now closed. Both Wander and Validate modals use `useExitAnimation` with `closing` prop wired to CSS exit animation classes. The 250ms exit animation plays on close before DOM unmount.
+
+---
+
+## 7. Sub-12px Font Fix Verification
+
+Scanned all `fontSize` declarations across `frontend/src/`:
+
+| Component | Previous | Current | Verified |
+|-----------|----------|---------|----------|
+| HelpPanel layer badge | 9px | 11px | line 337 |
+| HelpPanel API method badge | 9px | 11px | line 405 |
+| MemoryDetail trim badge | 9px | 11px | line 630 |
+| SearchBar Resolve button text | 10px | 12px | line 309 |
+| App.tsx view shortcut hints | 10px | 11px | lines 678/699/720 |
+| SearchBar "includes fuzzy matches" | 11px | 12px | line 156 |
+| App.tsx archive backlink IDs | 11px | 12px | line 1474 |
+
+**Aggregate check:** Zero instances of `fontSize: 9` or `fontSize: 10` in any DOM text element across all frontend source files. All interactive elements (buttons, links, clickable text) at >= 12px. Decorative non-interactive elements at 11px minimum.
+
+**GraphCanvas.tsx note:** Line 272 has `'font-size': '9px'` in a Cytoscape stylesheet for `node.trim-skipped`. This is a canvas rendering parameter (not a DOM CSS property) for nodes explicitly designed to appear dim/small. Canvas labels scale with graph zoom. Not a regression and not in scope of the DOM text audit.
+
+**PASS** — All seven documented sub-12px DOM text violations confirmed fixed.
+
+---
+
+## 8. Generator Report vs. Actual Comparison
+
+| Generator Claim | Evaluator | Match? |
+|-----------------|-----------|--------|
+| "7/8 tasks complete" | 7/8 PASS + 1 DEFERRED | YES |
+| "TypeScript zero errors" | Zero errors | YES |
+| "Vite build success (395ms)" | Success (338ms) | YES (timing variance normal) |
+| "57/57 unit tests" | 57/57 (0.28s) | YES |
+| "24/24 integration tests" | 24/24 | YES |
+| "5/5 API tests" | 5/5 (0.44s) | YES |
+| "/api/stats: decay_risk present" | decay_risk present | YES |
+| "/api/wander: stability+days" | stability + days_since_last_access present | YES |
+| "/api/validate: 200 OK" | 200 OK, 0 errors | YES |
+| "/api/memories: decay fields" | All 4 fields present | YES |
+| "/api/search: decay fields" | stability + days_since_last_access present | YES |
+| "Overview decay activated" | Verified via manual formula calc | YES |
+| "Companion heat values reflect decay" | Heat values differ from R13 bug | YES |
+| "R14-N3 intentionally skipped" | Confirmed not implemented | YES |
+
+**Result: Generator claims are 100% accurate. All pass claims independently verified and confirmed.**
+
+---
+
+## 9. Pitfalls Compliance Check
+
+| Pitfall | Status | Notes |
+|---------|--------|-------|
+| Sprint 13 PL3: English dataset stale placeholder hash | N/A | Not modified this round |
+| Sprint 4: summary_hash initial value trap | Pre-existing | Companion overview shows [stale] on all memories — known issue from placeholder hashes, not a regression |
+| Sprint 3: access_count precise assertion trap | Avoided | Verification uses >= not == |
+| R14-C1 pitfall (SPRINT.md): heat values will differ from R13 eval | **CONFIRMED** | Heat values match corrected formula, not R13 eval values (31,31,21,21,20) |
+| R14-C2 pitfall (SPRINT.md): gt=0 validator may reject existing data | **VERIFIED SAFE** | All 4 datasets have stability=14.0 on disk; no rejection at load time |
+| R14-C3 pitfall (SPRINT.md): /api/memories shape change needs frontend sync | **VERIFIED** | types.ts synced, zero TypeScript errors |
+| R14-I1 pitfall (SPRINT.md): inline Modal needs `closing` prop | **VERIFIED FIXED** | Modal() now accepts `closing` prop and conditionally applies exit CSS classes |
+
+All in-scope pitfalls confirmed addressed or verified as non-issues.
+
+---
+
+## 10. New Pitfalls to Append
+
+None identified. The sprint document already includes all four anticipated pitfalls (R14-C1, C2, C3, I1). No new traps emerged during independent verification.
+
+---
+
+## 11. Decision: COMPLETE
+
+**7/8 tasks fully verified PASS. 1 task (R14-N3) intentionally deferred per plan.**
+
+- 57/57 unit tests, 24/24 integration tests, 5/5 API tests: zero regressions, zero failures.
+- TypeScript: zero errors.
+- Vite build: success.
+- All 6 backend endpoints respond correctly with decay fields exposed.
+- The critical overview decay formula bug (R14-C1 / R-RED-1) is confirmed **fixed**: `handlers.py` now reads `days_since_last_access` from `MemoryEntry` objects, the unified formula `0.5^(days/stability)` produces correct heat values. Manual calculation cross-check passes.
+- Stability boundary guards (R14-C2) provide defense-in-depth: model validation rejects invalid values, runtime clamps guard edge cases.
+- All backend and frontend decay fields (R14-C3) wired, TypeScript types synced.
+- Modal exit animations (R14-I1) now wired in Dashboard.tsx using `useExitAnimation` — closes the R13-A1 PARTIAL PASS gap.
+- Sub-12px fonts (R14-I2) all fixed: zero 9px/10px DOM text remains.
+- Dashboard decay risk section (R14-N1) functional.
+- Graph node right-click Resolve (R14-N2) wired.
+
+---
+
 # Evaluator Report — Iteration 13
 
 > **Date**: 2026-05-07
@@ -31,7 +314,7 @@
 |------|--------|---------|----------|
 | R13-M1: 统一衰减模型 | [x] | **PASS** | `handlers.py:253-262`: overview heat = `deps*10 + access*0.5^(days/stability)`。`handlers.py:333-348`: wander(cool) 权重 = `1/(access*0.5^(days/stability) + 1)`。`validate.py:78-103`: `_check_decay()` 使用 R < 0.1 连续阈值（`0.5^(days/stability) < 0.1` → 约 3.3 half-lives）。三套逻辑统一为同一公式。 |
 | R13-M2: 排除循环参与者 | [x] | **PASS** | `handlers.py:227-248`: 通过 `find_cycle_participants()` 预计算 required-imports DAG 的循环参与者。heat 计算时循环成员的 `dependents` 计为 0。非循环 imports 不受影响。 |
-| R13-M3: 预计算 days_since_last_access | [x] | **PASS** | `models.py:64`: `days_since_last_access: int \| None`。`index.py:122-130`: reindex 时计算 `(now - last_access).days`，无访问记录则 None。`resolve.py:320`: resolve 后设为 0。overview heat 循环用 `entry.days_since_last_access` 替代 `datetime.fromisoformat`。 |
+| R13-M3: 预计算 days_since_last_access | [x] | **PASS** | `models.py:64`: `days_since_last_access: int | None`。`index.py:122-130`: reindex 时计算 `(now - last_access).days`，无访问记录则 None。`resolve.py:320`: resolve 后设为 0。overview heat 循环用 `entry.days_since_last_access` 替代 `datetime.fromisoformat`。 |
 | R13-M4: 添加 stability 字段 | [x] | **PASS** | `models.py:78`: `stability: float = Field(default=14.0)`。index.json 验证：所有 4 个数据集 reindex 后均有 `stability: 14.0`（float）。heat 公式使用 `stability` 替代硬编码 14.0。向后兼容：旧 index.json 缺少 stability 字段时 Pydantic 自动填充 14.0。 |
 
 ### 第四梯队：基础设施
@@ -104,7 +387,7 @@ curl -s -o /dev/null -w "%{http_code}" http://localhost:8000/openapi.json
 
 ### CLI overview 热力输出（衰减模型验证）
 ```
-CODEMEMORY_ROOT=examples/investment PYTHONPATH=src python -m codememory.cli overview
+CODEMORY_ROOT=examples/investment PYTHONPATH=src python -m codememory.cli overview
 → user/investment/risk-tolerance        heat:31 [active]
    user/investment/semiconductor-thesis  heat:31 [active]
    user/facts/nvidia-earnings            heat:21 [active]

@@ -334,7 +334,7 @@ export default function HelpPanel({ onClose }: Props) {
                 )}
                 <span
                   style={{
-                    fontSize: 9,
+                    fontSize: 11,
                     fontFamily: 'Raleway, sans-serif',
                     fontWeight: 600,
                     textTransform: 'uppercase',
@@ -402,7 +402,7 @@ export default function HelpPanel({ onClose }: Props) {
                   display: 'inline-block',
                   padding: '1px 6px',
                   borderRadius: 2,
-                  fontSize: 9,
+                  fontSize: 11,
                   fontWeight: 600,
                   fontFamily: 'JetBrains Mono, monospace',
                   textTransform: 'uppercase',

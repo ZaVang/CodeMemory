@@ -82,6 +82,8 @@ def search(
             "last_access": entry.last_access,
             "dependents": dependents,
             "maturity": entry.maturity,
+            "days_since_last_access": entry.days_since_last_access,
+            "stability": entry.stability,
         })
 
     results.sort(key=lambda r: (-r["dependents"], -r["access_count"], r["id"]))

@@ -1,216 +1,202 @@
-# Negotiation — Round 13
+# Negotiation — Round 14
 
 **Date:** 2026-05-07
-**Context:** Three Reviewer reports (product-audit-report.md, evolution-audit-report.md, research-audit-report.md) assessed against Round 12 (15/15 PASS, zero regression, first zero-Critical audit).
+**Context:** Three Reviewer reports (product-audit-report.md, evolution-audit-report.md, research-audit-report.md) assessed against Round 13 (10/11 FULL PASS + 1 PARTIAL PASS, 86/86 tests, one CRITICAL bug discovered by Researcher).
 
 ---
 
-## 体验官建议
-
-### Important
-
-#### 建议 1（体验官 Important #1）: Wire exit animations
-- **决策**：接受
-- **理由**：入场动画 CSS 已在 R12-UX2 中写完并正常运作，但 `panel-slide-exit` / `modal-fade-out` / `backdrop-fade-out` 三种退场 CSS class 从未被任何组件引用——实质上是死代码。体验官在 Phase 2.2 的详细分析已证明：关闭面板时 DOM 立即消失，退场 CSS 无 DOM 可动画。接入退场动画让入场动画有了"另一只靴子落地"的完成感——从 85% 完成推进到 100%。创建一套复用机制（延迟卸载直到 `animationend`）是低成本的解决方案，一次实现覆盖全部 7 个面板/模态入口。
-- **本轮行动**：A1
-
-#### 建议 2（体验官 Important #2）: Fix remaining sub-12px font sizes
-- **决策**：接受
-- **理由**：R12-UX1 将最小交互字号提升到了 12px，但体验官在 Phase 2.1 的代码审查中发现了 4 处遗漏——详情面板的 StatusBadge/MaturityBadge 缺少 fontSize 覆写（11px）、搜索栏 fuzzy matches 标签（9px）、搜索栏 match quality badge（9px）。4 行变更即可完成，没有布局风险。详情面板是最常被阅读的视图，它的徽章字号不应比列表视图的更小。图节点标签（11px Cytoscape）被体验官明确标记为"可辩护的例外"——Canvas 渲染有不同于 DOM 的可读性特征。
-- **本轮行动**：A2
-
-#### 建议 3（体验官 Important #3）: Add "Resolve" action to search result items
-- **决策**：接受
-- **理由**：这是本轮单一最高价值的发现路径改进。搜索是最常用的界面，Resolve 是最强大的功能——当前它们之间无任何连接。在搜索结果旁加一个"Resolve →"按钮，将 aha moment 从 4 次点击压缩到 2 次搜索加一次点击。体验官预估约 30 行变更，属于低投入。唯一需要关注的是跨组件回调——SearchBar 需要触发 Graph 视图切换和 resolve 调用，但 SearchBar 已经存在于顶层 App 控制下，数据流是可行的。
-- **本轮行动**：D1
-
-#### 建议 4（体验官 Important #4）: Display keyboard shortcut hints on view switcher buttons
-- **决策**：接受
-- **理由**：快捷键 1/2/3 已在 R12-P4 中实现，但完全没有可见提示——用户只能在 Help 面板中发现它们。在视图切换按钮标签旁添加小号 "1" / "2" / "3" 提示，让快捷键被自然发现而非需要文档搜索。体验官预估约 15 分钟变更——极低的投入产出比。
-- **本轮行动**：D2
-
----
-
-### Nice-to-have
-
-#### 建议 5（体验官 Nice-to-have #5）: Search dropdown expand/collapse animation
-- **决策**：接受
-- **理由**：搜索下拉框当前"闪现"而无过渡，与面板/模态的 250ms 动画语言不一致。150ms fade-in 是约 3 行 CSS 的变更，且搜索下拉框已经是条件渲染组件——技术模式已有先例。低投入，完成"全应用动画一致"的最后一块拼图。
-- **本轮行动**：A3
-
-#### 建议 6（体验官 Nice-to-have #6）: View-switch transition
-- **决策**：延期
-- **理由**：视图切换时添加 150ms crossfade 确实是低成本的（约 15 行 CSS），但本轮的任务密度已经足够高。且视图切换过渡与退场动画（A1）共享相同的技术模式——等退场动画的复用机制稳定后，视图过渡可以沿用同一套方案，避免重复设计。下轮评估。
-- **本轮行动**：N/A
-
-#### 建议 7（体验官 Nice-to-have #7）: Graph node hover micro-animation
-- **决策**：延期
-- **理由**：Cytoscape 原生支持 `transition-property`，实现成本低。但图动画与退场动画（A1）和搜索下拉动画（A3）在技术模式上不同（Canvas vs DOM），不能复用本轮建立的动画模式。且图节点 hover 反馈的实际用户感知价值低于退场动画和搜索下拉——用户关闭面板的频率远高于 hover 图节点。下轮评估。
-- **本轮行动**：N/A
-
-#### 建议 8（体验官 Nice-to-have #8）: Remove List view local filter bar, consolidate into global SearchBar
-- **决策**：延期
-- **理由**：这是 R12 negotiation 中已接受概念但延期的项目，本轮继续延期。理由不变：移除本地过滤条需要先在全局搜索下拉中添加"Show all N results in List view"功能——这是搜索功能的扩展，不是简单的删除。搜索功能扩展应在一个聚焦搜索的独立轮次中处理（届时可同步解决全文正文搜索的缺口）。
-- **本轮行动**：N/A
-
-#### 建议 9（体验官 Nice-to-have #9）: Markdown preview in MemoryForm body
-- **决策**：延期
-- **理由**：需要新建 UI 组件（Markdown 渲染面板 + Edit/Preview 切换器），成本中等。属于独立的编辑体验改进轮次的范围，不应在本轮打磨轮次中混入。
-- **本轮行动**：N/A
-
----
-
-### Feature Ideas（建议 10-14）
-
-- **DAG-Aware Editing** (建议 10) / **Memory Reminders** (建议 11) / **Graph Diff** (建议 12) / **Settings Panel Expansion** (建议 13) / **Command Palette** (建议 14) — 全部纳入长期 backlog。这些是 R12 审计中已记录的方向，本轮无新增信息改变其优先级。
-
----
-
-## 进化策略师建议
+## 产品体验官建议（Product Audit 7.9/10）
 
 ### Critical
 
-#### 建议 C1（进化策略师 Critical #C1）: Full-text body search
-- **决策**：延期——计划在搜索聚焦轮次中处理
-- **理由**：进化策略师将其标记为"the single biggest functional gap vs every competitor"。这个判断完全正确——CodeMemory 的搜索只覆盖 ID/summary/tags/metadata 而不覆盖 body 文本，确实是与 Obsidian/Notion/Mem.ai 的最大功能差距。但"Medium"effort 的估计过于乐观——body 搜索需要后端搜索管道变更（搜索循环中加载 body 文本、匹配算法扩展、性能考虑）、前端结果展示变更（body 匹配片段的高亮显示）、以及 API 响应格式的扩展。这不是本轮"不超过 50 行变更"的任务类型。适合在一个搜索聚焦轮次中与建议 C4（前端 body 搜索接线）、建议 8（List 过滤条整合）一并处理。
-- **本轮行动**：N/A
+#### 建议 1（体验官 Critical #1）: Wire modal exit animations to Wander/Validate/Archive modals and HelpPanel
+**产品体验官判定 Round 13 为 PARTIALLY IMPLEMENTED — 3/6 个 UI 关闭点缺少退场动画。**
+- **决策：** 接受 — 纳入 I1
+- **理由：** `useExitAnimation` hook 已创建并证明可用于 3 个面板（MemoryDetail、Settings、MemoryForm）。CSS 退场类（`modal-fade-exit`、`backdrop-fade-exit`）存在于 index.css，但目前为死代码——从未被任何组件引用。Wander、Validate 和 Archive 模态在关闭时瞬间消失，与面板平滑的退出动画形成鲜明对比。修复是机械性的：将 `useExitAnimation` 集成到 Dashboard 的 `Modal()` 函数和 App.tsx 的 Archive 确认中。约 25 行。这是当前构建中最明显的单一抛光缺陷。
+- **已解决挑战：** 体验官将其标记为"本次构建中最明显的单一抛光缺陷——每次模态关闭都提醒用户产品未完工。"进化策略师将相同的项目标记为 C2（"本轮必须修复"）。Eval 将 R13-A1 记录为 PARTIAL PASS。三个来源全部交汇于此项。
 
-#### 建议 C2（进化策略师 Critical #C2）: Enable OpenAPI /docs endpoint
-- **决策**：接受
-- **理由**：FastAPI 内建 Swagger UI，启用仅需引入 `from fastapi.openapi.docs import get_swagger_ui_html` 并添加一个路由——或者更简单地在 FastAPI app 初始化时设置 `docs_url="/docs"`（默认值）。零代码变更，纯配置打开。对于目标开发者用户，自文档化 API 是第一印象的关键组成部分。
-- **本轮行动**：I1
+#### 建议 2（体验官 Critical #2）: Fix 9px font stragglers in HelpPanel and MemoryDetail
+**产品体验官判定 R13-A2（Sub-12px Font Fix）为 INCOMPLETE — 7 个元素仍在 12px 以下。**
+- **决策：** 接受 — 纳入 I2
+- **理由：** HelpPanel 键盘快捷键参考表（2 处）为 9px。MemoryDetail 的"无额外上下文"文本为 9px。体验官："9px 文本在正常观看距离下确实不可读——比药瓶标签上的小写文字还小。"此外，Search Resolve 按钮以 10px 发布——正是 R13 承诺修复的字号。修复是低级替换——每处 1 行变更，无布局风险。
+- **已解决挑战：** R13-A2 在 EVAL 中被标记为 PASS（仅检查了 Badges 和 SearchBar 微标签），但体验官的逐像素代码审查发现了 7 个残留项。Eval 的验收标准不够严格——"无残留 10px 以下交互文字"错误地排除了 9px 非交互文本（HelpPanel、MemoryDetail 空状态）。
 
-#### 建议 C3（进化策略师 Critical #C3）: Add Resolve loading state
-- **决策**：接受
-- **理由**：点击 Resolve 后 UI 完全冻结 1-3 秒没有任何反馈——体验官和进化策略师都指出这是"任何人第一次使用的抱怨点"。在 Resolve 面板区域添加骨架加载器或旋转指示器是基础 UX 规范。成本低——Resolve 结果区域已有条件渲染逻辑，只需在等待状态时渲染加载组件。
-- **本轮行动**：D3
-
-#### 建议 C4（进化策略师 Critical #C4）: Add body text to frontend search
-- **决策**：延期——与 C1 合并处理
-- **理由**：本质上是 C1 的前端侧对应物。后端 body 搜索先落地，前端接线才能生效。纳入搜索聚焦轮次。
-- **本轮行动**：N/A
-
----
+#### 建议 3（体验官 Critical #3）: Bump Search Resolve button from 10px to 12px
+- **决策：** 接受 — 纳入 I2（与建议 2 合并）
+- **理由：** Search Resolve 按钮——R13 的旗舰新功能——以 `fontSize: 10` 发布。体验官："与它所代表的 R13 论题：'抛光轮次消除 sub-12px 字号' 矛盾。5 分钟修复。"将 fontSize 提升至 12 并将 padding 提升至 `3px 12px`。
 
 ### Important
 
-#### 建议 I1（进化策略师 Important #I1）: Multi-level undo stack
-- **决策**：延期
-- **理由**：单级撤销栈确实是落后的 UX，但升级为多级撤销需要跨组件状态管理重构——当前撤销状态存储在 App.tsx 顶层，undo entry 仅保存最近一次操作。升级为栈（至少 20 深）需要改变 undo entry 的数据结构、Ctrl+Z 的遍历逻辑、以及 Undo toast 的层级展示。这个变更超出本轮"不超过 50 行"的单体任务上限。下轮评估。
-- **本轮行动**：N/A
+#### 建议 4（体验官 Yellow #4）: Expose decay data to frontend API
+- **决策：** 接受 — 纳入 C3
+- **理由：** R13 的衰减模型完全是服务器端——`/api/memories` 端点目前硬编码了一个 10 字段子集，排除了 `access_count`、`last_access`、`days_since_last_access` 和 `stability`。前端仪表盘无法显示衰减信息、访问最近性，也无法实现"记忆健康"面板。在响应形状中添加这些字段的成本极低（约 10 行后端 + 类型定义同步）。这是将来任何衰减可视化功能的必要前提。
 
-#### 建议 I2（进化策略师 Important #I2）: Version diff viewer
-- **决策**：延期
-- **理由**：后端已存储完整版本历史（change_log + version 递增），这是进化策略师指出的"数据在，功能不在"的典型场景。但 diff 查看器需要新建前端组件、diff 算法选择、MemoryDetail 面板扩展——成本中等。应在专门的编辑体验轮次中与 Markdown 预览（体验官 Nice-to-have #9）一并处理。
-- **本轮行动**：N/A
+#### 建议 5（体验官 Yellow #5）: Add "Resolve" to graph node context menu
+- **决策：** 接受 — 纳入 N2
+- **理由：** 图视图目前无 Resolve 流程路径。查看图中某个节点的用户必须切换到 List 视图或使用 Search 才能解析它。在右键菜单中添加"Resolve"选项可在上下文需求点连接图视图与 Resolve 流程。约 15 行前端。
 
-#### 建议 I3（进化策略师 Important #I3）: Graph keyboard navigation
-- **决策**：延期
-- **理由**：箭头键导航图节点 + Enter 打开详情 + Escape 取消——这是交互式图的预期行为。但实现涉及 Cytoscape 事件绑定、focus 管理、与现有图交互（拖拽、缩放、点击）的冲突处理。超出本轮低投入边界。下轮评估。
-- **本轮行动**：N/A
+#### 建议 6（体验官 Yellow #6）: Heat-map maturity distribution in Dashboard
+- **决策：** 延期至 R15
+- **理由：** 视觉成熟度分布（色标柱状图）将"记忆健康"概念变得具体。但本轮优先级低于衰减风险暴露（N1）——N1 建立在 R13 模型之上并实现了体验官的"让衰减可见"指令，成本更低。成熟度可视化需要新的图表组件；衰减风险计数仅复用现有统计卡片模式。
 
-#### 建议 I4（进化策略师 Important #I4）: CSS design token system
-- **决策**：拒绝本轮——纳入中期架构 backlog
-- **理由**：进化策略师正确诊断了"inline styles everywhere"带来的维护摩擦——30+ CSS 自定义属性散落在 main.tsx 中，改变字体需要搜索 14 个组件文件。但提取设计 token 系统是一个架构级变更：需要定义 token 命名约定、迁移 14 个组件中的 inline styles、设置 linting 规则防止回退。这不是打磨轮次的任务，而是需要独立轮次的技术债清偿。本轮不做，但记录为中期优先处理项。
-- **本轮行动**：N/A
+### Nice to Have
 
-#### 建议 I5（进化策略师 Important #I5）: Interactive onboarding demo
-- **决策**：延期
-- **理由**：在 onboarding 中嵌入一个 3 节点预建 DAG 让用户点击和 resolve——这是"让用户在第一分钟体验 aha moment"的优秀想法。但需要内嵌小型可交互 Cytoscape 实例，这超出了文本替换的范畴。成本中等，涉及 Cytoscape 容器管理（onboarding 是一个叠加层而非主视图）。下轮评估。
-- **本轮行动**：N/A
+#### 建议 7（体验官 Green #7）: Search Resolve button tooltip
+- **决策：** 接受 — 纳入 N4
+- **理由：** Resolve 按钮小且用途不直观。"Resolve"一词在没有上下文的情况下含义不明。悬停提示解释"解析 DAG 上下文"可在不改变布局的情况下提高可发现性。约 30 分钟。
 
-#### 建议 I6（进化策略师 Important #I6）: Playwright smoke tests
-- **决策**：延期
-- **理由**：前端测试零覆盖是一个被三方 Reviewer 持续指出的结构性缺口。5 个 Playwright 冒烟测试（app 加载、图渲染、节点点击、搜索、CRUD 循环）能以最小投入捕获约 80% 的回归。但 Playwright 是一个新的 dev 依赖（约 200MB 安装），首次配置——浏览器二进制管理、测试运行器集成、CI 接线——成本不可忽略。本轮优先完成可直接写入代码的功能改进，Playwright 在下轮作为独立基础设施任务处理。
-- **本轮行动**：N/A
+#### 建议 8（体验官 Green #8）: Remove List view local filter bar
+- **决策：** 接受 — 纳入 N3
+- **理由：** List 视图的本地过滤条 80% 与全局 SearchBar 功能重叠，但产生不同结果（客户端子串匹配 vs 服务器端模糊匹配）。这种重复让用户困惑并占用屏幕空间。约 1 小时移除。
 
----
+#### 建议 9（体验官 Green #9）: Fix 11px sub-12px stragglers
+- **决策：** 纳入 I2（与建议 2 合并为综合字体修复）
+- **理由：** 搜索片段（当前 11px）和撤销 toast 详情（11px）略微低于最小交互文本的可读性。与 9px 修复一起批量完成。
 
-### Nice-to-have（建议 N1-N7）
+#### 建议 10（体验官 Green #10）: Add tooltip to maturity badges
+- **决策：** 延期至 R15
+- **理由：** 有价值——成熟度是 CodeMemory 独有的概念，用户需要帮助理解语义。但本轮优先完成安全/正确性（C1-C2）和完成未竟任务（I1-I2）。N1-N3 已经构成雄心勃勃的"附加"层；添加另一个工具提示组件将使 Generator 超出容量。
 
-- **N1**（Multi-select in List）/ **N2**（Saved filters）/ **N3**（Git integration guide + GitHub Action）/ **N4**（Quick-capture API）/ **N5**（Tabbed memory inspection）/ **N6**（Graph subgraph extraction）/ **N7**（Keyboard shortcut cheat sheet overlay） — 全部纳入长期 backlog。其中 N3（Git 集成指南）和 N7（快捷键速查表）成本低但战略价值高，建议下轮优先评估。
+### 产品策略建议
 
----
+#### 建议 11（体验官 Decay Heat Dashboard）: Proposal 1 — 完整衰减可视化
+- **决策：** 延期至 R15-R16
+- **理由：** 体验官将其标记为"尚未构建的最高单一影响力产品功能——将 CodeMemory 从笔记应用转变为记忆管理系统。"完全同意这是一种差异化功能。但需要 2-3 天，且需要 C1（Bug 修复）和 C3（API 暴露）作为前提。R14 交付前提条件；R15 构建仪表盘。
 
-### Feature Ideas（建议 F1-F6）
+#### 建议 12（体验官 Temporal Snapshot Comparison）: Proposal 3 — 版本历史与差异视图
+- **决策：** 延期至 R16+
+- **理由：** 后端已存储完整版本历史（change_log），但查看器需要新前端组件 + 差异算法集成。3-4 天。独立的编辑体验轮次候选。
 
-- **F1**（Collaborative resolve via WebSocket）/ **F2**（Memory health score）/ **F3**（DAG-aware editing sidebar）/ **F4**（Scheduled re-engagement）/ **F5**（VS Code extension）/ **F6**（MCP write tools） — 全部纳入长期研究 backlog。这些是差异化战略资产，但都属于需要独立轮次的大型功能。
-
----
-
-## 研究员建议
-
-### High-Impact, Low-Effort
-
-#### 建议 R-H1（研究员 High-Impact #1）: Unify decay models across overview, wander, and validate
-- **决策**：接受
-- **理由**：研究员 Phase 3.1 的诊断精确指出了概念断层——三套并行的衰减逻辑在一个系统中运行，且产生矛盾的行为。overview 用 `0.5^(days/14)`（连续指数衰减），wander(cool) 用原始 `access_count` 权重（完全忽略时间衰减），validate 的 `_check_decay()` 用硬编码 30 天阈值（二元判断）。统一的代价是约 20 LOC 的变更——将 wander 的冷却权重和 validate 的衰减检测都切换到 overview 已有的连续衰减公式。不引入新概念，只是消除内部不一致。
-- **本轮行动**：M1
-
-#### 建议 R-H2（研究员 High-Impact #2）: Exclude cycle participants from dependents count
-- **决策**：接受
-- **理由**：当节点属于不可解析的循环时，它仍然从循环成员获得 dependents 计数——这些计数乘 10 后贡献给 heat 公式。结果：不可解析的记忆因为"被循环引用"而排名高。这是结构上错误的 heat 评分。修复只需在 dependents 计数循环中跳过检测到的循环成员——约 15 LOC。
-- **本轮行动**：M2
-
-#### 建议 R-H3（研究员 High-Impact #3）: Precompute days_since_last_access in the index
-- **决策**：接受
-- **理由**：`datetime.fromisoformat` 在 overview O(n) 循环中的每个记忆上调用是当前最昂贵的单次操作。将 `days_since_last_access` 预计算为整数存储在 IndexData 中——在 reindex 时计算一次，在 access 时更新。约 10 LOC，纯性能优化，零行为变更。
-- **本轮行动**：M3
-
-#### 建议 R-H4（研究员 High-Impact #4）: Add stability field to MemoryEntry (default 14.0)
-- **决策**：接受
-- **理由**：当前 14 天 half-life 对所有记忆一视同仁——一个快速变化的代码库记忆和一个缓慢演变的原则记忆以相同速率衰减。添加一个 `stability: float = 14.0` 字段到 MemoryEntry，在 heat 公式中将 `0.5^(days / 14.0)` 改为 `0.5^(days / stability)`。初始值 14.0 对所有记忆保持向后兼容——行为不变。本轮仅添加字段并埋入公式，不实现 FSRS 动态更新逻辑（那是需要 schema 迁移 + per-access 数学的大型变更）。本轮仅铺路。
-- **本轮行动**：M4
+#### 建议 13（体验官 Graph Stroll Mode）: Proposal 4 — 动画依赖链游览
+- **决策：** 延期至 R16+
+- **理由：** "在空间上与 Wander 的时间召回等价——让图视图对不知道自己要找什么的用户变得可探索。"引人入胜的概念。需要 3 天的大规模 D3/Cytoscape 动画工作。独立轮次候选。
 
 ---
 
-### High-Impact, High-Effort
+## 进化策略师建议（Evolution Audit 7.8/10）
 
-#### 建议 R-HE5（研究员 High-Effort #5）: Implement spreading activation from tag context
-- **决策**：延期
-- **理由**：扩散激活是 ACT-R 模型中 CodeMemory 最大缺失的组件——一个关于风险容忍度的记忆在用户处理风险分析时应自动"热起来"。这是强大的概念，但实现前需要明确设计决策：上下文是由 --tags 参数提供（简单）还是从 active resolve session 推断（复杂）？上下文应该衰减吗？扩散范围应该限制在图中的几跳？这些设计问题应该在实现前回答。本轮不做，但列为中期研究优先项。
-- **本轮行动**：N/A
+### Critical
 
-#### 建议 R-HE6（研究员 High-Effort #6）: Build FSRS-style per-memory stability updates
-- **决策**：延期
-- **理由**：FSRS DSR 模型（Difficulty-Stability-Retrievability）是经过实证的个性化衰减方案，比全局 14 天 half-life 更科学。但实现需要：schema 迁移（两个新 float 字段 + 版本兼容逻辑）、per-access 更新函数（FSRS-4.5 公式）、以及两轮验证确保稳定性收敛而非发散。这是本轮 M4（添加 stability 字段）之后的下一个自然步骤，但需要独立轮次。
-- **本轮行动**：N/A（M4 是铺路项）
+#### 建议 C1（进化策略师 Critical #C1）: Add full-text body search
+- **决策：** 延期 — 与所有竞品相比最大的功能缺口，需独立搜索轮次
+- **理由：** 进化策略师将其标记为"与每款竞品相比最重大的功能缺口"。完全正确——搜索仅匹配 ID、摘要、标签和元数据。一个包含 500 字 body 并讨论"半导体供应链"的记忆不会在搜索"供应链"时出现。但"中等"投入的估计过于乐观——Body 搜索需要后端搜索管道变更、前端结果高亮、以及性能考量。本轮"修复 + 完工"不是构建搜索管道基础设施的正确时机。规划搜索聚焦轮次（建议 R16）作为 R15 的自然后续——那是衰减模型变得用户可见后的时机。
 
-#### 建议 R-HE7（研究员 High-Effort #7）: Memory tier visualization (Hot/Warm/Cold/Frozen)
-- **决策**：延期
-- **理由**：研究员建议将 FSRS 计算结果映射为 Leitner 风格的直观层级——Hot (R>0.7) / Warm (0.3<R<=0.7) / Cold (0.1<R<=0.3) / Frozen (R<=0.1)。这是"数学严谨 + 用户直观"的优秀折中。但需要 FSRS 先落地（建议 R-HE6），然后前端需要为每种层级设计视觉处理——成本约 100 行前端 + 30 行后端。依赖链：M4 → R-HE6 → R-HE7。
-- **本轮行动**：N/A
+#### 建议 C2（进化策略师 Critical #C2）: Complete modal exit animations
+- **决策：** 接受 — 纳入 I1
+- **理由：** 与体验官 Critical #1 交汇。进化策略师："3/6 个 UI 退出点已失效。修复：将 Dashboard `Modal()` 重构为使用 `useExitAnimation` 模式。约 25 行。"
+
+#### 建议 C3（进化策略师 Critical #C3）: Add Playwright smoke tests (5 tests)
+- **决策：** 延期至 R15 — 承诺为 R15 首个任务
+- **理由：** 进化策略师正确诊断了最高风险的技术债务项："15 个 TSX 组件零自动化测试覆盖。每次 UI 回归在手动检查前都是无法检测的。"5 个 Playwright 冒烟测试（应用加载、图渲染、节点点击、搜索、CRUD 循环）将以最小成本捕获约 80% 的回归。但 Playwright 是一个新开发依赖（约 200MB），首次配置——浏览器二进制管理、测试运行器集成、CI 接线——成本不可忽略。**策略承诺：** 如果 R14 在没有追加范围的条件下成功交付 C1-C2 + I1-I2（高概率），Playwright 是 R15 的第一个和最高优先级任务——在引入任何新代码之前建立回归安全网。
+
+### Important
+
+#### 建议 I1（进化策略师 Important #I1）: Add write-capable MCP tools (create_memory, update_memory)
+- **决策：** 延期至 R15-R16
+- **理由：** 闭合 agentic 闭环：Agent 读取上下文（resolve），推理，行动，并将学习结果写回。这是 Mem0 核心价值主张"自编辑记忆"的等价物——但具有显式导入而非概率提取。是 CodeMemory 可建的最强差异化功能。但作为"M"（中型 = ~150 LOC + 安全设计）任务，超出了修复轮次的范围。在衰减模型稳定且用户可见后（R14-R15），MCP 写入在 R16 变得迫切。
+
+#### 建议 I2（进化策略师 Important #I2）: Per-memory stability UI
+- **决策：** 延期至 R15 — 在 C1 衰减 Bug 修复 + C3 API 暴露后，成为 R15 的自然高优先级项目
+- **理由：** `stability` 字段（R13-M4）存在但不可见。MemoryForm/MemoryDetail 中的滑块 + List 视图中的"Decay"列将使衰减模型变得用户可见和用户可控。小型投入（约 40 行前端）。在 R14 使衰减计算**正确**运行后，R15 使衰减参数**可控**是逻辑的下一步。
+
+#### 建议 I3（进化策略师 Important #I3）: "Demo Resolve" button on Dashboard
+- **决策：** 延期至 R15
+- **理由：** 一键演示——切换至 3 节点演示数据集，自动 resolve 决策节点，播放动画，返回原始数据集。巧妙且有差异化（约 50 行 + 3 个 .md 文件）。优先级低于修复实际搜索 Resolve 可发现性（工具提示 N4 是更轻量的权宜之计）和完成退出动画（I1）。
+
+#### 建议 I4（进化策略师 Important #I4）: Full-text body search — frontend wiring
+- **决策：** 延期 — 随 C1（后端 body 搜索）一起
+- **理由：** 在后端 body 搜索落地后，前端接线是独立的但被阻塞。逻辑上包含在搜索聚焦轮次中。
+
+#### 建议 I5（进化策略师 Important #I5）: Dashboard "Cooling Memories" section
+- **决策：** 部分接受 — 纳入 N1（衰减风险暴露）作为轻量级替代
+- **理由：** 显示距离衰减阈值（R < 0.1）最近的 top 5 记忆。使用已计算的 `days_since_last_access` 和 `stability`。N1 将其缩减为最低限度——仅显示**数量**而非完整列表——以适应修复轮次的容量约束。在 R15 中扩展为完整列表。
+
+#### 建议 I6（进化策略师 Important #I6）: Multi-level undo stack
+- **决策：** 延期至 R16+
+- **理由：** 上一轮（R13）以相同理由延期，该理由仍然成立：完整的 Ctrl+Z/Ctrl+Shift+Z 接入需要跨组件状态管理重构。数据模型存在；布线是机械性的但范围很广。独立轮次候选。
+
+### Nice to Have / Feature Ideas
+
+- **N1-N7**（多选、保存的过滤器、Git 集成指南、快速捕获 API、标签页检查、子图提取、快捷键速查表覆盖层）— 全部保留在长期 backlog。其中，Git 集成指南（N3）和快捷键速查表覆盖层（N7）成本低、战略价值高，建议 R15 评估。
+- **F1-F6**（WebSocket 协作 resolve、记忆健康评分、DAG 感知编辑、定时重新参与提醒、VS Code 扩展、MCP 写入工具）— 全部保留在长期研究 backlog。这些是差异化战略资产，均需独立轮次。
+
+### 产品策略回应
+
+#### 进化策略师的"先关缺口再深挖功能"策略
+- **决策：** 完全接受并采纳为本轮指令
+- **理由：** 进化策略师："先关缺口再深挖功能。全文搜索 + 模态退出动画 + Playwright 冒烟测试应是 R14 的要求。衰减模型个性化（per-memory stability UI、冷却记忆仪表盘）是 R15 的自然议程。"Planner 同意这一策略方向。R14 交付 C1（衰减 Bug 修复，开辟缺口）、C2（稳定性防护，开辟缺口）、I1（模态动画，开辟缺口）、C3（API 暴露，使 R15 衰减功能化成为可能）。R15 才是"深挖"——使衰减变得用户可见和可控。
 
 ---
 
-### Thought-Provoking（建议 8-10）
+## 设计研究员建议（Research Audit 6.5/10，已发现 CRITICAL Bug）
 
-- **R-T8**（Memory Compiler metaphor）/ **R-T9**（Episodic-to-semantic mining）/ **R-T10**（Demotion path for maturity） — 8 和 9 是定位/营销层的概念重组和需要新架构的 TransientDAG 持久化——都不在本轮代码变更范围内。10（降级路径）与 M2（排除循环参与者）共享成熟度治理的关切，但降级需要新的生命周期状态机——比 M2 复杂得多。全部纳入长期研究。
+### Critical（阻塞正确性的 Bug）
+
+#### 建议 R-RED-1（研究员 CRITICAL）: Fix overview data plumbing bug
+- **决策：** 接受 — 纳入 C1，最高优先级
+- **理由：** `handle_overview()` 第 258 行从 search 结果字典中读取 `days_since_last_access`。`search()` 函数（search.py 第 73-85 行）从未在输出中包含此字段。统一衰减公式 `0.5^(days/stability)` 从未在 overview 路径中激活。所有被访问过的记忆回退到 R13 之前的 `access * 0.1` 常量乘数。Eval 热力值（31、31、21、21、20）通过是因为它们匹配的是**旧公式**，而非新公式。对比：`handle_wander()` 正确地从 `entry.days_since_last_access`（第 345 行）读取并按设计工作。**这是 Round 14 的单一最高优先级任务——其余均为次要。**
+
+#### 建议 R-RED-2（研究员 High Priority）: Add stability validation (guard against zero and negative)
+- **决策：** 接受 — 纳入 C2
+- **理由：** `stability=0` 导致 `0.5^(days/0)` → `ZeroDivisionError`——崩溃。`stability<0` 产生 `decay>1.0`——无意义（记忆随时间的推移"增强"）。需要 Pydantic `@field_validator(gt=0)`。研究员建议在 MemoryEntry 上设置 `stability > 0` 并设置最小 0.1 天（2.4 小时）作为实用下限。
+
+#### 建议 R-RED-3（研究员 High Priority）: Resolve `days_since_last_access=None` semantics
+- **决策：** 接受 — 纳入 C2
+- **理由：** `None` 表示"从未被访问"；`0` 表示"刚刚访问过"。两者当前在所有三个消费点（overview、wander、validate）中产生相同的衰减值（1.0 — 无衰减）。但语义不同：对于从未访问的记忆，wander 应有最大冷却权重（已存有 bug——被 C1 修复所掩盖），而 overview 应给予少量非零访问奖励。定义明确的合约并将所有三个消费点更新为一致处理。至少，使行为明确并记录，而非意外。本轮不改变行为——仅统一处理。
+
+#### 建议 R-RED-4（研究员 High Priority）: Include stability and decay fields in search result dict and API
+- **决策：** 接受 — 纳入 C3（与体验官 Yellow #4 合并）
+- **理由：** 研究员的搜索字典修复与体验官的 API 暴露请求趋同于同一个变更：使衰减字段对消费者可用。在 search 输出中添加 `stability` 和 `days_since_last_access`。同时考虑添加 `schema` 和 `imports`（或至少导入数量）——消费者越来越需要这些字段。
+
+### Medium Priority
+
+#### 建议 R-YLW-1（研究员 Medium）: Domain-calibrated stability presets (Bomb 1)
+- **决策：** 延期至 R15-R16
+- **理由：** 研究员提供了充分证据表明不同领域需要不同的半衰期：投资事实 7-14 天，软件架构概念 30-60 天，量化操作员程序性公式 60-180 天。作为 create 期间基于标签/类型的稳定性建议实现是正确的方法（约 50 LOC）。但在衰减**计算正确**（C1）之前调整默认值会混淆原因与效果。在 R14 中使公式正确；在 R15 中改进默认值。
+
+#### 建议 R-YLW-2（研究员 Medium）: Add recency factor to search ranking
+- **决策：** 延期至 R15
+- **理由：** 对搜索结果排序应用衰减乘数（最近访问的记忆排名更高）使搜索具有时间感知能力。约 15 LOC 在 search.py 中。C1 修复后自然扩展。
+
+#### 建议 R-YLW-3（研究员 Medium）: Decay-aware maturity upgrade requirements
+- **决策：** 延期至 R15
+- **理由：** 防止通过旧的、未经审查的记忆实现"成熟度膨胀"。需要最近的访问才能进行 draft→verified 升级。约 10 LOC 在 resolve.py 中。合理，但不如 C1-C2 迫切。
+
+#### 建议 R-YLW-4（研究员 Medium）: Apply decay formula to `--with-recall` path
+- **决策：** 延期至 R15 — 但受益于 C1 修复（如果 with-recall 路径与 overview 共享 code path）
+- **理由：** `handle_overview()` 第 292-307 行对 with-recall 排序使用原始 `access_count`。C1 修复可能解决此问题（取决于是否共享衰减计算路径）。如果未解决，这是 R15 中约 5 LOC 的变更。
+
+#### 建议 R-YLW-5（研究员 Medium）: Unify intensity-decay interaction
+- **决策：** 延期至 R15 — 设计决策需讨论
+- **理由：** 目前只有 `validate._check_decay` 豁免 `intensity >= 8` 的记忆免于衰减警告。Overview 和 wander 无论 intensity 如何都应用衰减。研究员提出了正确的问题：高 intensity 记忆应该获得稳定性乘数（`effective_stability = stability * (intensity / 5)`）吗？还是 intensity 只影响警告决策，不影响衰减计算？这是一个设计决策，不应急于在修复轮次中处理。
+
+### Exploratory / Inspiration Bombs
+
+- **R-GRN-1**（FSRS 自适应稳定性）/ **R-GRN-2**（协同记忆图）/ **R-GRN-3**（per-memory-type 衰减曲线）— 全部保留在长期研究 backlog。这些是研究员最高影响力的远期构想。R-GRN-1 是 R-YLW-1（领域校准预设）后逻辑上的下一步。R-GRN-2 和 R-GRN-3 是差异化长期战略资产，目前无已知竞品产品拥有。
+- **R-BOMB-1 至 R-BOMB-4**（上下文感知激活、遗忘即功能、DAG 稳定性继承、Duolingo HLR 风格训练稳定性）— 保留在启发式 backlog。这些代表了研究员最具想象力的构想。R-BOMB-2（"遗忘即功能"——作为主动 UX 功能展示处于风险中的记忆）是 Round 14-15 衰减工作直接催生的最具说服力的产品概念。
+
+### 研究员评分 6.5/10 — Planner 注解
+
+研究员的 6.5/10 是三位 Reviewer 中的最低分，但不应被解读为悲观——这是一个严格但公正的评估。评分扣分源于：(a) 发现的 CRITICAL bug（如果公式未被激活则无法给予功能性评分），(b) 未防护的边界情况（如果稳定性=0 会导致崩溃，则不能认为模型完备），(c) 该设计止步于"统一模型"而未达到"差异化模型"（14.0 天稳定性均匀 + 单一指数曲线未充分利用研究文献中的证据）。研究员报告的真正价值不在分数而在发现：overview bug 是隐藏良好的，三位 Reviewer 中就他一人通过代码审查而非功能测试发现了它。没有这份审计报告，R14 将在 decay 公式已损坏数轮的情况下继续——所有三种衰减计算路径均回归，但仅对其中两种路径。
 
 ---
 
-### Wild Ideas（建议 11-12）
+## Planner 自主关注的物品
 
-- **R-W11**（Auto-archiving with essence distillation）/ **R-W12**（Weekly Memory Digest） — 两个都依赖 LLM gateway 集成（精华蒸馏需要 LLM 生成 3 行摘要，周度摘要需要 LLM 生成报告）。llm_gateway 是一个存在于代码库但尚未与 codememory 核心深度集成的组件——这些功能是"当 AI 管道就绪后"的自然延伸，而非本轮的可行任务。
+### 1. C1（Bug 修复）是本轮压倒性的最高优先级
+这不仅仅是另一个任务——它是 Round 13 全部衰减模型工作一直处于待机状态的原因。Planner 因此将 C1 标记为 Critical 而非 Important。在 C1 被修复和验证之前，本轮没有其他任务重要。所有 eval 的"PASS"标记均无效（它们验证的是旧公式）。修复是约 3 行但需要额外约 10 行的搜索输出字典扩展以永久闭合该缺口。还需要一个新的测试：验证当 `days_since_last_access` 变化时 overview 热力值变化。
 
----
+### 2. 交接文件中的"退场动画接线 — 约 25 行"估计
+这个估计适用于 I1 模态端。对于面板端，`useExitAnimation` 已经在 3 个组件中集成并工作正常。HelpPanel 需要相同处理。总 I1 工作量：将 `useExitAnimation` 集成到 Dashboard Modal 函数（~15 行）、Archive 确认模态（~5 行）、HelpPanel（~5 行）。
 
-## Planner 自主识别的关注点
+### 3. 搜索 Resolve 按钮字体（I2 的一部分）是本轮的一个哲学试金石
+体验官："一个标志性 R13 功能以已弃用的字号发布，破坏了该轮次的论题。这是个具有讽刺意味的事实，让所有修复工作显得避重就轻。"这是**为什么该按钮的字体仍然显示 10px** 的真正问题——它是在构建机器上生成的吗？是预先存在的样式吗？是复制粘贴的吗？Planner 不探究原因，仅记录：修复它。I2 确保了搜索结果中不会再有功能元素显示 10px。
 
-### 1. 退场动画的复用机制设计
-A1（退场动画接线）是本轮唯一需要"设计"的任务——它需要创建一个复用机制来延迟组件卸载直到动画完成。这不是一个新问题：React 社区对此有成熟的解决方案（closing state + onAnimationEnd handler + 条件渲染延迟）。关键是这个机制需要足够通用以覆盖两种动画模式——panel-slide-exit（translateX）和 modal-fade-out（opacity + scale）。一次设计，7 处应用。
+### 4. Round 14 的规模：约 80-100 行总计，分布在 6-8 个任务中
+这比 Round 13 的约 150 行小（且 11 个任务 vs 本轮 8-9 个）。这是有意为之：修复轮次不应在修复的同时引入新复杂性。所有变更都是替换或添加——没有架构变更。唯一的结构性思考是 C2（None 语义一致性），这更像是文档记录而非代码变更。
 
-### 2. M1（统一衰减模型）的 wander 冷却语义
-研究员指出 wander(cool) 当前使用 `1/(access_count+1)` 作为权重，完全忽略时间维度。用连续衰减公式替代后，wander 的语义从"最少访问的记忆"变为"最低检索概率的记忆"——这是一个更精确的"cool"定义。但需要确认：wander 有两种模式（cool / random），本次变更仅影响 cool 模式。
-
-### 3. M4（stability 字段）的未来扩展路径
-添加 stability 字段时需确保向后兼容——旧 index.json 中没有该字段的记忆在加载后应获取默认值 14.0。这是 Pydantic 的 `Field(default=14.0)` 自然处理的场景。同时，heat 公式中的 `days / 14.0` 硬编码需要替换为 `days / stability`——这个变更应在一处（handle_overview）完成，而非在多处复制。
-
-### 4. D1（搜索 Resolve）的视图切换时机
-D1 要求搜索结果中的"Resolve →"按钮触发三件事：关闭搜索下拉、切换到 Graph 视图、自动 resolve。关键约束：切换到 Graph 视图后 Cytoscape 实例需要已渲染（因为 resolve 的依赖链动画依赖图实例）。如果视图切换和 resolve 调用之间没有渲染间隙，动画可能丢失。Generator 应确保 resolve 操作在 Graph 视图挂载后触发。
-
-### 5. 本轮不应触发 stale 记忆数据的修复
-本轮任务（M3/M4）涉及 index 数据模型的微小扩展——不影响 .md 文件中的 body hash，因此不会触发 stale 检测。但 reindex 操作应作为验收步骤之一运行，确保新增字段在 index.json 中正确序列化/反序列化。
+### 5. Playwright 承诺：延期至 R15，但有约束力
+Planner 承认拖延测试是不好的模式——这是 Playwright 连续第三次因"配置成本不可忽略"而被延期（R12 延期、R13 延期、R14 再次延期）。**此延期附带约束性承诺：** Playwright 冒烟测试是 Round 15 的第一个和最高优先级任务——在任何新功能代码之前。如果在首次 R15 提交时未交付，应提升为 Critical blocker。
 
 ---
 
