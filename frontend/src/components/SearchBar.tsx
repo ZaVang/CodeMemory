@@ -2,6 +2,33 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 import { fetchSearch, fetchStats } from '../api'
 import type { SearchResultItem } from '../api'
 
+/** R16-C1: split text around a query term and wrap matches in <mark> elements. */
+function highlightMatches(text: string, query: string): React.ReactNode {
+  if (!query || !text) return text
+  const qLower = query.toLowerCase()
+  const tLower = text.toLowerCase()
+  const idx = tLower.indexOf(qLower)
+  if (idx < 0) return text
+  const before = text.slice(0, idx)
+  const match = text.slice(idx, idx + query.length)
+  const after = text.slice(idx + query.length)
+  return (
+    <>
+      {before}
+      <mark style={{
+        backgroundColor: 'var(--cm-bg-warning-subtle)',
+        color: 'var(--cm-warning)',
+        fontWeight: 600,
+        padding: '0 1px',
+        borderRadius: 1,
+      }}>
+        {match}
+      </mark>
+      {after}
+    </>
+  )
+}
+
 interface Props {
   value: string
   onChange: (value: string) => void
@@ -351,7 +378,7 @@ export default function SearchBar({ value, onChange, onNavigate, onResolve }: Pr
                       setShowResults(false)
                       onResolve(item.id)
                     }}
-                    title={`Resolve context for ${item.id}`}
+                    title={`Resolve this memory's dependency graph into a structured context`}
                     style={{
                       border: '1px solid var(--cm-accent)',
                       background: 'transparent',
@@ -425,9 +452,36 @@ export default function SearchBar({ value, onChange, onNavigate, onResolve }: Pr
                     fontStyle: 'italic',
                   }}
                 >
-                  {item.snippet}
+                  {highlightMatches(item.snippet, value)}
                 </div>
               )}
+              {/* R16-S2: access freshness in search results */}
+              <div style={{
+                fontSize: 11,
+                fontFamily: 'Raleway, sans-serif',
+                color: 'var(--cm-text-tertiary)',
+                marginTop: 2,
+              }}>
+                {item.access_count != null && item.access_count > 0 && item.days_since_last_access != null ? (
+                  <>
+                    {item.days_since_last_access === 0 ? 'just now' : `${item.days_since_last_access}d ago`}
+                    {item.stability != null && item.days_since_last_access != null && (
+                      (() => {
+                        const exp = Math.pow(0.5, item.days_since_last_access / item.stability)
+                        const floor = 0.05 / (1 + item.days_since_last_access / (10 * item.stability))
+                        const R = Math.max(exp, floor)
+                        const R_pct = R * 100
+                        const rColor = R_pct > 50 ? 'var(--cm-success)' : R_pct >= 10 ? 'var(--cm-warning)' : 'var(--cm-error)'
+                        return (
+                          <span> &middot; <span style={{ color: rColor, fontWeight: 600 }}>R: {R_pct.toFixed(1)}%</span></span>
+                        )
+                      })()
+                    )}
+                  </>
+                ) : (
+                  <span>never &middot; R=N/A</span>
+                )}
+              </div>
             </div>
           ))}
         </div>

@@ -1322,9 +1322,9 @@ export default function App() {
             >
               {contextMenu.nodeId}
             </div>
-            <ContextMenuItem label="View Details" onClick={handleDetailFromContext} />
-            <ContextMenuItem label="Resolve" onClick={handleResolveFromContext} />
-            <ContextMenuItem label="Edit" onClick={handleEditFromContext} />
+            <ContextMenuItem label="View Details" onClick={handleDetailFromContext} shortcut="Ctrl+D" />
+            <ContextMenuItem label="Resolve" onClick={handleResolveFromContext} shortcut="Ctrl+R" />
+            <ContextMenuItem label="Edit" onClick={handleEditFromContext} shortcut="Ctrl+E" />
             <div
               style={{
                 height: 1,
@@ -1332,7 +1332,7 @@ export default function App() {
                 margin: '4px 0',
               }}
             />
-            <ContextMenuItem label="Archive" onClick={handleArchiveFromContext} />
+            <ContextMenuItem label="Archive" onClick={handleArchiveFromContext} shortcut="Del" />
           </div>
         </>
       )}
@@ -1625,12 +1625,14 @@ export default function App() {
   )
 }
 
-function ContextMenuItem({ label, onClick }: { label: string; onClick: () => void }) {
+function ContextMenuItem({ label, onClick, shortcut }: { label: string; onClick: () => void; shortcut?: string }) {
   return (
     <button
       onClick={onClick}
       style={{
-        display: 'block',
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
         width: '100%',
         textAlign: 'left',
         padding: '8px 14px',
@@ -1649,7 +1651,17 @@ function ContextMenuItem({ label, onClick }: { label: string; onClick: () => voi
         (e.currentTarget as HTMLButtonElement).style.backgroundColor = 'transparent'
       }}
     >
-      {label}
+      <span>{label}</span>
+      {shortcut && (
+        <span style={{
+          fontSize: 11,
+          color: 'var(--cm-text-tertiary)',
+          fontFamily: 'JetBrains Mono, monospace',
+          marginLeft: 16,
+        }}>
+          {shortcut}
+        </span>
+      )}
     </button>
   )
 }

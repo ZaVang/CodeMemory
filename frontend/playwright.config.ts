@@ -1,7 +1,12 @@
 import { defineConfig, devices } from '@playwright/test'
+import path from 'path'
+import { fileURLToPath } from 'url'
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
 
 export default defineConfig({
-  testDir: './tests',
+  testDir: path.resolve(__dirname, './tests'),
   timeout: 60000,
   retries: 1,
   use: {
@@ -17,6 +22,7 @@ export default defineConfig({
   ],
   webServer: {
     command: 'npm run dev',
+    cwd: __dirname,
     url: 'http://localhost:5299',
     reuseExistingServer: !process.env.CI,
     timeout: 60000,

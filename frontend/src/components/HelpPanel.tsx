@@ -32,8 +32,8 @@ const CLI_COMMANDS = [
   },
   {
     cmd: 'wander',
-    args: '[--mode cool|random] [--inject]',
-    desc: '触景生情：随机或加权激活冷记忆（低 access_count + 高 intensity）。',
+    args: '[--inject]',
+    desc: '触景生情：加权激活冷记忆（低 access_count + 高 intensity）。',
     layer: 'Layer 0 认知接口',
   },
   {

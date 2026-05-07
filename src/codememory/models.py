@@ -77,6 +77,9 @@ class MemoryEntry(BaseModel):
     # Per-memory half-life in days for exponential decay formula (R13-M4)
     stability: float = Field(default=14.0, gt=0.0, description="Half-life in days for access decay (min 0.1)")
 
+    # R16-C2: track whether stability was manually set (skip adaptive SInc if so)
+    stability_source: str | None = Field(default=None, description="None/adaptive = auto-updated; manual = user-set")
+
     # Protection flag (intensity >= 8)
     protected: bool | None = None
 

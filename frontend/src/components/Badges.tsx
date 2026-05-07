@@ -16,7 +16,7 @@ const StatusStyles: Record<string, { bg: string; color: string; label: string }>
 interface BadgeBaseOptions {
   /** Override padding. Detail view uses 2px 10px; List view uses 1px 8px. */
   padding?: string
-  /** Override font size. Detail view uses 12px; List view uses 10px. */
+  /** Override font size. Detail view uses 12px; List view also uses 12px. */
   fontSize?: number
 }
 

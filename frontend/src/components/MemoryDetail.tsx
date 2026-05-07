@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { fetchMemory } from '../api'
+import { fetchMemory, updateMemory, touchMemory } from '../api'
 import type { MemoryDetail as MemoryDetailType, ResolveResponse } from '../types'
 import { StatusBadge, MaturityBadge } from './Badges'
 import { useExitAnimation } from '../useExitAnimation'
@@ -80,6 +80,11 @@ export default function MemoryDetail({ memoryId, onClose, onResolve, onClearReso
   const { visible: panelVisible, closing } = useExitAnimation(!!memoryId)
   // PL3-6: track which strength groups are fully expanded
   const [expandedImports, setExpandedImports] = useState<Record<string, boolean>>({})
+  // R16-C2: stability slider state
+  const [stabilityValue, setStabilityValue] = useState<number>(14.0)
+  const [stabilityUpdating, setStabilityUpdating] = useState(false)
+  // R16-S1: touch confirmation state
+  const [touchAnimating, setTouchAnimating] = useState(false)
   const [copyLabel, setCopyLabel] = useState('Generate Prompt')
   const IMPORT_PREVIEW_LIMIT = 10
 
@@ -102,10 +107,53 @@ export default function MemoryDetail({ memoryId, onClose, onResolve, onClearReso
     }
     setLoading(true)
     fetchMemory(memoryId)
-      .then(setMemory)
+      .then((data) => {
+        setMemory(data)
+        // R16-C2: sync stability slider with loaded data
+        if (data.stability != null) {
+          setStabilityValue(data.stability)
+        }
+      })
       .catch(console.error)
       .finally(() => setLoading(false))
   }, [memoryId])
+
+  // R16-C2: handle stability slider change
+  const handleStabilityChange = useCallback((val: number) => {
+    setStabilityValue(val)
+  }, [])
+
+  const handleStabilityCommit = useCallback((val: number) => {
+    if (!memoryId || stabilityUpdating) return
+    setStabilityUpdating(true)
+    updateMemory(memoryId, { stability: val })
+      .then(() => {
+        // Refresh memory data to get updated stability_source
+        return fetchMemory(memoryId)
+      })
+      .then((data) => {
+        setMemory(data)
+        if (data.stability != null) setStabilityValue(data.stability)
+      })
+      .catch(console.error)
+      .finally(() => setStabilityUpdating(false))
+  }, [memoryId, stabilityUpdating])
+
+  // R16-S1: handle touch button
+  const handleTouch = useCallback(() => {
+    if (!memoryId || touchAnimating) return
+    setTouchAnimating(true)
+    touchMemory(memoryId)
+      .then(() => fetchMemory(memoryId))
+      .then((data) => {
+        setMemory(data)
+        if (data.stability != null) setStabilityValue(data.stability)
+      })
+      .catch(console.error)
+      .finally(() => {
+        setTimeout(() => setTouchAnimating(false), 600)
+      })
+  }, [memoryId, touchAnimating])
 
   // Close on Escape key
   useEffect(() => {
@@ -384,13 +432,35 @@ export default function MemoryDetail({ memoryId, onClose, onResolve, onClearReso
               <div style={{ fontSize: 12, fontFamily: 'Raleway, sans-serif', color: 'var(--cm-text-secondary)', lineHeight: 1.8 }}>
                 {memory.access_count != null && memory.access_count > 0 ? (
                   <>
-                    <div>
-                      Last accessed{' '}
-                      {memory.days_since_last_access != null && memory.days_since_last_access === 0
-                        ? 'just now'
-                        : memory.days_since_last_access != null
-                        ? `${memory.days_since_last_access} days ago`
-                        : 'unknown'}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span>
+                        Last accessed{' '}
+                        {touchAnimating
+                          ? 'just now'
+                          : memory.days_since_last_access != null && memory.days_since_last_access === 0
+                          ? 'just now'
+                          : memory.days_since_last_access != null
+                          ? `${memory.days_since_last_access} days ago`
+                          : 'unknown'}
+                      </span>
+                      <button
+                        onClick={handleTouch}
+                        disabled={touchAnimating}
+                        title="Mark as reviewed (lightweight decay refresh)"
+                        style={{
+                          fontSize: 10,
+                          padding: '1px 6px',
+                          border: '1px solid var(--cm-border)',
+                          borderRadius: 2,
+                          background: touchAnimating ? 'var(--cm-bg-success-subtle)' : 'transparent',
+                          color: touchAnimating ? 'var(--cm-success)' : 'var(--cm-text-tertiary)',
+                          cursor: touchAnimating ? 'default' : 'pointer',
+                          transition: 'all 0.15s ease',
+                          fontFamily: 'Raleway, sans-serif',
+                        }}
+                      >
+                        {touchAnimating ? '\u2713 Touched' : 'Touch'}
+                      </button>
                     </div>
                     <div>Stability: {memory.stability != null ? `${memory.stability.toFixed(1)}d` : '14.0d'}</div>
                     {memory.days_since_last_access != null && memory.stability != null ? (
@@ -400,11 +470,67 @@ export default function MemoryDetail({ memoryId, onClose, onResolve, onClearReso
                           const exp = Math.pow(0.5, memory.days_since_last_access / memory.stability)
                           const floor = 0.05 / (1 + memory.days_since_last_access / (10 * memory.stability))
                           const R = Math.max(exp, floor)
-                          return `${(R * 100).toFixed(1)}%`
+                          const R_pct = R * 100
+                          // R16-F4: signal-colour the R-probability
+                          const rColor = R_pct > 50
+                            ? 'var(--cm-success)'
+                            : R_pct >= 10
+                              ? 'var(--cm-warning)'
+                              : 'var(--cm-error)'
+                          return (
+                            <span
+                              style={{
+                                color: rColor,
+                                fontWeight: 600,
+                                fontSize: 13,
+                              }}
+                            >
+                              {`${R_pct.toFixed(1)}%`}
+                            </span>
+                          )
                         })()}
                       </div>
                     ) : null}
                     <div style={{ color: 'var(--cm-text-tertiary)' }}>Access count: {memory.access_count}</div>
+                    {/* R16-C2: stability slider */}
+                    <div style={{ marginTop: 6 }}>
+                      <div style={{ fontSize: 11, color: 'var(--cm-text-tertiary)', marginBottom: 2 }}>
+                        Half-life: {stabilityValue.toFixed(0)}d
+                        {memory.stability_source === 'manual' && (
+                          <span style={{ color: 'var(--cm-warning)', marginLeft: 4 }}>(manual)</span>
+                        )}
+                      </div>
+                      <input
+                        type="range"
+                        min="1"
+                        max="365"
+                        step="1"
+                        value={stabilityValue}
+                        disabled={stabilityUpdating}
+                        onChange={(e) => handleStabilityChange(Number(e.target.value))}
+                        onMouseUp={(e) => handleStabilityCommit(Number((e.target as HTMLInputElement).value))}
+                        onKeyUp={(e) => {
+                          if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+                            handleStabilityCommit(Number((e.target as HTMLInputElement).value))
+                          }
+                        }}
+                        style={{
+                          width: '100%',
+                          accentColor: 'var(--cm-accent)',
+                          cursor: stabilityUpdating ? 'wait' : 'pointer',
+                          opacity: stabilityUpdating ? 0.5 : 1,
+                        }}
+                      />
+                      <div style={{
+                        fontSize: 10,
+                        color: 'var(--cm-text-tertiary)',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                      }}>
+                        <span>1d (fast decay)</span>
+                        <span>365d (persistent)</span>
+                      </div>
+                    </div>
                   </>
                 ) : (
                   <div style={{ fontStyle: 'italic', color: 'var(--cm-text-tertiary)' }}>

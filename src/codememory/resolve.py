@@ -201,6 +201,7 @@ def resolve(
     rec_graph = build_dag(memory_id, "recommended", index)
     full_text_nodes: list[str] = []
     notices: list[str] = []
+    stale_ids: list[str] = []  # R16-F5: track stale memories for stability decrease
 
     for i, mid in enumerate(ordered):
         if mid not in index.memories:
@@ -219,6 +220,9 @@ def resolve(
                     f"[NOTICE] summary may be stale for {mid} (hash mismatch). "
                     f"Run: codememory update {mid} --change-note \"update summary\""
                 )
+                # R16-F5: mark for stability decrease (applied after loop)
+                if mid not in stale_ids:
+                    stale_ids.append(mid)
 
         # Pin version check
         imports_dict = entry.imports
@@ -310,6 +314,22 @@ def resolve(
         for notice in notices:
             lines.append(notice)
 
+    # R16-F5: stability decrease for stale memories (recall failure signal)
+    # Applied BEFORE access tracking so stale decrease and SInc don't conflict.
+    STALE_DECAY = 0.90  # mild penalty — a single recall failure shouldn't erase consolidation
+    STABILITY_FLOOR = 14.0  # never drop below the default domain baseline
+    for mid in stale_ids:
+        if mid in index.memories:
+            stale_entry = index.memories[mid]
+            old_stability = stale_entry.stability
+            new_stability = max(old_stability * STALE_DECAY, STABILITY_FLOOR)
+            if new_stability < old_stability:
+                stale_entry.stability = new_stability
+                notices.append(
+                    f"[NOTICE] stability decreased for {mid}: "
+                    f"{old_stability:.1f}d → {new_stability:.1f}d (stale recall)"
+                )
+
     # Track access: increment access_count for full-text nodes
     now_iso = datetime.now().isoformat()
     maturity_changes: list[str] = []
@@ -319,14 +339,16 @@ def resolve(
 
             # R15-C1: Adaptive stability — compute retrieval probability BEFORE
             # updating access fields (days_since represents time before this access).
-            old_days_since = entry.days_since_last_access
-            if old_days_since is not None and old_days_since > 0 and entry.stability > 0:
-                R = compute_retrieval_probability(old_days_since, entry.stability)
-                # Simplified SInc — Gaussian peak at R ~ 0.78, range 1.05-1.80
-                s_inc = 1.05 + 0.75 * math.exp(-((R - 0.78) ** 2) / 0.125)
-                # Diminishing returns at high stability
-                diminish = math.sqrt(14.0 / max(entry.stability, 14.0))
-                entry.stability = min(entry.stability * s_inc * diminish, 365.0)
+            # R16-C2: skip SInc if stability was manually set by the user.
+            if getattr(entry, "stability_source", None) != "manual":
+                old_days_since = entry.days_since_last_access
+                if old_days_since is not None and old_days_since > 0 and entry.stability > 0:
+                    R = compute_retrieval_probability(old_days_since, entry.stability)
+                    # Simplified SInc — Gaussian peak at R ~ 0.78, range 1.05-1.80
+                    s_inc = 1.05 + 0.75 * math.exp(-((R - 0.78) ** 2) / 0.125)
+                    # Diminishing returns at high stability
+                    diminish = math.sqrt(14.0 / max(entry.stability, 14.0))
+                    entry.stability = min(entry.stability * s_inc * diminish, 365.0)
 
             entry.access_count += 1
             entry.last_access = now_iso

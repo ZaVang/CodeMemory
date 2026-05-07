@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-05-07T14:32:15.790834",
+  "updated": "2026-05-07T17:05:20.329369",
   "memories": {
     "user/context": {
       "type": "atom",
@@ -13,13 +13,13 @@
         "entry-point"
       ],
       "intensity": 8,
-      "version": 1,
+      "version": 3,
       "path": "user/context.md",
       "access_count": 2,
       "last_access": "2026-05-07T14:32:15.790527",
       "days_since_last_access": 0,
       "created": "2026-04-27",
-      "updated": "",
+      "updated": "2026-05-07",
       "imports": {
         "required": [
           "user/preferences/morning-coffee",
@@ -37,7 +37,8 @@
       },
       "schema": null,
       "summary_hash": "3d6cf56",
-      "stability": 24.763025715228288,
+      "stability": 14.0,
+      "stability_source": null,
       "protected": true,
       "change_note": null,
       "change_log": [],
@@ -59,8 +60,8 @@
       "intensity": 6,
       "version": 1,
       "path": "user/beliefs/friendship-view.md",
-      "access_count": 24,
-      "last_access": "2026-05-07T14:32:15.790527",
+      "access_count": 34,
+      "last_access": "2026-05-07T17:01:30.632977",
       "days_since_last_access": 0,
       "created": "2026-04-22",
       "updated": "",
@@ -68,19 +69,13 @@
       "schema": null,
       "summary_hash": "a818dc9",
       "stability": 14.0,
+      "stability_source": null,
       "protected": null,
       "change_note": null,
       "change_log": [],
       "source": null,
-      "maturity": "verified",
-      "evidence": {
-        "verified_in": [
-          {
-            "version": 1,
-            "date": "2026-05-07"
-          }
-        ]
-      }
+      "maturity": "draft",
+      "evidence": null
     },
     "user/beliefs/life-pace": {
       "type": "atom",
@@ -109,7 +104,8 @@
       },
       "schema": null,
       "summary_hash": "4e3ca19",
-      "stability": 24.763025715228288,
+      "stability": 14.0,
+      "stability_source": null,
       "protected": null,
       "change_note": null,
       "change_log": [],
@@ -131,8 +127,8 @@
       "intensity": 7,
       "version": 1,
       "path": "user/feelings/burnout-april.md",
-      "access_count": 22,
-      "last_access": "2026-05-07T14:32:15.790527",
+      "access_count": 32,
+      "last_access": "2026-05-07T17:01:30.632977",
       "days_since_last_access": 0,
       "created": "2026-04-14",
       "updated": "",
@@ -144,19 +140,13 @@
       "schema": null,
       "summary_hash": "e20af68",
       "stability": 14.0,
+      "stability_source": null,
       "protected": null,
       "change_note": null,
       "change_log": [],
       "source": null,
-      "maturity": "proven",
-      "evidence": {
-        "verified_in": [
-          {
-            "version": 1,
-            "date": "2026-05-07"
-          }
-        ]
-      }
+      "maturity": "verified",
+      "evidence": null
     },
     "user/feelings/proud-moment": {
       "type": "atom",
@@ -172,8 +162,8 @@
       "intensity": 6,
       "version": 1,
       "path": "user/feelings/proud-moment.md",
-      "access_count": 22,
-      "last_access": "2026-05-07T14:32:15.790527",
+      "access_count": 32,
+      "last_access": "2026-05-07T17:01:30.632977",
       "days_since_last_access": 0,
       "created": "2026-04-26",
       "updated": "",
@@ -185,19 +175,13 @@
       "schema": null,
       "summary_hash": "c6fdb81",
       "stability": 14.0,
+      "stability_source": null,
       "protected": null,
       "change_note": null,
       "change_log": [],
       "source": null,
-      "maturity": "verified",
-      "evidence": {
-        "verified_in": [
-          {
-            "version": 1,
-            "date": "2026-05-07"
-          }
-        ]
-      }
+      "maturity": "draft",
+      "evidence": null
     },
     "user/moments/rainy-sunday": {
       "type": "atom",
@@ -213,8 +197,8 @@
       "intensity": 4,
       "version": 1,
       "path": "user/moments/rainy-sunday.md",
-      "access_count": 20,
-      "last_access": "2026-05-07T14:29:28.785848",
+      "access_count": 30,
+      "last_access": "2026-05-07T17:01:30.632977",
       "days_since_last_access": 0,
       "created": "2026-04-19",
       "updated": "",
@@ -226,6 +210,7 @@
       "schema": null,
       "summary_hash": "d34a1d8",
       "stability": 14.0,
+      "stability_source": null,
       "protected": null,
       "change_note": null,
       "change_log": [],
@@ -259,19 +244,13 @@
       "schema": null,
       "summary_hash": "52a1079",
       "stability": 14.0,
+      "stability_source": null,
       "protected": null,
       "change_note": null,
       "change_log": [],
       "source": null,
-      "maturity": "verified",
-      "evidence": {
-        "verified_in": [
-          {
-            "version": 1,
-            "date": "2026-05-07"
-          }
-        ]
-      }
+      "maturity": "draft",
+      "evidence": null
     },
     "user/people/mom-weekly-call": {
       "type": "atom",
@@ -299,7 +278,8 @@
       },
       "schema": null,
       "summary_hash": "7ab2594",
-      "stability": 24.763025715228288,
+      "stability": 14.0,
+      "stability_source": null,
       "protected": null,
       "change_note": null,
       "change_log": [],
@@ -320,8 +300,8 @@
       "intensity": 5,
       "version": 1,
       "path": "user/preferences/dislike-crowds.md",
-      "access_count": 22,
-      "last_access": "2026-05-07T14:32:15.790527",
+      "access_count": 32,
+      "last_access": "2026-05-07T17:01:30.632977",
       "days_since_last_access": 0,
       "created": "2026-04-10",
       "updated": "",
@@ -329,19 +309,13 @@
       "schema": null,
       "summary_hash": "37e79f0",
       "stability": 14.0,
+      "stability_source": null,
       "protected": null,
       "change_note": null,
       "change_log": [],
       "source": null,
-      "maturity": "verified",
-      "evidence": {
-        "verified_in": [
-          {
-            "version": 1,
-            "date": "2026-05-07"
-          }
-        ]
-      }
+      "maturity": "draft",
+      "evidence": null
     },
     "user/preferences/morning-coffee": {
       "type": "atom",
@@ -356,8 +330,8 @@
       "intensity": 5,
       "version": 1,
       "path": "user/preferences/morning-coffee.md",
-      "access_count": 22,
-      "last_access": "2026-05-07T14:32:15.790527",
+      "access_count": 32,
+      "last_access": "2026-05-07T17:01:30.632977",
       "days_since_last_access": 0,
       "created": "2026-04-10",
       "updated": "",
@@ -365,28 +339,22 @@
       "schema": null,
       "summary_hash": "4f5a488",
       "stability": 14.0,
+      "stability_source": null,
       "protected": null,
       "change_note": null,
       "change_log": [],
       "source": null,
-      "maturity": "proven",
-      "evidence": {
-        "verified_in": [
-          {
-            "version": 1,
-            "date": "2026-05-07"
-          }
-        ]
-      }
+      "maturity": "verified",
+      "evidence": null
     },
     "user/test/audit-test": {
       "type": "atom",
       "id": "user/test/audit-test",
-      "summary": "Test memory for audit",
+      "summary": "test",
       "status": "active",
       "tags": [],
       "intensity": 5,
-      "version": 1,
+      "version": 2,
       "path": "user/test/audit-test.md",
       "access_count": 1,
       "last_access": "2026-05-07T14:31:33.524269",
@@ -397,6 +365,41 @@
       "schema": null,
       "summary_hash": "e3b0c44",
       "stability": 14.0,
+      "stability_source": null,
+      "protected": null,
+      "change_note": null,
+      "change_log": [],
+      "source": {
+        "platform": "manual",
+        "created_by": "user"
+      },
+      "maturity": "draft",
+      "evidence": {
+        "contributors": [
+          "user"
+        ],
+        "sessions": []
+      }
+    },
+    "user/test/f1-test2": {
+      "type": "atom",
+      "id": "user/test/f1-test2",
+      "summary": "F1 test",
+      "status": "active",
+      "tags": [],
+      "intensity": 5,
+      "version": 1,
+      "path": "user/test/f1-test2.md",
+      "access_count": 0,
+      "last_access": null,
+      "days_since_last_access": null,
+      "created": "2026-05-07",
+      "updated": "2026-05-07",
+      "imports": {},
+      "schema": null,
+      "summary_hash": "63efb31",
+      "stability": 14.0,
+      "stability_source": null,
       "protected": null,
       "change_note": null,
       "change_log": [],

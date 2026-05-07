@@ -137,6 +137,13 @@ export async function updateMemory(id: string, req: UpdateMemoryRequest): Promis
   })
 }
 
+// R16-S1: lightweight decay refresh
+export async function touchMemory(id: string): Promise<Record<string, unknown>> {
+  return fetcher(`${BASE}/memories/${encodePathId(id)}/touch`, {
+    method: 'POST',
+  })
+}
+
 export interface DatasetInfo {
   name: string
   path: string

@@ -43,6 +43,7 @@ export interface MemoryDetail {
   source?: Record<string, unknown>
   days_since_last_access?: number | null
   stability?: number
+  stability_source?: string | null  // R16-C2: "manual" if user-set, null/undefined = adaptive
   access_count?: number
   [key: string]: unknown
 }
@@ -188,4 +189,5 @@ export interface UpdateMemoryRequest {
   maturity?: string | null
   change_note?: string | null
   imports?: Record<string, string[]> | null
+  stability?: number | null  // R16-C2: per-memory half-life slider
 }

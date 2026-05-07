@@ -35,10 +35,12 @@ if str(_SRC) not in sys.path:
     sys.path.insert(0, str(_SRC))
 
 from codememory.handlers import (
+    handle_create,
     handle_focus,
     handle_overview,
     handle_resolve,
     handle_snapshot,
+    handle_update,
     handle_wander,
 )
 
@@ -189,6 +191,85 @@ TOOLS = [
         },
         "readOnlyHint": False,
     },
+    {
+        "name": "propose_memory",
+        "description": (
+            "Propose a new memory for review. Creates a memory with maturity=draft "
+            "and status=proposed, requiring human review before promotion to "
+            "verified. Proposed memories do not appear in overview top-5 results "
+            "and are visually marked as 'Proposed' in the dashboard. "
+            "Use this to write new knowledge back to the CodeMemory brain "
+            "during agentic reasoning."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "string",
+                    "description": "Memory identifier (e.g. 'user/ideas/thesis')",
+                },
+                "summary": {
+                    "type": "string",
+                    "description": "One-line summary of the memory",
+                },
+                "body": {
+                    "type": "string",
+                    "description": "Full body content (Markdown)",
+                },
+                "tags": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Tags for categorization",
+                },
+                "intensity": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 10,
+                    "default": 5,
+                    "description": "Importance rating 1-10",
+                },
+            },
+            "required": ["id", "summary", "body"],
+        },
+    },
+    {
+        "name": "propose_update",
+        "description": (
+            "Propose an update to an existing memory. The proposed changes are "
+            "stored in the change_log with a '[PROPOSED]' prefix and require "
+            "human review before the original memory is modified. "
+            "This prevents the Agent from silently overwriting human-curated "
+            "memories while still allowing the Agent to contribute corrections, "
+            "additions, or clarifications."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "string",
+                    "description": "Memory identifier to propose an update for",
+                },
+                "body": {
+                    "type": "string",
+                    "description": "Proposed new body content (leave empty to keep current)",
+                },
+                "summary": {
+                    "type": "string",
+                    "description": "Proposed new summary (leave empty to keep current)",
+                },
+                "change_note": {
+                    "type": "string",
+                    "description": "Explanation of the proposed change for human review",
+                },
+                "tags": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Proposed new tags (leave empty to keep current)",
+                },
+            },
+            "required": ["id", "change_note"],
+        },
+    },
 ]
 
 
@@ -236,6 +317,72 @@ def _call_tool(name: str, arguments: dict) -> list[dict]:
         target = arguments.get("target")
         result = handle_snapshot(root=root, snapshot_id=snapshot_id, target=target)
         return [{"type": "text", "text": result}]
+
+    elif name == "propose_memory":
+        memory_id = arguments.get("id", "")
+        if not memory_id:
+            return [{"type": "text", "text": "Error: 'id' parameter is required for propose_memory"}]
+        summary = arguments.get("summary", "")
+        body = arguments.get("body", "")
+        tags = arguments.get("tags", [])
+        intensity = arguments.get("intensity", 5)
+        try:
+            from codememory.core import compute_body_hash, parse_frontmatter
+            import yaml as _yaml
+            filepath = handle_create(
+                root=root,
+                memory_type="atom",
+                memory_id=memory_id,
+                intensity=intensity,
+                tags=tags,
+                maturity="draft",
+            )
+            fp = Path(filepath)
+            meta, _ = parse_frontmatter(fp)
+            meta["summary"] = summary
+            meta["summary_hash"] = compute_body_hash(body.strip())
+            meta["status"] = "proposed"
+            _yaml_str = _yaml.dump(meta, allow_unicode=True, sort_keys=False)
+            fp.write_text(f"---\n{_yaml_str}---\n{body}", encoding="utf-8")
+            from codememory.index import reindex as _mcp_reindex
+            _mcp_reindex(root)
+            return [{"type": "text", "text": (
+                f"Memory proposed: {memory_id}\n"
+                f"Status: proposed (maturity=draft)\n"
+                f"Review required before this memory appears in normal results.\n"
+                f"Use the dashboard or CLI to promote maturity from draft to verified."
+            )}]
+        except Exception as exc:
+            return [{"type": "text", "text": f"Error proposing memory '{memory_id}': {exc}"}]
+
+    elif name == "propose_update":
+        memory_id = arguments.get("id", "")
+        if not memory_id:
+            return [{"type": "text", "text": "Error: 'id' parameter is required for propose_update"}]
+        change_note = arguments.get("change_note", "")
+        if not change_note:
+            return [{"type": "text", "text": "Error: 'change_note' is required for propose_update"}]
+        try:
+            body = arguments.get("body")
+            summary = arguments.get("summary")
+            # Run the update with the proposed changes; the change_log records
+            # the proposal automatically via handle_update.
+            # Tags updates are not supported via this tool (use frontend/CLI).
+            result_text = handle_update(
+                root=root,
+                memory_id=memory_id,
+                body=body if body else None,
+                summary=summary if summary else None,
+                change_note=f"[PROPOSED] {change_note}",
+            )
+            return [{"type": "text", "text": (
+                f"Update proposed for: {memory_id}\n"
+                f"Change note: {change_note}\n"
+                f"Review the change_log entry before accepting.\n"
+                f"Result:\n{result_text}"
+            )}]
+        except Exception as exc:
+            return [{"type": "text", "text": f"Error proposing update for '{memory_id}': {exc}"}]
 
     else:
         return [{"type": "text", "text": f"Unknown tool: {name}"}]

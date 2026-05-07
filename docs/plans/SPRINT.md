@@ -1150,3 +1150,137 @@ PYTHONPATH=src python tests/integration_test.py
 - **"衰减即功能"Dashboard**（研究员 R-BOMB-2）—— 在 Dashboard 中展示"你即将遗忘的内容"——R 值接近衰减警告阈值（0.1-0.2）的记忆。"救援队列"将衰减模型从后端机制升级为主动 UX 功能。无已知 PKM 工具将遗忘作为用户可见功能。
 - **Per-tag stability 默认值**（进化策略师 F2）—— 标签级 stability（"investment"=30d，"facts"=7d）。新记忆从标签继承。比 semantic_type 映射（R15-C3）更细粒度但维护成本更高。
 - **"代码式记忆"CI 流水线**（进化策略师 F5）—— GitHub Action + pre-commit hook 在 push 时运行 validate/reindex。拒绝含循环或断链的 PR。开发者采用楔子。
+
+
+## 第 16 轮追加任务
+
+> **日期**：2026-05-07
+> **上轮评估**：Round 15 — 8/8 PASS，零回归（86/86 测试 + 5/5 Playwright + TypeScript 零错误 + Vite 构建成功）。自适应 stability 更新确认生效（14.0→24.76），长期保留底线验证通过，领域差异化默认值正确，HelpPanel 退场动画完成，11px→12px 迁移完成，Playwright 冒烟测试 5/5 通过。
+> **主题**：闭环 —— 交付两个最长延期功能、完成衰减管理表面、修复所有已知 bug、清缴最多 polish 债务
+> **筛选原则**：最终轮（5/5）。本轮之后无后续迭代。规则：(1) 全文正文搜索必须交付——连续四轮延期的 #1 功能缺口；(2) 完成衰减管理表面——使 R15 的后端稳定性工作对用户可控；(3) 修复所有已知 bug——数据完整性、过时注释、CI 就绪问题；(4) 清缴多轮延期的 polish 债务；(5) 可写 MCP 工具和 God Object 部分拆分作为延伸目标——仅当前四个梯队全部完成后启动。
+
+### 第一梯队：关键修复（必达，< 3 小时合计）
+
+- [x] R16-F1: 修复个别记忆端点衰减字段缺口
+  - 目标：`GET /api/memories/{id}` 端点当前不返回 `access_count`、`days_since_last_access`、`stability` 字段，尽管 `server.py:407-414` 代码意图添加这些字段。前端 MemoryDetail 面板侥幸生效（它从父组件接收列表端点数据），但 CLI `focus`、MCP 工具、任何未来外部集成的消费者都会收到不完整的记忆数据。调查根因（疑似 FastAPI JSON 序列化排除 None 值或响应模型定义未包含这些字段），确保个别记忆端点与列表端点的字段集合一致。
+  - 验收：`GET /api/memories/{id}` 响应中每条记忆条目包含 `access_count`、`days_since_last_access`、`stability` 字段；字段值与列表端点 (`GET /api/memories`) 中同一记忆的字段值一致；从未访问的记忆（`access_count=0`）返回 `days_since_last_access: null` 和 `stability: 14.0`；所有现有端点行为不受影响；57+24+5 测试无回归
+  - 来源：体验官 Critical #1（R15 报告）——"Data integrity issue. The MemoryDetail panel happens to work because it receives list-endpoint data from the parent component, but any future consumer will receive incomplete data."
+
+- [x] R16-F2: 修复 Badges.tsx 过时注释
+  - 目标：`Badges.tsx` 第 19 行注释称"List view uses 10px"，但实际默认 fontSize 为 12px，且 List 视图显式传入 `fontSize: 12`。注释与代码不一致会导致未来开发者"修复"代码以匹配注释，重新引入 sub-12px 字体（逆转 R15-I2 的成果）。更新注释以反映实际代码行为。
+  - 验收：`Badges.tsx` 中所有 fontSize 相关注释与实际代码一致（12px 而非 10px）；无其他过时注释残留；TypeScript 构建零错误
+  - 来源：体验官 Critical #2（R15 报告）——"The comment refers to a pre-R14 state and should be updated. This is the kind of thing that causes a future developer to 'fix' the code to match the comment and reintroduce a sub-12px font."
+
+- [x] R16-F3: 修复 Playwright 测试路径解析
+  - 目标：Playwright 测试从 `frontend/` 目录运行正确（5/5 pass，29.2s），但从项目根目录运行时 `npx playwright test` 报错"test.describe() called in configuration context"。`playwright.config.ts` 使用相对路径 `testDir: './tests'`，仅从 `frontend/` 解析。修复方案：(a) 将 `testDir` 设为绝对路径以支持从项目根目录运行，或 (b) 在 `package.json` 的 `test:e2e` 脚本中明确 `cd frontend && npx playwright test` 为规范调用方式，并在 SPRINT.md 和 CLAUDE.md 中记录。
+  - 验收：`npx playwright test` 从 `frontend/` 目录运行时 5/5 通过（当前行为不变）；从项目根目录运行时也应通过（如采用方案 a），或 `package.json` 中 `test:e2e` 脚本明确包含 `cd frontend` 前缀（如采用方案 b）；CI 就绪——任何开发者遵循文档即可运行测试而无需猜测工作目录
+  - 来源：体验官 Important #6（R15 报告）——"CI readiness. The current configuration is fragile for automated CI pipelines that may run from the project root."
+
+- [x] R16-F4: R-probability 信号化着色
+  - 目标：MemoryDetail 的 Access Freshness 区域当前将 R-probability 显示为纯数字（次要文本颜色），无论值是 85%（健康）还是 6%（风险）。用户需自行判断数字好坏——系统已知但未传达。基于三档着色 R 值：绿色（R > 50%，使用 `--cm-success`）、琥珀色（10% ≤ R ≤ 50%，使用 `--cm-warning`）、红色（R < 10%，使用 `--cm-error`）。纯前端条件样式——R 值已在 MemoryDetail.tsx 中通过混合衰减公式客户端计算。应用颜色到 R 值文本本身以及 S3 的 List 健康条形（如 S3 纳入）。
+  - 验收：R > 50% 的记忆显示绿色 R 值；10% ≤ R ≤ 50% 的记忆显示琥珀色 R 值；R < 10% 的记忆显示红色 R 值；从未访问的记忆（"R=N/A"）保持次要文本颜色（无着色）；颜色变量使用已有 CSS 自定义属性（`--cm-success` / `--cm-warning` / `--cm-error`）；亮色和深色模式下均可区分；TypeScript 构建零错误
+  - 来源：体验官 Proposal 1（R15 报告）——"The R-probability is the product's core signal — it tells the user whether a memory is being maintained. Rendering it as a neutral number is like a thermometer that shows degrees without a fever indicator."
+
+- [x] R16-F5: 陈旧检测时下调 stability
+  - 目标：R15-C1 在成功访问时上调 stability（SInc 乘数 1.05-1.80）。对称地，当 `resolve` 检测到 summary_hash 不匹配（陈旧提醒）时，应下调 stability 作为"回忆失败"信号。下调幅度小于上调幅度（建议 0.85-0.95 乘数），反映"一次回忆失败不应抹去所有之前的巩固"。`stability` 不低于默认基线 14.0（或领域默认值，取记忆创建时使用的值），防止惩罚性下跌。完成 stability 反馈闭环：成功回忆 → stability↑（R15-C1），检测陈旧 → stability↓（R16-F5）。
+  - 验收：resolve 检测到 summary_hash 不匹配（陈旧记忆）时 stability 值下调（新值 < 旧值）；下调幅度小于上调幅度（陈旧惩罚应轻于回忆奖励）；`stability` 不低于该记忆的领域默认基线（如记忆以 stability=14.0 创建，即使连续陈旧也不低于 14.0）；非陈旧记忆的 stability 不受影响（resolve 行为不变）；57+24+5 测试无回归
+  - 来源：研究员 Important #5（审计报告）+ R15 协商明确延期至 R16——"Stability decrease on stale detection — When resolve detects a stale summary (hash mismatch), decrease the memory's stability as a 'recall failure' signal. Currently, stale detection is purely informational."
+
+### 第二梯队：长期延期功能（必达，约 3-4 天）
+
+- [x] R16-C1: 全文正文搜索
+  - 目标：当前搜索仅匹配 ID、summary、tags 和 body 前 120 字符的截断（通过 `search.py` 的 `_tokenize` 和匹配逻辑）。用户若只记得 body 中的关键概念但忘了 ID 或摘要措辞，无法找到记忆。需重构搜索管道以索引和搜索 body 全文内容。前端在搜索结果中高亮匹配词（使用 `<mark>` 或 `<span>` 高亮样式）并显示匹配位置预览（匹配词周围的 body 片段）。搜索排名逻辑：精确 ID 匹配 > summary/tags 匹配 > body 全文匹配。不改变 DAG 依赖解析的核心哲学——全文搜索是"逃生舱"补充检索机制，非替代。
+  - 验收：搜索匹配 body 正文中任意位置的词（不仅前 120 字符）；搜索结果排序：精确 ID 匹配优先于 summary/tags 匹配优先于 body 全文匹配；搜索结果中 body 匹配词高亮显示；搜索结果显示 body 匹配片段（匹配词前后约 40 字符的上下文）；搜索性能在 100 条记忆的数据集上感知无延迟（< 500ms）；现有搜索行为不变——ID/summary/tags 匹配不受影响；57+24+5 测试无回归；前端 TypeScript 零错误
+  - 来源：进化策略师 C3（R15 报告）——"Search is the 'escape hatch' of memory tools. When DAG navigation and browsing both fail, full-text search is the last retrieval mechanism. Currently this escape hatch is half-closed." + Gemini 进化策略师 C4——"Refactor the search pipeline to index and search body full-text."
+
+- [x] R16-C2: Per-memory stability UI（前端滑块）
+  - 目标：R15 完成了所有后端 stability 工作——自适应更新（C1：resolve 访问时 SInc 增长）、长期保留底线（C2：混合衰减公式）、领域差异化默认值（C3：semantic_type → stability 映射）。但用户无法手动调整 stability——所有交互都通过 resolve/reindex 自动触发。在 MemoryDetail 面板的 Access Freshness 区域添加 stability 滑块（范围 1-365 天，步长 1 天，默认值来自该记忆当前 stability）。用户拖动滑块后通过 `PUT /api/memories/{id}` 更新 stability（复用现有更新端点，stability 已是 MemoryEntry 字段）。滑块显示当前值及对应半衰期的人类可读标签（"Half-life: X days — 50% retrieval at X days"）。为避免手动设置被 resolve 的自适应更新覆盖：手动调整 stability 的记忆记录 `stability_source: "manual"`（resolve 仅对 `stability_source != "manual"` 的记忆应用 SInc）。用户可通过将滑块拖回默认值来清除 manual 标记。
+  - 验收：MemoryDetail 的 Access Freshness 区域存在 stability 滑块（HTML range input 或等效 UI 组件）；滑块范围 1-365 天，步长 1 天；滑块当前值反映该记忆的实际 stability；拖动滑块并释放后触发 `PUT /api/memories/{id}` 更新 stability；更新后滑块值和显示文本反映新 stability；手动设置 stability 的记忆标记为 `stability_source: "manual"`（resolve 不再对其应用 SInc）；未手动调整的记忆（`stability_source` 不存在或为 `"adaptive"`）继续受 resolve 自适应更新影响；滑块在亮色和深色模式下均可正常显示和交互；TypeScript 构建零错误；57+24+5 测试无回归
+  - 来源：体验官 Important #3（R14 遗留）——"R14 Important #3: Add stability editing to MemoryDetail — DEFERRED to R16 per negotiation" + 进化策略师 I2（R15 报告）——"Frontend slider for per-memory half-life tuning. R16 likely slot per negotiation."
+
+### 第三梯队：衰减管理轻量化（应达，约 5 小时）
+
+- [x] R16-S1: Touch 端点——轻量衰减刷新
+  - 目标：当前唯一刷新记忆衰减时钟（更新 `last_access` 并重算 stability）的方式是运行 Resolve——但 Resolve 是重量级操作（加载完整 DAG、渲染图节点、返回 LLM 就绪上下文）。用户只想标记"我已复习此记忆"时不应需要加载依赖图。新增 `POST /api/memories/{id}/touch` 端点：更新 `last_access` 为当前 ISO 时间戳、`days_since_last_access` 设为 0、如果 `stability_source != "manual"` 则调用与 resolve 相同的 SInc 函数重算 stability。端点轻量——不加载 DAG、不渲染节点、不返回上下文。前端在 MemoryDetail 的 Access Freshness 区域添加"Touch"按钮（或图标按钮），点击后：(a) 发送 touch 请求；(b) 显示短暂确认动画（对勾脉冲，~600ms）；(c) "Last accessed" 文本从 "X days ago" 变为 "just now"；(d) R-probability 重新计算并显示更新后的值（使用 F4 的着色）。Touch 按钮在 touch 请求进行中禁用（防止重复点击）。
+  - 验收：`POST /api/memories/{id}/touch` 端点存在并返回 200；touch 后记忆的 `last_access` 更新为当前时间；touch 后 `days_since_last_access` 变为 0；touch 后 stability 按 SInc 公式更新（与 resolve 相同的公式，stability_source != "manual" 时）；MemoryDetail 的 Access Freshness 区域存在 Touch 按钮（图标或文字按钮）；点击 Touch 后显示确认动画（对勾脉冲，约 600ms）且按钮在请求期间禁用；确认后 "Last accessed" 显示 "just now"；确认后 R-probability 重新计算并更新为 ~100%（days=0 时 R≈100%）；确认后 R 值着色变为绿色（R > 50%）；Touch 不影响其他记忆（不递增 dependents 的 access_count）；57+24+5 测试无回归；前端 TypeScript 零错误
+  - 来源：体验官 Proposal 2（R15 报告）——"The decay management loop is currently 'see at-risk memory -> click Resolve -> wait for DAG -> memory is now accessed' which is heavyweight and misaligned with the intent. 'I reviewed this memory' should not require loading a dependency graph."
+
+- [x] R16-S2: 搜索结果中显示访问新鲜度
+  - 目标：R14 协商将"在搜索结果中显示访问新鲜度"（体验官 Important #5）明确延期至 R16。当前搜索下拉框的每条结果条目显示 ID、summary 片段、match quality 指示器——但不显示该记忆的衰减状态。在每条搜索结果条目旁（或在条目的次要信息行中）显示：(a) "X days ago"（基于 `days_since_last_access`），或 "never"（如为从未访问）；(b) R-probability 百分比（使用与 F4 和 MemoryDetail 相同的三档着色：绿/琥珀/红）。数据已在搜索 API 响应中（`days_since_last_access` 和 `stability` 字段自 R15-C4 统一数据源起），纯前端渲染。不使用额外的垂直空间——将这些信息内联到现有搜索结果条目布局中。
+  - 验收：每条搜索结果条目显示 `days_since_last_access`（"X days ago" 或 "never"）；每条搜索结果条目显示 R-probability（百分比，使用 F4 的三档着色：绿/琥珀/红）；从未访问的记忆显示 "never · R=N/A"（无着色）；新鲜度信息使用次要文本样式（12px、低突出度颜色），不主导搜索条目；搜索结果下拉框布局不因新增信息而破损（高度自适应）；亮色和深色模式适用；TypeScript 构建零错误
+  - 来源：体验官 Important #5（R14 遗留）+ R15 协商明确延期至 R16——"Add access recency to search results — DEFERRED to R16 per negotiation."
+
+- [x] R16-S3: List 视图添加记忆健康列
+  - 目标：List 视图是产品的"一览"界面。当前展示丰富元数据——ID、summary、type、maturity、status、tags——但无衰减信息。用户浏览列表时无法识别哪些记忆需要关注，必须逐个打开 MemoryDetail。在 List 视图表格中新增紧凑的 "Health" 列：每行显示一个水平彩色条形（width ~40px, height ~4px），颜色基于 R-probability 的三档着色（绿色 R>50%、琥珀色 10-50%、红色 R<10%，从 F4 共享颜色逻辑）。条形旁显示 R 百分比数值（10px 或 11px 小号字体，节省水平空间）。将 "Health" 列放在现有列（ID / Summary / Type / Maturity / Status / Tags / Health）的最后或倒数第二位。点击健康指示器（条形或百分比）打开该记忆的 MemoryDetail 并自动滚动到 Access Freshness 区域。数据已在列表 API 响应中（`days_since_last_access`、`stability` 字段），纯前端——无新端点。
+  - 验收：List 视图表格中存在 "Health" 列标题；每行显示彩色水平条形（绿/琥珀/红对应 R 值）；每行显示 R 百分比数值（紧凑字号）；从未访问的记忆显示灰色条形 + "N/A"（无着色）；点击健康指示器打开该记忆的 MemoryDetail 面板（复用现有 openDetail 机制）；MemoryDetail 打开后 Access Freshness 区域可见（最好自动滚动到该区域）；Health 列可排序（按 R 值降序——最有风险的排在最前）；列宽紧凑（不挤占其他列）；亮色和深色模式适用；TypeScript 构建零错误
+  - 来源：体验官 Proposal 3（R15 报告）——"The List view is the product's 'at a glance' interface. It currently shows what memories exist but not which ones are decaying. Adding a health column makes the list a diagnostic tool rather than a directory."
+
+### 第四梯队：批量 Polish（容量允许时，约 2 小时）
+
+- [x] R16-P1: 移除 Wander 模式切换
+  - 目标：Wander 模态当前提供 "cool" vs "random" 模式切换按钮。在小型数据集（10-62 条记忆）上，两种模式产生感知上相同的结果——加权随机（cool）与均匀随机（random）在样本量 < 200 时不可区分。移除模式切换按钮和对应状态管理。默认使用 "cool" 模式（加权向低访问 + 低 intensity 记忆倾斜——更有用的行为）。简化视觉：Wander 模态仅显示单一 "Wander" 按钮（点击随机召回冷记忆），无模式 UI。
+  - 验收：Wander 模态中无 "cool" / "random" 模式切换 UI（按钮、标签或指示器）；点击 Wander 按钮触发 cool 模式行为（加权随机向冷记忆倾斜）；Wander 结果展示行为不变（summary + id + tags）；后端 wander API 不变（`POST /api/wander` 继续工作）；TypeScript 构建零错误
+  - 来源：体验官 Phase 3 建议（R15 报告）——"Remove the mode toggle and default to 'cool' mode. The toggle adds UI complexity without delivering a perceptibly different experience at current dataset sizes."
+
+- [x] R16-P2: Search Resolve 按钮添加 tooltip
+  - 目标：搜索下拉框中每条结果旁有 "Resolve →" 按钮（自 R13-D1 起），但按钮缺少 tooltip 解释其功能。新用户可能不理解 "Resolve" 的含义或不愿点击未知按钮。添加 tooltip（title 属性或自定义 tooltip 组件）："Resolve this memory's dependency graph"。使用与产品中已有 tooltip 一致的样式（Dashboard 或 MemoryDetail 中的 tooltip 模式）。
+  - 验收：鼠标悬浮在搜索结果的 "Resolve →" 按钮上时显示 tooltip；tooltip 文本解释 Resolve 功能（"Resolve this memory's dependency graph" 或类似措辞）；tooltip 样式与产品中已有 tooltip 一致（暗色背景、亮色文字、合理 padding）；亮色和深色模式下 tooltip 均可读；TypeScript 构建零错误
+  - 来源：体验官 Nice-to-have #7（R14 遗留）——"R13 debt, still deferred. Improves discoverability of the primary feature."
+
+- [x] R16-P3: 上下文菜单项添加快捷键提示
+  - 目标：图节点右键菜单（自 R12-P3 起）显示三个选项：Edit、Delete、Resolve（R14-N2 新增）。这些菜单项的纯文本标签旁应显示键盘快捷键提示（如 "Ctrl+E" / "Delete" / "Ctrl+R"），作为快捷键可发现面——用户在看到菜单时自然学习快捷键。快捷键提示使用与视图切换快捷键提示相同的视觉语言（小号、muted 颜色、右对齐或放在标签后面）。实际键盘快捷键绑定可以不在本轮实现（仅视觉提示），但提示的快捷键必须与实际绑定一致（若已有全局快捷键）。
+  - 验收：图节点右键菜单中 "Edit" 旁显示快捷键提示（如 "Ctrl+E" 或 "E"）；"Delete" 旁显示快捷键提示（如 "Delete" 或 "Del"）；"Resolve" 旁显示快捷键提示（如 "Ctrl+R" 或 "R"）；快捷键提示使用小号 muted 文字（与视图切换提示一致）；亮色和深色模式下可读但不喧宾夺主；菜单布局不因快捷键提示而破损；TypeScript 构建零错误
+  - 来源：体验官 Nice-to-have #10（R14 遗留）——"The context menu is a natural shortcut discoverability surface."
+
+### 第五梯队：延伸目标（仅当前四梯队全部完成、测试通过后启动）
+
+- [x] R16-M1: 可写 MCP 工具（propose_memory + propose_update）
+  - 目标：5 个已注册 MCP 工具中 4 个标记为 `readOnly`（resolve / overview / wander / focus）。Agent 可读不可写——对于一个定位为"AI Agent 外部大脑"的系统构成悖论。实现两个新 MCP 工具：(1) `propose_memory`——创建 `maturity: draft` + `status: proposed` 的新记忆，需人工审核后才能提升为 `verified`；(2) `propose_update`——对现有记忆提出更新（新 body/summary/tags），以 proposed 状态存储为 `change_note` 或 `proposed_changes` 字段，需人工审核。两个工具在 MCP 注册中标记为非 readOnly。安全边界：proposed 记忆在人工通过 MemoryForm 或 CLI `update` 提升 maturity 之前，(a) 不出现在 overview 的 top 5 中（maturity=draft），(b) 不出现在 resolve 结果中（除非被显式 focus），(c) 在 Dashboard 中显示为 "Proposed" 分组。MCP tool 定义遵循已有模式（Claude 兼容的 inputSchema）。
+  - 验收：`propose_memory` MCP 工具存在并可被发现（`sandbox.list_tools()` 包含该工具）；`propose_update` MCP 工具存在并可被发现；两个工具均非 readOnly（在工具定义的 annotations 中未设置或设为 `readOnly: false`）；`propose_memory` 创建的记忆 `maturity: "draft"` 且 `status: "proposed"`；proposed 记忆写入正确的数据集目录（`.md` 文件 + index.json 条目）；proposed 记忆不出现在 overview top 5 中（draft 记忆的 deps 计数最低 + access 计数最低）；proposed 记忆在 Dashboard 中有可见标识（Proposed 分组或过滤选项）；`propose_update` 不直接修改原记忆——以 proposed_changes 存储；现有 MCP 工具行为不变（5 个已有工具仍正常工作）；57+24+5 测试无回归
+  - 来源：进化策略师 I1（R15 报告）——"If CodeMemory is positioned as 'the external brain for AI Agents,' the Agent must be able to update the brain during reasoning." + Gemini 进化策略师——"Enhance MCP Server: not only allow Agents to read memories, but support Agent-to-Agent shared memory topology."
+
+- [x] R16-A1: God Object 部分拆分——server.py APIRouter 化
+  - 目标：`server.py` 达 1419 行，17 个端点全在一个文件中。随功能增加，合并冲突风险上升、代码导航困难。仅做后端路由拆分——不碰 `App.tsx`。使用 FastAPI `APIRouter` 将端点按业务域分到独立模块：(1) `routers/memories.py`——CRUD 端点（GET list、GET by id、POST create、PUT update、DELETE、POST touch（如 S1 纳入）、POST import）；(2) `routers/search.py`——POST search、POST resolve；(3) `routers/stats.py`——GET stats、POST validate、GET datasets、POST wander、POST reindex；(4) `routers/mcp.py`——MCP 相关端点（如存在）。`server.py` 主文件保留 app 创建、中间件注册、CORS 配置、router 挂载（~100 行）。每个 router 模块独立导入所需依赖（handlers、models、index 加载）。拆分后所有 17+ 个端点行为不变——URL 路径、请求/响应格式、header 要求完全不变。拆分前运行全部测试确认基线；拆分后重跑全部测试确认零回归。
+  - 验收：`server.py` < ~150 行（仅 app 创建 + 中间件 + router 挂载 + 启动逻辑）；至少 3 个独立 router 模块（`routers/memories.py`、`routers/search.py`、`routers/stats.py`）；每个 router 模块使用 `APIRouter(prefix="/api")` 或等效路径注册；所有现有端点 URL 路径不变（如 `POST /api/search` 仍为 `/api/search`）；所有现有端点行为不变（请求/响应格式、header 要求、状态码完全相同）；57+24+5+5（Playwright）测试全部通过；`uvicorn backend.server:app` 启动成功，`/docs` Swagger UI 显示所有端点
+  - 来源：Gemini 架构师（7.0/10）——"server.py at 1,377 lines... all 17 endpoints crammed into one file. This will become a merge conflict hotspot." + 进化策略师 TH1（R15 报告）——"Introduce APIRouter to split endpoints."
+
+---
+
+### 本轮排除项目（不纳入最终轮）
+
+- **导入 UI（拖拽 Markdown 批量导入）**—— 约 3 天。大型全栈功能。进化策略师 C1 + Gemini 进化策略师 #1 短板。本轮已被全文搜索 + stability UI 占满容量。留给未来 Sprint 作为最高优先级。
+- **AI 辅助创建（LLM Gateway 集成到 MemoryForm）**—— 约 2 天。进化策略师 I2 + Gemini 进化策略师 #2 短板。需 `llm_gateway` 前端集成且依赖状态未确认。留给未来 Sprint。
+- **语义边（semantic_type on imports）**—— 约 5 天。Gemini 研究员标注为突破点。研究级差异化功能，需 schema 迁移 + prompt 生成变更。不适合在容量紧张的最终轮启动。
+- **复习队列（Review Queue）**—— 约 2 天。S3（List 健康列）+ F4（R-probability 着色）已覆盖 80% 复习队列价值（扫描发现风险记忆）。完整 sequential review 留给未来 Sprint。
+- **跨数据集解析**—— 约 3-4 天。需共享索引 + resolve 引擎变更。独立轮次范畴。
+- **Markdown 预览（MemoryForm 中）**—— 约 0.5 天。价值清晰但优先于全文搜索和 stability UI 之下。
+- **完整 God Object 拆分（含 App.tsx 状态管理）**—— 约 3 天。当前 1-2 人团队可管理。仅 server.py 路由拆分（R16-A1）作为延伸目标。
+- **图-搜索联动**—— 约 0.5 天。全文搜索（C1）交付后，搜索本身就是比图高亮更直接的发现路径。
+- **Wander 主动复习模式**—— 约 2 小时。研究员 Important #4。依赖 C2（per-memory stability UI）先落地并稳定。留给未来 Sprint。
+- **Maturity badge tooltip**—— 约 1 小时。体验官 Nice-to-have #9。教育性 tooltip，在最终轮让位于全文搜索和 stability UI。
+- **移除 List 视图本地过滤条**—— 约 1 小时。体验官 Nice-to-have #8 + R14-N3 有意延期。非阻塞性 UI 简化，在最终轮容量饱和时不可冒险。
+
+### 新增陷阱（本轮结束后追加至 pitfalls.md）
+
+- **[R16-C1] 全文搜索引入时需关注搜索性能。** 当前搜索在 100 条记忆的数据集上感知无延迟（基线 < 100ms）。全文 body 搜索需读取每个 `.md` 文件并扫描 body 内容——在 100 条记忆时可能增加到 200-500ms。验收基准为 < 500ms。如果 body 文件读取成为瓶颈，考虑在 index.json 中预计算 body token 集合（在 reindex 时构建 `body_tokens: list[str]` 字段）。
+
+- **[R16-C2] stability 滑块产生的 `stability_source: "manual"` 标记需持久化。** 如果在 MemoryEntry 模型上新增 `stability_source` 字段，需确保：(a) reindex 时保留该字段；(b) 旧记忆加载时默认值为 None 或 `"adaptive"`（与未标记行为一致）。Pydantic 模型更新必须在 `index.json` 序列化/反序列化中正确往返。
+
+- **[R16-C2] stability 滑块与 R15-C1 自适应更新的交互。** resolve 访问时，R15-C1 对所有记忆应用 SInc——不检查 `stability_source`。R16-C2 需在该代码路径中添加条件：仅 `stability_source != "manual"` 时应用 SInc。如果遗漏此条件，手动设置的 stability 将在下次 resolve 时被覆盖。
+
+- **[R16-S1] Touch 和 Resolve 都更新 `last_access` 和重算 stability。** 两个端点应共享相同的 stability 更新逻辑（提取为共享函数 `_update_stability_on_access(entry)`）。如果 Touch 使用与 Resolve 不同的 stability 更新代码路径，行为将发生分歧。
+
+- **[R16-M1] Proposed 记忆的 maturity/status 组合语义。** `maturity: draft` + `status: proposed` 是 proposed 记忆的标记组合。现有代码中对 draft 成熟度的处理是降权（overview heat 较低、resolve 结果中标记为 DRAFT）。需确保 proposed 记忆在 Dashboard 和搜索中有可见的 "Proposed" 标识，而不仅仅表现为一般的 draft 记忆。
+
+- **[R16-A1] APIRouter 拆分不改变任何 URL 路径。** 使用 `APIRouter(prefix="/api")` 时，router 模块中的路由定义不应包含 `/api` 前缀（FastAPI 自动拼接）。如果误在 `@router.post("/api/search")` 中重复前缀，实际路径将变为 `/api/api/search`——导致 404。验收时需逐端点 curl 验证。
+
+- **[R16-F1] 端点字段缺口的根因可能是 FastAPI `response_model` 排除 None 值。** 如果 `response_model` 定义为包含 `days_since_last_access: int | None` 的 Pydantic 模型，FastAPI 的默认 JSON 序列化可能省略值为 None 的字段。需在响应模型上设置 `model_config = {"serialize_unknown": True}` 或等效配置，或使用 `response_model_exclude_none=False`。
+
+- **[R16-C1 + R16-C2 + R16-S1 联合] stability 更新逻辑分散在多个文件中。** R15-C1（resolve.py）、R16-F5（resolve.py 陈旧检测）、R16-S1（touch 端点）、R16-C2（滑块更新）——四个位置都会修改 stability。如果未提取为共享函数，未来维护成本将随每个新 stability 修改入口而线性增长。建议在 `core.py` 或 `handlers.py` 中定义 `apply_stability_update(entry, reason: str)` 统一入口。
+
+### 长期 Backlog 新增（本轮审计中识别的新项目）
+
+- **下一 Sprint 最高优先级——破局冷启动**：批量导入 UI（3 天）+ AI 辅助创建（2 天）+ MemoryForm imports 自动补全（1 天）+ Markdown 预览（0.5 天）。四个审计源一致认定这是当前产品最大的体验鸿沟。
+- **下一 Sprint 次高优先级——语义图谱**：语义边扩展（5 天）+ God Object 完整拆分（3 天，如前序未完成）。Gemini 研究员标注为长链推理突破点。
+- **导入端点 CLI/API 统一**（进化策略师 + 体验官）—— `codememory import` CLI 和 `POST /api/import` 端点当前行为一致但代码路径分离。合并为共享 handler 减少分歧风险。
+- **搜索性能基准测试**（进化策略师 TH2 延伸）—— 在 100/500/1000 条记忆的数据集上建立搜索性能基线。为未来 SQLite 索引后端迁移提供量化依据。

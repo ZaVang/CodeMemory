@@ -3,8 +3,8 @@ type: atom
 id: user/context
 summary: 陪伴记忆入口——从日常生活习惯→情感状态→重要人物→价值观→关键时刻，一键加载完整的个人世界
 status: active
-created: 2026-04-27
-version: 1
+created: '2026-04-27'
+version: 3
 tags:
 - companion
 - context
@@ -14,18 +14,29 @@ protected: true
 maturity: verified
 imports:
   required:
-    - user/preferences/morning-coffee
-    - user/preferences/dislike-crowds
-    - user/feelings/burnout-april
-    - user/feelings/proud-moment
-    - user/people/mom-weekly-call
-    - user/people/best-friend-li
-    - user/beliefs/friendship-view
-    - user/beliefs/life-pace
+  - user/preferences/morning-coffee
+  - user/preferences/dislike-crowds
+  - user/feelings/burnout-april
+  - user/feelings/proud-moment
+  - user/people/mom-weekly-call
+  - user/people/best-friend-li
+  - user/beliefs/friendship-view
+  - user/beliefs/life-pace
   recommended:
-    - user/moments/rainy-sunday
-summary_hash: d1d43d7
+  - user/moments/rainy-sunday
+summary_hash: 3d6cf56
+updated: '2026-05-07'
+change_log:
+- version: 3
+  date: '2026-05-07'
+  note: API update
+- version: 2
+  date: '2026-05-07'
+  note: API update
+change_note: API update
 ---
+
+
 # 陪伴上下文
 
 ## 关于这些记忆
