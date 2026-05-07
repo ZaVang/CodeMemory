@@ -199,5 +199,6 @@ codememory snapshot <id> [--target <id> | --from-dag <json_file>]
 |------|---------|---------|------|
 | Backend (FastAPI) | 8000 | `python backend/server.py` | 可通过 `--root` 参数或 `CODEMEMORY_ROOT` 环境变量指定记忆数据目录 |
 | Frontend (Vite) | 5299 | `cd frontend && npm run dev` | 若端口被占用，Vite 会自动递增到 5300、5301 等；proxy 配置固定指向 backend `localhost:8000` |
+| **一键启动** | — | `./bin/dev` | 同时启动 Backend + Frontend，Ctrl+C 停止全部 |
 
 实际端口以启动时终端输出为准。验收脚本不应硬编码端口号——优先读 `vite.config.ts` 中的 `server.port` 或启动日志。
