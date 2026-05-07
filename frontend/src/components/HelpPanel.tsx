@@ -111,7 +111,8 @@ const UI_GUIDE = [
       { name: 'Search 搜索', desc: '按 tag、目录、maturity 或关键词过滤。匹配节点金色高亮，非匹配节点淡化。' },
       { name: 'Budget 滑块', desc: 'Token 预算控制器（200–5000）。拖动时实时重新 resolve，被裁剪的节点会变半透明 + 缩小 + 虚线边框。' },
       { name: 'Dagre', desc: '分层布局，自上而下展示依赖关系方向。这是当前唯一的图布局方式。' },
-      { name: '+ New', desc: '创建新记忆表单。填写 id、summary、tags、intensity、body 后提交。' },
+      { name: 'Create Memory', desc: '创建新记忆表单。填写 id、summary、tags、intensity、body 后提交。' },
+      { name: '快捷键', desc: '1=Graph / 2=List / 3=Dashboard / Ctrl+K=Search / Ctrl+N=Create / Ctrl+Z=Undo / ?=Shortcuts / Esc=Close' },
     ],
   },
   {
@@ -159,6 +160,7 @@ export default function HelpPanel({ onClose }: Props) {
 
       {/* Panel */}
       <div
+        className="panel-slide-enter"
         style={{
           position: 'fixed',
           top: 0,
@@ -261,7 +263,7 @@ export default function HelpPanel({ onClose }: Props) {
                   <span
                     style={{
                       fontFamily: 'JetBrains Mono, monospace',
-                      fontSize: 11,
+                      fontSize: 12,
                       color: 'var(--cm-text-primary)',
                       backgroundColor: 'var(--cm-bg-subtle)',
                       padding: '1px 6px',
@@ -295,7 +297,7 @@ export default function HelpPanel({ onClose }: Props) {
           </h3>
 
           <div style={{ fontSize: 13, fontFamily: 'Raleway, sans-serif', color: 'var(--cm-text-secondary)', marginBottom: 16 }}>
-            以下 15 个命令通过 <code style={{ backgroundColor: 'var(--cm-bg-subtle)', padding: '1px 4px', borderRadius: 2, fontFamily: 'JetBrains Mono, monospace', fontSize: 11 }}>codememory &lt;command&gt;</code> 在终端中使用。
+            以下 15 个命令通过 <code style={{ backgroundColor: 'var(--cm-bg-subtle)', padding: '1px 4px', borderRadius: 2, fontFamily: 'JetBrains Mono, monospace', fontSize: 12 }}>codememory &lt;command&gt;</code> 在终端中使用。
             其中的 10 个已封装为 REST API 供前端调用——见下方 API 参考。
           </div>
 
@@ -323,7 +325,7 @@ export default function HelpPanel({ onClose }: Props) {
                   <code
                     style={{
                       fontFamily: 'JetBrains Mono, monospace',
-                      fontSize: 10,
+                      fontSize: 12,
                       color: 'var(--cm-text-tertiary)',
                     }}
                   >
@@ -348,7 +350,7 @@ export default function HelpPanel({ onClose }: Props) {
                   {layer}
                 </span>
               </div>
-              <div style={{ fontSize: 11, fontFamily: 'Raleway, sans-serif', color: 'var(--cm-text-secondary)', lineHeight: 1.5 }}>
+              <div style={{ fontSize: 12, fontFamily: 'Raleway, sans-serif', color: 'var(--cm-text-secondary)', lineHeight: 1.5 }}>
                 {desc}
               </div>
             </div>
@@ -370,7 +372,7 @@ export default function HelpPanel({ onClose }: Props) {
           </h3>
 
           <div style={{ fontSize: 13, fontFamily: 'Raleway, sans-serif', color: 'var(--cm-text-secondary)', marginBottom: 16 }}>
-            前端通过以下端点与后端通信。所有端点委托 <code style={{ backgroundColor: 'var(--cm-bg-subtle)', padding: '1px 4px', borderRadius: 2, fontFamily: 'JetBrains Mono, monospace', fontSize: 11 }}>src/codememory/handlers.py</code>，不重复实现业务逻辑。
+            前端通过以下端点与后端通信。所有端点委托 <code style={{ backgroundColor: 'var(--cm-bg-subtle)', padding: '1px 4px', borderRadius: 2, fontFamily: 'JetBrains Mono, monospace', fontSize: 12 }}>src/codememory/handlers.py</code>，不重复实现业务逻辑。
           </div>
 
           {[
@@ -415,10 +417,10 @@ export default function HelpPanel({ onClose }: Props) {
                 {ep.method}
               </span>
               <div>
-                <code style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'var(--cm-text-primary)' }}>
+                <code style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: 'var(--cm-text-primary)' }}>
                   {ep.path}
                 </code>
-                <div style={{ fontSize: 11, fontFamily: 'Raleway, sans-serif', color: 'var(--cm-text-secondary)', lineHeight: 1.5, marginTop: 1 }}>
+                <div style={{ fontSize: 12, fontFamily: 'Raleway, sans-serif', color: 'var(--cm-text-secondary)', lineHeight: 1.5, marginTop: 1 }}>
                   {ep.desc}
                 </div>
               </div>

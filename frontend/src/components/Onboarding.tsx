@@ -4,41 +4,86 @@ interface Props {
   onComplete: () => void
 }
 
+// R12-P1: SVG geometric icons for each onboarding step
+const StepIcon = ({ step }: { step: number }) => {
+  const size = 32
+  const color = 'var(--cm-accent)'
+  const strokeW = 2
+  switch (step) {
+    case 0: // Welcome — star
+      return (
+        <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeW} strokeLinecap="round" strokeLinejoin="round">
+          <polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26" />
+        </svg>
+      )
+    case 1: // Graph View — circle (node)
+      return (
+        <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeW} strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="12" r="8" />
+          <circle cx="12" cy="12" r="3" />
+          <line x1="12" y1="4" x2="12" y2="9" />
+          <line x1="20" y1="8" x2="17" y2="10.5" strokeDasharray="2 1" />
+        </svg>
+      )
+    case 2: // Resolve — arrow / dependency
+      return (
+        <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeW} strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="7" cy="7" r="3" />
+          <circle cx="17" cy="17" r="3" />
+          <line x1="9.5" y1="8.5" x2="14.5" y2="13.5" />
+          <polyline points="16,15 14.5,13.5 16,12" />
+        </svg>
+      )
+    case 3: // Create — plus
+      return (
+        <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeW} strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="12" r="8" />
+          <line x1="12" y1="8" x2="12" y2="16" />
+          <line x1="8" y1="12" x2="16" y2="12" />
+        </svg>
+      )
+    case 4: // You're Ready — checkmark in circle
+      return (
+        <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeW} strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="12" r="8" />
+          <polyline points="8,12 11,15 16,9" />
+        </svg>
+      )
+    default:
+      return null
+  }
+}
+
 const STEPS = [
   {
     title: 'Welcome to CodeMemory',
     subtitle: 'Your memory is a dependency graph, not a search index.',
     description:
       'CodeMemory organizes knowledge as interconnected "atoms" — small, self-contained memories linked by explicit dependencies. Think of it as a personal knowledge graph where every piece of information knows what it depends on.',
-    icon: '+',
   },
   {
     title: 'Graph View',
     subtitle: 'Explore your memory network visually.',
     description:
       'Each circle is a memory. Color = category, size = importance. Solid lines mean required dependencies (must-read), dashed lines are recommended, dotted lines are related. Click a node to see details. Right-click to Edit or Archive.',
-    icon: 'o',
   },
   {
     title: 'Resolve',
     subtitle: 'Reconstruct the full context of any idea.',
     description:
       'Click "Resolve" in the detail panel to trace all dependencies. The graph animates through the dependency chain in topological order — showing you exactly how ideas connect. Use the Budget slider to control how much context to load.',
-    icon: '>',
   },
   {
     title: 'Create Memories',
     subtitle: 'Build your knowledge graph.',
     description:
-      'Click "+ New" to create a memory. Give it an ID (e.g. "user/ideas/my-thought"), add tags, set importance (1–10), and write your content in Markdown. Add imports to link it to existing memories.',
-    icon: '~',
+      'Click "Create Memory" to create a memory. Give it an ID (e.g. "user/ideas/my-thought"), add tags, set importance (1–10), and write your content in Markdown. Add imports to link it to existing memories.',
   },
   {
     title: "You're Ready",
     subtitle: 'Start building your memory network.',
     description:
       'The Dashboard shows statistics and health checks. Switch datasets from the header dropdown. Press Escape to close panels. The Help button (top-right) has full reference documentation.',
-    icon: '✓',
   },
 ]
 
@@ -84,13 +129,9 @@ export default function Onboarding({ onComplete }: Props) {
               alignItems: 'center',
               justifyContent: 'center',
               margin: '0 auto 24px',
-              fontSize: 28,
-              fontFamily: "'Cormorant Garamond', serif",
-              color: 'var(--cm-accent)',
-              fontWeight: 500,
             }}
           >
-            {current.icon}
+            <StepIcon step={step} />
           </div>
 
           {/* Title */}

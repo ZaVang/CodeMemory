@@ -224,3 +224,60 @@ code, pre {
 .prose code { background: var(--cm-bg-subtle); padding: 2px 6px; border-radius: 2px; font-size: 14px; }
 .prose pre { background: var(--cm-text-primary); color: var(--cm-text-inverse); padding: 16px; border-radius: 4px; overflow-x: auto; margin-bottom: 12px; }
 .prose pre code { background: none; color: inherit; padding: 0; }
+
+/* R12-UX2: Panel slide-in from right with 250ms ease */
+@keyframes panelSlideIn {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+
+@keyframes panelSlideOut {
+  from { transform: translateX(0); }
+  to { transform: translateX(100%); }
+}
+
+.panel-slide-enter {
+  animation: panelSlideIn 250ms ease forwards;
+}
+
+.panel-slide-exit {
+  animation: panelSlideOut 250ms ease forwards;
+}
+
+/* R12-UX2: Modal fade-in + scale entrance */
+@keyframes modalFadeIn {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes modalFadeOut {
+  from { opacity: 1; transform: scale(1); }
+  to { opacity: 0; transform: scale(0.96); }
+}
+
+.modal-fade-enter {
+  animation: modalFadeIn 250ms ease forwards;
+}
+
+.modal-fade-exit {
+  animation: modalFadeOut 250ms ease forwards;
+}
+
+/* R12-UX2: Backdrop fade */
+@keyframes backdropFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes backdropFadeOut {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+.backdrop-fade-enter {
+  animation: backdropFadeIn 200ms ease forwards;
+}
+
+.backdrop-fade-exit {
+  animation: backdropFadeOut 200ms ease forwards;
+}

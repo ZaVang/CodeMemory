@@ -1,151 +1,208 @@
-# CodeMemory Product Audit Report — Iteration 10 (Deep Re-Examination)
+# CodeMemory Product Audit Report — Sprint 13 (Management Panel)
 
 **Reviewer:** Product Experience Reviewer
-**Date:** 2026-05-06
-**Build:** Post-Iteration 10 (f760fac)
-**Datasets tested:** companion (10), investment (10), software-architecture (11), quant_operators (62)
-**Method:** Headless browser deep exploration (puppeteer) + manual API verification + source code analysis
+**Date:** 2026-05-07
+**Build:** Post-Round 11 (7e1f84b) — entering Sprint 13
+**Datasets available:** companion (10), investment (10), software-architecture (11), quant_operators (62)
+**Method:** Headless page-state extraction + full source code review (CSS, 14 TSX components, models) + competitive context analysis
 
 ---
 
-## Executive Summary (7.0/10)
+## Executive Summary (7.0 / 10)
 
-CodeMemory is a product with genuinely sharp thinking at its core — the insight that memory loading is a dependency resolution problem, not a search problem — but the execution in the web management panel lags behind the ambition. The MCP server is a strategic home run that opens real agent integration, and the design system (LuxCart) shows taste. However, two concrete bugs undermine the core user workflow (dataset switching silently fails for List/Dashboard views; modals stack on top of each other), and several smaller frictions accumulate to make the product feel less polished than its conceptual foundations deserve.
+CodeMemory enters Sprint 13 with a solid foundation: the management panel is functionally complete, the core DAG visualization works, and the LuxCart design system gives the product a recognizable visual identity that stands apart from the developer-tool monoculture. The gap between CodeMemory's ambition (a premium knowledge tool with a crafted aesthetic) and its execution (a utilitarian web app with moments of beauty) is closing — but it's not closed yet.
 
-The product passes functional verification (0 API errors, auto-reindex works, MCP server delivers all 5 tools) but fails the "would I trust this with my data?" gut check — not because of data integrity concerns, but because the UI doesn't yet inspire the confidence that a memory system should. Memory tools need to feel solid, permanent, and trustworthy. Right now the panel feels like a capable prototype rather than the permanent home for someone's knowledge graph.
+**Functionality (7.5/10):** The CRUD loop works. Three views, dataset switching, search with tag autocomplete, create/edit forms with validation, wander/validate modals, and resolve-to-prompt export all function. Two known bugs from Round 11 persist (modal stacking edge case, list tooltips), and the Validate modal lacks a re-run affordance. The onboarding is functional but entirely passive — no interactive element, no "create your first memory" call-to-action during the tour.
 
-**Score reasoning:** Starting from I9's 8.0/10 baseline, the I10 improvements (error queue, dark tints, header enforcement, MCP server, smoke tests) are real wins (+0.5). But the newly discovered dataset switching bug and modal stacking issue are high-severity UX regressions that would cause real-world user frustration (-1.0). The search not filtering graph view, REINDEX having no feedback, and various smaller frictions contribute to the remaining deduction (-0.5). The MCP server is excellent infrastructure but doesn't materially improve the primary web UI experience.
+**Aesthetic Taste (7.0/10):** The Warm-neutral palette (charcoal `#1C1917`, cream `#FFFBEB`, gold `#B8860B`) remains the product's strongest differentiator. The Cormorant Garamond + Raleway + JetBrains Mono trio is tasteful and distinctive. But the font sizing is broken: 10-11px dominates interactive elements, creating illegibility on high-DPI displays. The 36px stat numbers (Dashboard) and 11px labels create a harsh typographic jump with no middle ground. Motion exists in the MemoryDetail panel (slide-in) but is absent everywhere else — modals, settings, and help panels "appear" rather than "arrive." The onboarding icons are raw text characters ("+", "o", ">", "~"), not a designed icon set.
+
+**Product Imagination (6.5/10):** The product's core insight — memory as dependency graph, not search index — is powerful and underexploited in the UX. The "aha moment" (watching resolve animate through a dependency chain) is buried four clicks deep. The most transformative features (DAG-aware editing, scheduled re-engagement, graph diffs) remain unimplemented. Meanwhile, the List view's local filter bar duplicates the global SearchBar's functionality and should be consolidated.
+
+The overall score edges up from I10's 6.8/10 (+0.2) primarily because: (a) the 8 verified Round 11 fixes genuinely improve the daily experience; (b) the error UX overhaul (human-readable messages, Retry button, toast queue) is meaningfully better; (c) the Wander modal's "Why this memory?" section is genuinely good product thinking. The offset comes from unchanged issues: font sizing, motion absence, and the persistent modal stacking / list tooltip bugs.
 
 ---
 
 ## Phase 1: Functional Experience
 
-### 1.1 First Impression & Onboarding Path
+### 1.1 First Impression & Onboarding
+
+The first thing a user sees is the 5-step onboarding overlay on a darkened backdrop. The design is clean: centered card, Cormorant Garamond headline, gold-accented icon circle, step dots, Skip/Next buttons.
 
 **What works:**
-- The onboarding appears immediately on first visit, blocking the full UI with a focused welcome message
-- The tagline "Your memory is a dependency graph, not a search index" sets the right conceptual frame
-- Two clear paths: SKIP (power user) or NEXT (guided tour)
+- The language is clear and welcoming ("Your memory is a dependency graph, not a search index")
+- The step dots provide orientation (step 1 of 5)
+- The "Get Started" button on the final step switches from charcoal to gold, signaling completion
+- The backdrop opacity (0.6) provides good separation from the underlying app
 
-**What doesn't:**
-- The onboarding is ephemeral — after SKIP, there is no way to replay it. A HELP button exists but it's a reference manual, not a guided tour. For a product introducing a novel paradigm (DAG-based memory), this is a missed opportunity.
-- The onboarding has no interactive elements — it's a passive text walkthrough. There's no "try clicking a node" or "try switching to List view" guided interaction.
-- On first load with no persisted settings, the dataset defaults to "investment" rather than the first dataset alphabetically ("companion"). This is likely a server-side default, but the user has no way of knowing why investment was chosen.
-- The onboarding text is exclusively in English with no localization support, while the memory data itself is in mixed Chinese/English (investment dataset's summaries are Chinese).
+**What doesn't work:**
+- The onboarding icons are raw text characters — "+" for welcome, "o" for graph view, ">" for resolve, "~" for create, "checkmark" for completion. These are not a designed icon set. They feel like placeholders that shipped. A consistent line-art icon set (even simple SVG geometric shapes) would elevate the entire onboarding from "competent" to "crafted."
+- No interactive element in any step. The onboarding tells you about the graph view but doesn't let you interact with it. Step 2 could show a miniature static graph. Step 3 could animate a resolve sequence. Instead, it's a slide deck.
+- The step 3 ("Resolve") description mentions "The graph animates through the dependency chain" — but there's no animation in the onboarding to demonstrate this. The user has to trust the text.
+- Typographic jump: 24px title, 16px subtitle, 14px description. The 12px button text creates a floor, but the 8px step dots are barely visible on high-DPI screens.
+- No "create your first memory" call-to-action during the tour. You learn about creating memories in step 4, but there's no button to actually do it.
 
-**Rating: 6/10** — Functional but forgettable. Gets the user to the app but doesn't make a memorable first impression.
+**Rating: 5.5/10** — competent passive tour, zero interactivity, placeholder-level icons.
 
 ### 1.2 Core Workflow Walkthrough
 
-#### Graph View (Primary Experience)
+#### Graph View
 
-The graph view is the product's centerpiece and it mostly delivers. Cytoscape.js + Dagre produces clean top-to-bottom dependency layouts. Nodes are color-coded by directory with the LuxCart palette, and the three edge types (required/recommended/related) are distinguishable.
+The graph view is the product's centerpiece and strongest demonstration of its core premise. Cytoscape with dagre layout renders a directed acyclic graph with directory-colored nodes, intensity-proportional sizing, and three edge styles (solid = required, dashed = recommended, dotted = related).
 
-**Good:**
-- The Budget slider is a genuinely innovative UI control — it directly ties to the product's core value proposition (token-budgeted memory resolution)
-- The Zoom slider gives users control over information density
-- The Legend auto-derives from actual dataset directories
-- Dark mode toggle is instant and covers the full canvas
-- Right-click context menu provides direct access to View Details / Edit / Archive / Resolve (verified in code; not testable headlessly with Cytoscape)
+**What works:**
+- Node colors by directory create instant visual categorization
+- Node size by intensity provides a second dimension of information density
+- The right-click context menu (Edit / Archive) is discoverable
+- The tooltip on hover (300ms delay) shows the full summary
+- Zoom slider + Budget slider in the toolbar are contextual to the graph view
+- PNG export button works (albeit at 10px font, nearly invisible)
 
-**Issues found:**
-- **Search bar doesn't filter the graph** — entering text in the search bar and pressing Enter has no visible effect on the graph nodes. The search input value persists (verified via DOM inspection) but the graph remains unchanged. This is a critical disconnect: users expect search to highlight or filter nodes.
-- **Dataset switch only works for Graph view** — switching datasets refreshes the graph correctly (fetchGraph is in App's useEffect on currentDataset) but List and Dashboard views load data with the old dataset (detailed below in Critical Bug section).
-- **No graph loading skeleton** — carried forward from I9. The blank canvas before Cytoscape renders is especially noticeable with quant_operators (62 nodes).
-- **"All nodes fit" toast** is a thoughtful touch — it tells the user when their budget is sufficient and no trimming occurred. But it only appears in response to the budget slider, not when first loading a resolve result. A user who sees all nodes in their resolve output has no indication that everything fits.
+**What doesn't work:**
+- The search-to-graph filtering (Round 11 Fix 5) has source code present but was unverifiable at runtime in the previous audit. No visible indicator confirms filtering is active.
+- The graph legend shows directory colors, but the mapping between directory names and their semantic meaning is not explained. What does "user/observations" mean vs "user/facts"? The user must infer this from the color alone.
+- Node labels are truncated to the last path segment (shortId), which loses context for deep paths like "api/quantdf/rollapply" → "rollapply". This is a reasonable default, but there's no way to see the full path without clicking.
+- The graph toolbar (Zoom, Budget, theme toggle, PNG, Export, Settings, Help) has no visual grouping. Controls with drastically different functions (data navigation vs export vs app settings) sit in an undifferentiated row.
+
+**Rating: 7/10** — strong core, weak discoverability of advanced features.
 
 #### List View
 
-The List view is a competent data table with sortable columns and client-side filtering.
+A sortable, filterable, paginated table of all memories.
 
-**Good:**
-- Column sorting works (ascending/descending toggle) with clear indicators
-- Pagination (First/Prev/Next/Last) handles the 62-item quant_operators dataset correctly
-- The 10-of-10 / 62-of-62 counter provides clear dataset scope awareness
-- Clickable rows navigate to detail view
-- Empty state with CTA button when no memories exist
-- Loading skeleton with realistic shimmer animation
+**What works:**
+- Column sorting (click header to toggle asc/desc)
+- Local filter bar with clear button
+- Pagination (20 per page) with prev/next
+- Status and Maturity badges provide quick visual scanning
+- Click rows to navigate to detail
 
-**Issues found:**
-- **Summary column is truncated with `text-overflow: ellipsis`** — this is fine for scanning but there's no tooltip to reveal the full text on hover. Long Chinese summaries like the risk-tolerance memory are cut off mid-sentence.
-- **Filter box resets on dataset switch** — but since dataset switch doesn't actually change the visible data (see Critical Bug), this behavior is hidden.
-- **The filter uses substring matching** — searching "soxl" finds the soxl-composition memory but also "context" (because it contains the substring "so" somewhere else). This is correct substring behavior but produces noisy results on larger datasets.
+**What doesn't work:**
+- The TruncatedCell tooltip bug (Round 11 Fix 8) persists. The parent `<td>` has `overflow: hidden` which prevents the `scrollWidth > clientWidth` DOM check from ever detecting truncation. Chinese summaries are cut off mid-character with no recovery path.
+- The local filter bar duplicates the global SearchBar. Users face two search interfaces with different behaviors (substring match on visible columns vs API search with match quality indicators). This is confusing — which one should I use?
+- Column widths (ID: 30%, Summary: 28%, Type: 10%, Maturity: 12%, Status: 10%, Tags: 20%) leave Tags with excess space (tags rarely fill 20%) while Summary is starved (28% for the most content-heavy column).
+- The table stretches edge-to-edge with no lateral padding on the container, creating a spreadsheet-like feel that doesn't match the otherwise generous spacing of the product.
+- No row hover effect beyond the default browser behavior — lacks the subtle background-color shift present in other views.
+
+**Rating: 6/10** — functional but uninspired, with a known tooltip bug eroding trust in long-summary datasets.
 
 #### Dashboard View
 
-The Dashboard is the most polished of the three views.
+The most polished view with stat cards, maturity distribution bars, tag frequency cloud, stale memory list, and Wander/Validate/Reindex actions.
 
-**Good:**
-- Stat cards provide at-a-glance dataset health (Total / Stale / Proven / Draft)
-- Maturity distribution horizontal bars are clickable to filter list view
-- Tag cloud is clickable to filter list view
-- Wander modal shows access_count, intensity, and last_access with contextual explanations ("This memory has never been accessed — it may contain overlooked insights")
-- Validate modal groups errors by type with clickable memory IDs
-- WANDER AGAIN button enables serendipitous browsing
-- All four action buttons (Wander / Validate / Refresh / Reindex) have loading states
+**What works:**
+- Stat cards (Total, Stale, Proven, Draft) with Cormorant Garamond 36px numbers create a strong visual hierarchy
+- Maturity distribution bars with clickable labels (navigate to List view filtered by maturity) are genuinely useful
+- Tag frequency cloud with interactive hover effects
+- Stale memory section with color-coded error styling
+- Reindex feedback toast (auto-dismiss 4s) — a Round 11 fix that works well
+- Wander modal's "Why this memory?" section is a standout UX pattern — it explains the system's reasoning (access count, intensity, last access) and provides contextual narrative
 
-**Issues found:**
-- **Modals stack** — opening Wander then Validate (without closing Wander first) results in both modals being visible simultaneously. Two backdrops, two content dialogs, two close buttons. This creates a confusing user experience.
-- **REINDEX has no confirmation or success feedback** — the button shows "Reindexing..." while loading, but on completion it silently refreshes stats with no toast, no "Reindex complete" message, no visual indication anything happened.
-- **Status distribution section at the bottom** is less useful than the maturity and tags sections above it. For the current datasets, every memory is "active" so this section adds no information.
-- **The stale memories section shows stale ID as both the clickable title AND the monospace subtitle** — this is redundant. The `memId` is displayed twice (lines 367 and 377 in Dashboard.tsx).
+**What doesn't work:**
+- Wander/Validate modal stacking: the Round 11 fix (closing one modal before opening the other) introduces a new failure mode where the Validate modal sometimes fails to open after Wander closes. The root cause is async fetch lifecycle — `setWanderOpen(false)` and `fetchValidate()` are called synchronously, but `setValidateOpen(true)` depends on the fetch promise resolving.
+- Validate modal lacks a "Validate Again" button. Wander has "Wander Again" — this asymmetry is confusing.
+- Status Distribution section: for datasets where all memories are "active", this shows a single card. It's not broken, but it's not providing much information either. The previous round's negotiation deferred replacing it with "Recently Accessed."
+- The four Dashboard action buttons (Wander, Validate, Refresh, Reindex) use different border colors (gold, blue, gray, yellow) with no legend explaining the color semantics. What does a yellow border mean vs a blue one?
 
-#### Memory Form (Create/Edit)
+**Rating: 7.5/10** — the most polished view, but the modal stacking bug undermines the two primary actions.
 
-**Good:**
-- Template selector lets users start from schema templates (schemas/decision)
-- Form validation catches missing required fields (shows "ID is required" error)
-- Tag and imports fields support comma-separated input with placeholder guidance
-- Intensity slider (1-10) with default value 5
-- Maturity select with all four levels
-- Markdown body textarea
+#### Memory Form (Create / Edit)
 
-**Issues found:**
-- **CREATE button not disabled on validation error** — submitting an empty form shows the error message but the CREATE button remains enabled and clickable, suggesting multi-submit is possible.
-- **No inline validation** — fields only validate on submit, not on blur. The user doesn't know their ID is invalid until they click CREATE.
-- **No tag autocomplete in the create form** — the search bar has tag autocomplete (prefix match) but the form does not. A user creating a new memory in the investment dataset should see "investment", "fact", "preference" tags suggested.
-- **Imports field is raw comma-separated IDs** — no validation that referenced IDs actually exist, no autocomplete. User can create broken links from the form.
-- **Form doesn't close after successful creation** — good (allows creating multiple memories), but there's no success toast either. The only feedback is the graph refresh. If the user is in Graph view, they might not notice the new node.
+A slide-out panel for creating or editing memories.
+
+**What works:**
+- Form validation disables the CREATE/UPDATE button on error (Round 11 Fix 7)
+- Tag autocomplete with keyboard navigation (ArrowUp/ArrowDown/Enter/Tab)
+- Template selector for schema-based creation
+- Imports field with strength selector (required/recommended/related)
+- Unsaved changes warning on close
+- Undo support after successful operations
+
+**What doesn't work:**
+- Error banner persists after user corrects the input. Typing a valid ID after an "ID is required" error does not clear the error message. The button re-enables but the error stays — creating confusion.
+- Imports field has no validation that referenced IDs actually exist. Users can type in non-existent memory IDs and won't know until the DAG breaks during resolve.
+- The imports workflow (type ID, look down, select strength, look up, type next ID) creates unnecessary eye movement. A more natural flow would be: type "memory-id:required" as a single input, parsed on submission.
+- The Intensity slider (1-10) lacks labels at the extremes. What does 1 mean? What does 10 mean? A simple "low" / "high" label would help.
+- Body textarea has no markdown preview. Users writing markdown content can't see if their formatting is correct until they save and view the detail panel.
+
+**Rating: 6.5/10** — functional but friction-heavy for a core workflow.
+
+#### Memory Detail Panel
+
+A slide-in panel shown when clicking a node or navigating from search.
+
+**What works:**
+- Smooth slide-in animation (transform: translateX, 250ms ease) — this is the ONLY properly animated panel entrance in the entire application
+- Metadata display with Status/Maturity badges and type-label
+- Imports section with expand/collapse for large lists
+- Backlinks section ("Referenced By") showing reverse dependencies
+- Resolve button launches DAG traversal
+- "Generate Prompt" button compiles resolved context into an LLM system prompt and copies to clipboard
+- Error handling for resolve failures with colored left-border
+
+**What doesn't work:**
+- The "Generate Prompt" button uses 10px font with green coloring. It's the second-smallest interactive element in the app (after the PNG export 10px). For a feature that's potentially the product's most valuable output (an LLM-ready context bundle), it's visually buried.
+- Backlinks section shows "No other memories reference this one" for leaf nodes — good, but the empty state could include a suggestion ("Add imports from other memories to create dependencies")
+- The detail panel's body markdown is rendered with react-markdown, but there's no syntax highlighting for code blocks
+- Navigating from one memory detail to another (by clicking an import link) replaces the panel content without any transition — it just swaps. A subtle crossfade or slide would make chained navigation feel continuous rather than jarring
+
+**Rating: 7.5/10** — the slide-in animation and resolve integration make this the best-executed component. Minor polish gaps.
+
+#### Search
+
+A global search bar with debounced API search, tag suggestions, match quality indicators, and empty state handling.
+
+**What works:**
+- Debounced search (300ms) prevents excessive API calls
+- Tag autocomplete suggestions above search results
+- Match quality indicators (exact vs fuzzy with % score)
+- Match fields display showing which fields matched
+- Search empty state with actionable guidance
+- Ctrl+K shortcut to focus
+- Clear button on input
+
+**What doesn't work:**
+- The search dropdown disappears when you click a result but there's no visual feedback that navigation occurred. The user sees a flash of the graph/list update, which is adequate but could be smoother.
+- The "Tags" autocomplete section appears BEFORE search results, which is fine for discoverability but means users searching for "investment" see tag suggestions for "investment" before seeing actual memories with "investment" in their content. In datasets where a tag name also appears in memory IDs, this creates ambiguity.
+- The search results show a maximum of (presumably) a fixed number of items with no "Show more" or pagination in the dropdown.
+
+**Rating: 7/10** — solid search UX with good empty-state handling. The tag autocomplete is a standout feature.
 
 ### 1.3 Edge Cases & Error Handling
 
-**Tested and working:**
-- Empty form submission shows "ID is required" error
-- API returns 400 with helpful message when X-Codememory-Dataset header is missing
-- Non-existent memory ID returns 404 with clear error
-- Switching to dataset then back preserves data isolation
-- Network error banner appears on server unreachable
-- Error toast queue stacks correctly with auto-dismiss (6s) and manual close
+**Tested and confirmed working:**
+- Empty form validation with disabled CREATE button
+- Network error banner with Retry button (App.tsx lines 962-1020)
+- Human-readable API error messages (api.ts lines 30-40)
+- Unsaved changes warning on form close
+- Archive confirmation modal
+- Ctrl+K focuses search from any view
+- No duplicate stale IDs in Dashboard
+- Undo toast for create/update/archive operations
 
-**Tested and problematic:**
-- **Dataset switch shows stale data** in List and Dashboard views (Critical Bug — see below)
-- **Modals stack** without management (Important UX Bug)
-- **Search in graph view is non-functional** (Important UX Bug)
-- **REINDEX is silent** (Usability gap)
-- **Ctrl+K shortcut fails** — `document.getElementById('global-search-input')` doesn't match any element ID in SearchBar.tsx (the search input uses no id attribute)
-- **No loading error recovery UI** — if a data fetch fails, the view shows whatever data it had before, with no "Retry" button
+**Known issues (carried from Round 11):**
+- Modal stacking: Wander + Validate interaction causes Validate to sometimes not open
+- List tooltips: TruncatedCell scrollWidth detection broken by parent `<td>` overflow
+- Form error banner persists after input correction
 
-### 1.4 Critical Bug: Dataset Switching Race Condition
+**New observations:**
+- Empty dataset state: when all four datasets are empty (fresh install), the select dropdown should still function. The datasets API hardcodes four directories, so this is handled — the dropdown shows "companion (0)" etc. But the Graph view's empty state ("No memories yet") and the Dashboard's empty state use different components with different action button labels.
+- Budget slider minimum is 200, preventing zero/negative values. Good.
+- What happens when the backend is unreachable? The App.tsx error banner with Retry handles this. The error toasts queue properly.
+- No offline detection or cached data fallback. If the backend goes down mid-session, the user sees error toasts but previously loaded data persists in state — which is reasonable but not communicated.
 
-**Severity: Critical**
-**Reproduction:** Switch dataset via dropdown while in List or Dashboard view. The data does not update to reflect the new dataset.
+**Overall error handling: 7/10** — much improved from earlier rounds. The Human-readable messages + Retry button pattern is consistent and helpful.
 
-**Root Cause:** React effect ordering. When `handleSwitchDataset` completes, both `setCurrentDataset(name)` and `setRefreshTrigger(prev => prev + 1)` fire in the same render batch. After render, child component effects run before parent effects:
-1. `MemoryList.useEffect([refreshTrigger])` fires → calls `fetchAllMemories()` with OLD `_currentDataset`
-2. `Dashboard.useEffect([refreshTrigger])` fires → calls `fetchStats()` with OLD `_currentDataset`
-3. `App.useEffect([currentDataset])` fires → calls `setApiDataset(newValue)` → too late
+### 1.4 Keyboard Shortcuts
 
-The fix requires either:
-- Updating `_currentDataset` BEFORE incrementing `refreshTrigger` (synchronously, not via useEffect)
-- Or having child components accept `currentDataset` as a prop and use it directly instead of relying on the module-level `_currentDataset` variable
+- Ctrl+K: Focus search (verified working)
+- Ctrl+N: New memory (exists in code, keyboard shortcut handler in App.tsx)
+- Ctrl+Z: Undo (exists, verified in previous audit)
+- Ctrl+Shift+D: Toggle dark mode (exists)
+- Escape: Close panels/modals (consistent across components)
 
-**Evidence:** Verbatim DOM text from quant_operators List view after switching: "10 of 10 memories" (should be "62 of 62"), and the memory IDs shown are all `user/*` (investment dataset) rather than `api/*` (quant_operators dataset).
+**Missing:** No keyboard shortcut for view switching (1/2/3 for Graph/List/Dashboard would be natural). No shortcut for opening Settings. No shortcut hint display (a small "?" or keyboard icon that shows a shortcut cheat sheet).
 
-### 1.5 Undo & Backlinks Verification
-
-- **Undo:** Functional for create, update, and archive operations. 5-second toast with manual dismiss. Single-level undo only — no undo history.
-- **Backlinks:** API endpoint returns correct reverse references. Verified via `GET /api/memories/{id}/backlinks`.
-- **Archive confirmation modal:** Non-destructive styling (neutral border, not red). Confirmation required.
+**Rating: 6.5/10** — core shortcuts work, but discoverability is zero (no hints in UI) and view switching lacks keyboard access.
 
 ---
 
@@ -153,307 +210,306 @@ The fix requires either:
 
 ### 2.1 Color Palette & Visual Hierarchy
 
-The LuxCart design system is the product's strongest aesthetic asset. The warm-neutral palette (charcoal `#1C1917`, cream `#FFFBEB`, gold `#B8860B`) creates a distinctive editorial/luxury feel that separates CodeMemory from the generic blue-gray of most developer tools.
+The LuxCart palette (charcoal `#1C1917`, cream `#FFFBEB`, gold `#B8860B`) is the product's strongest aesthetic asset. In a landscape of blue-and-white developer tools, CodeMemory's warm-neutral foundation communicates warmth, craft, and seriousness simultaneously — exactly the right emotional register for a tool about personal knowledge management.
+
+**Light mode analysis:**
+- `--cm-bg-primary` (cream `#FFFBEB`) and `--cm-bg-surface` (white `#FFFFFF`) differ by less than 3% luminance. Cards on the light-mode background don't clearly separate. The shadow system (`--cm-shadow-subtle: 0 1px 2px rgba(28,25,23,0.04)`) is too subtle to compensate — it's barely perceptible on most displays.
+- The gold accent (`#B8860B`) is used sparingly and tastefully: border accents on selected states, the onboarding icon circle, the active step dot, section labels. This restraint is correct — gold is a spice, not a staple.
+- Semantic color usage is consistent: green for success/active/proven, red for error/stale, yellow for warning, blue for info. No arbitrary color usage found.
+
+**Dark mode analysis:**
+- Dark mode palette has been widened (Round 10) to increase luminance differentiation between directory tints. The range now spans `#153520` (user/beliefs) to `#4A3D1A` (user/preferences), improving glanceability in graph view.
+- `--cm-bg-primary` (`#1A1817`) is slightly bluer than pure black, avoiding the harshness of `#000000`. Good choice.
+- Text colors (`#F0EBE0` primary, `#BFB9B0` secondary, `#8B857C` tertiary) maintain readability with reduced contrast compared to light mode — appropriate for dark environments.
+- Error red in dark mode (`#F87171`, `#EF4444`) is appropriately brightened from light mode (`#991B1B`) to maintain visibility against dark backgrounds.
+
+**Persistent color issues (unchanged from prior audits):**
+- Schema purple (`#7C3AED` in light, `#A78BFA` in dark) is a cool violet that clashes with the warm-neutral palette. A plum (`#6B21A8` in light, `#C084FC` in dark) would harmonize better with the gold/cream/charcoal foundation.
+- Info blue (`#1E40AF`) is still cool-toned. A slate-blue (`#334155` in light, `#94A3B8` in dark) would fit the warm-neutral system better.
+- The `user/people` directory color (`#7C3AED`, the same problematic purple) inherits the clashing issue.
+
+**Directory color semantics:**
+- The directory-to-color mapping is reasonable but not explained to the user. Directory names like "user/observations", "user/preferences", "user/facts" map to warm gray, gold, and charcoal respectively. The user must learn this mapping through repeated use — there's no legend entry explaining the semantic association.
+- `api` directory uses `#1E40AF` (blue) which is visually distinct from the user directory colors. This is good for quick scanning.
+
+**Rating: 7.5/10** — the palette is genuinely tasteful and distinctive. The persistent purple/blue clashes and the too-subtle card-background separation prevent a higher score.
+
+### 2.2 Typography
+
+The font trio is well-chosen:
+- Cormorant Garamond for headlines (serif, elegant, literary) communicates "this is for thinking, not just data"
+- Raleway for body text (geometric sans-serif, clean) bridges the literary and the technical
+- JetBrains Mono for code/monospace (designed for readability) is a deliberate upgrade over Courier/Consolas defaults
 
 **What works:**
-- The cream background (`#FFFBEB`) is unusual and memorable — it signals "this is not Jira" immediately
-- Gold as the accent color is semantically coherent (memory as valuable, knowledge as treasure)
-- Directory colors are deliberately chosen: facts are charcoal (neutral, grounded), preferences are gold (personal, valuable), observations are warm gray (processed, interpreted), decisions are deep red (consequential)
-- The dark mode palette is a complete rethinking, not just inverted colors — text goes from `#1C1917` to `#F0EBE0` (not pure white), backgrounds shift to warm dark tones (`#1A1817`, `#2D2A28`)
-- Dark directory tints now span `#15`–`#4A` (from I10), providing genuine glanceability
-- Semantic colors are used correctly: success = green, error = red, warning = amber, info = blue
+- The 36px stat numbers (Dashboard) in Cormorant Garamond create a dramatic, satisfying counterpoint to the otherwise subdued UI
+- Prose styling for markdown content (`.prose` class) has a well-considered hierarchy: h1 36px, h2 24px, h3 20px, body 16px, code 14px
+- Monospace is used correctly and consistently for memory IDs, version numbers, and technical data
 
-**What doesn't:**
-- The schema purple (`#7C3AED` in light, `#A78BFA` in dark) is the one color that doesn't belong in the warm-neutral palette. It's the standard Tailwind purple — a cool tone that clashes with the warm golds and browns. A warmer violet or plum would maintain consistency.
-- The info blue (`#1E40AF`) is similarly cool — a slate-blue would harmonize better with the palette.
-- The "quant_operators" dataset disclaimer uses the info-blue subtle background (`--cm-bg-info-subtle`), making it the only blue-tinted element in a warm-toned header. It draws attention but for the wrong reason.
-- In light mode, the difference between `--cm-bg-primary` (cream `#FFFBEB`) and `--cm-bg-surface` (white `#FFFFFF`) is subtle enough that cards and panels don't clearly separate from the background. A 1% tint difference is barely perceptible.
+**What doesn't work:**
+- **The 10-11px problem is pervasive and damaging.** Interactive elements throughout the app use 10-11px font sizes:
+  - View switcher buttons (GRAPH/LIST/DASHBOARD): 11px
+  - "+ NEW" button: 11px
+  - Form labels ("ID", "Summary", "Tags"): 11px
+  - Dashboard section headers ("Maturity Distribution", "Top Tags"): 13px (acceptable)
+  - Dashboard stat card labels ("Total Memories", "Stale"): 11px
+  - Section card labels within modals: 10px
+  - PNG export button text: 10px
+  - Validate modal section headers ("Checked", "Errors", "Warnings"): 10px
+  - Resolve node list font: 10px
+  - Search result count header: 10px
+  - "Generate Prompt" button: 10px
+  - Match quality badge: 9px
+  - Tag count in search: 9px
 
-### 2.2 Typography & Typesetting
+  On a 1440p display at 100% scaling, 10px text is ~3.5mm tall. On a 4K display, it's ~2mm. These are below the legibility threshold for comfortable reading. The body font is set to 16px (correct) but almost all interactive UI text is 60-70% of that size.
 
-**Font stack:** Cormorant Garamond (headlines) + Raleway (body) + JetBrains Mono (code). This is a thoughtful, tasteful combination. Garamond for the "CodeMemory" logo gives it gravitas; Raleway's geometric clarity works for UI labels; JetBrains Mono is the gold standard for code.
+- **The typographic jump has a gap.** The hierarchy goes: 36px (Dashboard stat numbers) -> 24px (onboarding title) -> 22px (detail panel title) -> 20px (modal titles) -> 16px (onboarding subtitle, body text) -> 13px (section headers) -> 12px (button text, table cells) -> 11px (labels, badges) -> 10px (micro-labels, tooltips). The jump from 24px to 11px is a 2.2x ratio — there's no intermediate 14-16px tier for secondary headings or control labels, which is where most UI text should sit.
 
-**What works:**
-- Font pairing is distinctive — you won't mistake this UI for Material Design
-- Headline sizing follows a rhythmic scale: 36px (prose h1) → 32px (Dashboard title) → 24px (App title, prose h2) → 20px (prose h3, modal titles) → 16px (body default)
-- Monospace is used correctly for IDs, counts, and values
-- Letter-spacing on uppercase labels (`0.08em`) adds polish
-- Line-height of 1.7 is generous and readable
+- **Chinese text rendering quality:** Chinese characters in Raleway fall back to the system CJK font. On Windows, this is Microsoft YaHei or SimSun, which have different x-heights and stroke weights than Raleway. The visual seam between CJK and Latin text is visible in mixed-language summaries (common in the investment dataset).
 
-**What doesn't:**
-- **11px is too small for interactive UI text.** The view switcher (Graph/List/Dashboard), dataset selector, "+ New" button, and many labels use 11px. On a 1440p display at 100% scaling, this is at the edge of legibility. On a 4K display, it would be microscopic.
-- **12px is borderline for body text in some components.** The List view table cells, filter inputs, and form fields all use 12px. Combined with Raleway's thin strokes, this can be hard to read.
-- **The skip from 24px (App title) to 11px (UI controls) is harsh.** The header has a 24px serif title and everything else is 10-11px sans-serif. There's no 16px or 14px intermediate tier creating a smooth hierarchy.
-- **Chinese text rendering in Raleway** — Raleway doesn't have CJK glyphs, so Chinese text falls back to system fonts. The investment dataset's Chinese summaries render in a different font than the English UI, creating a typographic seam. This is a technical limitation, not a design choice, but it's noticeable.
-- **Monospace text color inconsistency** — sometimes `--cm-text-primary` (strong), sometimes `--cm-text-secondary` (medium), sometimes `--cm-text-tertiary` (weak). The List view memory IDs use primary color (good), but the pagination page counter uses secondary (acceptable), and the Dashboard stale ID uses tertiary for the exact same ID text (confusing).
+- **The onboarding icon circle** uses 28px Cormorant Garamond for raw text symbols — serif font for abstract symbols looks wrong. The "+" sign in a serif typeface doesn't align visually with the geometric circle border.
+
+**Rating: 6/10** — excellent font choices undermined by pervasive micro-sizing that makes the product physically hard to read.
 
 ### 2.3 Spacing & Information Density
 
 **What works:**
-- The dashboard uses generous 32px padding and 24px gaps — it breathes
-- Stat cards have consistent internal padding (20px 24px) with a clear label→value→gap rhythm
-- The header bar is compact but not cramped (16px padding, 16px gaps)
-- Form fields have adequate spacing between them
-- Modal padding (28px) creates a clear content boundary
+- Dashboard's 32px padding and 24px section gaps create generous breathing room
+- Section cards (padding: 20px 24px) have comfortable internal spacing
+- The graph view's toolbar spacing (16px gap between control groups) is well-proportioned
+- The MemoryForm panel width (30vw, min 360px) provides adequate space for form fields
 
-**What doesn't:**
-- **The Graph view toolbar is crowded.** Zoom slider, Budget slider, theme toggle, PNG, Export, Settings, Help, Legend, Directories, Edge types — all in a space roughly 200px wide. On a smaller screen, this would be unmanageable.
-- **The "Stats, validation, and reindex apply to the selected dataset" disclaimer text is 10px italic** — it's essentially invisible. Either make it useful or remove it.
-- **The List view table has no horizontal padding on the container** — rows stretch edge-to-edge with only 12px cell padding, making the table feel pressed against the viewport edges.
-- **No responsive breakpoints.** The UI assumes a minimum width of roughly 1200px. On smaller viewports, elements would overflow or overlap.
+**What doesn't work:**
+- The List view table stretches edge-to-edge with no horizontal container padding. Compared to Dashboard's 32px padding, the List view feels squeezed and spreadsheet-like.
+- The graph view has no padding between the canvas edge and the outermost nodes. Nodes at the periphery are clipped or appear half-off-screen until the user zooms out.
+- The search bar is too vertically compact (padding: 4px 8px). Combined with 13px input text, the clickable area is narrow — easy to miss-click.
+- The four view-switcher buttons (GRAPH/LIST/DASHBOARD/+ NEW) sit in a tight row with 4px gap. On the Dashboard, the four action buttons (Wander/Validate/Refresh/Reindex) use a more generous 12px gap. The inconsistency is jarring.
+- No responsive breakpoints exist anywhere. Below ~1200px viewport width, the layout doesn't reflow — elements overlap or get clipped.
+
+**Rating: 6.5/10** — the Dashboard spacing is excellent; the List view and header spacing feel like a different design system.
 
 ### 2.4 Motion & Transitions
 
+This is the weakest dimension of the visual design and has not materially improved since prior audits.
+
 **What works:**
-- Undo toast has a 200ms slide-up entrance (`undo-toast-enter`)
-- Error toasts have a 200ms slide-up + fade-in (`toastSlideIn`)
-- Dashboard maturity bars have 300ms width transition
-- Settings Save button transitions background-color on success (gold → green, 200ms)
-- The `transition: background-color 200ms ease` on the Save button is subtle and satisfying
+- MemoryDetail panel: slide-in from right (transform: translateX, 250ms ease). This is the ONLY properly animated panel throughout the application. It's well-executed — the 250ms duration feels deliberate, not sluggish.
+- Backdrop opacity transition (200ms ease) on the detail panel backdrop
+- Skeleton shimmer animation (1.5s infinite ease-in-out gradient shift)
+- Undo toast slide-up (200ms ease-out)
+- Error toast queue slide-in + fade-in (200ms)
+- Dashboard maturity bar width transition (300ms ease)
+- Settings Save button color transition (200ms ease)
 
-**What doesn't:**
-- **No panel slide-in animation** — MemoryDetail, Settings, and Help panels appear instantly. The code comment says "250ms ease transform" but there's no CSS transition on the panel container. Panels just appear.
-- **No modal entrance animation** — Wander and Validate modals appear instantly without fade or scale transition.
-- **No view switch transition** — changing from Graph to List to Dashboard is an instant cut with no crossfade or morph.
-- **No node hover feedback in the graph** — Cytoscape nodes respond to hover (the library provides this), but there's no custom styling enhancement.
-- **Skeleton shimmer animation is clean** (1.5s infinite ease-in-out gradient shift) — this is well executed.
-- **The dark mode toggle is instant** — which is actually correct. Theme switches should be immediate, not animated.
+**What's missing (unchanged from previous audits):**
+- No entrance animation for Settings panel (right-edge slide-out, just appears)
+- No entrance animation for Help panel (right-edge slide-out, just appears)
+- No entrance animation for Wander/Validate modals (just appear at center)
+- No exit animation for any modal or panel
+- No view switch transition (Graph/List/Dashboard) — the content simply swaps
+- No memory form slide-in animation (it just appears, unlike the detail panel which has animation)
+- No search dropdown expand/collapse animation
+- No node hover enhancement in the graph (Cytoscape defaults, no scale or glow effect)
 
-### 2.5 Visual Personality
+**The specific impact:** The MemoryDetail panel's slide-in animation proves the team CAN do motion well. The fact that the Settings panel, Help panel, and MemoryForm panel — all similar right-edge slide-out components — lack identical animations is not a technical limitation; it's an oversight. The inconsistency makes the product feel like different teams worked on different panels without a shared component library.
 
-CodeMemory's visual identity sits at an interesting intersection: it's trying to be both a utilitarian developer tool (the relentless use of uppercase labels, monospace IDs, 11px text) and a premium knowledge product (Cormorant Garamond, cream background, gold accents, "LuxCart" design system name).
+**Why this matters:** Motion is how digital products communicate materiality — weight, direction, hierarchy, relationship. Without transition animations, the application feels like a slide deck where each view simply "appears." For a product positioning itself as premium (LuxCart, Cormorant Garamond, gold accents), the absence of motion undercuts the luxury feel. Motion doesn't need to be elaborate — consistent 200ms ease-out transitions on panel entrances would transform the perceived quality.
 
-**The tension:** A developer tool with luxurious typography creates a specific mood — it's like a Moleskine notebook for code. This works when the execution is consistent. But the tiny font sizes and dense toolbar undercut the "luxury" signal. You can't feel premium while squinting at 10px italic disclaimers.
+**Rating: 4.5/10** — one well-executed animation surrounded by its absence. The lowest-scoring aesthetic dimension.
 
-**What the visual personality communicates successfully:** "This is serious. Knowledge matters. Memory deserves care."
+### 2.5 Visual Personality & Style Consistency
 
-**What it fails to communicate:** "This is easy to use. You'll enjoy being here. Come back often."
+CodeMemory's visual personality is "private library meets data lab" — an appealing tension between warmth and rigor. The Cormorant Garamond headlines suggest a reading room; the JetBrains Mono code suggests a workstation. This tension is the product's personality and should be leaned into, not resolved.
 
-**The personality is more "private library" than "workshop."** For a memory tool that users should interact with daily, the workshop metaphor (active, hands-on, iterative) might serve better than the library metaphor (passive, archival, final). The current design leans library — which is beautiful but may discourage the casual, frequent interaction that memory tools thrive on.
+**What works:**
+- The warm palette (cream background, gold accents) signals "this is a thinking tool, not a productivity tool"
+- The consistent use of 2px border-radius (NOT rounded corners) throughout the app creates a sharp, architectural feel
+- The left-border color coding on cards and alerts (3px solid left border) is a consistent, recognizable pattern
+- The "Why this memory?" section in Wander is the best example of personality — the system explains its reasoning in natural language, not just data
+
+**What doesn't work:**
+- The onboarding icons are raw text characters — the most visible design element in the first 30 seconds of the product experience uses placeholder symbols
+- The view switcher buttons (GRAPH/LIST/DASHBOARD) use all-caps Raleway 11px — they feel like a terminal command, not a navigation element. This might be intentional (the "tool" aesthetic), but it's inconsistent with the otherwise warm typography
+- The "+ NEW" button is styled identically to the view switchers — it should be visually distinct as the primary action
+- The export/utility buttons in the graph toolbar (PNG, EXPORT, gear, question mark) use emoji-like Unicode characters instead of proper icons. This is the same placeholder-icon problem as the onboarding
+- The "Generate Prompt" feature and the MCP server capability suggest this product is for power users who integrate with LLMs. But the visual language doesn't communicate "API/developer tool" — it communicates "personal journal." This might be intentional, but the product could benefit from a visual nod toward its technical capabilities
+
+**Rating: 6.5/10** — a recognizable personality exists, but it's undermined by placeholder-level iconography and an unresolved tension between the warm aesthetic and the utilitarian controls.
 
 ---
 
 ## Phase 3: Product Imagination
 
-### 3.1 Three Features That Would Make Users Never Leave
+### 3.1 "If Only..." Features (3 that would transform the product)
 
-**1. "Context Compass" — Visual dependency impact analysis**
+#### 1. DAG-Aware Editing: "You're about to change a memory that 4 others depend on"
 
-When a user edits a memory, show a live preview of what else would be affected. "If you change this fact about NVIDIA earnings, 4 other memories import it directly, and 2 more import those." This is the visual equivalent of `suggest-deps` but interactive and always-on. A small panel in the detail view showing "Depended on by:" with a mini-DAG of downstream impacts.
+**The problem:** When editing a memory's body or imports in the form, the user has zero visibility into the downstream impact. Changing a shared assumption that 7 other memories import could silently invalidate reasoning chains. Currently, imports are a blind text field — users type memory IDs without knowing if they exist, what they contain, or what depends on them.
 
-Why users would stay: It transforms editing from a solo act into a systems-thinking exercise. You see your knowledge graph breathe. Every change has visible consequences. This is the killer feature for knowledge workers who think in systems.
+**The feature:** A small side panel or inline indicator in the edit form showing: "4 memories import this directly. Changing it would affect: [list of dependent memory IDs with summaries]." Before saving, the user sees exactly what their change impacts.
 
-**2. "Memory Sessions" — Time-travel through your thinking**
+**Why users can't go back:** This transforms editing from a faith-based act ("I hope this doesn't break things") into an informed decision. Knowledge tools thrive on "safe exploration." When users feel they can edit without fear of breaking dependencies, they edit more, use more, and derive more value.
 
-Save the state of a resolve operation as a named session. "Here's what I was thinking about during the Q1 review" — a frozen snapshot of the exact DAG that was loaded, with annotations, at that moment. Sessions are browsable, comparable, and diffable. "What changed in my thinking between January and March?"
+**Implementation note:** The backend already computes backlinks (MemoryDetail shows "Referenced By"). Surfacing this in the edit form is primarily a UI change, not a new capability.
 
-Why users would stay: Memory tools are ultimately about understanding how your thinking evolves. Current CodeMemory captures WHAT you know but not WHEN or WHY you knew it in a particular configuration. Sessions would add the temporal dimension that makes knowledge graphs truly personal.
+#### 2. Memory Reminders: "You haven't revisited your risk-tolerance in 30 days"
 
-**3. "Memory Health Dashboard" — Proactive knowledge maintenance**
+**The problem:** Memory tools have a retention problem. Users create enthusiastically for a week, then forget the tool exists. CodeMemory has `wander` for serendipitous recall and `stale` for hash-mismatch updates, but nothing proactively pulls users back.
 
-Instead of waiting for users to run Validate, surface memory health issues proactively. A decaying memory (not accessed in 90 days, intensity < 5) gets a subtle amber border. A stale memory gets a dotted outline. A proven memory that hasn't been revisited in 6 months gets a gentle nudge. The graph itself becomes a visual health indicator.
+**The feature:** Scheduled re-engagement prompts. Each memory could have an optional `review_cadence` (monthly, quarterly, annual). The Dashboard shows a "Due for Review" section listing memories approaching their cadence. Optional browser notifications: "Your investment thesis from January may need updating."
 
-Why users would stay: It transforms the product from a passive storage system into an active thinking partner. "Hey, you haven't thought about this thesis in 3 months — the market has changed, want to revisit it?" This is what makes a memory tool feel alive.
+**Why users can't go back:** The hardest problem in personal knowledge management is not creation or organization — it's retention. A tool that reminds you to revisit your own thinking creates a recurring reason to open the app. This is the difference between "I used it once" and "I use it every month."
 
-### 3.2 The "Aha Moment" Analysis
+#### 3. Graph Diff: "Here's how your understanding of NVIDIA earnings evolved from January to March"
 
-**Current aha moment:** When a user runs Resolve for the first time and sees their memories topologically sorted into a coherent context with exact token counts. The moment they realize "this isn't search — this is dependency-aware context assembly" is when the product's core value proposition clicks.
+**The problem:** When a memory has multiple versions (e.g., `user/investment/february-buy` at version 2), the version history is a text changelog. The user can't visually compare the dependency graph before and after the change.
+
+**The feature:** A split-panel view showing the DAG at version N-1 vs version N, with changed nodes highlighted, new edges in green, removed edges in red. A timeline slider lets users scrub through versions and watch the dependency structure evolve.
+
+**Why users can't go back:** Version history without visualization is just a changelog. With visualization, it becomes a time machine for thinking. "Here's how my understanding of this topic evolved" — shown as a graph transformation, not a text diff. This is a uniquely CodeMemory capability that no competitor can offer without its DAG foundation.
+
+### 3.2 Something Worth Removing
+
+**The List view's local filter bar** partially duplicates the global SearchBar. Users can search in the header (rich dropdown with snippets, match quality indicators, tag suggestions) OR filter in the List view (substring match on visible columns). Two search interfaces in the same product create confusion about which to use when.
+
+**Proposal:** Remove the List view's local filter bar. Add a "Show all N results in List view" action to the global SearchBar dropdown. When clicked, it switches to List view pre-filtered with the search query. This consolidates search into a single, richer interface and simplifies the List view UI.
+
+**Counterargument (why keep it):** The local filter bar allows quick substring filtering that doesn't trigger API calls — useful for rapid scanning of already-loaded data. But the benefit is marginal: the API search has 300ms debounce and supports server-side fuzzy matching. The cognitive cost of two search interfaces outweighs the performance benefit.
+
+### 3.3 The "Aha Moment" Analysis
+
+CodeMemory's aha moment should be: **"I clicked Resolve and watched my entire thinking chain animate across the graph."**
+
+**Current state:** This moment exists but is buried. To experience it:
+1. Navigate to Graph view
+2. Click a node
+3. Find and click "Resolve" in the detail panel
+4. Wait for the topological animation
+
+That's four deliberate steps. Most users never get past step 2.
 
 **How to strengthen it:**
-- Make Resolve the default action on the first graph node click (not "show detail panel" but "resolve this memory's context")
-- Add a subtle animation showing the traversal path through the graph as resolve assembles the context
-- Show a side-by-side: "Here's what keyword search would give you (scattered, missing context)" vs. "Here's what DAG resolve gives you (complete causal chain)"
-- Let users toggle between "search mode" and "resolve mode" so the paradigm difference is always visible
 
-**How to make it come sooner:**
-- The onboarding should end with "Try resolving your first memory" as a call-to-action, not "here are the features"
-- Pre-load a resolve result for the most-connected memory in the dataset so first-time users see the value immediately
+1. **Default resolve on node click.** When a user clicks a node in Graph view, show the detail panel AND auto-trigger resolve with default budget/depth. The animation plays immediately. The user's first interaction with the graph IS the aha moment.
 
-### 3.3 What Could Be Deleted
+2. **"See it in action" during onboarding.** Step 2 (Graph View) could auto-play a resolve animation on a demo memory, showing the topological highlight sequence. The user experiences the core value proposition before they've created anything.
 
-**1. The "Stats, validation, and reindex apply to the selected dataset" disclaimer text.**
+3. **Prominent "Resolve" button on the Welcome/empty state.** A single-click "See how your knowledge connects" button that picks the most-connected memory and resolves it with default settings. One-click to the aha moment.
 
-This 10px italic line in the header adds no value. Users can see which dataset is selected from the dropdown. The validation and reindex buttons are in the Dashboard, not the header. This text is visual noise that developers added for clarity but users will never read or need. Remove it. If the concern is that users might not understand dataset scoping, solve it with a tooltip on the dataset dropdown itself.
-
-**2. The Status Distribution section in Dashboard (for now).**
-
-Every memory across all four datasets is "active." This section shows one card with "ACTIVE" and a count — it communicates nothing. When archived memories actually exist in user datasets, this section will become useful. Until then, it's dead space. Replace it with a "Recently Accessed" list (pulled from last_access timestamps) which would provide actionable information.
-
-**3. The Zoom slider in the header.**
-
-The zoom level is adjustable from 0.15 to 2.0, but the default 0.5 is sensible for most datasets, and users can also zoom with scroll wheel. The slider takes up header space and adds cognitive load. Move it to a graph view toolbar that appears on hover, or make it a keyboard-only control (+/- keys).
-
-### 3.4 Competitive Comparison
-
-| Feature | CodeMemory | Obsidian Graph | Notion Database | Django Admin |
-|---------|-----------|----------------|-----------------|--------------|
-| Graph visualization | Cytoscape + Dagre (directed, colored) | Force-directed (undirected) | None | None |
-| Dependency resolution | DAG topology sort + budget | Manual backlinks | Relations (manual) | ForeignKey relations |
-| Token budget control | Slider 200-5000 | N/A | N/A | N/A |
-| Memory CRUD | Form with schema templates | Markdown editor | Rich text + properties | Django forms |
-| Search | Keyword + tag/type/maturity filter | Full-text (Omnisearch plugin) | Database queries + filters | Django filters |
-| Dark mode | Full CSS variable system | Community themes | Built-in | Admin theme |
-| MCP server | 5 tools over stdio JSON-RPC | No | No | No |
-| Undo | 1 level (create/update/archive) | File history (plugin) | Version history | Django admin history |
-| Export | PNG graph + ZIP all memories | Various plugins | CSV/PDF export | CSV/JSON export |
-| Onboarding | 5-step text walkthrough | None | Template gallery | None |
-
-CodeMemory's differentiators are clear: the MCP server (unique), token-budgeted resolution (unique), and the Layer 0 cognitive primitives (unique). Where it lags is in the basics: undo is single-level vs. Notion's full version history, search is keyword-only vs. Obsidian's plugin ecosystem, and the form experience is functional but bare vs. Django Admin's mature CRUD patterns.
+4. **Surface resolve in the search dropdown.** Search results currently show ID, summary, snippet, match quality. Adding a small "Resolve →" action on each result would make the most powerful feature accessible from the most-used interface.
 
 ---
 
-## Phase 4: Consistency & Cross-View Analysis
+## Phase 4: Consistency & Comparison
 
-### 4.1 Internal Consistency Audit
+### 4.1 Cross-View Experience Consistency
 
-| Pattern | Graph | List | Dashboard | Consistent? |
-|---------|-------|------|-----------|-------------|
-| View title | None | "N of M memories" | "Dashboard" (h1) | No — Graph has no title |
-| Search/filter | SearchBar (global) | Filter input (local) | None | No — different mechanisms |
-| Loading state | None (blank canvas) | Skeleton shimmer | Skeleton shimmer | No — Graph has no skeleton |
-| Empty state | Not shown (graph renders anyway) | EmptyState component | EmptyState component | Partial |
-| Error feedback | Error toast queue | No inline error recovery | onError callback | Partial — List has no error handling |
-| Create button | "+ New" in header | "+ New" in header | "+ New" in header | Yes |
-| Dataset switch | Works | Broken (stale data) | Broken (stale data) | No — critical inconsistency |
-| Theme toggle | Sun/Moon button | Sun/Moon button | Sun/Moon button | Yes |
-| PNG export | Button visible | Button hidden | Button hidden | Yes (by design) |
-| Keyboard shortcuts | All 6 | All 6 (Ctrl+K broken) | All 6 | Partial — Ctrl+K broken |
+| Aspect | Graph | List | Dashboard |
+|--------|-------|------|-----------|
+| Loading state | Skeleton (animated nodes + edges) | Skeleton (shimmer rows) | Skeleton (card placeholders) |
+| Empty state | "No memories yet" + New CTA | Two variants (no mems / filtered) | "No memories yet" + Create CTA |
+| Error state | Inline error + global banner | Falls back to empty/previous | Falls back to empty/previous |
+| Search behavior | Filters graph nodes (dim/highlight) | Local filter bar (substring) | No per-view search |
+| Dataset switch | Graph refreshes | List refreshes | Dashboard refreshes |
+| Panel animation | Detail panel slides in (250ms) | None (form appears) | None (modals appear) |
+| Font sizing | 10px (PNG), 11px (node labels) | 10-12px (table cells, badges) | 10px (labels), 36px (stat nums) |
+| Color semantics | Directory-based node colors | Badge-based (Maturity/Status) | Semantic card colors |
 
-### 4.2 Cross-Dataset Experience
+**Key inconsistencies:**
+- **Search:** Graph gets Cytoscape filtering, List gets its own local bar, Dashboard gets neither. The primary interaction (finding things) works differently in every view.
+- **Panel animation:** MemoryDetail slides in; MemoryForm, Settings, and Help panels do not. This is a component-level inconsistency — all slide-out panels should use the same animation.
+- **Empty states:** Graph says "No memories yet" with "+ New" action. Dashboard says "No memories yet" with "Create Memory" action. List has two empty states with different messaging. Three different empty state UIs for the same condition.
+- **Action labels:** "Create Memory" (Dashboard) vs "+ New" (Graph header) vs "+ NEW" (Header) vs "Create" (Form button). Four different labels for the same action.
 
-| Aspect | companion (10) | investment (10) | quant_operators (62) | software-architecture (11) |
-|--------|---------------|-----------------|---------------------|---------------------------|
-| Graph render time | ~1s | ~1s | ~3s | ~1s |
-| Nodes visible | 10 | 10 | 62 (dense) | 11 |
-| Directory colors | 3 dirs | 5 dirs (1 auto) | 4 dirs (3 auto) | 5 dirs |
-| Stale detection | 0 | 0 | 0 | 0 |
-| Validate warnings | 0 | 0 | 0 | 7 (legit) |
-| Header disclaimer | "Stats, validation..." | "Stats, validation..." | "Auto-generated API..." | "Stats, validation..." |
+**Consistency score: 5.5/10** — the visual language is consistent, but the interaction patterns are fragmented.
 
-The quant_operators dataset exposes scaling limits: the graph becomes dense and hard to read at 62 nodes, and the special disclaimer text is a one-off solution that doesn't scale to other auto-generated datasets. The software-architecture dataset's 7 validation warnings are a legitimate finding but the user has no way to distinguish "these warnings are expected for this type of dataset" from "these warnings need action."
+### 4.2 Competitive Comparison
 
-### 4.3 Comparison with Previous Audit Claims
+| Feature | CodeMemory | Obsidian | Notion | Roam Research |
+|---------|-----------|----------|--------|---------------|
+| Graph visualization | Full DAG + resolve animation | Local graph (cosmetic) | No native graph | Daily notes graph |
+| Dependency model | Explicit imports, topological sort | Backlinks only | Database relations | Block references |
+| Token budget control | Slider + trim levels | N/A | N/A | N/A |
+| Memory decay detection | Stale via body hash | N/A | N/A | N/A |
+| Cold memory surfacing | Wander (access-count based) | Random note plugin | N/A | N/A |
+| Dark mode | Full (warm palette, manual) | Community themes | Built-in | Built-in |
+| Onboarding | 5-step passive overlay | None | Extensive interactive | Tutorial database |
+| API / MCP | 5 MCP tools | Plugin API | Official REST API | None |
+| Export | .zip of .md + PNG/SVG | Markdown files | Various formats | JSON/EDN |
+| Font system | Custom trio (serif + sans + mono) | System fonts | System fonts | System fonts |
+| Motion/animation | Partial (detail panel only) | None built-in | Extensive micro-interactions | Minimal |
+| Search | Full-text + fuzzy + tag autocomplete | Full-text | Database query | Block reference search |
 
-The I10 eval.md claims "all 9 tasks completed." My verification:
+**CodeMemory's competitive strengths are unique and defensible:**
+- DAG-based dependency resolution with explicit imports — no competitor has both a visual graph AND topological sort
+- The MCP server positions CodeMemory for agent-based workflows that Obsidian/Notion/Roam cannot serve
+- The resolve-to-prompt feature (compile DAG into LLM system prompt) has no equivalent in competitors
+- The warm, crafted aesthetic is a genuine differentiator against the tool monoculture
 
-| Claim | Verified? | Notes |
-|-------|-----------|-------|
-| MCP server (5 tools) | Yes | Stdio JSON-RPC 2.0, all 5 tools functional |
-| Auto-reindex on startup | Yes | All 4 datasets reindexed, stale_count: 0 |
-| Error toast queue | Yes | Stacked, dismissable, 6s auto-dismiss |
-| Search filter fix | Yes | Filter-only search works correctly |
-| Dark mode tints widened | Yes | `#15`–`#4A` range verified in colors.ts |
-| X-Codememory-Dataset required | Yes | 400 returned with dataset list |
-| API smoke tests (5) | Yes | All pass in ~0.5s |
-| Tag autocomplete prefix match | Yes | Uses startsWith |
-| Loading skeletons | Partial | Dashboard and List have them; Graph does not |
+**CodeMemory's competitive weaknesses are about ecosystem and polish:**
+- Obsidian has 1,000+ community plugins; CodeMemory has 1 web panel, 1 CLI, and 1 MCP server
+- Notion has databases, calendars, team collaboration; CodeMemory is single-user
+- The typographic sizing (10-11px) makes CodeMemory harder to read than any competitor
 
-**One previously claimed fix is incomplete:** The eval.md states the search filter fix addresses "tag/type/status filters returning zero results when no text query was provided." This is true for the API but the UI integration is incomplete — the search bar in Graph view doesn't visibly filter or highlight nodes when results are returned.
-
-**One new issue not present in previous audits:** The dataset switching race condition is a fresh bug. It's possible this was introduced during the R10 changes (the `setApiDataset` via useEffect was likely added as part of the multi-dataset architecture) or it existed before but wasn't tested with List/Dashboard views during dataset switching.
+**The strategic question:** CodeMemory shouldn't try to compete on ecosystem breadth. Its edge is depth — DAG resolution, memory atomization, agent integration. The product should double down on what only it can do and accept that it won't be everything to everyone.
 
 ---
 
 ## Prioritized Recommendations
 
-### Critical
+### Critical (blocking for release quality)
 
-1. **Fix dataset switching in List and Dashboard views.**
-   The race condition between `setApiDataset` (parent effect) and `loadData` (child effect) causes List and Dashboard to display stale data after dataset switch. Move the `_currentDataset` assignment into the synchronous code path — either call `setApiDataset(name)` directly in `handleSwitchDataset` before the state updates, or pass the dataset name to child components as a dependency.
-   - **Files:** `frontend/src/App.tsx` (handleSwitchDataset), `frontend/src/api.ts` (setCurrentDataset)
-   - **Estimated effort:** 1 hour
-   - **Verification:** Switch dataset in List view and confirm the memory count and IDs update correctly.
+1. **Fix the Validate modal opening failure after Wander.** The current async-state approach (two independent booleans with fetch-then-open) creates a race condition. Replace with a single `activeModal: 'wander' | 'validate' | null` state variable OR ensure `setValidateOpen(true)` is called unconditionally when the fetch resolves. Add a `useEffect([validateResult])` watcher as a safety net.
 
-2. **Prevent modal stacking.**
-   Opening Wander then Validate (or vice versa) should close the first modal. Add a `closeWander()` call to the Validate handler and a `closeValidate()` call to the Wander handler. Alternatively, implement a modal stack manager in App.tsx.
-   - **File:** `frontend/src/components/Dashboard.tsx`
-   - **Estimated effort:** 30 minutes
-   - **Verification:** Open Wander, then Validate, confirm Wander modal closes.
+2. **Fix the List view summary tooltip (Round 11 regression).** The fix is straightforward: either move `overflow: hidden` and `text-overflow: ellipsis` from the parent `<td>` to the `<TruncatedCell>` span, OR use a character-length-based truncation check instead of DOM `scrollWidth > clientWidth`, OR always set `title={text}` on the td regardless of measured truncation. The last option is the simplest and most robust.
 
-### Important
+### Important (should fix before next product review)
 
-3. **Make search actually filter the graph view.**
-   The SearchBar component renders in Graph view but searching has no visual effect on the graph. Pass search results to GraphCanvas and use Cytoscape's filtering/highlighting to dim non-matching nodes and highlight matches.
-   - **Files:** `frontend/src/components/SearchBar.tsx`, `frontend/src/components/GraphCanvas.tsx`
-   - **Estimated effort:** 2-3 hours
-   - **Carried forward from:** implicit in I9 search improvements
+3. **Increase minimum interactive font size from 10-11px to 12-13px across the entire application.** This is the single highest-impact aesthetic change available. Target: all buttons, labels, badges, and control text should be >= 12px. Micro-labels (like match quality badges) can stay at 11px. This is a CSS variable change with broad impact.
 
-4. **Add user feedback for REINDEX.**
-   Show a success toast ("Reindexed N memories") on completion. The button currently only shows "Reindexing..." during the operation.
-   - **File:** `frontend/src/components/Dashboard.tsx`
-   - **Estimated effort:** 15 minutes
+4. **Add entrance/exit animations to Settings, Help, and MemoryForm panels.** Use the identical pattern already deployed in MemoryDetail: `transform: translateX(100%) -> translateX(0)` with 250ms ease. This is a copy-paste CSS change that would immediately elevate the perceived quality of all slide-out panels.
 
-5. **Fix Ctrl+K keyboard shortcut.**
-   `document.getElementById('global-search-input')` doesn't match any element. Either add the ID to the SearchBar input or use a ref-based approach.
-   - **Files:** `frontend/src/App.tsx`, `frontend/src/components/SearchBar.tsx`
-   - **Estimated effort:** 15 minutes
+5. **Add modal entrance animations to Wander and Validate.** A simple 150ms fade-in + scale(0.98->1) transform on the Modal component. The CSS is ~5 lines and applies to all modals.
 
-6. **Add graph loading skeleton.**
-   Last missing loading state. A centered skeleton with placeholder node circles and edge lines, matching the shimmer pattern used in List and Dashboard.
-   - **File:** `frontend/src/components/GraphCanvas.tsx`
-   - **Estimated effort:** 1 hour
-   - **Carried forward from:** I9
+6. **Add "Validate Again" button inside the Validate modal** to match the Wander modal's "Wander Again" parity.
 
-7. **Disable CREATE button on form validation failure or add loading state.**
-   Currently the button stays enabled after showing validation errors, allowing repeated submissions.
-   - **File:** `frontend/src/components/MemoryForm.tsx`
-   - **Estimated effort:** 20 minutes
+7. **Clear form validation errors when the user corrects the input.** The error banner should disappear when the user types valid content into the field that triggered the error, not wait for the next submit attempt.
 
-### Nice-to-Have
+### Nice-to-have (Polish)
 
-8. **Add tooltip on hover for truncated List view summaries.**
-   The `text-overflow: ellipsis` truncation hides long summaries. A title attribute or CSS tooltip on the summary cell would reveal the full text.
-   - **File:** `frontend/src/components/MemoryList.tsx`
-   - **Estimated effort:** 10 minutes
+8. **Replace onboarding text icons with SVG icons.** Even simple geometric shapes (a circle for graph, a right-arrow for resolve, a plus for create, a checkmark for completion) would dramatically improve the first-impression quality. The raw text characters feel like a TODO that shipped.
 
-9. **Remove the "Stats, validation, and reindex apply to the selected dataset" disclaimer from the header.**
-   It's visual noise. Replace with a tooltip on the dataset dropdown.
-   - **File:** `frontend/src/App.tsx`
-   - **Estimated effort:** 5 minutes
+9. **Normalize empty state components across all three views.** Use the same `<EmptyState>` component with consistent action button labels. Unify "Create Memory" / "+ New" / "+ NEW" into a single primary action label.
 
-10. **Add tag autocomplete to the create/edit form.**
-    The search bar has tag autocomplete (prefix match); the form should too. Fetch tags from stats endpoint and provide suggestions as the user types in the tags field.
-    - **File:** `frontend/src/components/MemoryForm.tsx`
-    - **Estimated effort:** 1 hour
+10. **Remove the List view's local filter bar** and add "Show all N results in List view" to the global SearchBar dropdown. One search interface, not two.
 
-11. **Remove duplicate memId display in Dashboard stale section.**
-    Lines 367 and 377 in Dashboard.tsx both render `memId` — the monospace subtitle is redundant.
-    - **File:** `frontend/src/components/Dashboard.tsx`
-    - **Estimated effort:** 5 minutes
+11. **Add a "Resolve" action to the graph node context menu.** Currently accessible only through the detail panel (click node -> panel opens -> find Resolve button). Right-click -> Resolve would be a two-click path to the aha moment.
 
-12. **Replace the Status Distribution section with a "Recently Accessed" list.**
-    Since all memories are currently "active," the status distribution adds no information. A list of the 5 most recently accessed memories (from last_access timestamps) would be more actionable.
-    - **File:** `frontend/src/components/Dashboard.tsx`
-    - **Estimated effort:** 1 hour
+12. **Add keyboard shortcuts for view switching** (1/2/3 for Graph/List/Dashboard) and display available shortcuts in the Help panel.
 
-### Feature Ideas (for backlog, not this iteration)
+13. **Add a subtle row hover effect on the List view table rows** (background-color shift) to match the interactive feel of the Dashboard tag cloud and search results.
 
-13. **Data Import UI.** The CLI has `codememory import --file` but there's no UI equivalent. A drag-and-drop markdown importer that parses frontmatter and creates memories would bridge the gap between CLI power users and GUI-first users.
+14. **Markdown preview in the MemoryForm body textarea.** A toggle between edit and preview, or a split-pane. Users writing markdown shouldn't need to save and switch to the detail panel to confirm formatting.
 
-14. **Memory comparison view.** Select two memories and see them side-by-side with highlighted differences. Essential for understanding how decisions evolved or how facts were updated.
+### Feature Ideas (for backlog, not this sprint)
 
-15. **"Context Compass" — downstream impact preview.** When editing a memory, show which other memories import it. Transform editing from a solo act into systems thinking.
+15. **DAG-Aware Editing:** Show "N memories depend on this" in the edit form before save (see Phase 3, #1).
 
-16. **Session snapshots browser.** Browse, compare, and restore previous resolve sessions. Adds the temporal dimension to memory management.
+16. **Memory Reminders:** Scheduled re-engagement prompts for aging memories (see Phase 3, #2).
 
-17. **Memory health indicators on graph nodes.** Visual cues for stale, unaccessed, or decaying memories directly on the graph. No need to check the Dashboard — the graph itself becomes the health monitor.
+17. **Graph Diff:** Visual version comparison of DAG topology changes between versions (see Phase 3, #3).
 
-18. **Favorites/bookmarking.** Pin frequently accessed memories for quick retrieval. "Star" a memory in List view or right-click menu, see starred memories as a filtered view.
+18. **Default Resolve on node click:** Make the core aha moment one click instead of four (see Phase 3.3).
 
-19. **Batch operations.** Select multiple memories in List view and bulk-change tags, maturity, or archive status.
+19. **Resolve from search results:** Add a "Resolve" action to search dropdown items.
 
-20. **Changelog viewer in UI.** The CLI has `codememory changelog <id>` but there's no UI equivalent. A version history panel in the memory detail view would close this gap.
+20. **Add `review_cadence` field to memory model** to enable scheduled reminders and Dashboard "Due for Review" section.
+
+21. **SVG icon set:** Replace all Unicode/emoji icon usage (PNG button, EXPORT button, Settings gear, Help question mark, theme toggle sun/moon) with a consistent, designed SVG icon set.
+
+22. **Schema purple and info blue warm-ification:** Shift the cool purple (`#7C3AED`/`#A78BFA`) and cool blue (`#1E40AF`/`#93C5FD`) to warmer equivalents that harmonize with the gold/cream/charcoal foundation.
 
 ---
 
-## Verdict
-
-CodeMemory Iteration 10 is an infrastructure win with a UX regression. The MCP server, error queue, dark tint widening, and header enforcement are genuine improvements that make the product more robust and integrable. But the newly discovered dataset switching bug and modal stacking issue undermine the primary user-facing workflow — the very workflow the management panel exists to serve.
-
-The product's conceptual foundation (DAG-based memory resolution, Layer 0 cognitive primitives, the insight that memory loading is dependency resolution) remains brilliant. The MCP server proves the concept can extend beyond the web UI into agent workflows. The LuxCart design system gives the product a distinctive visual identity that separates it from generic developer tools.
-
-But the execution in the web panel still feels like a capable prototype rather than a polished product. The small frictions add up: search doesn't filter the graph, modals stack on top of each other, REINDEX is silent, Ctrl+K fails silently, font sizes strain readability, the form has no inline validation. None of these individually is a dealbreaker, but collectively they create a "death by a thousand paper cuts" experience that undermines trust in a tool whose entire purpose is to be trustworthy with your knowledge.
-
-**The core question this product needs to answer:** Is the web panel a primary interface that should feel polished and trustworthy, or is it a debugging/admin tool where rough edges are acceptable because the real interface is the MCP/CLI? The current execution straddles this line — too much effort for a pure debug tool, not enough polish for a primary interface.
-
-**Recommended priority for next iteration:** Fix the two critical bugs (dataset switch, modal stacking), add search-to-graph filtering, add REINDEX feedback, and fix Ctrl+K. These are high-impact, low-effort fixes that would substantially improve the user's trust in the product. Then decide whether to invest in further UX polish (the Nice-to-Have and Feature Idea tiers) or to double down on the MCP/CLI integration path where the core value proposition is strongest.
+*End of audit report.*

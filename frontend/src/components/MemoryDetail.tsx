@@ -133,6 +133,7 @@ export default function MemoryDetail({ memoryId, onClose, onResolve, onClearReso
 
       {/* Slide-in panel */}
       <div
+        className="panel-slide-enter"
         style={{
           position: 'absolute',
           top: 0,
@@ -187,7 +188,7 @@ export default function MemoryDetail({ memoryId, onClose, onResolve, onClearReso
               border: '1px solid var(--cm-accent)',
               background: 'transparent',
               cursor: 'pointer',
-              fontSize: 11,
+              fontSize: 12,
               fontWeight: 600,
               fontFamily: 'Raleway, sans-serif',
               color: 'var(--cm-accent)',
@@ -269,7 +270,7 @@ export default function MemoryDetail({ memoryId, onClose, onResolve, onClearReso
                   display: 'inline-block',
                   padding: '2px 10px',
                   borderRadius: 2,
-                  fontSize: 11,
+                  fontSize: 12,
                   fontFamily: 'Raleway, sans-serif',
                   fontWeight: 600,
                   textTransform: 'uppercase',
@@ -298,7 +299,7 @@ export default function MemoryDetail({ memoryId, onClose, onResolve, onClearReso
                         backgroundColor: 'var(--cm-bg-subtle)',
                         marginRight: 4,
                         marginBottom: 2,
-                        fontSize: 11,
+                        fontSize: 12,
                         fontFamily: 'Raleway, sans-serif',
                         fontWeight: 500,
                         letterSpacing: '0.04em',
@@ -322,7 +323,7 @@ export default function MemoryDetail({ memoryId, onClose, onResolve, onClearReso
             {/* Imports */}
             {memory.imports && Object.keys(memory.imports).length > 0 && (
               <div style={{ marginTop: 12 }}>
-                <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--cm-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4, fontFamily: 'Raleway, sans-serif' }}>
+                <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--cm-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4, fontFamily: 'Raleway, sans-serif' }}>
                   Imports
                 </div>
                 {Object.entries(memory.imports).map(([strength, deps]) => {
@@ -331,7 +332,7 @@ export default function MemoryDetail({ memoryId, onClose, onResolve, onClearReso
                   const visibleDeps = expanded ? depList : depList.slice(0, IMPORT_PREVIEW_LIMIT)
                   return (
                   <div key={strength} style={{ marginBottom: 2 }}>
-                    <span style={{ fontSize: 11, color: 'var(--cm-text-tertiary)', fontStyle: 'italic' }}>{strength}:</span>
+                    <span style={{ fontSize: 12, color: 'var(--cm-text-tertiary)', fontStyle: 'italic' }}>{strength}:</span>
                     {visibleDeps.map((dep) => {
                       const depId = typeof dep === 'string' ? dep : (dep as Record<string, unknown>).id as string || ''
                       return (
@@ -343,7 +344,7 @@ export default function MemoryDetail({ memoryId, onClose, onResolve, onClearReso
                           }}
                           title={`Navigate to ${depId}`}
                           style={{
-                            fontSize: 11,
+                            fontSize: 12,
                             color: 'var(--cm-info)',
                             paddingLeft: 12,
                             fontFamily: 'Raleway, sans-serif',
@@ -361,7 +362,7 @@ export default function MemoryDetail({ memoryId, onClose, onResolve, onClearReso
                           setExpandedImports((prev) => ({ ...prev, [strength]: !prev[strength] }))
                         }
                         style={{
-                          fontSize: 11,
+                          fontSize: 12,
                           color: 'var(--cm-accent)',
                           paddingLeft: 12,
                           fontFamily: 'Raleway, sans-serif',
@@ -380,7 +381,7 @@ export default function MemoryDetail({ memoryId, onClose, onResolve, onClearReso
 
             {/* Referenced By (backlinks) */}
             <div style={{ marginTop: 12 }}>
-              <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--cm-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4, fontFamily: 'Raleway, sans-serif' }}>
+              <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--cm-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4, fontFamily: 'Raleway, sans-serif' }}>
                 Referenced By
               </div>
               {backlinks && backlinks.length > 0 ? (
@@ -393,7 +394,7 @@ export default function MemoryDetail({ memoryId, onClose, onResolve, onClearReso
                     }}
                     title={`Navigate to ${ref.id}`}
                     style={{
-                      fontSize: 11,
+                      fontSize: 12,
                       color: 'var(--cm-info)',
                       paddingLeft: 12,
                       fontFamily: 'Raleway, sans-serif',
@@ -409,7 +410,7 @@ export default function MemoryDetail({ memoryId, onClose, onResolve, onClearReso
                   </div>
                 ))
               ) : (
-                <div style={{ fontSize: 11, color: 'var(--cm-text-tertiary)', fontFamily: 'Raleway, sans-serif', paddingLeft: 12, fontStyle: 'italic' }}>
+                <div style={{ fontSize: 12, color: 'var(--cm-text-tertiary)', fontFamily: 'Raleway, sans-serif', paddingLeft: 12, fontStyle: 'italic' }}>
                   No other memories reference this one.
                 </div>
               )}
@@ -464,7 +465,7 @@ export default function MemoryDetail({ memoryId, onClose, onResolve, onClearReso
                         backgroundColor: 'var(--cm-bg-warning-subtle)',
                         borderLeft: '3px solid var(--cm-warning)',
                         borderRadius: 2,
-                        fontSize: 11,
+                        fontSize: 12,
                         fontFamily: 'Raleway, sans-serif',
                         color: 'var(--cm-warning)',
                         marginBottom: 4,
@@ -487,7 +488,7 @@ export default function MemoryDetail({ memoryId, onClose, onResolve, onClearReso
               >
                 <div
                   style={{
-                    fontSize: 11,
+                    fontSize: 12,
                     fontWeight: 600,
                     fontFamily: 'Raleway, sans-serif',
                     color: 'var(--cm-text-secondary)',
@@ -509,7 +510,7 @@ export default function MemoryDetail({ memoryId, onClose, onResolve, onClearReso
                       border: '1px solid var(--cm-success)',
                       background: copyLabel === 'Copied!' ? 'var(--cm-bg-success-subtle)' : 'transparent',
                       cursor: 'pointer',
-                      fontSize: 10,
+                      fontSize: 12,
                       fontWeight: 600,
                       fontFamily: 'Raleway, sans-serif',
                       color: copyLabel === 'Copied!' ? 'var(--cm-success)' : 'var(--cm-success)',
@@ -528,7 +529,7 @@ export default function MemoryDetail({ memoryId, onClose, onResolve, onClearReso
                         border: '1px solid var(--cm-border-cool)',
                         background: 'transparent',
                         cursor: 'pointer',
-                        fontSize: 10,
+                        fontSize: 12,
                         fontWeight: 600,
                         fontFamily: 'Raleway, sans-serif',
                         color: 'var(--cm-text-secondary)',
@@ -553,7 +554,7 @@ export default function MemoryDetail({ memoryId, onClose, onResolve, onClearReso
                       alignItems: 'center',
                       gap: 8,
                       padding: '3px 0',
-                      fontSize: 11,
+                      fontSize: 12,
                       fontFamily: 'Raleway, sans-serif',
                       opacity: node.trim === 'skipped' ? 0.4 : node.trim === 'summary' ? 0.65 : 1,
                     }}
@@ -561,7 +562,7 @@ export default function MemoryDetail({ memoryId, onClose, onResolve, onClearReso
                     <span
                       style={{
                         fontFamily: 'JetBrains Mono, monospace',
-                        fontSize: 10,
+                        fontSize: 12,
                         color: 'var(--cm-text-tertiary)',
                         minWidth: 24,
                       }}
@@ -581,7 +582,7 @@ export default function MemoryDetail({ memoryId, onClose, onResolve, onClearReso
                     <code
                       style={{
                         fontFamily: 'JetBrains Mono, monospace',
-                        fontSize: 10,
+                        fontSize: 12,
                         color: 'var(--cm-text-primary)',
                         flex: 1,
                         overflow: 'hidden',

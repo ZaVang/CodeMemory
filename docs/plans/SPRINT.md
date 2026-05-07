@@ -722,6 +722,114 @@ PYTHONPATH=src python tests/integration_test.py
   - 目标：搜索查询返回零结果时显示用户可见提示（如 "No memories found matching 'xyz' — try different keywords"），而非下拉菜单静默消失
   - 验收：输入无匹配结果的查询后搜索下拉菜单出现，显示 "No results" 提示含可操作建议；清除查询后提示消失；有结果时正常显示结果列表
 
-- [ ] R11-P4: 为 MCP server 工具添加读写注解
+- [x] R11-P4: 为 MCP server 工具添加读写注解
   - 目标：在 MCP server 工具定义中将 `resolve_memory`、`overview`、`wander`、`focus` 标记为只读，`snapshot` 标记为写入操作
   - 验收：MCP tools/list 响应中每个工具包含 `readOnlyHint` 或等效注解；现有 MCP 工具调用行为不变；现有后端 57+24 测试通过
+
+## 第 12 轮追加任务（基于体验官 + 进化策略师 + 研究员审计 — 2026-05-07）
+
+> **背景**: 体验官评分 7.0/10，两个 Critical bug（模态竞态、列表 tooltip）和多项重要摩擦。进化策略师评分 5.5/10（从 4.5 上升），Critical 建议均为大功能（AI 创建、导入 UI、设置扩展），Important 中有低投入项（确认对话框、面板标准化、快捷键系统）。研究员 Red 级建议中 R4（MCP 注解）与 R11-P4 重叠，R1（时间衰减激活）为 20 行公式变更。R11 eval 12/13 PASSED，仅 R11-P4（MCP readOnlyHint）未完成。
+> **策略**: 本轮聚焦于修复已知缺陷 + 完成 R11-P4 + 采纳体验官 2 个 Critical + 4 个 Important fix + 进化策略师 2 个低投入 Important 建议 + 研究员 R1。大型功能（导入 UI、AI 创建、设置扩展）纳入 backlog 不在本轮实现。
+> **优先级**: 🔴 第一梯队 = R11-P4 carry-over + 2 个 Critical bug + 1 个 Critical UX bug；🟡 第二梯队 = 4 个 Important 改进 + 1 个进化策略师 Important + 1 个研究员 Red；🟢 第三梯队 = 至少 4 项 polish。
+
+### 第一梯队（🔴 Critical 修复 — 本轮必须完成）
+
+- [x] R12-B1: 修复 Validate 模态在 Wander 关闭后偶发性打不开的异步竞态问题
+  - 目标：Wander 模态关闭 + 触发 validate 请求后，Validate 模态始终能可靠打开，不受异步 fetch 生命周期影响
+  - 验收：多次重复"打开 Wander → 关闭 → 点击 Validate"操作，Validate 模态每次都出现；反之亦然（Validate → Wander）；两个模态的 close/open 逻辑完全独立无相互干扰
+  - 来源：体验官 Critical #1（R11-B2 修复引入的新竞态——setWanderOpen(false) 和 fetchValidate() 同步调用但 setValidateOpen(true) 依赖 fetch promise 解析）
+
+- [x] R12-B2: 修复 List 视图 TruncatedCell tooltip 不显示（R11 回归）
+  - 目标：List 视图截断的 Summary 列在 hover 时正确显示包含完整文本的 tooltip
+  - 验收：含省略号的长文本单元格 hover 后出现 tooltip 显示完整内容；未截断的单元格不显示 tooltip；中文混合文本截断检测同样准确；tooltip 内容与单元格实际完整内容一致
+  - 来源：体验官 Critical #2（父元素 `<td>` 的 `overflow: hidden` 阻止了 `scrollWidth > clientWidth` DOM 检测——R11-UX6 在特定条件下失效）
+
+- [x] R12-B3: 清除用户修正输入后的表单校验错误
+  - 目标：用户在表单中修正了触发校验错误的字段后，错误 banner 自动消失，无需等待下次提交
+  - 验收：提交空表单后显示的 "ID is required" 错误在用户输入有效 ID 后自动消失；按钮状态（disabled/enabled）与错误存在状态一致；任何字段修正后对应错误消失；错误消失后恢复时无闪烁
+  - 来源：体验官 Important #7（错误 banner persist 让用户困惑——认为错误仍在）
+
+- [x] R12-B4: 完成 R11-P4 — MCP server 工具 readOnlyHint 注解（上轮遗留）
+  - 目标：在 MCP server 的 5 个工具定义中添加 readOnlyHint 属性（resolve/overview/wander/focus 为只读，snapshot 为写入）
+  - 验收：MCP tools/list 响应中每个工具包含 readOnlyHint 或等效注解；现有 MCP 工具调用行为不变；现有后端 57+24 测试通过
+  - 来源：上轮遗留 + 进化策略师 I9 + 研究员 R4（三方一致认定）
+
+### 第二梯队（🟡 高价值改进 — 本轮尽量完成）
+
+- [x] R12-UX1: 提升全局最小交互字号从 10-11px 到 12-13px
+  - 目标：所有按钮、标签、badge 和控制文字的最小字号提升至 12px；微标签（match quality badge、tag count）可保持 11px 但不低于此
+  - 验收：所有视图（Graph/List/Dashboard/Detail/Form/Modal/Onboarding）中交互文字字号 >= 12px；微标签 >= 11px；布局不因字号增加而破损；深色模式同样适用；色彩和间距与现有设计系统一致
+  - 来源：体验官 Important #3（"the single highest-impact aesthetic change available" — 10-11px 在高 DPI 屏幕下低于可读阈值）
+
+- [x] R12-UX2: 为 Settings、Help、MemoryForm 面板和 Wander/Validate 模态添加入场/退场动画
+  - 目标：所有滑出面板使用与 MemoryDetail 相同的动画模式（transform 平移 + 250ms ease）；所有模态使用 fade-in + scale 过渡
+  - 验收：Settings 面板从右侧滑入（250ms ease）；Help 面板从右侧滑入；MemoryForm 面板从右侧滑入；Wander 模态 fade-in + scale 入场；Validate 模态同样入场动画；所有退场动画正确执行（无瞬间消失）；动画统一性——所有同类型面板/模态使用相同时长和缓动函数
+  - 来源：体验官 Important #4 + #5（"the fact that Settings/Help/MemoryForm panels lack identical animations is an oversight"；"Motion is how digital products communicate materiality"）
+
+- [x] R12-UX3: 为 Validate 模态添加 "Validate Again" 按钮
+  - 目标：Validate 模态内提供重新运行 validate 的按钮，匹配 Wander 模态的 "Wander Again" 体验
+  - 验收：Validate 模态内出现 "Validate Again" 按钮（或等效操作入口）；点击后重新运行 validate 并更新模态内容；按钮位置和样式与 Wander 的 "Wander Again" 一致；按钮在 validate 运行期间有加载态反馈
+  - 来源：体验官 Important #6（"Wander has 'Wander Again' — this asymmetry is confusing"）
+
+- [x] R12-UX4: 为归档操作添加确认对话框
+  - 目标：点击归档按钮时弹出确认对话框；若被归档的记忆被其他记忆 imports 引用，额外显示警告告知会创建断链
+  - 验收：归档操作触发确认对话框（"Are you sure?" + 说明归档操作可逆）；若记忆被 N 条其他记忆引用，对话框中显示 "N memories import this one. Archiving it will create broken links." 及引用者 ID 列表；确认后执行归档；取消则关闭对话框无操作；确认对话框样式与现有设计系统一致（Escape 可关闭）
+  - 来源：进化策略师 C5（"Prevents data loss. Standard UX pattern absent from the product."）
+
+- [x] R12-UX5: 为 overview 添加时间衰减激活计算
+  - 目标：将 `overview` 的 heat 计算公式从 `deps * 10 + access` 替换为时间衰减逻辑，使 session-start 上下文注入更能反映记忆的"最近相关性"而非简单访问频次
+  - 验收：最近常访问的记忆 heat 值高于很久以前高频访问的记忆；overview 输出排序按新公式正确排列；时间衰减逻辑对 zero-access 记忆（从未访问过）优雅降级；现有 overview 输出格式和字段不变；57+24 测试通过
+  - 来源：研究员 R1（Red / High-Impact Low-Effort — "约 20 行公式变更，能显著改善 session-start 质量"）
+
+### 第三梯队（🟢 打磨 — 本轮至少完成四项）
+
+- [x] R12-P1: 替换 onboarding 文字图标为 SVG 几何图标
+  - 目标：5 步 onboarding overlay 中的原始文字字符（"+"、"o"、">"、"~"、"checkmark"）替换为一致的 SVG 几何图标集
+  - 验收：每步 onboarding icon 为 SVG 图形（圆形表示 graph、箭头表示 resolve、加号表示 create、对勾表示完成、星形表示欢迎）；图标风格一致（线描或实心，非混合）；图标颜色与 gold accent 协调
+  - 来源：体验官 Nice-to-have #8（"the most visible design element in the first 30 seconds uses placeholder symbols"）
+
+- [x] R12-P2: 统一三个视图的空状态组件
+  - 目标：Graph、List、Dashboard 三个视图在零记忆和零过滤结果场景下使用统一的 EmptyState 组件，包含一致的图标、文案和操作按钮
+  - 验收：Graph 空状态含统一 EmptyState + "Create Memory" 按钮；List 空状态含统一 EmptyState + 情境化消息；Dashboard 空状态含统一 EmptyState + "Create Memory" 按钮；所有空状态的视觉风格（图标、排版、间距）一致；零记忆 vs 零过滤结果通过不同文案/图标区分
+  - 来源：体验官 Nice-to-have #9（"Three different empty state UIs for the same condition"）
+
+- [x] R12-P3: 统一操作标签 —— "Create Memory" / "+ New" / "+ NEW" → 单一主操作标签
+  - 目标：全应用中使用一致的主操作标签文字和视觉样式
+  - 验收：创建记忆操作在所有位置使用统一的文案（如 "Create Memory" 或 "+ New"——选一统一）；"+ NEW" 按钮与视图切换器在视觉上可区分（主操作 vs 导航）；操作按钮颜色/样式一致传达"创建"语义
+  - 来源：体验官 Nice-to-have #9 补充（"Four different labels for the same action"）
+
+- [x] R12-P4: 添加视图切换键盘快捷键（1/2/3）
+  - 目标：按 1/2/3 键可在 Graph/List/Dashboard 视图之间切换；Help 面板记录这些快捷键
+  - 验收：按 "1" 切换到 Graph 视图；按 "2" 切换到 List 视图；按 "3" 切换到 Dashboard 视图；当搜索框或表单输入框聚焦时不触发视图切换；Help 面板中快捷键列表包含 1/2/3 的说明
+  - 来源：体验官 Nice-to-have #12 + 进化策略师 I3（"No keyboard shortcut for view switching... natural"）
+
+- [x] R12-P5: 为 List 视图表格行添加 hover 效果
+  - 目标：List 视图表格行在鼠标悬浮时有微妙的背景色过渡
+  - 验收：悬浮表行时背景色在 ~100ms 内平滑过渡到稍深的色值（亮色和深色模式均适用）；已选中的行（如有）与 hover 行视觉可区分；hover 效果与 Dashboard tag cloud 和 search results 的交互风格一致；行 hover 不影响列排序功能
+  - 来源：体验官 Nice-to-have #13（"lacks the subtle background-color shift present in other views"）
+
+- [x] R12-P6: 为 List 视图添加容器横向 padding
+  - 目标：List 视图表格不再拉伸到容器边缘，获得与 Dashboard 一致的横向 padding
+  - 验收：List 视图表格有可见的横向 padding（不贴边）；padding 值与 Dashboard 视图一致或视觉协调；表格内容不被 padding 裁切（columns 宽度自适应）；深色模式下 padding 区域颜色与背景一致
+  - 来源：体验官 Phase 2.3（"the List view table stretches edge-to-edge... feels squeezed and spreadsheet-like"）
+
+### Backlog（本轮不纳入，下轮评估）
+
+以下建议由 Planner 审阅后记录为 backlog，待后续轮次根据优先级和容量评估纳入：
+
+- **数据导入 UI**（进化策略师 C2）—— #1 冷启动障碍，但属大型功能，需独立轮次
+- **AI 辅助创建**（进化策略师 C1）—— 差异化战略资产，但需依赖 llm_gateway 集成，属大型功能
+- **设置面板扩展**（进化策略师 C3）—— 从 3 项扩展到 15-20 项，中等规模但本轮聚焦缺陷修复
+- **交互式 Onboarding**（进化策略师 C4）—— 被动教程升级为交互式引导，中等规模
+- **Suggest-Deps 在创建表单中**（进化策略师 I1）—— 高价值低投入，但本轮任务已满
+- **命令面板 Ctrl+P**（进化策略师 I2）—— 桥接 CLI/UI，下轮评估
+- **图结构过滤器**（进化策略师 I6）—— 按 type/status/maturity/directory 过滤图节点
+- **草稿自动保存**（进化策略师 I5）—— localStorage 持久化，已多次提及
+- **Markdown 预览**（体验官 Nice-to-have #14）—— 编辑体验改进
+- **移除 List 本地过滤条**（体验官 Nice-to-have #10）—— 搜索接口统一
+- **图节点右键菜单添加 Resolve**（体验官 Nice-to-have #11）—— 减少 "aha moment" 点击路径
+- **imports 字段添加语义类型**（研究员 R2）—— 支持/反驳/扩展/替换/例证
+- **预计算 in_degree / out_degree**（研究员 R3）—— 消除 O(n^2) 瓶颈
+- **图 Minimap**（进化策略师 I10）—— Cytoscape 原生支持
+- **Schema purple 和 info blue 暖化**（体验官 Nice-to-have #22）—— 调色板和谐调整
+- **SVG 图标集**（体验官 Nice-to-have #21）—— 替换所有 Unicode/emoji 图标

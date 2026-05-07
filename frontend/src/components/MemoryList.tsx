@@ -89,13 +89,13 @@ export default function MemoryList({ onSelectMemory, refreshTrigger, initialFilt
 
   const sortIndicator = (field: SortField) => {
     if (sortField !== field) return null
-    return <span style={{ marginLeft: 2, fontSize: 10 }}>{sortDir === 'asc' ? ' ↑' : ' ↓'}</span>
+    return <span style={{ marginLeft: 2, fontSize: 12 }}>{sortDir === 'asc' ? ' ↑' : ' ↓'}</span>
   }
 
   const thStyle: React.CSSProperties = {
     padding: '8px 12px',
     textAlign: 'left',
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: 600,
     fontFamily: 'Raleway, sans-serif',
     textTransform: 'uppercase',
@@ -167,13 +167,13 @@ export default function MemoryList({ onSelectMemory, refreshTrigger, initialFilt
             </button>
           )}
         </div>
-        <span style={{ fontSize: 11, color: 'var(--cm-text-tertiary)', fontFamily: 'Raleway, sans-serif', whiteSpace: 'nowrap' }}>
+        <span style={{ fontSize: 12, color: 'var(--cm-text-tertiary)', fontFamily: 'Raleway, sans-serif', whiteSpace: 'nowrap' }}>
           {filtered.length} of {allMemories.length} memories
         </span>
       </div>
 
       {/* Table */}
-      <div style={{ flex: 1, overflow: 'auto' }}>
+      <div style={{ flex: 1, overflow: 'auto', padding: '0 24px' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
             <tr>
@@ -202,11 +202,11 @@ export default function MemoryList({ onSelectMemory, refreshTrigger, initialFilt
               <tr
                 key={mem.id}
                 onClick={() => onSelectMemory(mem.id)}
-                style={{ cursor: 'pointer' }}
+                style={{ cursor: 'pointer', transition: 'background-color 100ms ease' }}
                 onMouseEnter={(e) => { (e.currentTarget as HTMLTableRowElement).style.backgroundColor = 'var(--cm-bg-hover)' }}
                 onMouseLeave={(e) => { (e.currentTarget as HTMLTableRowElement).style.backgroundColor = 'transparent' }}
               >
-                <td style={{ ...tdStyle, fontFamily: 'JetBrains Mono, monospace', fontSize: 11, wordBreak: 'break-all' }}>
+                <td style={{ ...tdStyle, fontFamily: 'JetBrains Mono, monospace', fontSize: 12, wordBreak: 'break-all' }}>
                   {mem.id}
                 </td>
                 <td style={{ ...tdStyle, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 300 }}>
@@ -214,7 +214,7 @@ export default function MemoryList({ onSelectMemory, refreshTrigger, initialFilt
                 </td>
                 <td style={tdStyle}>
                   <span style={{
-                    fontSize: 10,
+                    fontSize: 12,
                     fontFamily: 'Raleway, sans-serif',
                     fontWeight: 600,
                     textTransform: 'uppercase',
@@ -223,13 +223,13 @@ export default function MemoryList({ onSelectMemory, refreshTrigger, initialFilt
                     {mem.type}
                   </span>
                 </td>
-                <td style={tdStyle}><MaturityBadge maturity={mem.maturity} opts={{ padding: '1px 8px', fontSize: 10 }} /></td>
-                <td style={tdStyle}><StatusBadge status={mem.status} opts={{ padding: '1px 8px', fontSize: 10 }} /></td>
+                <td style={tdStyle}><MaturityBadge maturity={mem.maturity} opts={{ padding: '1px 8px', fontSize: 12 }} /></td>
+                <td style={tdStyle}><StatusBadge status={mem.status} opts={{ padding: '1px 8px', fontSize: 12 }} /></td>
                 <td style={tdStyle}>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
                     {mem.tags.slice(0, 4).map((t) => (
                       <span key={t} style={{
-                        fontSize: 10,
+                        fontSize: 12,
                         fontFamily: 'Raleway, sans-serif',
                         padding: '1px 6px',
                         borderRadius: 2,
@@ -241,7 +241,7 @@ export default function MemoryList({ onSelectMemory, refreshTrigger, initialFilt
                       </span>
                     ))}
                     {mem.tags.length > 4 && (
-                      <span style={{ fontSize: 10, color: 'var(--cm-text-tertiary)' }}>+{mem.tags.length - 4}</span>
+                      <span style={{ fontSize: 12, color: 'var(--cm-text-tertiary)' }}>+{mem.tags.length - 4}</span>
                     )}
                   </div>
                 </td>
@@ -326,7 +326,7 @@ const pageBtnStyle: React.CSSProperties = {
   background: 'transparent',
   color: 'var(--cm-text-secondary)',
   cursor: 'pointer',
-  fontSize: 11,
+  fontSize: 12,
   fontWeight: 600,
   fontFamily: 'Raleway, sans-serif',
   textTransform: 'uppercase',
@@ -334,21 +334,39 @@ const pageBtnStyle: React.CSSProperties = {
   borderRadius: 2,
 }
 
-// ── R11-UX6: Truncated cell with hover tooltip ───────────────────────
+// ── R11-UX6 / R12-B2: Truncated cell with hover tooltip ─────────────
 
 function TruncatedCell({ text }: { text: string }) {
-  const ref = useRef<HTMLSpanElement>(null)
+  const containerRef = useRef<HTMLSpanElement>(null)
   const [isTruncated, setIsTruncated] = useState(false)
 
   useEffect(() => {
-    const el = ref.current
-    if (el) {
-      setIsTruncated(el.scrollWidth > el.clientWidth)
-    }
+    const container = containerRef.current
+    if (!container) return
+
+    // R12-B2: Parent <td> has overflow:hidden which breaks scrollWidth > clientWidth
+    // measurement. Use a detached measurement element to get the true text width.
+    const measure = document.createElement('span')
+    const cs = getComputedStyle(container)
+    measure.style.position = 'absolute'
+    measure.style.visibility = 'hidden'
+    measure.style.whiteSpace = 'nowrap'
+    measure.style.fontSize = cs.fontSize
+    measure.style.fontFamily = cs.fontFamily
+    measure.style.fontWeight = cs.fontWeight
+    measure.style.letterSpacing = cs.letterSpacing
+    measure.textContent = text
+    document.body.appendChild(measure)
+
+    const textWidth = measure.getBoundingClientRect().width
+    const containerWidth = container.getBoundingClientRect().width
+    setIsTruncated(textWidth > containerWidth)
+
+    document.body.removeChild(measure)
   }, [text])
 
   return (
-    <span ref={ref} title={isTruncated ? text : undefined}>
+    <span ref={containerRef} title={isTruncated ? text : undefined}>
       {text}
     </span>
   )

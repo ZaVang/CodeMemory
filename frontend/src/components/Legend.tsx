@@ -57,11 +57,11 @@ export default function Legend({ graphData }: Props) {
     >
       {/* Directory colors — dynamic from graph data */}
       <div style={{ marginBottom: 8 }}>
-        <h4 style={{ margin: '0 0 6px 0', fontSize: 11, fontWeight: 600, color: 'var(--cm-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+        <h4 style={{ margin: '0 0 6px 0', fontSize: 12, fontWeight: 600, color: 'var(--cm-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
           Directories
         </h4>
         {allDirs.length === 0 && (
-          <span style={{ color: 'var(--cm-text-tertiary)', fontSize: 11 }}>No directories</span>
+          <span style={{ color: 'var(--cm-text-tertiary)', fontSize: 12 }}>No directories</span>
         )}
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 10px' }}>
           {allDirs.map(({ dir, color, isFallback }) => (
@@ -76,7 +76,7 @@ export default function Legend({ graphData }: Props) {
                   flexShrink: 0,
                 }}
               />
-              <span style={{ color: 'var(--cm-text-secondary)', fontSize: 11, whiteSpace: 'nowrap' }}>
+              <span style={{ color: 'var(--cm-text-secondary)', fontSize: 12, whiteSpace: 'nowrap' }}>
                 {dir}{isFallback ? ' (auto)' : ''}
               </span>
             </div>
@@ -86,7 +86,7 @@ export default function Legend({ graphData }: Props) {
 
       {/* Edge styles — static */}
       <div>
-        <h4 style={{ margin: '0 0 6px 0', fontSize: 11, fontWeight: 600, color: 'var(--cm-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+        <h4 style={{ margin: '0 0 6px 0', fontSize: 12, fontWeight: 600, color: 'var(--cm-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
           Edges
         </h4>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px 12px' }}>
@@ -100,7 +100,7 @@ export default function Legend({ graphData }: Props) {
                   borderTop: style,
                 }}
               />
-              <span style={{ color: 'var(--cm-text-secondary)', fontSize: 11 }}>{label}</span>
+              <span style={{ color: 'var(--cm-text-secondary)', fontSize: 12 }}>{label}</span>
             </div>
           ))}
         </div>

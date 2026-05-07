@@ -86,6 +86,7 @@ TOOLS = [
             },
             "required": ["id"],
         },
+        "readOnlyHint": True,
     },
     {
         "name": "overview",
@@ -116,6 +117,7 @@ TOOLS = [
                 },
             },
         },
+        "readOnlyHint": True,
     },
     {
         "name": "wander",
@@ -136,6 +138,7 @@ TOOLS = [
                 },
             },
         },
+        "readOnlyHint": True,
     },
     {
         "name": "focus",
@@ -161,6 +164,7 @@ TOOLS = [
             },
             "required": ["id"],
         },
+        "readOnlyHint": True,
     },
     {
         "name": "snapshot",
@@ -183,6 +187,7 @@ TOOLS = [
             },
             "required": ["id"],
         },
+        "readOnlyHint": False,
     },
 ]
 

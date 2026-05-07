@@ -1,555 +1,486 @@
 # CodeMemory -- Product Evolution Audit Report
 
-**Date:** 2026-05-06
-**Reviewer:** Product Evolution Reviewer (Sprint 13 Audit)
-**Methodology:** Full-stack manual testing (all 16 API endpoints), MCP server JSON-RPC 2.0 protocol verification, puppeteer DOM state capture, frontend source code review (17 components), backend architecture review, API smoke tests, all unit (57) and integration (24) tests, TypeScript compilation check, Vite production build, competitive research (SuperLocalMemory V3.4, MAG, AutoMem, Cognee, Cuba-Memorys, Obsidian, Notion)
+**Date:** 2026-05-07
+**Reviewer:** Product Evolution Reviewer (Product Strategy)
+**Build:** Post-Round 11 (7e1f84b), pre-Sprint 13
+**Previous score:** 4.5/10 (May 2026, pre-Round 11)
+**Datasets available:** companion (10), investment (10), software-architecture (11), quant_operators (62)
+**Methodology:** Full-stack product startup (backend + frontend), headless page-state extraction at localhost:5317, source code review of all 12 frontend components (8,668 lines TSX), all 16 API endpoints (1,377 lines Python), MCP server (371 lines), competitive research (Obsidian, Notion, Mem.ai, Reflect.app), and review of the prior audit report and Round 11 negotiation outcomes.
 
 ---
 
 ## Executive Summary
 
-**Product Evolution Maturity Score: 4.5 / 10**
+**Product Evolution Maturity Score: 5.5 / 10** (up from 4.5)
 
-CodeMemory has a genuine technical moat — DAG-based dependency resolution with topological sorting and token-budgeted context assembly — that no competitor replicates. The MCP server (5 tools) and the three-view web panel (Graph/List/Dashboard) constitute a credible v0.1 infrastructure product for AI agent memory. All 57 unit tests, 24 integration tests, 5 API smoke tests, and both TypeScript and Vite builds pass clean.
+CodeMemory has moved from "developer tool with a thin product shell" to "advanced prototype with a coherent but narrow product surface." The Round 11 fixes were substantial: search gained fuzzy matching, tag autocomplete, snippet previews, and empty-state feedback; error handling got a toast queue with human-readable messages; the onboarding wizard and settings panel shipped; graph skeleton loading and dark mode tints were added. Twelve of thirteen committed fixes were delivered.
 
-However, the product remains a **developer tool with a thin product shell**, not a product ready for users. The gap between "works for the builders" and "works for a new user" is wide and spans four categories:
+The product's core differentiator -- deterministic DAG-based memory resolution with topological sorting and token-budgeted context assembly -- remains genuinely unique in the market. The MCP server (5 tools) and three-view web panel (Graph/List/Dashboard) form a credible v0.1 for AI agent memory infrastructure.
 
-1. **No data import path in the UI** — a user with 200 existing notes must create 200 memories one at a time through a form. The CLI has `codememory import --file` but the web panel has no import button, drag zone, or bulk endpoint.
+However, the gap between "convincing demo" and "daily-use product" is still significant. The product has solved the **consumption** side (browse graph, resolve context, search memories) but not the **creation** side (no AI-assisted writing, no import pipeline UI, no suggest-deps in the create form, no templates beyond schemas). The product's mission is AI memory, yet the only AI surface is the MCP server -- which is for AI agents to consume, not for human users to benefit from.
 
-2. **Primitive search** — difflib-based word matching (2005-era technology) versus competitors offering 7-channel retrieval (semantic, BM25, entity graph, temporal, associative, Hopfield, consolidation). The product's core promise of "finding connections" is undermined by its inability to search by meaning.
+The single largest evolution opportunity remains the same: **bridge the creation gap.** A user with 200 existing notes must manually create 200 memories through a form. The CLI has `codememory import --file` but the web UI has no import button. The `suggest-deps` engine exists but is not wired into the create form. AI-assisted writing (summarize, extract key points, suggest imports) would simultaneously close the feature gap with Mem.ai/Reflect and amplify CodeMemory's unique DAG structure.
 
-3. **Absent product-layer features** — no favorites/bookmarks, no batch operations, no collaboration, no mobile/responsive design, no Markdown preview, no draft auto-save, no memory templates, no graph export (buttons exist but are not wired), no API documentation surfaced to users.
+**Where the score comes from:**
+- +2.0: Core DAG resolution engine remains unique and solid
+- +1.5: Web UI (Graph/List/Dashboard) is functional and visually coherent
+- +1.0: Round 11 improvements (search, error handling, onboarding, settings, dark mode) meaningfully raised the floor
+- +0.5: MCP server integration is forward-looking
+- -1.0: No content import/creation workflow beyond manual form-filling -- the #1 adoption blocker persists
+- -0.5: Settings panel has only 3 items -- feels like a placeholder
+- -0.5: No AI features in the UI despite the product's AI-memory mission
+- -0.5: Search is strong but graph filtering is weak; no structural filters (by type/status/maturity) on the graph view
+- -0.5: No mobile/responsive, no collaboration, no sharing -- standard features for 2026 knowledge tools
+- -0.5: Technical debt signals: monolithic App.tsx (1,574 lines), monolithic server.py (1,377 lines), inline styles everywhere, zero frontend tests
 
-4. **Missing user guidance** — empty search returns no feedback (reads as broken), empty wander returns a 404 with no user-friendly message, graph rendering failures show a blank canvas, errors are raw technical strings, and the onboarding explains concepts but doesn't guide users through their first workflow.
+### Dimension Breakdown
 
-The competitive landscape has accelerated dramatically. SuperLocalMemory offers 35 MCP tools with 7-channel cognitive retrieval and neuroscience-inspired forgetting. MAG scores 91.1% on LoCoMo from a single Rust binary with ONNX embeddings. CodeMemory's 5 MCP tools and difflib search are a credible entry — but the feature depth gap versus multi-year incumbents is significant.
-
-**The single largest evolution opportunity:** Core completeness — bridging the gap from "works for the developer" to "works for a new user." Import UI, semantic search, and error message UX are the three critical blocking items. Only after these are addressed should the team invest in wow-factor features.
+| Dimension | Last Audit | Now | What Changed |
+|-----------|:----------:|:---:|-------------|
+| Core Completeness | 3/10 | 5/10 | Onboarding wizard, settings panel, error toast queue, search empty states, form validation, loading skeletons shipped. Import UI and AI creation still missing. |
+| Competitive Gaps | 3/10 | 4/10 | Fuzzy search + tag autocomplete narrows the search gap somewhat. Still no semantic search, no mobile, no AI features, no import pipeline. |
+| Functional Depth | 5/10 | 6/10 | Resolve (8/10) and Search (7/10, up from 4/10) are now genuinely deep. Settings (2/10) and Create (4/10) remain shallow. |
+| Differentiation | 7/10 | 7/10 | No change. DAG resolution + MCP server remains unique. The moat is intact but underexploited. |
 
 ---
 
 ## Phase 1: Core Completeness
 
-### Current Core Loop Analysis
+### 1.1 What the Core Loop Can Do Today
 
-**What works end-to-end (with no bugs detected):**
-1. A user opens the web panel, sees a 5-step onboarding wizard (skippable, persisted in localStorage)
-2. They select a dataset from the header dropdown (companion/investment/quant_operators/software-architecture)
-3. They view memories in three modes:
-   - **Graph** — interactive D3 force-directed layout, node sizing by intensity, directory-based coloring, solid/dashed/dotted edges by import strength, zoom slider, right-click context menu (Edit/Archive), resolve animation
-   - **List** — paginated table with columns (ID, summary, tags, maturity, intensity, status), text filter, click-to-select, shimmer skeleton loader
-   - **Dashboard** — stats (total, maturity/type/status breakdowns, tags), validate/reindex/wander buttons, shimmer skeleton
-4. They create a memory via a form (ID, summary, tags with autocomplete, body in Markdown, imports, intensity 1-10, maturity level, schema reference, semantic type)
-5. They resolve a memory to see its DAG dependency chain with token-budget trimming and LLM prompt generation
-6. They search memories by keyword (with tag/type/status/maturity filter support)
-7. They edit or archive memories, with single-action undo
-8. They export all memories as .zip (backend API), with a .zip download button in the toolbar
-9. They change settings (dataset, budget, theme) persisted in localStorage
-10. They access the Help panel (keyboard shortcuts, concept reference)
-11. They trigger wander for serendipitous recall of cold memories
-12. They run validation to check for broken links, cycles, schema compliance
+The "happy path" works end-to-end for a user who already has memory data:
 
-**What the loop looks like for a real user:**
-The ideal flow is: import existing knowledge -> wire dependencies -> browse graph -> resolve context -> inject into AI agent. But the import step is missing, so the flow breaks at step one. The user must manually create every memory through a form.
+1. **Open the app** --> greeted by a 5-step onboarding wizard (skippable, persisted in localStorage). Modal backdrop with step dots, "Skip" and "Get Started" buttons.
+2. **Browse the graph** --> DAG nodes colored by directory, sized by intensity (1-10), edges styled by strength (solid=required, dashed=recommended, dotted=related). Zoom slider with numeric display. Hover tooltips with summary. Right-click for Edit/Archive.
+3. **Click a node** --> slide-out detail panel with metadata badges (StatusBadge, MaturityBadge), import list grouped by strength, full Markdown body rendered with react-markdown + remark-gfm.
+4. **Click Resolve** --> topological animation highlights nodes in dependency order (300ms/step), shows full/summary/skipped trim levels, token counts. Budget slider (200-5000) with debounced re-resolution.
+5. **Generate Prompt** --> copies a formatted LLM system prompt with all resolved context, maturity/status weighting instructions, and structured guidance. Button shows "Copied!" feedback.
+6. **Search** --> type keywords, see exact + fuzzy results with snippets, match quality badges (exact/~85%), matched-field indicators. Tag autocomplete in dropdown. Empty state with "No memories found matching..." message.
+7. **Create memory** --> fill form (ID, summary, tags with autocomplete, intensity slider, imports, Markdown body, schema reference, maturity level). Submit creates via POST /api/memories.
+8. **Edit memory** --> modify fields, add change note, submit via PUT /api/memories/{id}. Undo button for most recent action.
+9. **Archive memory** --> right-click node --> Archive. Available from both graph context menu and detail panel.
+10. **Switch datasets** --> dropdown in header with memory counts. All three views refresh correctly (R11 race condition fix).
+11. **Dashboard** --> stats cards (total, stale, proven, draft), maturity distribution, top tags, stale list, Wander button, Validate button, Reindex button with feedback.
+12. **Export** --> .zip of all memories (backend API), PNG of current graph view.
+13. **Settings** --> default dataset, default budget (200-5000), theme (system/light/dark). Persisted in localStorage.
 
-### Missing Critical Links
+**This is a functioning knowledge graph browser, not yet a knowledge management tool.** The flow is heavily consumption-oriented (browse, read, resolve, search) and creation is still a manual form-filling exercise.
 
-#### 1. Data Import — CLI-Only, No UI Path (CRITICAL)
+### 1.2 What Round 11 Fixed (and What It Didn't)
 
-The backend has `/api/memories` POST for single-memory creation and the CLI has `codememory import --file` for text extraction. But the web UI has **zero import capability**. A new user with existing notes, bookmarks, or chat logs has no way to bootstrap their memory graph.
+| Fix | Status | Assessment |
+|-----|:------:|-----------|
+| Dataset switch race condition | Fixed | List/Dashboard now refresh correctly on switch |
+| Modal stacking (Wander + Validate) | Partial | Previous audit found edge case; fix in progress |
+| Ctrl+K focus search | Fixed | Keyboard shortcut documented and working |
+| Reindex feedback | Fixed | "Reindexed N memories successfully" message |
+| Search graph filter | Partial | Source code exists; runtime effect under-verified |
+| Graph skeleton loading | Fixed | Shimmer loader shown during graph load |
+| Form validation | Fixed | Inline validation on create/edit form |
+| List view tooltips | Partial | TruncatedCell component exists; rendering under-verified |
+| Error messages (human-readable) | Fixed | HTTP status mapped to user-friendly strings |
+| Empty states | Fixed | "No memories found matching" with suggestions |
+| Header cleanup | Fixed | Cleaner header layout |
+| MCP annotations | Deferred | R11-P4: only remaining open item |
 
-**Current state:**
-- CLI: `codememory import --file notes.txt --extract preferences` (works)
-- CLI: `codememory import --stdin --extract decisions` (works)
-- Web UI: No import button, no drag-and-drop zone, no file picker, no paste area
-- API: No bulk-import endpoint, no folder-import endpoint
+### 1.3 Missing Critical Links
 
-**Impact:** This is the #1 adoption blocker. Nobody will manually create 100+ memories through a form. The product requires users to already have the patience and technical skill to use a CLI for data ingestion.
+| Gap | Severity | Why It Matters | Has Changed Since Last Audit? |
+|-----|:--------:|---------------|:----------------------------:|
+| **No AI-assisted memory creation** | Critical | The product is *about* AI memory, yet users must hand-write every memory. Competitors (Mem.ai Smart Write, Reflect AI Palette, Notion AI) all offer AI writing features. CodeMemory has zero AI surface in its UI. | No |
+| **No import UI** | Critical | CLI has `codememory import --file` but the web panel has no import button, drag zone, or bulk endpoint. A user migrating from Obsidian (both use .md files!) cannot drag-and-drop a folder. This is the #1 cold-start blocker. | No |
+| **No suggest-deps in create form** | Important | The `suggest-deps` CLI exists and works. The create/edit form does not call it. Users must manually guess which memories to import. This is the most impactful low-effort improvement available. | No |
+| **No draft auto-save** | Important | Acknowledged in negotiation.md as backlog since Round 10. Create/edit form data is lost on accidental close or navigation. | No |
+| **No batch operations** | Important | Cannot select multiple memories to tag, archive, or export together. | No |
+| **No confirmation for Archive** | Important | Right-click "Archive" has no confirmation dialog. One misclick archives a memory. No warning if other memories import the one being archived. | No |
+| **Only 3 settings** | Important | Settings panel feels like a placeholder. Missing: keyboard shortcuts, graph preferences, editor preferences, notification settings, data directory, page size. | No -- shipped with 3 items |
+| **Onboarding teaches concepts, not workflows** | Important | The 5-step slideshow explains what Graph View and Resolve *are*. It does not guide the user through creating their first memory, wiring an import, or running a resolve. After clicking "Get Started," the user faces a pre-populated graph with no next-step guidance. | No -- shipped but limited |
 
-#### 2. No Cross-Device or Cross-Session Persistence Strategy
+### 1.4 Empty State and Boundary Coverage (Updated)
 
-Settings persist in `localStorage` (browser-local, per-machine). Memory files are on the local filesystem. There is no cloud sync, no remote storage option, no way to access memories from a different machine. This is acceptable for a local-first tool, but the product doesn't articulate this tradeoff — there's no documentation about data location, backup strategy, or migration path.
+| State | Status | Quality |
+|-------|:------:|---------|
+| First visit (onboarding) | Has 5-step wizard, skippable | Good -- well-written, visually coherent |
+| Onboarding re-trigger | **Missing** | No "Tour" or "Replay onboarding" button anywhere in the UI |
+| Empty dataset (all views) | Has EmptyState component with CTAs | Good -- icon, title, description, action buttons |
+| Empty search results | Has "No memories found matching..." with suggestion text | Good -- R9 implementation working |
+| Empty wander | **Under-verified** | Previous audit found 404 with no user-friendly message |
+| Graph rendering failure | **Missing** | Blank canvas, only console.error |
+| Loading states | Has shimmer skeletons (Graph, List, Dashboard) | Good |
+| Network error | Has toast queue with human-readable messages | Good -- but no explicit Retry button on toast |
+| Validation errors | Has detailed modal with error/warning lists | Good |
+| Budget overrun in resolve | Has trim level annotations (full/summary/skipped) | Good |
+| Dataset with zero imports (quant_operators) | **Misleading** | 62 memories with zero imports contradicts the "memory is a dependency graph" philosophy |
 
-#### 3. Onboarding Covers Concepts, Not Workflows
+### 1.5 Onboarding -- Deeper Assessment
 
-The 5-step onboarding explains what Graph View and Resolve do conceptually. After clicking "Get Started," the user faces a pre-populated dataset but no guidance on what to do next:
-- No "Create your first memory" CTA
-- No interactive tutorial that guides through the full loop
-- No progressive disclosure of advanced features
-- No way to re-trigger onboarding from the UI (there is no "Tour" button)
+**What works:**
+- The 5-step wizard is visually coherent: modal backdrop, circular step icons, step dots, "Skip" and "Next" buttons, "Get Started" CTA on final step
+- Persists completion in localStorage (`codememory-onboarded` key)
+- Covers the right topics: product concept, graph view, resolve, create, readiness
 
-The onboarding is well-written and skippable — this is good. But it teaches vocabulary, not workflows.
+**What's missing (not in the code):**
+- Zero interactivity. The onboarding is entirely passive text -- a slideshow, not a tutorial. There are no "click this node now" prompts, no hands-on exercises, no progress tracking.
+- No progressive disclosure after onboarding. The user lands on a full graph with no guidance on what to do first.
+- No post-onboarding "quick start" CTA. A "Create your first memory" button should be prominent after onboarding completion, but the user must discover the "+ New" button themselves.
+- No "Getting Started" empty-state pathway. If the user starts with an empty dataset, they see the generic EmptyState component but no guided first-memory creation flow.
+- The onboarding cannot be re-triggered from the UI (no "Tour" button, no "Help" menu link to restart onboarding).
 
-#### 4. Settings Panel is Skeletal (3 items)
+### 1.6 Settings Panel -- Deeper Assessment
 
-Current settings: default dataset, default budget (200-5000), theme (system/light/dark). Missing:
-- Keyboard shortcut customization/remapping
-- Graph layout preferences (force strength, node sizing, link distance)
-- Data directory configuration (change memory root from UI)
-- Export format options (what to include in .zip)
-- Notification preferences
-- Onboarding re-trigger
-- Page size for list view
-- MCP server configuration guidance
+**What exists:** A slide-out panel (34vw fixed width, 400-520px) with three settings:
+1. Default Dataset (dropdown with dataset names and memory counts)
+2. Default Resolve Budget (range slider, 200-5000, numeric display)
+3. Theme (three radio-style buttons: System, Light, Dark)
 
-#### 5. Error Messages — Raw Technical Strings
+**What's missing for a credible product:**
+- Keyboard shortcut reference and customization (List view shows "Ctrl+K" nowhere visible to users)
+- Graph preferences: layout algorithm, default zoom, node sizing scale
+- Editor preferences: font size, line width, auto-save toggle
+- List view preferences: default sort column, page size
+- Notification preferences: which events trigger toasts
+- Data directory configuration
+- MCP server configuration guidance (important for the product's strategic differentiator)
+- About/version info
+- "Reset to defaults" button
 
-The error toast queue is well-implemented (stacked, individually dismissable, 6s auto-dismiss, slide-in animation). But error messages are raw technical strings from FastAPI or fetch exceptions:
-- `"500 Internal Server Error"` — no explanation, no recovery suggestion
-- `"Cannot reach server"` — no "Retry" button
-- FastAPI validation error arrays dumped as joined strings — confusing for non-developers
-
-There is no error categorization (network vs. validation vs. server), no user-friendly rewording, and no suggested recovery actions.
-
-#### 6. No Batch Operations
-
-Users cannot:
-- Select multiple memories and tag/archive/delete them together
-- Batch-update maturity levels or status
-- Batch-add imports
-- Bulk-import from a folder or clipboard
-- Select all in filtered view
-
-#### 7. No Draft Auto-Save in MemoryForm
-
-If the browser crashes or the form is accidentally closed during composition, all work is lost. No localStorage draft persistence, no "unsaved changes" warning on navigation away from the form.
-
-#### 8. No Memory Templates
-
-Beyond referencing a schema (which defines structure fields), users cannot create and save reusable templates with pre-filled tags, imports, or body scaffolding. Schema provides structure; templates would provide content.
-
-#### 9. MemoryForm Missing Polish
-
-- No live Markdown preview panel (only raw textarea)
-- No Markdown formatting toolbar (bold, italic, links, lists)
-- No import-ID autocomplete or validation against existing memory IDs
-- Schema reference selector works but shows raw schema IDs with no preview
-
-### Empty States and Edge Cases — Inventory
-
-| State | Handled? | Quality |
-|-------|----------|---------|
-| First visit (onboarding) | Yes — 5-step tour, skippable | Good |
-| Dataset with 0 memories (all views) | Yes — shared EmptyState component | Good — has icon, title, description, CTA |
-| Empty search results | **No** | **Critical gap** — shows nothing, reads as broken |
-| Empty wander (no cold memories) | **No** | **Critical gap** — returns 404 with no user-friendly UI message |
-| Graph rendering failure | **No** | Blank canvas, no error state |
-| Loading states | Yes — shimmer skeleton for Graph, List, Dashboard | Good |
-| Network error (server unreachable) | Yes — network error toast | Adequate — but no "Retry" button |
-| Validation errors | Yes — detailed modal | Good |
-| Stale memory detected | Yes — indicator in resolve output | Good |
-| Budget overrun in resolve | Yes — trim level annotations | Good |
-| Dataset with memories but zero imports | **No** | All 62 quant_operators memories are isolated nodes — contradicts product philosophy |
-
-### What the quant_operators Dataset Reveals
-
-The `quant_operators` dataset has 62 memories with **zero imports**. This violates the product's core philosophy ("memory is a dependency graph, not a search index"). A new user browsing this dataset sees 62 disconnected circles — the opposite of the interconnected knowledge graph the product promises. This dataset should either be wired with imports or removed from the default set.
+The settings panel design is clean, but with only 3 items it signals "unfinished product" to any user exploring beyond the surface. A credible settings panel should have 15-20 items across 3-4 sections.
 
 ---
 
 ## Phase 2: Competitive Gaps
 
-### Competitive Landscape (May 2026)
+### 2.1 Feature Comparison Matrix
 
-Research covered: SuperLocalMemory (SLM) V3.4, MAG (Rust MCP server), AutoMem, Cognee, Cuba-Memorys, Obsidian, Notion, and the MAGMA research paper (arXiv:2601.03236).
+| Feature | CodeMemory | Obsidian | Notion | Mem.ai | Reflect |
+|---------|:----------:|:--------:|:------:|:------:|:-------:|
+| **Knowledge graph visualization** | DAG (Cytoscape) | Local + Global Graph | None | Auto knowledge graph | Map view |
+| **Explicit dependency resolution** | Yes (imports DAG) | Manual linking only | Relations property | AI-inferred | Manual linking |
+| **Token-budgeted context assembly** | Yes (unique) | No | No | No | No |
+| **Deterministic (not probabilistic) recall** | Yes (core thesis) | Yes (manual links) | No (search-based) | No (embedding-based) | No (manual links) |
+| **On-device / local-first** | Yes (filesystem) | Yes | No | Cloud | Cloud (E2E encrypted) |
+| **AI-assisted writing** | No | Via plugins | Notion AI | Mem Chat + Smart Write | AI Palette (GPT-4, dozens of commands) |
+| **AI-assisted organization** | suggest-deps (CLI only) | No | No | Auto-tag + Collections | No |
+| **Multi-device sync** | No | Obsidian Sync ($4/mo) | Built-in | Built-in | Built-in |
+| **Mobile app** | No | iOS, Android | iOS, Android | iOS, Android | iOS only |
+| **Responsive web** | No (min 1200px) | N/A (native) | Yes | Yes | Yes (web app) |
+| **Real-time collaboration** | No | No | Yes | Teams only | No |
+| **Import from other tools** | CLI only | Plugin ecosystem | Native importers | Evernote, Notion, Roam, MD | Notion, Evernote, Roam |
+| **API / Integrations** | MCP server | Community plugins | 100+ native, 6000+ via Zapier | Zapier, calendar, webhooks, email | Zapier, API, webhooks |
+| **Templates** | Schema only | Core plugin + community gallery | Massive gallery | No | Minimal (journal, meeting) |
+| **Version history** | changelog in frontmatter | File recovery | 7-30 day history | No | Full per-note history |
+| **Web publishing** | No | Obsidian Publish ($8/mo) | Share to web | No | One-click publish |
+| **Task management** | No | Via plugins | Full task DB | Auto-aggregation | Centralized Tasks panel |
+| **Daily notes** | No | Core plugin | Template | No | Built-in |
+| **Calendar integration** | No | Via plugins | Yes | Yes | Google, Office 365 |
+| **Offline mode** | Yes (local server) | Yes | No | Limited | Yes |
+| **Keyboard shortcuts** | Escape, Ctrl+K | Extensive | Extensive | Limited | Limited |
+| **Plugin ecosystem** | No | 1000+ plugins | Via API | No | No |
+| **Dark mode** | System/Light/Dark (3-mode) | Community themes | System/Light/Dark | System only | System/Light/Dark |
+| **Pricing** | Free (open source) | Free + Sync $4/mo | Free + $10-20/mo | Free + $8-10/mo | $10-15/mo |
+| **Data format** | YAML frontmatter + .md | Plain .md | Proprietary | Proprietary | Proprietary (encrypted) |
+| **Open source** | Yes | No | No | No | No |
 
-The AI agent memory infrastructure market has consolidated into clear tiers:
+### 2.2 Table-Stakes Features CodeMemory Lacks
 
-| Tier | System | LoCoMo Score | MCP Tools | Key Architecture |
-|------|--------|-------------|-----------|------------------|
-| Leader | SuperLocalMemory V3.4 | 74.8-87.7% | 35 | SQLite + FTS5 + 7-channel cognitive retrieval + Fisher-Rao metric + Ebbinghaus decay |
-| Strong | MAG | 91.1% | ~12 | Single Rust binary + SQLite + ONNX embeddings + FTS5 + graph traversal |
-| Strong | agent-memory-store | 92.1% | ~10 | Zero-install npx + no-LLM retrieval |
-| Growing | Cognee | N/A | 0 | Python SDK + LanceDB + Kuzu graph DB + ECL pipeline |
-| Growing | Cuba-Memorys | N/A | 12 | Rust + KG + FSRS-6 spaced repetition + Hebbian learning |
-| Growing | AutoMem | ~90.5% | N/A | FalkorDB graph + Qdrant vector + neuroscience consolidation |
-| PKM | Obsidian | N/A | Via plugins | Local .md files + 1000+ plugins + Canvas + Graph View |
-| PKM | Notion | N/A | No | Cloud database + Notion AI + collaboration + templates |
-| **New Entry** | **CodeMemory** | **Untested** | **5** | **DAG topological sort + token budget + explicit imports + 3-view web panel** |
+These are features that users of any modern knowledge management tool have come to expect:
 
-### Feature Comparison Matrix
+1. **AI features in the UI.** CodeMemory's mission is AI memory, yet there is no AI assistance for writing, organizing, or discovering memories. Every major competitor has shipped AI features: Notion AI (content gen, summarization, database Q&A), Mem.ai (Smart Write, Mem Chat, auto-organization), Reflect (GPT-4 AI Palette with dozens of writing commands). CodeMemory's only "AI" surface is the MCP server -- which is for AI *agents* to consume, not for human users to benefit from directly.
 
-| Capability | CodeMemory | SLM V3.4 | MAG | Obsidian | Notion |
-|---|---|---|---|---|---|
-| **Local-first** | Yes | Yes | Yes | Yes | No |
-| **MCP tools** | 5 | 35 | 12+ | Via plugins | No |
-| **Retrieval channels** | 2 (DAG + word search) | 7 (semantic, BM25, entity graph, temporal, associative, Hopfield, consolidation) | 3+ (FTS5, ONNX embeddings, graph traversal) | 1 (full-text + graph view) | 1 (search + DB filter) |
-| **Semantic/vector search** | No | Yes (Fisher-Rao geodesic) | Yes (ONNX embeddings) | Via plugins | Via Notion AI |
-| **Automatic memory lifecycle** | Manual only | Ebbinghaus decay + consolidation | Neuroscience-inspired cycles | Manual | Manual |
-| **Multi-agent trust** | No | Bayesian trust scoring | No | No | Permissions |
-| **Web dashboard** | 3 views | 23 tabs | CLI only | Full app | Full app |
-| **Plugin ecosystem** | No | No | No | 1000+ plugins | Templates + API |
-| **Collaboration** | No | No | No | Paid sync | Real-time |
-| **Mobile** | No | No | No | Paid app | Native apps |
-| **Data format** | YAML frontmatter + .md | SQLite + FTS5 | SQLite | Plain .md | Proprietary |
-| **Embedding model** | None | TF-IDF (zero-LLM) | ONNX (local) | Via plugins | Notion AI |
-| **Graph visualization** | Interactive D3 | 23-tab dashboard | No | Graph + Canvas | No |
-| **Import from external tools** | CLI only | No | No | Community plugins | Native importers |
-| **SDK / client libraries** | No | npm + pip | Cargo crate | Plugin API | REST API |
-| **Pricing** | Free (open source) | $0 forever (AGPL) | Free (MIT) | Free + $4/mo sync | Free + $10-20/mo AI |
-| **LoCoMo benchmark** | Untested | 87.7% | 91.1% | N/A | N/A |
+2. **Content import pipeline.** Every competitor supports importing from at least 2-3 sources. CodeMemory has `codememory import --file` in the CLI but no UI path. A user migrating from Obsidian (both use .md files!) should be able to drag-and-drop a folder. A user with chat logs or meeting notes should be able to paste text and let the system extract atomic memories.
 
-### Critical Missing "Table Stakes"
+3. **Mobile or responsive experience.** The UI uses fixed minimum widths (400px for settings, 460px for help, nodes assume >=1200px viewport). On a tablet or phone, it is unusable. Every major competitor has either a native mobile app (Obsidian, Notion, Mem.ai, Reflect) or a responsive web app (Notion).
 
-These features are present in at least 2 competitors and absent from CodeMemory, making the product feel incomplete to anyone evaluating alternatives:
+4. **Content sharing or publishing.** No way to share a memory, a resolved context, or a graph view with someone else. No URL to link to a specific memory. Obsidian has Publish ($8/mo), Notion has "Share to web," Reflect has one-click publish.
 
-1. **Semantic search** — Every competitor has some form of embedding-based retrieval. CodeMemory's difflib is a placeholder, not a feature.
+5. **Rich content capture.** No web clipper, no email-to-memory, no voice notes, no quick-capture widget. Users must open the web app and fill a form. This is high-friction compared to Mem.ai's "dump thoughts and let AI organize" or Reflect's frictionless daily notes.
 
-2. **Multiple retrieval strategies** — SLM has 7, MAG has 3+. CodeMemory has 1.5 (exact + difflib). The product philosophy ("memory is a dependency resolution problem, not a search problem") is a strong thesis — but it doesn't excuse having only one retrieval mode. Users need both: explicit DAG resolution AND fuzzy discovery.
+6. **Template library.** Only schema templates exist (which define structure fields). No content templates for common memory types (meeting notes, project decisions, learning notes, reading summaries). Notion has a massive template gallery. Obsidian has a core templates plugin with community contributions.
 
-3. **Memory lifecycle automation** — Competitors offer automatic decay, consolidation, and pruning based on access patterns. CodeMemory requires manual stale checks and manual status updates.
+7. **Cross-device access.** Settings persist in `localStorage` (browser-local, per-machine). Memory files are on the local filesystem. No cloud sync, no remote storage, no way to access memories from another machine. This is acceptable for a local-first tool, but the product doesn't articulate this tradeoff anywhere.
 
-4. **Import/ingestion pipeline** — SLM has an 11-step ingestion pipeline. CodeMemory has a CLI `import` command with basic text extraction and no UI.
+### 2.3 Competitor Pain Points CodeMemory Can Exploit
 
-5. **Benchmark scores** — Every competitor publishes LoCoMo scores. CodeMemory has none. For AI engineers evaluating tools, "what's the score?" is the first filter. Without a number, CodeMemory is invisible.
+| Competitor Pain Point | CodeMemory's Structural Advantage |
+|----------------------|----------------------------------|
+| Obsidian: "Graph becomes unusable at 500+ nodes" | Token budget + trim levels produce bounded, readable output regardless of graph size |
+| Obsidian: "Plugins break on updates" | No plugin ecosystem to maintain; core features are native |
+| Notion: "Poor offline, data not portable, databases are slow" | Local-first Markdown files; always offline-capable; plain-text future-proof |
+| Mem.ai: "AI organization is a black box, can't manually adjust links" | Explicit imports are transparent and user-controlled |
+| Mem.ai: "Cloud-dependent, no offline" | Local filesystem storage |
+| Reflect: "Closed-source, privacy concerns, $10-15/month subscription" | Open source, free, local-first |
+| All: "Links are probabilistic/embedding-based" | CodeMemory's imports are explicit and auditable -- you can trace exactly why two memories are connected |
 
-### Competitive Pain Points — CodeMemory's Opportunities
+**Key market positioning insight:** The knowledge management market is segmenting into "AI-does-everything-for-you" (Mem.ai, Notion AI) and "I-control-everything-myself" (Obsidian, Logseq). CodeMemory occupies a potentially valuable middle ground -- **AI assistance** (suggest-deps, resolve) with **human control** (explicit imports, editable .md files). This positioning is unique but currently under-exploited because the AI assistance side has no UI.
 
-| Competitor Weakness | CodeMemory's Advantage |
-|--------------------|----------------------|
-| SLM: 7-channel fusion is probabilistic; no deterministic dependency chains | CodeMemory's explicit `imports` DAG is auditable, traceable, zero-hallucination |
-| MAG: Single SQLite file, no graph visualization | CodeMemory's D3 graph is unique among agent memory tools |
-| All agent memory tools: No visual knowledge graph UX | CodeMemory has a polished graph + resolve + prompt-generation UX |
-| All competitors: Implicit/similarity-based connections | CodeMemory's explicit dependency declarations enable formal reasoning |
-| Obsidian: No MCP, no AI agent integration | CodeMemory's MCP server makes it AI-agent-native |
-| Notion: Cloud-dependent, proprietary format | CodeMemory is local-first with open .md files |
+### 2.4 User Feedback Themes from Competitor Research
 
-### User Feedback Themes from Competitor Research
-
-- **"I want to auto-tag and auto-link"** — SLM users praise automatic pattern extraction. CodeMemory has `suggest-deps` CLI but no UI for it and no learning layer.
-- **"I need my memory everywhere"** — Cross-device sync is the #1 Obsidian feature request. CodeMemory has no answer to this.
-- **"Don't make me think about graph structure"** — Notion users prefer databases over explicit graph wiring. CodeMemory demands users manually manage imports. This is the product's identity, but it needs better tooling (auto-suggest, templates) to reduce the burden.
-- **"Show me what I forgot"** — SLM's wander shows access counts. CodeMemory's wander stores this data but doesn't display it in the UI.
+- **"I want to auto-tag and auto-link"** (Mem.ai users) -- CodeMemory has `suggest-deps` CLI but no UI for it.
+- **"I need my memory everywhere"** (Obsidian users) -- Cross-device sync is the #1 Obsidian feature request. CodeMemory has no answer.
+- **"Don't make me think about structure"** (Notion users) -- CodeMemory demands users manually manage imports. Templates and auto-suggest would reduce this burden.
+- **"Show me what I forgot"** (Mem.ai/Reflect users) -- CodeMemory's Wander algorithm stores access_count but doesn't display context or decay in the UI.
+- **"I want to share specific ideas, not my whole notebook"** (Obsidian Publish users) -- No product allows sharing granular memory atoms with dependency context. This is a latent CodeMemory opportunity.
 
 ---
 
 ## Phase 3: Functional Depth
 
-### Feature Depth Assessment
+### 3.1 Feature Depth Assessment
 
-#### Graph View — Moderate Depth (7/10)
+| Feature | Depth | What's Deep | What's Shallow |
+|---------|:-----:|------------|---------------|
+| **DAG Resolve** | 8/10 | Depth levels (required/recommended/full), budget slider, topological sort, trim annotations, animation, prompt generation, stale detection, debounced re-resolution | No diff view, no resolve history, no comparison mode, no multi-target resolve |
+| **Search** | 7/10 | Full-text + difflib fuzzy, match quality badges, match field display, content snippets, tag autocomplete, metadata filters, debounced input, empty states | No semantic/embedding search, no advanced syntax (AND/OR/NOT/tag:), no saved searches, no search history, O(n) linear scan reads body from disk per request |
+| **Graph View** | 7/10 | Cytoscape + dagre, directory colors, intensity sizing, edge styles, zoom with numeric display, right-click menu, resolve animation, dark mode tints, hover tooltips with summary, search highlight, dynamic legend | No structural filtering (by type/status/maturity/directory), no layout algorithm choice (dagre only), no minimap, no node pinning, no subgraph extraction, no graph analytics, no SVG export verified at runtime |
+| **Memory List** | 5/10 | Sortable columns, client-side filter with multi-field matching, pagination, shimmer loader | No multi-select checkboxes, no column visibility toggle, no saved views, no inline editing, loads all memories client-side, no server-side filtered pagination |
+| **Dashboard** | 5/10 | Stats overview, maturity distribution, top tags, stale list, Wander, Validate, Reindex, clickable tag/maturity filters | No trends over time, no health score, no recommendations, no activity feed, no customizable widgets |
+| **Create/Edit Form** | 4/10 | Full form fields, tag autocomplete, intensity slider, schema selector, undo for most recent action | No suggest-deps integration, no Markdown preview, no toolbar, no templates beyond schema, no draft auto-save, no import autocomplete, no "clone memory" |
+| **Settings** | 2/10 | Three settings with clean UI, localStorage persistence, slide-out panel | Only 3 items. Feels like a placeholder. Missing 12+ standard settings. |
+| **Export** | 3/10 | .zip of all memories (backend), PNG of graph (frontend) | No individual memory export, no JSON/CSV export, no selective export, no resolved-context export |
 
-**Deep:**
-- Interactive D3 force-directed layout
-- Node sizing by intensity (1-10 scale)
-- Directory-based coloring (10+ directories, both themes)
-- Edge styling by import strength (solid = required, dashed = recommended, dotted = related)
-- Zoom slider with percentage display
-- Right-click context menu (Edit, Archive)
-- Resolve animation (topological highlight pulse + trim dimming)
-- Search highlighting
-- Hover tooltips with summary
-- Dynamic legend (updates with visible directories)
+### 3.2 Power-User Paths
 
-**Shallow:**
-- No graph filtering by tag/type/maturity (must rely on search)
-- No subgraph extraction ("focus on this node and its 2-hop neighborhood")
-- No layout algorithm choice (only force-directed)
-- No node pinning
-- No graph analytics (centrality, clustering, connected components)
-- No export of current view as SVG/PNG (buttons in toolbar but functionality unverified)
-- No comparison view (two subgraphs side-by-side)
+**Current power-user capabilities:**
+- Keyboard: Escape (close panels), Ctrl+K (focus search)
+- Graph: zoom slider, budget slider, PNG export, right-click context menu
+- Search: fuzzy matching, tag autocomplete, enter to search
+- CLI: 15 commands for scripting/automation
+- MCP server: 5 tools for AI agent integration
+- Help panel: full CLI + API reference
 
-#### Resolve — Strong Depth (8/10) — Core Differentiator
+**Missing power-user features (that differentiate retained users from drop-offs):**
 
-**Deep:**
-- Three depth levels: required, recommended, full
-- Token budget slider (200-5000)
-- Topological sort of DAG
-- Three trim levels: full, summary, skipped
-- Stale detection with indicator
-- Pinned version notices
-- Debounced re-resolution (300ms)
-- Resolve-to-prompt generation with formatted LLM context
-- Copy-to-clipboard with visual feedback
-- Budget overrun indicators
+1. **Keyboard shortcut system.** Only Escape and Ctrl+K are documented. No: `Ctrl+N` (new memory), `Ctrl+R` (resolve), `Ctrl+1/2/3` (switch views), `Ctrl+,` (settings), `Ctrl+/` (help), arrow keys for graph navigation. Every professional tool in 2026 has a comprehensive shortcut map. CodeMemory has two shortcuts.
 
-**Shallow:**
-- No diff view (what changed since last resolve?)
-- No side-by-side comparison of two resolves
-- No resolve history or caching
-- No bookmark/save of resolve configurations
-- No scheduling/automation of resolves
-- No multi-target resolve (resolve several IDs in one operation)
+2. **Command palette (Ctrl+P).** The Help panel beautifully documents all 15 CLI commands, but there is no way to execute them from the UI. A command palette -- type `> resolve risk-tolerance --depth full` and have it execute -- would bridge the CLI/UI divide and give keyboard-driven users a fast path. This is a single React component addition with high impact.
 
-#### Memory CRUD — Adequate (6/10)
+3. **Graph structural filters.** The search bar filters by text highlight, but there is no way to filter the graph by type (show only atoms), status (hide archived), maturity (show only proven), or directory (focus on one category). A filter bar or toggle row above the graph would dramatically improve exploration.
 
-**Deep:**
-- Full form: ID, summary, tags (autocomplete), body (Markdown), imports, intensity, maturity, schema, semantic type
-- Undo for most recent action
-- Tag autocomplete with keyboard nav
-- Import management (add/remove dependency edges)
-- Schema reference selection
+4. **Saved views and filters.** No way to save "show me all draft memories tagged investment sorted by intensity" for quick recall. This is standard in any data-heavy tool (database IDEs, analytics dashboards, even Gmail).
 
-**Shallow:**
-- No Markdown preview in the form
-- No Markdown formatting toolbar
-- No duplicate/clone memory
-- No version history beyond changelog
-- No draft auto-save
-- No import-ID autocomplete or validation
-- No templates beyond schema reference
+5. **Batch operations.** Multi-select in List view with Shift+Click and Ctrl+Click. Batch actions: tag, archive, change maturity, export selection. Users managing 50+ memories need this.
 
-#### Search — Shallow (4/10)
+6. **Import autocomplete in create/edit form.** When typing an import ID, the form should suggest existing memory IDs. Currently, the user must know exact IDs or copy-paste them. This is high-friction for new users who don't know the ID naming conventions.
 
-**Deep:**
-- Full-text keyword search
-- Tag filtering without query text
-- Type/status/maturity filter support
-- Debounced input (300ms)
-- Paginated results (20 per page)
+### 3.3 Integration and Extensibility
 
-**Shallow:**
-- No fuzzy/semantic matching (difflib-based word overlap only)
-- No search within body text (body content loaded from disk on each search — not indexed)
-- No advanced query syntax (AND/OR/NOT, `tag:`, `type:`, `before:`)
-- No saved searches
-- No search history
-- No search result sorting options
-- No "no results" empty state feedback
-- Results dropped silently in certain filter combinations (known issue R7-N3)
-
-#### Dashboard — Shallow (4/10)
-
-**Deep:**
-- Stats: total count, maturity breakdown, type breakdown, status breakdown
-- Tag cloud
-- Stale count
-- Validate and reindex trigger buttons
-- Wander button
-
-**Shallow:**
-- No trends over time (memory creation rate, decay rate)
-- No health score aggregation
-- No recommendations ("3 memories stale, 2 have broken links")
-- No activity feed (what changed recently?)
-- No customizable widgets
-- No export of dashboard data
-
-#### List View — Adequate (6/10)
-
-**Deep:**
-- Paginated with First/Prev/Next/Last controls
-- Columns: ID, summary, tags, maturity, intensity, status
-- Click to select and view detail
-- Text filter (client-side)
-- Shimmer skeleton loader
-
-**Shallow:**
-- No sorting by column
-- No multi-select checkboxes
-- No inline editing
-- No customizable columns
-- No quick-filter chips
-- Loads all memories client-side (not scalable beyond ~1000)
-
-### Integration and Extensibility
-
-| Aspect | Status | Notes |
-|--------|--------|-------|
-| MCP Server | 5 tools, stdio JSON-RPC 2.0 | Good architecture, zero logic duplication. But 5 tools vs 35 from SLM. |
-| REST API | 16 endpoints, no auth, no rate limiting, no versioning | Functional but no versioning strategy. |
-| API Docs | OpenAPI at `/docs`, not linked from UI | Users must know to visit `/docs` manually. |
-| SDK | None | No Python/TypeScript client libraries. |
-| Webhooks | None | No external tool integration. |
-| Plugin system | None | No extensibility model. |
-| Import connectors | CLI only | No GitHub, Notion, Obsidian, or bookmark import. |
-| Code splitting | None | Single 987KB JS bundle (297KB gzipped). |
-
-### Collaboration — Zero
-
-No sharing, no multi-user, no comments, no suggestions, no version merge. This is a deliberate choice for a local-first tool, but it means the product cannot serve team use cases.
+| Surface | Status | Assessment |
+|---------|:------:|-----------|
+| MCP Server | 5 tools, stdio JSON-RPC 2.0 | Solid architecture, zero logic duplication. 5 tools is credible for v0.1 but vs. 35 from SuperLocalMemory or 12+ from MAG, the gap is notable. |
+| REST API | 16 endpoints, OpenAPI at /docs | Functional but undocumented in the UI. Users must know to visit `/docs` manually. No auth, no rate limiting, no API versioning. |
+| CLI | 15 commands, bash + PowerShell wrappers | Complete command surface. Good for developers. No integration with the web UI's command palette. |
+| SDK | None | No Python/TypeScript client libraries for the REST API. |
+| Webhooks | None | No external tool integration. Can't trigger on-memory-created events. |
+| Plugin system | None | No extensibility model for third-party additions. |
+| IDE plugins | None | No VS Code or JetBrains integration despite .md file compatibility. |
+| Obsidian compatibility | None | Both use .md files with YAML frontmatter. A compatibility bridge is a missed opportunity. |
 
 ---
 
 ## Phase 4: Differentiation and Wow Factor
 
-### The Genuine Moat
+### 4.1 The Genuine Moat (Unchanged -- but Underexploited)
 
-CodeMemory's core differentiator — **"memory loading is a dependency resolution problem, not a search problem"** — is the only genuinely unique architectural position in the AI memory market. Explicit DAG-based resolution with topological sorting and token-budgeted trimming has no equivalent in any competitor. This is the product's identity and should be amplified, not diluted.
+CodeMemory's core thesis -- "memory loading is a dependency resolution problem, not a search problem" -- remains the product's only genuinely unique architectural position. No competitor does deterministic DAG-based context assembly with topological sorting and token budgeting. The MCP server makes this moat externally callable.
 
-The MCP server makes this moat externally callable. Any MCP-compatible AI agent can now use CodeMemory's deterministic resolution as its memory backbone. No competitor offers deterministic, auditable dependency resolution as an MCP tool.
+The moat is structurally defensible because it is architectural, not superficial. Competitors cannot "add DAG resolution" without fundamentally changing how they store and retrieve memories. Embedding-based systems (Mem.ai, SuperLocalMemory) optimize for *similarity*; CodeMemory optimizes for *causal completeness*.
 
-### "If Only It Could..." — Wow-Factor Proposals
+**The product's biggest risk is not competition -- it's irrelevance.** If users never experience the magic of deterministic resolution (because they can't get their data in, or can't create memories easily), the moat doesn't matter.
 
-#### 1. Temporal Memory Graph — "Time-Travel Through Your Thinking"
+### 4.2 "If Only CodeMemory Could..." -- Five Feature Ideas
 
-A timeline slider that shows how the knowledge graph evolved over weeks or months. As the user drags, nodes appear, edges form, old memories fade, new ones emerge. The data already exists (created_at, updated_at, changelog history, access_count).
+These are unconstrained by current sprint scope. They represent directions that would make the product not just competitive but category-defining.
 
-**Why it matters:** No product in the market visualizes knowledge evolution temporally. This would be screenshot-worthy, shareable, and unique. It makes the implicit evolution of thinking explicit.
+#### Idea 1: AI Co-Pilot That Reasons Over the DAG
 
-#### 2. AI-Powered Dependency Suggestion — "The Graph That Writes Itself"
+**What it is:** An AI assistant embedded in the web UI that reads the memory graph and helps users think. It can: suggest new memories to create ("You've been writing about React performance -- should we capture a memory about React.memo vs useMemo tradeoffs?"), propose import links for orphaned memories, auto-generate summaries for long bodies, detect contradictions between memories ("Memory A says risk tolerance: high but memory B's evidence documents suggest moderate"), and answer questions by resolving the relevant subgraph ("What are all my assumptions about the semiconductor market?").
 
-As users create memories, the system proactively suggests imports: "This new memory about React hooks probably depends on 'JavaScript fundamentals.' Add import?" Over time, a learning layer observes patterns and auto-suggests edges with confidence scores.
+**Why it's differentiated:** No competitor has a *deterministic* dependency graph for an AI to reason over. ChatGPT/Claude plugged into your memory graph with full causal context is fundamentally different from Mem.ai's black-box embedding search. The AI can say not just "this note seems related" but "your conclusion X depends on premises A, B, and C -- and premise B was archived last month."
 
-**Why it matters:** Manual import wiring is the #1 friction point. The `suggest-deps` CLI already proves this is feasible. A learning layer on top creates a "magic" feeling — the tool understands how you think.
+**Effort:** Large. Requires LLM integration (the `llm_gateway/` package exists in `src/` as a starting point), embedding model for similarity fallback, and a new UI surface. But this is an *activation* of existing infrastructure, not a build-from-scratch.
 
-#### 3. Memory Publishing & Discovery — "GitHub for Ideas"
+#### Idea 2: Memory Diff Timeline -- "What Changed in My Thinking?"
 
-Let users publish individual memories or subgraphs as public, shareable, citable artifacts. Other users can "fork" a memory into their own graph. Creates a network of interconnected knowledge graphs across users.
+**What it is:** A timeline view showing how a memory's content and dependencies evolved across versions. Combined with the DAG, show how changing one memory cascaded to affect dependent memories. Answer the question: "I changed my risk tolerance from conservative to moderate -- which of my investment decisions should I re-examine?"
 
-**Why it matters:** No tool allows sharing granular memory atoms with dependency context. Obsidian Publish shares entire vaults; this shares semantic units. Academic and research communities would adopt this for literature reviews and knowledge synthesis.
+**Why it's differentiated:** Version history exists in Notion and Reflect, but no tool shows *dependency-aware* change impact. "You changed memory X -- here are the 4 memories that import it, and here's what their Resolve output looked like before vs. after your change." This turns version history from a backup feature into a reasoning tool.
 
-#### 4. Resolve-to-Notebook — "Interactive Dependency Exploration"
+**Effort:** Medium. The `changelog` already exists in frontmatter. Need to compute and display before/after resolve diffs.
 
-Instead of flat text output, resolve a memory into an interactive notebook where each dependency is a collapsible section with source links, graphs, and expandable context. The current resolve-to-prompt is already well-formatted — this is the next level.
+#### Idea 3: Publish a Thesis -- Interactive Argument Publishing
 
-**Why it matters:** Makes the resolve output explorable rather than just readable. Turns a linear text dump into an interactive exploration tool.
+**What it is:** Take any resolved context (a target memory + its full DAG of dependencies) and publish it as a self-contained, navigable web page. Readers can expand/collapse the dependency tree, see which parts are proven vs. draft, and trace the full reasoning chain. This turns a private memory graph into a publishable "interactive paper."
 
-#### 5. Memory Health Dashboard with Decay Visualization
+**Why it's differentiated:** Obsidian Publish publishes a flat wiki. CodeMemory could publish an *argument* -- a structured, dependency-aware document where readers can explore the evidence chain, not just read a conclusion. This is closer to a scientific paper or legal brief than a wiki. It makes CodeMemory not just a thinking tool but a *communication* tool.
 
-Visualize which parts of the knowledge graph are atrophying using existing stale detection, access_count, and maturity data. Show clusters that have no remaining importers, memories approaching staleness, and knowledge that needs refreshing.
+**Effort:** Medium-Large. Needs a static site generator that reads resolved DAG output and produces navigable HTML.
 
-**Why it matters:** Unique to CodeMemory's explicit dependency model. Vector-similarity systems cannot show "this cluster has no importers" because they don't have explicit imports.
+#### Idea 4: Ambient Memory Discovery -- "Your Graph Says Hello"
 
-### Word-of-Mouth Triggers
+**What it is:** A background mode where CodeMemory periodically surfaces one memory (weighted by the "cool" wand algorithm) as a subtle notification or widget. Over time, the user develops peripheral awareness of their knowledge base without actively browsing it. Think of it as spaced repetition for your own thoughts.
 
-| Trigger | Current Status | Viral Potential |
-|---------|---------------|----------------|
-| "My AI agent has perfect memory via CodeMemory MCP" | MCP server shipped, 5 tools | High |
-| "It showed me a connection I didn't realize existed" | Resolve DAG traversal works | Medium — under-marketed |
-| "The graph is gorgeous" | D3 visualization, dark mode tints | High — aesthetic is shareable |
-| "I imported 200 notes and it auto-wired the dependencies" | No import, no auto-wire | Zero — critical gap |
-| "It told me which memories I'd forgotten" | Wander works but doesn't show decay context | Low — needs improvement |
-| "CodeMemory beat SLM on structured reasoning benchmarks" | No benchmarks | Zero — untapped |
+**Why it's differentiated:** Wander already exists as an on-demand button. Making it ambient (like a screensaver, a periodic desktop notification, or a widget) turns memory maintenance from a deliberate chore into passive reinforcement. This exploits the spacing effect for knowledge retention, but applied to *your own writing*, not flashcards.
 
-### What to Delete or Simplify
+**Effort:** Small. The Wander algorithm exists. Needs a timer and a non-intrusive UI surface (browser notification, status bar widget, or idle-screen overlay).
 
-1. **Remove or wire the quant_operators dataset.** 62 memories with zero imports contradicts the product's core philosophy. It teaches new users the wrong thing about CodeMemory.
+#### Idea 5: Agent-to-Agent Memory Infrastructure
 
-2. **Remove the duplicate PNG export button.** The toolbar has a PNG button; cytoscape renders its own. Consolidate to one that actually works.
+**What it is:** Position CodeMemory not as a human-facing PKM tool but as the *memory layer for AI agents*. Extend the MCP server to support: multi-agent shared memory with access control, memory provenance tracking (which agent wrote this? what evidence was it based on?), automatic memory creation from agent conversation logs, and conflict resolution when two agents produce contradictory memories.
 
-3. **Retire legacy "type" terminology from the UI.** The codebase has unified to "atom" — but Graph colors nodes by "type" and List shows a "type" column. Show only `atom` and `schema`. Hide the implementation history.
+**Why it's differentiated:** This is an entirely new product category. No competitor is building a memory system *for AI agents to use with each other*. The MCP server is the seed, but the vision is much larger: CodeMemory as the filesystem for agent cognition.
 
-4. **Consider reducing the Settings panel to a slide-out drawer.** With only 3 settings, a full fixed panel occupying 34vw is disproportionate. Or expand Settings to justify the space.
+**Effort:** Very Large. This is effectively a pivot or second product line.
 
-5. **Auto-dismiss the dataset disclaimer.** "Stats, validation, and reindex apply to the selected dataset" is shown persistently. Show it briefly on dataset switch (3 seconds), then auto-dismiss.
+### 4.3 Word-of-Mouth Triggers
+
+What would make a user tell a friend about CodeMemory?
+
+| Trigger | Current Status | Potential |
+|---------|:-------------:|:---------:|
+| "My AI agent has perfect memory across sessions" | MCP server shipped with 5 tools | High -- developer word-of-mouth is powerful |
+| "Watch it trace the dependency chain in topological order" | Resolve animation exists | High -- visually distinctive, screenshot/GIF-worthy |
+| "One click generates a perfectly structured LLM system prompt" | Generate Prompt button works | High -- solves a real pain point for AI users |
+| "It found a contradiction in my thinking" | Not yet possible (no AI co-pilot) | Very High -- this is a "holy shit" demo moment |
+| "I dragged in 200 notes and it auto-wired the dependencies" | Not yet possible (no import UI, no auto-suggest in UI) | Very High -- would be the #1 adoption story |
+| "I published my research as an interactive argument" | Not yet possible | High -- unique in the market |
+
+### 4.4 What to Delete or Simplify
+
+1. **Surface a curated default dataset, not quant_operators.** With 62 memories and zero imports, `quant_operators` contradicts the product's core philosophy. A new user sees 62 disconnected circles -- the opposite of the interconnected knowledge graph the product promises. Move it to a separate "Stress Test" directory or mark it clearly as a benchmark dataset. Make `investment` or `companion` the default -- both show imports in action.
+
+2. **Standardize the panel system.** The app has five slide-out panels: MemoryDetail, MemoryForm, Settings, HelpPanel, Onboarding. Each uses slightly different widths (34vw, 42vw, 520px max, 90%), different close behaviors, and different animation states. Consolidate to a single `SlideoutPanel` component that handles backdrop, Escape key, width constraints, and enter/exit animations uniformly.
+
+3. **Remove the Chinese-English language mixing in HelpPanel.** The Help panel uses Chinese section headings ("界面指南", "CLI 命令参考") alongside English content. For an English-first product, this is confusing and looks unfinished. Either localize fully or keep it uniformly in one language.
+
+4. **Consider collapsing the Settings panel.** With only 3 settings, the current design -- a full fixed panel occupying 34vw with backdrop -- is disproportionate. Either expand Settings significantly (to justify the space) or collapse it to a smaller dropdown or popover until there are enough settings to warrant a full panel.
+
+5. **Remove the dagre-only limitation label.** The Help panel says "This is the only graph layout method available" -- this self-deprecating documentation makes the product feel unfinished. Either add one more layout option (force-directed) or remove the limitation note. Never document your own shortcomings unless you also document the plan to fix them.
 
 ---
 
-## Technical Health (Ancillary)
+## Technical Health (Abridged)
 
-### Architecture Scalability Risks
+### 5.1 Architecture Risks
 
 | Risk | Severity | Detail |
-|------|----------|--------|
-| Monolithic `server.py` (~1400 lines) | Medium | All routes, search, export, reindex in single file. Each new feature adds to the monolith. No route group boundaries. |
-| Monolithic `App.tsx` (~1540 lines) | Medium | 15+ useState hooks, all view logic, error handling, context menu, undo. No context provider or state management library. |
-| Synchronous FastAPI endpoints | High | All endpoints are `def` (synchronous). Reindex, validate, export are blocking. At 10,000+ memories, these will block the event loop. No background task queue. |
-| In-memory index with file persistence | Medium | Full index loaded into memory on startup. Fine at 10-62 memories; will consume significant RAM and slow startup at 10,000+. |
-| No API versioning | Medium | All routes at `/api/*` with no version prefix. Breaking changes break all clients. |
-| Single 987KB JS bundle | Medium | No code splitting, no lazy loading. Entire app downloads on first load. Will hurt on slow connections and mobile. |
-| CORS wildcard | Low (local dev) / High (deployment) | `allow_origins=["*"]` with no authentication. Acceptable for localhost; a security incident for any deployment. |
-| Path traversal risk | Low | Memory IDs contain `/` and are used in file paths. Input validation exists but defense-in-depth is absent. |
+|------|:--------:|--------|
+| **Monolithic `server.py` (1,377 lines)** | Medium | All 16 endpoints in a single file. No FastAPI router splitting. At 2,000+ lines, maintainability collapses. Split into `routers/memories.py`, `routers/search.py`, `routers/export.py`, `routers/datasets.py`. |
+| **Monolithic `App.tsx` (1,574 lines)** | Medium | Manages ~20 pieces of state, all views, themes, datasets, context menu, undo, error handling, keyboard listeners. No custom hooks extracted (`useGraph`, `useTheme`, `useKeyboard`, `useDataset`). Extract before adding more features. |
+| **Inline styles everywhere** | Medium | All 12 components use inline `style={{}}` objects. Approximately 30-40% of TSX lines are style objects. No CSS modules, no styled-components, no Tailwind utility classes used. Design system changes require touching every component. Theme work is fragile. |
+| **Synchronous FastAPI endpoints** | Medium | All endpoints use `def` (not `async def`). Reindex, validate, and export are blocking. At 1,000+ memories, these will block the event loop. No background task queue. |
+| **No code splitting** | Low-Medium | Single JS bundle. No `React.lazy()` for Dashboard, Settings, Help, Onboarding. Full app loads on first visit. |
+| **In-memory index loaded from disk per request** | Low | `_load_index()` reads the full index.json from disk on every request. Fine at 93 memories. Needs TTL cache for larger datasets (acknowledged in backlog as I8). |
+| **CORS wildcard + no authentication** | Low (localhost) / Critical (deployment) | `allow_origins=["*"]` with no auth. Acceptable for local dev; a security incident for any deployment. |
 
-### Key Performance Bottlenecks
+### 5.2 Key Performance Bottlenecks
 
-| Bottleneck | Impact | Fix Effort |
-|-----------|--------|-----------|
-| Reindex scans all .md files synchronously | O(n) file I/O. Fine at 62 files; problematic at 1000+. | Medium — add async/background processing |
-| Graph API returns all nodes + edges | No pagination or subgraph queries. Frontend receives entire graph every refresh. | Medium |
-| Search is O(n*m) linear scan with difflib | Body text read from disk for every candidate on every search. Degrades at 500+ memories. | Medium — index body text; add embedding search |
-| `_load_index()` reads from disk on every request | I/O per API call. Cached minimally. | Low — add TTL cache |
-| D3 force simulation on every graph render | No Web Worker offloading. No virtualization. | Medium |
-| Client-side list filtering loads all memories | `fetchAllMemories(10000)` loads everything to filter client-side. | Medium — server-side filtered pagination |
+| Bottleneck | Impact Now | Impact at Scale |
+|-----------|:----------:|:---------------:|
+| Search reads .md body from disk for every candidate | Negligible (93 files) | Degrades at 500+ memories. Need indexed body text. |
+| Graph API returns all nodes/edges unconditionally | Fine (93 nodes) | Breaks at 500+ nodes. Need subgraph queries or pagination. |
+| Reindex on startup scans all .md files synchronously | ~200ms (93 files) | Minutes at 10,000+ files. Need async/background processing. |
+| Client-side list filtering loads all memories | Fine (93 items) | Breaks at 1,000+. Need server-side filtered pagination. |
+| Cytoscape renders all nodes at once | Fine (93 nodes) | Will degrade at 500+ nodes without virtualization. |
 
-### Test Coverage
+### 5.3 Test Coverage
 
 | Layer | Tests | Assessment |
-|-------|-------|-----------|
-| **Unit (Python)** | 57 | Good — resolve, validate, create/update, edge cases. Gaps: search, index, handlers, CLI, tools. |
-| **Integration (Python)** | 24 | Good — full workflow (create, update, resolve, wander, snapshot, cleanup). |
-| **API smoke tests** | 5 | Minimal — covers GET /memories, GET /memories/{id}, POST /search, POST /resolve, GET /stats. No write-path coverage. |
-| **MCP server** | 0 | **Gap** — no JSON-RPC protocol tests, no tool call verification. |
-| **Frontend** | 0 | **Gap** — no Jest, no Vitest, no React Testing Library, no Playwright/Cypress. |
-| **TypeScript** | Clean | `tsc --noEmit` passes with zero errors. |
-| **Vite build** | Clean | Builds in 333ms. Warning: single chunk >500KB. |
+|-------|:-----:|-----------|
+| **Unit (Python)** | 57 across 6 files | Good coverage of resolve, validate, create, update, edge cases. Gaps: search, index, handlers, CLI, tools, integrations. |
+| **Integration (Python)** | 24 assertions in integration_test.py | Covers end-to-end scenarios against real data. |
+| **API smoke tests** | 5 in test_api.py | Covers GET /memories, GET /memories/{id}, POST /search, POST /resolve, GET /stats. No write-path coverage (POST create, PUT update, POST wander, POST validate). |
+| **MCP server** | 0 | **Gap.** No JSON-RPC protocol tests, no tool call verification. The strategic differentiator has zero tests. |
+| **Frontend** | 0 | **Gap.** No Jest, Vitest, React Testing Library, Playwright, or Cypress. Zero coverage of UI components, user flows, or visual regressions. |
+| **TypeScript** | Clean on `tsc --noEmit` | Passes with zero errors. |
+| **Vite build** | Clean | Builds successfully. Warning: single chunk >500KB. |
 
-**Assessment:** Backend core engine has adequate coverage. Frontend has zero automated tests — this is a significant quality risk as complexity grows. MCP server has zero tests despite being the strategic differentiator.
+**Assessment:** Core Python logic has adequate testing. The frontend (all 12 components, all user interactions, all views) has zero automated tests. This is the single biggest quality risk as features accumulate. Visual regressions, interaction bugs, and accessibility issues will only be caught manually. The MCP server -- the product's strategic differentiator -- also has zero tests.
 
-### Minimum Test Additions for Next Sprint
+### 5.4 Security and Privacy
 
-- 3 MCP server tests: initialize handshake, tools/list returns 5 tools, tools/call resolve_memory
-- 3 API write-path tests: POST create, PUT update, POST wander
-- 1 integration test: create -> update body -> confirm stale -> reindex -> confirm cleared
-- 1 frontend smoke test: App renders without crash (React Testing Library)
+| Concern | Assessment |
+|---------|-----------|
+| No authentication | API endpoints are unauthenticated. Fine for localhost, not for deployment. |
+| Markdown rendering | `react-markdown` with `remark-gfm` renders user content. React's default escaping provides basic XSS protection, but no explicit sanitization (e.g., `rehype-sanitize`). |
+| File path traversal | Memory IDs containing `/` are used in filesystem paths. The frontend `encodePathId` function encodes path segments, but the backend should validate that resolved paths stay within the dataset root directory. |
+| No rate limiting | API endpoints have no rate limits. `/api/search` with repeated large queries could be used for resource exhaustion. |
 
 ---
 
 ## Prioritized Recommendations
 
-### Critical — Blocking Market Readiness (Sprint 13-14)
+### Critical -- Blockers to Market Readiness (Sprint 13-14)
 
-| # | Recommendation | Effort | Rationale |
-|---|---|---|---|
-| **C1** | **Data Import UI** — Build an import page/dialog supporting: plain text paste, file upload (.md, .txt, .json), and URL fetch. Leverage existing `import_cmd.py` extraction logic. Add bulk-import API endpoint. | Medium | #1 adoption blocker. No one types 100 memories by hand. |
-| **C2** | **Semantic/Fuzzy Search** — Integrate a lightweight local embedding model (all-MiniLM-L6-v2 via ONNX, or TF-IDF + BM25 as lighter option). Generate embeddings on reindex. Store in index.json. Complement, not replace, existing search. Following MAG's proven pattern. | Medium-High | Every competitor has multi-strategy retrieval. Current difflib search undermines the product's credibility. |
-| **C3** | **Error Message UX Pass** — Rewrite all user-facing error messages to be actionable: (1) what happened, (2) why, (3) what to do next. Add "Retry" and "Copy error details" buttons. Categorize errors (network/validation/server). | Low | Current raw technical strings erode trust. Fast fix, high impact. |
-| **C4** | **Empty State Completion** — Add "No results matching your search" with suggestions for search. Add "No cold memories found — create more memories to enable Wander" for empty wander. Add graph rendering failure state. | Low | Empty states that show nothing read as broken features. |
-| **C5** | **First-Run Workflow** — After onboarding, show an interactive tutorial: "Let's create your first 3 memories and link them. (1) Create a memory. (2) Create another. (3) Link them with an import. (4) Resolve to see the chain." | Medium | Onboarding explains concepts but doesn't build a habit. |
-| **C6** | **Publish Benchmark Scores** — Run CodeMemory's resolve engine against LoCoMo and LongMemEval. Publish results. | Medium | Every competitor has a score. Without one, CodeMemory is filtered out before evaluation begins. |
+These address the largest gaps between "demo" and "daily-use product."
 
-### Important — Significant Completeness Gains (Sprint 14-15)
+| # | Recommendation | Effort | Why |
+|---|---------------|:------:|-----|
+| **C1** | **AI-Assisted Memory Workflow.** Integrate an LLM via the existing `llm_gateway/` package. Minimum: auto-generate summaries when creating a memory from a long body, suggest imports from `suggest-deps` in the create form, and a "rephrase/summarize" button on the body textarea. This closes the largest feature gap with Mem.ai and Reflect while leveraging CodeMemory's unique DAG structure. Without AI features, the product feels like a 2018 Markdown editor with a graph view. | Medium-High | AI features are table stakes in 2026 knowledge tools. CodeMemory's mission is AI memory yet has zero AI in its UI. |
+| **C2** | **Data Import UI.** Build a UI for the existing `codememory import` command. Support: drag-and-drop a folder of Markdown files, paste raw text (meeting notes, chat logs) for automatic extraction, and a simple file picker. Add a bulk-import API endpoint. The CLI `import` path exists -- it needs a UI wrapper. | Medium | The #1 cold-start blocker. No one types 100 memories by hand. Every competitor has solved this. |
+| **C3** | **Settings Panel Expansion.** Expand from 3 settings to 15-20 across 3-4 sections: Editor (font size, line width, auto-save), Graph (layout algorithm, default zoom, node sizing), Keyboard (shortcut reference, customization), Data (directory location, export format), About (version, links). The current 3-item panel signals "unfinished" to any exploring user. | Medium | First impression of product depth. A complete settings panel builds confidence. |
+| **C4** | **Onboarding Workflow Upgrade.** Replace the passive 5-step slideshow with a 3-step interactive tutorial: (1) "Click a node to see details" (waits for user action), (2) "Click Resolve to see the dependency chain" (waits for action), (3) "Create your first memory" (opens the create form with pre-filled example data). Add a "Restart Tour" button in Help. | Medium | Passive text doesn't build habits. Interactive onboarding does. |
+| **C5** | **Confirmation Dialogs + Destructive Action Safety.** Add "Are you sure?" for Archive and Delete. When archiving a memory that other memories import, show a warning: "3 memories import this one. Archiving it will create broken links." | Low | Prevents data loss. Standard UX pattern absent from the product. |
 
-| # | Recommendation | Effort | Rationale |
-|---|---|---|---|
-| **I1** | **Favorites/Bookmarks** — Let users star/bookmark memories. Add "Favorites" filter and "Recently Viewed" list. Persist in localStorage. | Low | Simple feature with high perceived value. Builds attachment. |
-| **I2** | **Wander Improvements** — Show access_count, last_access, and decay context in the wander card. Add "Wander Again" button. | Low | R7-wander-improve is already spec'd. Makes Wander feel like a feature. |
-| **I3** | **Batch Operations** — Multi-select checkboxes in List view with batch: tag, archive, change maturity, add imports. Add bulk PATCH endpoint. | Medium | Users managing 50+ memories need this. |
-| **I4** | **Auto-Import Suggestion in UI** — Surface `suggest-deps` as a button in MemoryForm: "Suggest dependencies." Show confidence scores, let users accept/reject. | Medium | Manual import wiring is friction. CLI already has this logic. |
-| **I5** | **Memory Templates** — Beyond schema reference, allow users to create and save memory templates (pre-filled tags, imports, body scaffolding). | Low-Medium | Accelerates memory creation. Schema provides structure; templates add content. |
-| **I6** | **Draft Auto-Save** — localStorage persistence of in-progress MemoryForm. "Unsaved changes" warning on navigation. | Low | Prevents data loss. Standard in all modern form UX. |
-| **I7** | **Graph Export (SVG/PNG)** — Wire the existing PNG/EXPORT toolbar buttons to actual D3 SVG/PNG export functionality. | Low | Buttons exist but may not work. Low-hanging fruit. |
-| **I8** | **Index Caching** — In-memory TTL cache for `_load_index()` with write-through invalidation on reindex. Cache body text in index during reindex. | Low | Eliminates disk read on every API request. Foundation for scale. |
-| **I9** | **Responsive Layout** — CSS pass to make List and Dashboard views usable on tablets. Mobile graph view is stretch; List and Dashboard should work on phones. | Medium | 40%+ of knowledge workers use mobile for reference. |
-| **I10** | **Expand Settings** — Keyboard shortcut customization, graph layout preferences, page size for list view, onboarding re-trigger, MCP configuration guidance. | Medium | 3 settings is insufficient for a tool with this feature surface. |
+### Important -- Significant Completeness Gains (Sprint 14-15)
 
-### Nice-to-Have — Power-User and Polish (Sprint 15-16)
+| # | Recommendation | Effort | Why |
+|---|---------------|:------:|-----|
+| **I1** | **Suggest-Deps in Create/Edit Form.** Call the existing `suggest-deps` handler when a user types a body or adds tags. Show suggested imports with confidence scores. Let users accept/reject with one click. The backend does all the work -- it just needs a UI surface. | Low-Medium | Most impactful low-effort improvement. Reduces the #1 friction point (manual import wiring). |
+| **I2** | **Command Palette (Ctrl+P).** Single React component: a text input that appears on Ctrl+P, accepts `> command args` syntax, and executes CLI commands via the existing API endpoints. Show available commands with descriptions. Bridges the CLI/UI divide for power users. | Low-Medium | Gives keyboard-driven users a fast path. Makes the beautiful CLI reference in HelpPanel actionable. |
+| **I3** | **Keyboard Shortcut System.** Define and document: `Ctrl+N` (new memory), `Ctrl+Shift+N` (new from template), `Ctrl+R` (resolve selected), `Ctrl+1/2/3` (switch views), `Ctrl+,` (settings), `Ctrl+/` (help), arrow keys for graph navigation. Show shortcuts in tooltips and a reference card. | Low | 2 shortcuts (Escape, Ctrl+K) is insufficient for a professional tool. |
+| **I4** | **Memory Templates (Content, not just Schema).** Ship 5-10 pre-built content templates: Meeting Notes, Project Decision, Learning Note, Reading Summary, Daily Standup. Each has pre-filled tags, suggested import patterns, and body scaffolding. Let users create and save custom templates. | Low-Medium | Reduces blank-page friction. Schema defines structure; templates add content patterns. |
+| **I5** | **Draft Auto-Save.** Save in-progress create/edit form data to localStorage. Restore on next visit. Show "You have an unsaved draft" banner. Prevent accidental navigation with `beforeunload` event. | Low | Acknowledged in backlog since Round 10. Standard in all modern form UX. |
+| **I6** | **Graph Structural Filters.** Add toggle buttons or a filter bar above the graph: filter by type (atom/schema), status (active/archived), maturity (draft/verified/proven), and directory. The search bar filters by text highlight; add structural filters for graph exploration. | Medium | Makes the graph explorable, not just viewable. Critical for datasets with 30+ nodes. |
+| **I7** | **Batch Operations.** Multi-select in List view with Shift+Click and Ctrl+Click. Batch actions: tag, archive, change maturity, add imports. Add bulk PATCH endpoint to API. | Medium | Users managing 50+ memories need this. Standard in any list-based tool. |
+| **I8** | **Standardize Panel Component.** Extract a shared `SlideoutPanel` component used by MemoryDetail, MemoryForm, Settings, HelpPanel, and Onboarding. Handles: backdrop, Escape key, width constraints, close animation, scroll locking. Reduces code duplication and ensures consistent behavior. | Low | Currently 5 slightly different panel implementations. Extract-once, use-everywhere. |
+| **I9** | **MCP Server `readOnlyHint` Annotations.** Add `readOnlyHint: true/false` to each of the 5 MCP tool definitions. Resolve, overview, wander, focus are reads; snapshot is a write. This is the R11-P4 open item -- a ~10-line change with meaningful security impact for MCP clients. | Low | The single remaining open item from Round 11. |
+| **I10** | **Graph Minimap.** A small overview in the corner of the graph view showing the full graph with a viewport indicator. Essential for navigating graphs with 30+ nodes. | Low-Medium | Cytoscape supports minimaps natively. Quant_operators (62 nodes) already strains navigation without one. |
 
-| # | Recommendation | Effort | Rationale |
-|---|---|---|---|
-| **N1** | **Graph Analytics** — Centrality metrics, connected components, clustering coefficient. "Most central memory" and "most isolated memory" shown in Dashboard. | Medium | Builds on existing D3 integration. Differentiates the graph view. |
-| **N2** | **Markdown Preview + Toolbar** — Split-pane editor with live preview. Bold, italic, links, lists toolbar buttons. | Medium | Reduces edit-save-check loop. Standard in Markdown editors. |
-| **N3** | **Advanced Search Syntax** — Support `tag:`, `type:`, `imports:`, `maturity:`, `before:`, `after:` query filters. | Medium | Power users expect this. GitHub/Notion/Obsidian all have it. |
-| **N4** | **Memory Diff View** — Side-by-side comparison of memory versions with highlighted changes. | Low-Medium | Builds on existing changelog. Makes editing feel safe. |
-| **N5** | **Server-Side Filtered Pagination** — Replace `fetchAllMemories(10000)` with server-filtered pagination for List view. | Medium | Current approach breaks at scale. |
-| **N6** | **Code Splitting** — Use `React.lazy()` for Dashboard, Settings, Help, Onboarding. | Low | Reduces initial JS bundle by ~30%. |
-| **N7** | **Search History & Saved Queries** — Recent searches dropdown, save and name search queries. | Low | Power-user feature that costs almost nothing. |
-| **N8** | **Wander History Sidebar** — Show recently wandered memories with timestamps. | Low | Simple addition to the wander feature. |
-| **N9** | **MCP Tools Expansion** — Add `search_memory`, `validate_memory`, `suggest_deps` as MCP tools. | Medium | 5 tools is credible for v0.1. 8 tools starts to close the gap. |
-| **N10** | **MCP Server Tests** — JSON-RPC protocol tests, tool call verification, error path tests. | Low | MCP server is the strategic differentiator with zero tests. |
+### Nice-to-Have -- Power User and Polish (Sprint 15-16)
 
-### Feature Ideas — Differentiated Innovation (Backlog)
+| # | Recommendation | Effort | Why |
+|---|---------------|:------:|-----|
+| **N1** | **Markdown Preview + Toolbar.** Split-pane editor with live Markdown preview in the create/edit form. Toolbar buttons for bold, italic, links, lists, code blocks. | Medium | Reduces edit-save-check loop. Standard in Markdown editors. |
+| **N2** | **Advanced Search Syntax.** Support `tag:`, `type:`, `imports:`, `maturity:`, `status:`, `before:`, `after:` query filters in the search bar. | Medium | Power users expect this. GitHub, Notion, Obsidian all have it. |
+| **N3** | **Graph Analytics Dashboard.** Centrality metrics, connected components, clustering coefficient. "Most central memory" and "most isolated memory" badges on Dashboard. | Medium | Builds on existing DAG data. Visualizes graph health, not just memory health. |
+| **N4** | **Memory Diff View.** Side-by-side comparison of memory versions with highlighted changes. Builds on existing `changelog` infrastructure. | Low-Medium | Makes editing feel safe. Users can review what they changed. |
+| **N5** | **Export Enhancements.** Individual memory export (Markdown/JSON), CSV export of search results or list view, resolved-context export as self-contained HTML, graph export as SVG with embedded links. | Medium | Current PNG + .zip is minimal. More formats serve different workflows. |
+| **N6** | **Saved Views and Filters.** Save current graph state (zoom, pan, visible nodes, filter settings) as a named view. Save search filters as named queries for quick recall. | Medium | Reduces repetitive setup. Standard in data-heavy tools. |
+| **N7** | **Responsive Layout Base.** CSS pass to make List and Dashboard usable on tablets (768px+). Graph view will require deeper work, but List and Dashboard can be made responsive with CSS-only changes. | Medium | 40%+ of knowledge workers access tools on mobile for reference. |
+| **N8** | **Server-Side Filtered Pagination for List.** Replace client-side `fetchAllMemories(10000)` with server-filtered pagination. | Medium | Current approach breaks at scale. Foundation for large datasets. |
+| **N9** | **Search History and Saved Queries.** Recent searches dropdown. Save and name search queries for quick recall. | Low | Costs almost nothing. High convenience for frequent searchers. |
+| **N10** | **Wander History Sidebar.** Show recently wandered memories with timestamps and access counts. "Wander Again" button. | Low | Makes Wander feel like a feature, not a gimmick. |
 
-| # | Idea | Effort | Why It Matters |
-|---|---|---|---|
-| **F1** | **Temporal Graph View** — Timeline slider showing graph evolution. Uses existing created_at/updated_at/changelog data. | High | Unique in the market. Screenshot-worthy organic marketing. |
-| **F2** | **Memory Publishing & Discovery** — Publish memories as public URLs. Fork into personal graphs. | Very High | Creates network effects. Tool becomes a platform. |
-| **F3** | **AI Co-Pilot for Graph Building** — Learning layer that observes import patterns and auto-suggests edges. | High | `suggest-deps` CLI is the proof of concept. Learning layer creates magic. |
-| **F4** | **Resolve-to-Notebook** — Interactive dependency exploration with collapsible sections, graphs, expandable context. | Medium | Transforms resolve from text dump to exploration tool. |
-| **F5** | **Memory Health Dashboard** — Atrophy visualization, orphan clusters, staleness trends, decay forecasts. | Medium | Unique to CodeMemory's explicit dependency model. No competitor can show "this cluster has no importers." |
-| **F6** | **Voice Notes to Memory Graph** — Record voice, transcribe, extract entities/claims, suggest structure and imports. | High | Expands user base beyond text-heavy workflows. |
-| **F7** | **Collaborative DAG Merge** — Share subgraphs, merge perspectives, highlight dependency conflicts. | Very High | Transforms from personal tool to collaborative reasoning platform. |
+### Feature Ideas -- Differentiated Innovation (Long-Term Backlog)
+
+| # | Idea | Effort | Why |
+|---|------|:------:|-----|
+| **F1** | **AI Co-Pilot Reasoning Over the DAG.** Embedded LLM that reads the memory graph, suggests new memories, proposes import links, detects contradictions, answers questions by resolving subgraphs. | Large | The "wow factor" feature. Turns CodeMemory from a PKM tool into an intelligence augmentation system. Leverages the existing `llm_gateway/` package. |
+| **F2** | **Memory Diff Timeline.** Dependency-aware version history. Show how changing one memory cascades through the DAG. "You changed X -- here's what your dependent memories' resolve outputs now look like." | Medium | Unique in the market. Turns version history from backup feature into reasoning tool. |
+| **F3** | **Interactive Thesis Publishing.** One-click publish a resolved context as a navigable web document. Readers explore the dependency tree. | Medium-Large | Obsidian Publish is a flat wiki; CodeMemory could publish structured arguments. |
+| **F4** | **Ambient Memory Discovery.** Background Wander that periodically surfaces a memory as a subtle notification. Passive knowledge reinforcement. | Small | Wander algorithm exists. Just needs a timer and a notification surface. |
+| **F5** | **Agent-to-Agent Memory Infrastructure.** CodeMemory as the memory layer for multi-agent AI systems. Memory provenance, conflict resolution, access control. | Very Large | New product category. The MCP server is the seed. |
+| **F6** | **Voice Notes to Memory Graph.** Record voice, transcribe, extract entities and claims, auto-suggest structure and imports. | High | Expands user base beyond text-heavy workflows. |
+| **F7** | **Obsidian Compatibility Bridge.** Import Obsidian vaults preserving wiki-links as imports. Export CodeMemory graphs as Obsidian-compatible vaults. | Medium | Both use .md + YAML frontmatter. A compatibility layer expands the addressable market significantly. |
 
 ---
 
 ## Summary
 
-CodeMemory is a technically sound kernel surrounded by a thin product shell. The DAG resolution engine is a genuine moat — no competitor does deterministic dependency-based context assembly with token budgeting. The MCP server correctly positions the product as AI agent infrastructure.
+After 11 rounds of iteration, CodeMemory has a working DAG resolution engine, a visually coherent three-view web panel, and a strategic MCP server -- all free and open source. The product's architectural moat (deterministic dependency resolution with token budgeting) is genuine and defensible.
 
-But the product is not ready for users who don't already understand dependency graphs. The import path is CLI-only. Search is primitive. Settings are skeletal. Errors are raw. Empty states are incomplete. Onboarding teaches vocabulary but not workflows.
+But the product is not yet ready for users who don't already understand dependency graphs. The import path is CLI-only. Search is fast but only string-matching -- no semantic discovery. AI features -- the defining characteristic of 2026 knowledge tools -- are entirely absent from the UI. Settings are skeletal at 3 items. The onboarding teaches vocabulary but not workflows. There is no mobile access, no collaboration, no sharing.
 
-**The two sprints ahead should focus relentlessly on Core Completeness (C1-C6) and Competitive Gaps (I1-I10).** Only after these are addressed should the team invest in wow-factor features (F1-F7). A product that works reliably for basic workflows with good error recovery, import paths, and search will attract users. A product with a temporal graph view but no way to get data into it will not.
+**The next two sprints should focus relentlessly on bridging the creation gap.** The product's consumption story (browse, resolve, search, export) is solid. Its creation story (hand-write one memory at a time through a form) is a non-starter for anyone with more than a handful of memories. An AI-assisted create workflow, a data import UI, and suggest-deps in the form would transform the product from "impressive demo" to "daily driver."
 
-**The single most impactful action this sprint: Build the data import UI.** Everything else is polish on an empty room.
+**The single most impactful action this sprint:** Build the AI-assisted memory workflow. Make the create form smart. Auto-generate summaries. Suggest imports. Offer a "rephrase" button. This simultaneously closes the AI feature gap with competitors and amplifies CodeMemory's unique DAG structure -- because the AI's suggestions can be grounded in the deterministic dependency graph, not probabilistic embeddings.
 
-### Score Breakdown by Dimension
+### Score Breakdown
 
-| Dimension | Score | Key Gap |
-|-----------|-------|---------|
-| Core Completeness | 3/10 | No import UI, skeletal settings, incomplete empty states, raw errors |
-| Competitive Gaps | 3/10 | No semantic search, 5 tools vs 35, no benchmarks, no memory lifecycle automation |
-| Functional Depth | 5/10 | Resolve is deep (8/10), Search is shallow (4/10), Dashboard is shallow (4/10) |
-| Differentiation | 7/10 | DAG resolution is unique and defensible. MCP server makes it callable. |
-
-**Overall: 4.5 / 10**
+| Dimension | Before (I10) | After R11 Fixes | Now | Key Gap |
+|-----------|:------------:|:---------------:|:---:|---------|
+| Core Completeness | 3/10 | 4/10 | 5/10 | Import UI, AI creation, settings depth, interactive onboarding |
+| Competitive Gaps | 3/10 | 3.5/10 | 4/10 | AI features, mobile, import, sharing, templates |
+| Functional Depth | 5/10 | 5.5/10 | 6/10 | Create form, settings, export, power-user pathways |
+| Differentiation | 7/10 | 7/10 | 7/10 | Moat is intact but underexploited in the UI |
+| **Overall** | **4.5/10** | **5.0/10** | **5.5/10** | |

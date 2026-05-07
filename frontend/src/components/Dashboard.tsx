@@ -44,24 +44,32 @@ export default function Dashboard({ onSelectMemory, onNavigateToFilter, refreshT
   const handleWander = useCallback(() => {
     setWandering(true)
     setValidateOpen(false)  // R11-B2: prevent modal stacking
+    setWanderOpen(true)     // R12-B1: open modal immediately, decouple from fetch promise
+    setWanderResult(null)   // clear previous result to show loading state
     fetchWander('cool')
       .then((result) => {
         setWanderResult(result)
-        setWanderOpen(true)
       })
-      .catch((err) => onError?.(err instanceof Error ? err.message : 'Wander failed'))
+      .catch((err) => {
+        onError?.(err instanceof Error ? err.message : 'Wander failed')
+        setWanderOpen(false)  // close modal on error since we have nothing to show
+      })
       .finally(() => setWandering(false))
   }, [])
 
   const handleValidate = useCallback(() => {
     setValidating(true)
-    setWanderOpen(false)  // R11-B2: prevent modal stacking
+    setWanderOpen(false)     // R11-B2: prevent modal stacking
+    setValidateOpen(true)    // R12-B1: open modal immediately, decouple from fetch promise
+    setValidateResult(null)  // clear previous result to show loading state
     fetchValidate()
       .then((result) => {
         setValidateResult(result)
-        setValidateOpen(true)
       })
-      .catch((err) => onError?.(err instanceof Error ? err.message : 'Validate failed'))
+      .catch((err) => {
+        onError?.(err instanceof Error ? err.message : 'Validate failed')
+        setValidateOpen(false)  // close modal on error
+      })
       .finally(() => setValidating(false))
   }, [])
 
@@ -371,7 +379,7 @@ export default function Dashboard({ onSelectMemory, onNavigateToFilter, refreshT
                     {tag}
                     <span
                       style={{
-                        fontSize: 10,
+                        fontSize: 12,
                         color: 'var(--cm-text-tertiary)',
                         fontFamily: 'JetBrains Mono, monospace',
                       }}
@@ -425,7 +433,7 @@ export default function Dashboard({ onSelectMemory, onNavigateToFilter, refreshT
                           borderRadius: 2,
                           backgroundColor: 'var(--cm-bg-error-subtle)',
                           color: 'var(--cm-error)',
-                          fontSize: 10,
+                          fontSize: 12,
                           fontWeight: 600,
                           fontFamily: 'Raleway, sans-serif',
                           textTransform: 'uppercase',
@@ -455,7 +463,7 @@ export default function Dashboard({ onSelectMemory, onNavigateToFilter, refreshT
                 >
                   <div
                     style={{
-                      fontSize: 11,
+                      fontSize: 12,
                       fontWeight: 600,
                       fontFamily: 'Raleway, sans-serif',
                       textTransform: 'uppercase',
@@ -481,8 +489,8 @@ export default function Dashboard({ onSelectMemory, onNavigateToFilter, refreshT
         </>
       )}
 
-      {/* Wander modal */}
-      {wanderOpen && wanderResult && (
+      {/* Wander modal — R12-B1: opens immediately with loading state */}
+      {wanderOpen && (
         <Modal onClose={() => setWanderOpen(false)}>
           <h2
             style={{
@@ -506,6 +514,21 @@ export default function Dashboard({ onSelectMemory, onNavigateToFilter, refreshT
             Surfaces a memory you haven&rsquo;t revisited recently.
           </p>
 
+          {/* R12-B1: Loading state while fetching */}
+          {wandering && !wanderResult && (
+            <div style={{ padding: '24px 0', textAlign: 'center' }}>
+              <div className="skeleton-shimmer" style={{ width: '60%', height: 14, borderRadius: 2, margin: '0 auto 8px' }} />
+              <div className="skeleton-shimmer" style={{ width: '80%', height: 14, borderRadius: 2, margin: '0 auto 8px' }} />
+              <div className="skeleton-shimmer" style={{ width: '40%', height: 14, borderRadius: 2, margin: '0 auto' }} />
+              <p style={{ marginTop: 12, fontSize: 12, color: 'var(--cm-text-tertiary)', fontFamily: 'Raleway, sans-serif' }}>
+                Surfacing a cold memory...
+              </p>
+            </div>
+          )}
+
+          {/* Data state */}
+          {wanderResult && (
+          <>
           {/* Why this memory? */}
           <div style={{
             marginBottom: 16,
@@ -515,7 +538,7 @@ export default function Dashboard({ onSelectMemory, onNavigateToFilter, refreshT
             border: '1px solid var(--cm-bg-subtle)',
           }}>
             <div style={{
-              fontSize: 10,
+              fontSize: 12,
               fontWeight: 600,
               fontFamily: 'Raleway, sans-serif',
               textTransform: 'uppercase',
@@ -527,32 +550,32 @@ export default function Dashboard({ onSelectMemory, onNavigateToFilter, refreshT
             </div>
             <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 8 }}>
               <div>
-                <span style={{ fontSize: 10, color: 'var(--cm-text-tertiary)', fontFamily: 'Raleway, sans-serif' }}>Access Count: </span>
+                <span style={{ fontSize: 12, color: 'var(--cm-text-tertiary)', fontFamily: 'Raleway, sans-serif' }}>Access Count: </span>
                 <span style={{ fontSize: 13, fontFamily: 'JetBrains Mono, monospace', color: 'var(--cm-text-primary)', fontWeight: 600 }}>
                   {wanderResult.access_count}
                   {wanderResult.access_count === 0 && (
-                    <span style={{ fontSize: 10, fontWeight: 400, color: 'var(--cm-text-tertiary)', marginLeft: 4 }}>(never accessed)</span>
+                    <span style={{ fontSize: 12, fontWeight: 400, color: 'var(--cm-text-tertiary)', marginLeft: 4 }}>(never accessed)</span>
                   )}
                 </span>
               </div>
               <div>
-                <span style={{ fontSize: 10, color: 'var(--cm-text-tertiary)', fontFamily: 'Raleway, sans-serif' }}>Intensity: </span>
+                <span style={{ fontSize: 12, color: 'var(--cm-text-tertiary)', fontFamily: 'Raleway, sans-serif' }}>Intensity: </span>
                 <span style={{ fontSize: 13, fontFamily: 'JetBrains Mono, monospace', color: 'var(--cm-text-primary)', fontWeight: 600 }}>
                   {wanderResult.intensity}/10
                   {wanderResult.intensity >= 8 && (
-                    <span style={{ fontSize: 10, fontWeight: 400, color: 'var(--cm-info)', marginLeft: 4 }}>(protected)</span>
+                    <span style={{ fontSize: 12, fontWeight: 400, color: 'var(--cm-info)', marginLeft: 4 }}>(protected)</span>
                   )}
                 </span>
               </div>
               <div>
-                <span style={{ fontSize: 10, color: 'var(--cm-text-tertiary)', fontFamily: 'Raleway, sans-serif' }}>Last Access: </span>
+                <span style={{ fontSize: 12, color: 'var(--cm-text-tertiary)', fontFamily: 'Raleway, sans-serif' }}>Last Access: </span>
                 <span style={{ fontSize: 13, fontFamily: 'JetBrains Mono, monospace', color: 'var(--cm-text-primary)', fontWeight: 600 }}>
                   {wanderResult.last_access ? new Date(wanderResult.last_access).toLocaleDateString() : 'never'}
                 </span>
               </div>
             </div>
             <p style={{
-              fontSize: 11,
+              fontSize: 12,
               fontFamily: 'Raleway, sans-serif',
               color: 'var(--cm-text-tertiary)',
               margin: '4px 0 0 0',
@@ -592,7 +615,9 @@ export default function Dashboard({ onSelectMemory, onNavigateToFilter, refreshT
               {wanderResult.summary}
             </p>
           </div>
+          </>)}
           <div style={{ display: 'flex', gap: 8 }}>
+            {wanderResult && (
             <button
               onClick={() => onSelectMemory(wanderResult.id)}
               style={{
@@ -601,7 +626,7 @@ export default function Dashboard({ onSelectMemory, onNavigateToFilter, refreshT
                 color: 'var(--cm-bg-primary)',
                 border: 'none',
                 cursor: 'pointer',
-                fontSize: 11,
+                fontSize: 12,
                 fontWeight: 600,
                 fontFamily: 'Raleway, sans-serif',
                 textTransform: 'uppercase',
@@ -611,9 +636,11 @@ export default function Dashboard({ onSelectMemory, onNavigateToFilter, refreshT
             >
               View Details
             </button>
+            )}
             <button
               onClick={() => {
                 setWandering(true)
+                setWanderResult(null)
                 fetchWander('cool')
                   .then((result) => {
                     setWanderResult(result)
@@ -627,7 +654,7 @@ export default function Dashboard({ onSelectMemory, onNavigateToFilter, refreshT
                 background: 'transparent',
                 color: 'var(--cm-accent)',
                 cursor: 'pointer',
-                fontSize: 11,
+                fontSize: 12,
                 fontWeight: 600,
                 fontFamily: 'Raleway, sans-serif',
                 textTransform: 'uppercase',
@@ -645,7 +672,7 @@ export default function Dashboard({ onSelectMemory, onNavigateToFilter, refreshT
                 background: 'transparent',
                 color: 'var(--cm-text-secondary)',
                 cursor: 'pointer',
-                fontSize: 11,
+                fontSize: 12,
                 fontWeight: 600,
                 fontFamily: 'Raleway, sans-serif',
                 textTransform: 'uppercase',
@@ -659,8 +686,8 @@ export default function Dashboard({ onSelectMemory, onNavigateToFilter, refreshT
         </Modal>
       )}
 
-      {/* Validate results modal */}
-      {validateOpen && validateResult && (
+      {/* Validate results modal — R12-B1: opens immediately with loading state */}
+      {validateOpen && (
         <Modal onClose={() => setValidateOpen(false)}>
           <h2
             style={{
@@ -673,6 +700,21 @@ export default function Dashboard({ onSelectMemory, onNavigateToFilter, refreshT
           >
             Validation Results
           </h2>
+
+          {/* R12-B1: Loading state while fetching */}
+          {validating && !validateResult && (
+            <div style={{ padding: '24px 0', textAlign: 'center' }}>
+              <div className="skeleton-shimmer" style={{ width: '70%', height: 14, borderRadius: 2, margin: '0 auto 8px' }} />
+              <div className="skeleton-shimmer" style={{ width: '50%', height: 14, borderRadius: 2, margin: '0 auto 8px' }} />
+              <div className="skeleton-shimmer" style={{ width: '60%', height: 14, borderRadius: 2, margin: '0 auto' }} />
+              <p style={{ marginTop: 12, fontSize: 12, color: 'var(--cm-text-tertiary)', fontFamily: 'Raleway, sans-serif' }}>
+                Running validation checks...
+              </p>
+            </div>
+          )}
+
+          {/* Data state */}
+          {validateResult && (<>
           <div style={{ display: 'flex', gap: 16, marginBottom: 20 }}>
             <div
               style={{
@@ -682,7 +724,7 @@ export default function Dashboard({ onSelectMemory, onNavigateToFilter, refreshT
                 borderLeft: '3px solid var(--cm-success)',
               }}
             >
-              <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--cm-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.08em', fontFamily: 'Raleway, sans-serif' }}>
+              <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--cm-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.08em', fontFamily: 'Raleway, sans-serif' }}>
                 Checked
               </div>
               <div style={{ fontSize: 22, fontFamily: "'Cormorant Garamond', serif", color: 'var(--cm-text-primary)' }}>
@@ -697,7 +739,7 @@ export default function Dashboard({ onSelectMemory, onNavigateToFilter, refreshT
                 borderLeft: `3px solid ${validateResult.error_count > 0 ? 'var(--cm-error)' : 'var(--cm-success)'}`,
               }}
             >
-              <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--cm-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.08em', fontFamily: 'Raleway, sans-serif' }}>
+              <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--cm-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.08em', fontFamily: 'Raleway, sans-serif' }}>
                 Errors
               </div>
               <div style={{ fontSize: 22, fontFamily: "'Cormorant Garamond', serif", color: 'var(--cm-text-primary)' }}>
@@ -712,7 +754,7 @@ export default function Dashboard({ onSelectMemory, onNavigateToFilter, refreshT
                 borderLeft: `3px solid ${validateResult.warning_count > 0 ? 'var(--cm-warning)' : 'var(--cm-success)'}`,
               }}
             >
-              <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--cm-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.08em', fontFamily: 'Raleway, sans-serif' }}>
+              <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--cm-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.08em', fontFamily: 'Raleway, sans-serif' }}>
                 Warnings
               </div>
               <div style={{ fontSize: 22, fontFamily: "'Cormorant Garamond', serif", color: 'var(--cm-text-primary)' }}>
@@ -753,25 +795,56 @@ export default function Dashboard({ onSelectMemory, onNavigateToFilter, refreshT
               {renderGroupedIssues(validateResult.warnings, 'warning', onSelectMemory)}
             </div>
           )}
-
-          <button
-            onClick={() => setValidateOpen(false)}
-            style={{
-              padding: '8px 20px',
-              border: '1px solid var(--cm-border-cool)',
-              background: 'transparent',
-              color: 'var(--cm-text-secondary)',
-              cursor: 'pointer',
-              fontSize: 11,
-              fontWeight: 600,
-              fontFamily: 'Raleway, sans-serif',
-              textTransform: 'uppercase',
-              letterSpacing: '0.08em',
-              borderRadius: 2,
-            }}
-          >
-            Close
-          </button>
+          </>)}
+          <div style={{ display: 'flex', gap: 8 }}>
+            {validateResult && (
+            <button
+              onClick={() => {
+                setValidating(true)
+                setValidateResult(null)
+                fetchValidate()
+                  .then((result) => {
+                    setValidateResult(result)
+                  })
+                  .catch((err) => onError?.(err instanceof Error ? err.message : 'Validate failed'))
+                  .finally(() => setValidating(false))
+              }}
+              style={{
+                padding: '8px 20px',
+                border: '1px solid var(--cm-info)',
+                background: 'transparent',
+                color: 'var(--cm-info)',
+                cursor: 'pointer',
+                fontSize: 12,
+                fontWeight: 600,
+                fontFamily: 'Raleway, sans-serif',
+                textTransform: 'uppercase',
+                letterSpacing: '0.08em',
+                borderRadius: 2,
+              }}
+            >
+              {validating ? 'Validating...' : 'Validate Again'}
+            </button>
+            )}
+            <button
+              onClick={() => setValidateOpen(false)}
+              style={{
+                padding: '8px 20px',
+                border: '1px solid var(--cm-border-cool)',
+                background: 'transparent',
+                color: 'var(--cm-text-secondary)',
+                cursor: 'pointer',
+                fontSize: 12,
+                fontWeight: 600,
+                fontFamily: 'Raleway, sans-serif',
+                textTransform: 'uppercase',
+                letterSpacing: '0.08em',
+                borderRadius: 2,
+              }}
+            >
+              Close
+            </button>
+          </div>
         </Modal>
       )}
     </div>
@@ -793,7 +866,7 @@ function StatCard({ label, value, color }: { label: string; value: number; color
     >
       <div
         style={{
-          fontSize: 11,
+          fontSize: 12,
           fontWeight: 600,
           fontFamily: 'Raleway, sans-serif',
           textTransform: 'uppercase',
@@ -921,7 +994,7 @@ function renderGroupedIssues(
   return Array.from(grouped.entries()).map(([type, groupItems]) => (
     <div key={type} style={{ marginBottom: 14 }}>
       <div style={{
-        fontSize: 10,
+        fontSize: 12,
         fontWeight: 600,
         fontFamily: 'Raleway, sans-serif',
         textTransform: 'uppercase',
@@ -957,7 +1030,7 @@ function renderGroupedIssues(
                   title={`View ${part.text}`}
                   style={{
                     fontFamily: 'JetBrains Mono, monospace',
-                    fontSize: 11,
+                    fontSize: 12,
                     color: 'var(--cm-accent)',
                     cursor: 'pointer',
                     textDecoration: 'underline',
@@ -982,6 +1055,7 @@ function Modal({ children, onClose }: { children: React.ReactNode; onClose: () =
     <>
       <div
         onClick={onClose}
+        className="backdrop-fade-enter"
         style={{
           position: 'fixed',
           inset: 0,
@@ -990,6 +1064,7 @@ function Modal({ children, onClose }: { children: React.ReactNode; onClose: () =
         }}
       />
       <div
+        className="modal-fade-enter"
         style={{
           position: 'fixed',
           top: '50%',

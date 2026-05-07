@@ -100,6 +100,7 @@ export default function Settings({
 
       {/* Panel */}
       <div
+        className="panel-slide-enter"
         style={{
           position: 'fixed',
           top: 0,
@@ -164,7 +165,7 @@ export default function Settings({
             <label
               style={{
                 display: 'block',
-                fontSize: 11,
+                fontSize: 12,
                 fontWeight: 600,
                 fontFamily: 'Raleway, sans-serif',
                 textTransform: 'uppercase',
@@ -212,7 +213,7 @@ export default function Settings({
             <label
               style={{
                 display: 'block',
-                fontSize: 11,
+                fontSize: 12,
                 fontWeight: 600,
                 fontFamily: 'Raleway, sans-serif',
                 textTransform: 'uppercase',
@@ -262,7 +263,7 @@ export default function Settings({
             <label
               style={{
                 display: 'block',
-                fontSize: 11,
+                fontSize: 12,
                 fontWeight: 600,
                 fontFamily: 'Raleway, sans-serif',
                 textTransform: 'uppercase',
@@ -308,7 +309,7 @@ export default function Settings({
               ))}
             </div>
             <p style={{
-              fontSize: 11,
+              fontSize: 12,
               fontFamily: 'Raleway, sans-serif',
               color: 'var(--cm-text-tertiary)',
               margin: '8px 0 0 0',

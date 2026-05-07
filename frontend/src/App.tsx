@@ -564,6 +564,15 @@ export default function App() {
         setShowShortcuts(true)
         return
       }
+
+      // 1/2/3 — switch views (only when not in input)
+      if (!isInput && (e.key === '1' || e.key === '2' || e.key === '3')) {
+        e.preventDefault()
+        if (e.key === '1') setViewMode('graph')
+        else if (e.key === '2') setViewMode('list')
+        else if (e.key === '3') setViewMode('dashboard')
+        return
+      }
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
@@ -616,7 +625,7 @@ export default function App() {
             color: 'var(--cm-text-inverse)',
             border: 'none',
             cursor: 'pointer',
-            fontSize: 11,
+            fontSize: 12,
             fontWeight: 600,
             fontFamily: 'Raleway, sans-serif',
             textTransform: 'uppercase',
@@ -626,7 +635,7 @@ export default function App() {
             flexShrink: 0,
           }}
         >
-          + New
+          Create Memory
         </button>
 
         {/* View switcher: Graph / Dashboard */}
@@ -645,7 +654,7 @@ export default function App() {
               padding: '6px 20px',
               border: 'none',
               cursor: 'pointer',
-              fontSize: 11,
+              fontSize: 12,
               fontFamily: 'Raleway, sans-serif',
               fontWeight: 600,
               textTransform: 'uppercase',
@@ -662,7 +671,7 @@ export default function App() {
               padding: '6px 20px',
               border: 'none',
               cursor: 'pointer',
-              fontSize: 11,
+              fontSize: 12,
               fontFamily: 'Raleway, sans-serif',
               fontWeight: 600,
               textTransform: 'uppercase',
@@ -679,7 +688,7 @@ export default function App() {
               padding: '6px 20px',
               border: 'none',
               cursor: 'pointer',
-              fontSize: 11,
+              fontSize: 12,
               fontFamily: 'Raleway, sans-serif',
               fontWeight: 600,
               textTransform: 'uppercase',
@@ -703,7 +712,7 @@ export default function App() {
               padding: '4px 8px',
               border: '1px solid var(--cm-border-cool)',
               borderRadius: 2,
-              fontSize: 11,
+              fontSize: 12,
               fontWeight: 600,
               fontFamily: 'Raleway, sans-serif',
               color: 'var(--cm-text-primary)',
@@ -721,7 +730,7 @@ export default function App() {
           </select>
         )}
         {switchingDataset && (
-          <span style={{ fontSize: 11, color: 'var(--cm-text-tertiary)', fontFamily: 'Raleway, sans-serif' }}>
+          <span style={{ fontSize: 12, color: 'var(--cm-text-tertiary)', fontFamily: 'Raleway, sans-serif' }}>
             Switching...
           </span>
         )}
@@ -729,7 +738,7 @@ export default function App() {
         {/* R8-quant-disclaimer: informational message for quant_operators dataset */}
         {currentDataset === 'quant_operators' && !switchingDataset && (
           <span style={{
-            fontSize: 10,
+            fontSize: 12,
             color: 'var(--cm-text-secondary)',
             fontFamily: 'Raleway, sans-serif',
             fontStyle: 'italic',
@@ -768,7 +777,7 @@ export default function App() {
             >
               <label
                 style={{
-                  fontSize: 11,
+                  fontSize: 12,
                   fontWeight: 600,
                   fontFamily: 'Raleway, sans-serif',
                   color: 'var(--cm-text-secondary)',
@@ -804,7 +813,7 @@ export default function App() {
             >
               <label
                 style={{
-                  fontSize: 11,
+                  fontSize: 12,
                   fontWeight: 600,
                   fontFamily: 'Raleway, sans-serif',
                   color: 'var(--cm-text-secondary)',
@@ -877,7 +886,7 @@ export default function App() {
               color: 'var(--cm-text-secondary)',
               border: '1px solid var(--cm-border-cool)',
               cursor: 'pointer',
-              fontSize: 11,
+              fontSize: 12,
               fontWeight: 600,
               fontFamily: 'Raleway, sans-serif',
               textTransform: 'uppercase',
@@ -901,7 +910,7 @@ export default function App() {
             color: 'var(--cm-text-secondary)',
             border: '1px solid var(--cm-border-cool)',
             cursor: 'pointer',
-            fontSize: 11,
+            fontSize: 12,
             fontWeight: 600,
             fontFamily: 'Raleway, sans-serif',
             textTransform: 'uppercase',
@@ -945,7 +954,7 @@ export default function App() {
             color: 'var(--cm-text-inverse)',
             border: 'none',
             cursor: 'pointer',
-            fontSize: 11,
+            fontSize: 12,
             fontWeight: 600,
             fontFamily: 'Raleway, sans-serif',
             textTransform: 'uppercase',
@@ -987,7 +996,7 @@ export default function App() {
               color: 'var(--cm-error)',
               border: 'none',
               cursor: 'pointer',
-              fontSize: 11,
+              fontSize: 12,
               fontWeight: 600,
               fontFamily: 'Raleway, sans-serif',
               textTransform: 'uppercase',
@@ -1276,7 +1285,7 @@ export default function App() {
           >
             <div
               style={{
-                fontSize: 10,
+                fontSize: 12,
                 fontWeight: 600,
                 fontFamily: 'Raleway, sans-serif',
                 textTransform: 'uppercase',
@@ -1349,8 +1358,20 @@ export default function App() {
         </div>
       )}
 
-      {/* Archive confirmation modal (non-destructive styling — PL1-5) */}
-      {archiveConfirmId && (
+      {/* Archive confirmation modal (R12-UX4: backlink warnings) */}
+      {archiveConfirmId && (() => {
+        // R12-UX4: compute backlinks for the archive target
+        const archiveBacklinks: { id: string; strength: string }[] = []
+        if (graphData) {
+          const seen = new Set<string>()
+          for (const edge of graphData.edges) {
+            if (edge.data.target === archiveConfirmId && !seen.has(edge.data.source)) {
+              seen.add(edge.data.source)
+              archiveBacklinks.push({ id: edge.data.source, strength: edge.data.strength })
+            }
+          }
+        }
+        return (
         <>
           <div
             onClick={() => setArchiveConfirmId(null)}
@@ -1362,6 +1383,7 @@ export default function App() {
             }}
           />
           <div
+            className="modal-fade-enter"
             style={{
               position: 'fixed',
               top: '50%',
@@ -1371,7 +1393,7 @@ export default function App() {
               border: '1px solid var(--cm-border)',
               borderRadius: 2,
               padding: 28,
-              maxWidth: 420,
+              maxWidth: 460,
               width: '90%',
               zIndex: 101,
               boxShadow: '0 4px 24px rgba(28,25,23,0.12)',
@@ -1400,6 +1422,36 @@ export default function App() {
               Archive this memory? It will be hidden from most views but can be
               restored later by editing its status back to &quot;active&quot;.
             </p>
+            {/* R12-UX4: Backlink warning */}
+            {archiveBacklinks.length > 0 && (
+              <div
+                style={{
+                  padding: '10px 14px',
+                  marginBottom: 12,
+                  backgroundColor: 'var(--cm-bg-warning-subtle)',
+                  borderLeft: '3px solid var(--cm-warning)',
+                  borderRadius: 2,
+                }}
+              >
+                <p
+                  style={{
+                    fontSize: 13,
+                    fontFamily: 'Raleway, sans-serif',
+                    color: 'var(--cm-warning)',
+                    fontWeight: 600,
+                    margin: '0 0 4px 0',
+                  }}
+                >
+                  {archiveBacklinks.length} {archiveBacklinks.length === 1 ? 'memory imports' : 'memories import'} this one. Archiving it will create broken links.
+                </p>
+                <div style={{ fontSize: 11, fontFamily: 'JetBrains Mono, monospace', color: 'var(--cm-text-tertiary)', maxHeight: 80, overflowY: 'auto', lineHeight: 1.6 }}>
+                  {archiveBacklinks.slice(0, 8).map((b) => (
+                    <span key={b.id} style={{ display: 'inline-block', marginRight: 8, marginBottom: 2 }}>{b.id}</span>
+                  ))}
+                  {archiveBacklinks.length > 8 && <span>+{archiveBacklinks.length - 8} more</span>}
+                </div>
+              </div>
+            )}
             <p
               style={{
                 fontSize: 12,
@@ -1419,7 +1471,7 @@ export default function App() {
                   background: 'transparent',
                   color: 'var(--cm-text-secondary)',
                   cursor: 'pointer',
-                  fontSize: 11,
+                  fontSize: 12,
                   fontWeight: 600,
                   fontFamily: 'Raleway, sans-serif',
                   textTransform: 'uppercase',
@@ -1438,7 +1490,7 @@ export default function App() {
                   color: 'var(--cm-bg-surface)',
                   border: 'none',
                   cursor: 'pointer',
-                  fontSize: 11,
+                  fontSize: 12,
                   fontWeight: 600,
                   fontFamily: 'Raleway, sans-serif',
                   textTransform: 'uppercase',
@@ -1451,7 +1503,8 @@ export default function App() {
             </div>
           </div>
         </>
-      )}
+        )
+      })()}
 
       {/* Keyboard shortcuts overlay */}
       {showShortcuts && (
@@ -1496,13 +1549,14 @@ export default function App() {
                 { keys: 'Ctrl + N', desc: 'Open new memory form' },
                 { keys: 'Ctrl + Z', desc: 'Undo last action' },
                 { keys: 'Ctrl + Shift + D', desc: 'Toggle dark mode' },
+                { keys: '1 / 2 / 3', desc: 'Switch to Graph / List / Dashboard view' },
                 { keys: 'Escape', desc: 'Close open panel / menu' },
                 { keys: '?', desc: 'Show this help overlay' },
               ].map(({ keys, desc }) => (
                 <div key={keys} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                   <code style={{
                     fontFamily: 'JetBrains Mono, monospace',
-                    fontSize: 11,
+                    fontSize: 12,
                     backgroundColor: 'var(--cm-bg-subtle)',
                     padding: '2px 8px',
                     borderRadius: 2,
@@ -1527,7 +1581,7 @@ export default function App() {
                 background: 'transparent',
                 color: 'var(--cm-text-secondary)',
                 cursor: 'pointer',
-                fontSize: 11,
+                fontSize: 12,
                 fontWeight: 600,
                 fontFamily: 'Raleway, sans-serif',
                 textTransform: 'uppercase',

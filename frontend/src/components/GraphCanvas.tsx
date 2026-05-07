@@ -538,9 +538,10 @@ const GraphCanvas = forwardRef<GraphCanvasHandle, Props>(function GraphCanvas({ 
     return (
       <div style={{ width: '100%', height: '100%', backgroundColor: 'var(--cm-bg-primary)' }}>
         <EmptyState
+          icon="o"
           title="No memories yet"
-          description="Click + New to add your first memory."
-          actions={onCreateMemory ? [{ label: '+ New', onClick: onCreateMemory, variant: 'primary' }] : undefined}
+          description="Create your first memory to get started."
+          actions={onCreateMemory ? [{ label: 'Create Memory', onClick: onCreateMemory, variant: 'primary' }] : undefined}
         />
       </div>
     )
@@ -570,7 +571,7 @@ const GraphCanvas = forwardRef<GraphCanvasHandle, Props>(function GraphCanvas({ 
             background: 'var(--cm-bg-surface)',
             color: 'var(--cm-text-secondary)',
             cursor: 'pointer',
-            fontSize: 10,
+            fontSize: 12,
             fontWeight: 600,
             fontFamily: 'Raleway, sans-serif',
             textTransform: 'uppercase',
@@ -705,7 +706,7 @@ function GraphSkeleton() {
         top: '50%',
         left: '50%',
         transform: 'translate(-50%, -50%)',
-        fontSize: 11,
+        fontSize: 12,
         fontFamily: 'Raleway, sans-serif',
         color: 'var(--cm-text-tertiary)',
         textTransform: 'uppercase',

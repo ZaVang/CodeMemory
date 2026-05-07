@@ -152,7 +152,7 @@ export default function SearchBar({ value, onChange, onNavigate }: Props) {
         />
 
         {searching && (
-          <span style={{ fontSize: 10, color: 'var(--cm-text-tertiary)', fontFamily: 'Raleway, sans-serif' }}>
+          <span style={{ fontSize: 12, color: 'var(--cm-text-tertiary)', fontFamily: 'Raleway, sans-serif' }}>
             ...
           </span>
         )}
@@ -204,7 +204,7 @@ export default function SearchBar({ value, onChange, onNavigate }: Props) {
             <>
               <div
                 style={{
-                  fontSize: 10,
+                  fontSize: 12,
                   fontWeight: 600,
                   fontFamily: 'Raleway, sans-serif',
                   textTransform: 'uppercase',
@@ -243,7 +243,7 @@ export default function SearchBar({ value, onChange, onNavigate }: Props) {
                   }}
                 >
                   <span style={{
-                    fontSize: 10,
+                    fontSize: 12,
                     color: 'var(--cm-text-tertiary)',
                   }}>
                     #
@@ -274,7 +274,7 @@ export default function SearchBar({ value, onChange, onNavigate }: Props) {
               </div>
               <div
                 style={{
-                  fontSize: 11,
+                  fontSize: 12,
                   fontFamily: 'Raleway, sans-serif',
                   color: 'var(--cm-text-tertiary)',
                 }}
@@ -288,7 +288,7 @@ export default function SearchBar({ value, onChange, onNavigate }: Props) {
           {showResults && results.length > 0 && (
           <div
             style={{
-              fontSize: 10,
+              fontSize: 12,
               fontWeight: 600,
               fontFamily: 'Raleway, sans-serif',
               textTransform: 'uppercase',
@@ -330,7 +330,7 @@ export default function SearchBar({ value, onChange, onNavigate }: Props) {
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
                 <div
                   style={{
-                    fontSize: 11,
+                    fontSize: 12,
                     fontFamily: 'JetBrains Mono, monospace',
                     color: 'var(--cm-text-primary)',
                     flex: 1,
@@ -376,7 +376,7 @@ export default function SearchBar({ value, onChange, onNavigate }: Props) {
               {/* Match fields — subtle display of which fields matched */}
               {item.match_fields && item.match_fields.length > 0 && (
                 <div style={{
-                  fontSize: 10,
+                  fontSize: 12,
                   fontFamily: 'Raleway, sans-serif',
                   color: 'var(--cm-text-tertiary)',
                   marginBottom: item.snippet ? 4 : 0,
@@ -388,7 +388,7 @@ export default function SearchBar({ value, onChange, onNavigate }: Props) {
               {item.snippet && (
                 <div
                   style={{
-                    fontSize: 11,
+                    fontSize: 12,
                     fontFamily: 'Raleway, sans-serif',
                     color: 'var(--cm-text-tertiary)',
                     lineHeight: 1.5,

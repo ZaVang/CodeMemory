@@ -11,7 +11,8 @@ import json
 import logging
 import random
 import sys
-from datetime import datetime
+import math
+from datetime import datetime, timezone
 from pathlib import Path
 
 from .core import compute_body_hash as _cbh
@@ -224,12 +225,35 @@ def handle_overview(
         results = [r for r in results if r.get("status") != "archived"]
 
     lines: list[str] = []
+    now = datetime.now(timezone.utc)
     for r in results[:limit]:
         mid = r["id"]
         mem_type = r["type"]
         deps = r.get("dependents", 0)
         access = r.get("access_count", 0)
-        heat = deps * 10 + access
+
+        # R12-UX5: time-decay heat calculation.
+        # Structural importance (dependents) is the foundation.
+        # Access count is weighted by recency using exponential decay
+        # with a 14-day half-life. Recently-accessed memories rank
+        # higher than long-ago high-frequency ones.
+        # Zero-access memories get minimal access bonus (10% weight).
+        last_access_str = r.get("last_access", None)
+        if access > 0 and last_access_str:
+            try:
+                last_dt = datetime.fromisoformat(last_access_str)
+                if last_dt.tzinfo is None:
+                    last_dt = last_dt.replace(tzinfo=timezone.utc)
+                days_since = max(0, (now - last_dt).days)
+                # Exponential decay: value halves every 14 days
+                decay = math.pow(0.5, days_since / 14.0)
+                access_bonus = access * decay
+            except (ValueError, TypeError, OSError):
+                access_bonus = access
+        else:
+            access_bonus = access * 0.1
+
+        heat = int(deps * 10 + access_bonus)
         entry_status = r.get("status", "active")
         tags_str = _fmt_tags(r)
         summary = r.get("summary", "")

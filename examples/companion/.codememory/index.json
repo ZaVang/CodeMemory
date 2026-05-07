@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-05-07T09:28:56.003003",
+  "updated": "2026-05-07T11:05:42.139112",
   "memories": {
     "user/context": {
       "type": "atom",
@@ -57,8 +57,8 @@
       "intensity": 6,
       "version": 1,
       "path": "user/beliefs/friendship-view.md",
-      "access_count": 11,
-      "last_access": "2026-05-07T09:20:47.203365",
+      "access_count": 15,
+      "last_access": "2026-05-07T11:04:53.815104",
       "created": "2026-04-22",
       "updated": "",
       "imports": {},
@@ -118,8 +118,8 @@
       "intensity": 7,
       "version": 1,
       "path": "user/feelings/burnout-april.md",
-      "access_count": 9,
-      "last_access": "2026-05-07T09:20:47.203365",
+      "access_count": 13,
+      "last_access": "2026-05-07T11:04:53.815104",
       "created": "2026-04-14",
       "updated": "",
       "imports": {
@@ -150,8 +150,8 @@
       "intensity": 6,
       "version": 1,
       "path": "user/feelings/proud-moment.md",
-      "access_count": 9,
-      "last_access": "2026-05-07T09:20:47.203365",
+      "access_count": 13,
+      "last_access": "2026-05-07T11:04:53.815104",
       "created": "2026-04-26",
       "updated": "",
       "imports": {
@@ -182,8 +182,8 @@
       "intensity": 4,
       "version": 1,
       "path": "user/moments/rainy-sunday.md",
-      "access_count": 8,
-      "last_access": "2026-05-07T09:20:47.203365",
+      "access_count": 12,
+      "last_access": "2026-05-07T11:04:53.815104",
       "created": "2026-04-19",
       "updated": "",
       "imports": {
@@ -276,8 +276,8 @@
       "intensity": 5,
       "version": 1,
       "path": "user/preferences/dislike-crowds.md",
-      "access_count": 9,
-      "last_access": "2026-05-07T09:20:47.203365",
+      "access_count": 13,
+      "last_access": "2026-05-07T11:04:53.815104",
       "created": "2026-04-10",
       "updated": "",
       "imports": {},
@@ -303,8 +303,8 @@
       "intensity": 5,
       "version": 1,
       "path": "user/preferences/morning-coffee.md",
-      "access_count": 9,
-      "last_access": "2026-05-07T09:20:47.203365",
+      "access_count": 13,
+      "last_access": "2026-05-07T11:04:53.815104",
       "created": "2026-04-10",
       "updated": "",
       "imports": {},
@@ -316,6 +316,37 @@
       "source": null,
       "maturity": "verified",
       "evidence": null
+    },
+    "user/test/audit-test": {
+      "type": "atom",
+      "id": "user/test/audit-test",
+      "summary": "Test memory for audit",
+      "status": "active",
+      "tags": [],
+      "intensity": 5,
+      "version": 1,
+      "path": "user/test/audit-test.md",
+      "access_count": 0,
+      "last_access": null,
+      "created": "2026-05-07",
+      "updated": "2026-05-07",
+      "imports": {},
+      "schema": null,
+      "summary_hash": "e3b0c44",
+      "protected": null,
+      "change_note": null,
+      "change_log": [],
+      "source": {
+        "platform": "manual",
+        "created_by": "user"
+      },
+      "maturity": "draft",
+      "evidence": {
+        "contributors": [
+          "user"
+        ],
+        "sessions": []
+      }
     }
   }
 }

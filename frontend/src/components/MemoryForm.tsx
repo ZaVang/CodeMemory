@@ -414,6 +414,7 @@ export default function MemoryForm({ memoryId, onClose, onChange, onUndoEntry }:
 
       {/* Slide-in panel */}
       <div
+        className="panel-slide-enter"
         style={{
           position: 'fixed',
           top: 0,
@@ -541,7 +542,7 @@ export default function MemoryForm({ memoryId, onClose, onChange, onUndoEntry }:
                 style={inputStyle}
               />
               {isEdit && (
-                <div style={{ fontSize: 10, color: 'var(--cm-text-tertiary)', fontFamily: 'Raleway, sans-serif', marginTop: 2 }}>
+                <div style={{ fontSize: 12, color: 'var(--cm-text-tertiary)', fontFamily: 'Raleway, sans-serif', marginTop: 2 }}>
                   ID cannot be changed after creation
                 </div>
               )}
@@ -552,7 +553,7 @@ export default function MemoryForm({ memoryId, onClose, onChange, onUndoEntry }:
               <input
                 type="text"
                 value={summary}
-                onChange={(e) => setSummary(e.target.value)}
+                onChange={(e) => { setSummary(e.target.value); clearValidationError() }}
                 placeholder="Brief description of this memory"
                 style={inputStyle}
               />
@@ -569,6 +570,7 @@ export default function MemoryForm({ memoryId, onClose, onChange, onUndoEntry }:
                     setTags(e.target.value)
                     setShowTagSuggestions(true)
                     setHighlightedTagIndex(0)
+                    clearValidationError()
                   }}
                   onFocus={() => {
                     if (tagSuggestions.length > 0) setShowTagSuggestions(true)
@@ -704,7 +706,7 @@ export default function MemoryForm({ memoryId, onClose, onChange, onUndoEntry }:
                             ...inputStyle,
                             width: 120,
                             padding: '2px 8px',
-                            fontSize: 11,
+                            fontSize: 12,
                           }}
                         >
                           <option value="required">Required</option>
@@ -747,7 +749,7 @@ export default function MemoryForm({ memoryId, onClose, onChange, onUndoEntry }:
             <Field label="Maturity">
               <select
                 value={maturity}
-                onChange={(e) => setMaturity(e.target.value)}
+                onChange={(e) => { setMaturity(e.target.value); clearValidationError() }}
                 style={inputStyle}
               >
                 <option value="draft">Draft</option>
@@ -762,7 +764,7 @@ export default function MemoryForm({ memoryId, onClose, onChange, onUndoEntry }:
               <Field label="Status">
                 <select
                   value={status}
-                  onChange={(e) => setStatus(e.target.value)}
+                  onChange={(e) => { setStatus(e.target.value); clearValidationError() }}
                   style={inputStyle}
                 >
                   <option value="active">Active</option>
@@ -790,7 +792,7 @@ export default function MemoryForm({ memoryId, onClose, onChange, onUndoEntry }:
             <Field label="Body (Markdown)">
               <textarea
                 value={body}
-                onChange={(e) => setBody(e.target.value)}
+                onChange={(e) => { setBody(e.target.value); clearValidationError() }}
                 placeholder="Write markdown content here..."
                 style={{
                   ...inputStyle,
@@ -941,7 +943,7 @@ export default function MemoryForm({ memoryId, onClose, onChange, onUndoEntry }:
                   background: 'transparent',
                   color: 'var(--cm-text-secondary)',
                   cursor: 'pointer',
-                  fontSize: 11,
+                  fontSize: 12,
                   fontWeight: 600,
                   fontFamily: 'Raleway, sans-serif',
                   textTransform: 'uppercase',
@@ -959,7 +961,7 @@ export default function MemoryForm({ memoryId, onClose, onChange, onUndoEntry }:
                   color: 'var(--cm-bg-surface)',
                   border: 'none',
                   cursor: 'pointer',
-                  fontSize: 11,
+                  fontSize: 12,
                   fontWeight: 600,
                   fontFamily: 'Raleway, sans-serif',
                   textTransform: 'uppercase',
@@ -1044,7 +1046,7 @@ export default function MemoryForm({ memoryId, onClose, onChange, onUndoEntry }:
                   background: 'transparent',
                   color: 'var(--cm-text-secondary)',
                   cursor: 'pointer',
-                  fontSize: 11,
+                  fontSize: 12,
                   fontWeight: 600,
                   fontFamily: 'Raleway, sans-serif',
                   textTransform: 'uppercase',
@@ -1063,7 +1065,7 @@ export default function MemoryForm({ memoryId, onClose, onChange, onUndoEntry }:
                   color: 'var(--cm-bg-surface)',
                   border: 'none',
                   cursor: 'pointer',
-                  fontSize: 11,
+                  fontSize: 12,
                   fontWeight: 600,
                   fontFamily: 'Raleway, sans-serif',
                   textTransform: 'uppercase',
@@ -1097,7 +1099,7 @@ function Field({
       <label
         style={{
           display: 'block',
-          fontSize: 11,
+          fontSize: 12,
           fontWeight: 600,
           fontFamily: 'Raleway, sans-serif',
           textTransform: 'uppercase',
