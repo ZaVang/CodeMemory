@@ -1,323 +1,289 @@
-# CodeMemory -- Product Research Audit Report (Sprint 13)
+# CodeMemory Design Research Audit — Round 12 Post-Mortem
 
-**Date:** 2026-05-07
 **Reviewer:** Product Research Reviewer
-**Build:** Post-Round 11 (7e1f84b), Sprint 13
-**Methodology:** Full source code audit (16 modules), CLI hands-on testing (reindex / validate / resolve / overview / wander), adjacent domain research (knowledge graph storage patterns, ACT-R/SOAR cognitive architecture, Obsidian/Roam/Tana note-taking linking models, Git Merkle DAG, spaced repetition / forgetting curve algorithms, 2025 Agent memory management), competitive design philosophy analysis
+**Date:** 2026-05-07
+**Trigger:** Round 12 introduces ACT-R time-decay activation (heat formula `deps*10 + access*0.5^(days_since/14)`). This audit asks: is this the right direction, and what would a radical rethink look like?
+
+**Method:** Full source review (resolve.py, handlers.py, models.py, index.py, validate.py, search.py, transient.py, orphans.py, suggest_deps.py, update.py, create.py, integrations.py) + adjacent domain research via WebSearch (3 domains: cognitive architectures, knowledge graphs, human memory models) + gap analysis + proposal synthesis.
 
 ---
 
 ## Executive Summary
 
-### Current Design's Core Assumptions
+Round 12's time-decay activation formula is a valid first step toward a richer memory lifecycle model — but it is a **local maximum**, not the destination. Three deeper findings reshape the design space:
 
-CodeMemory rests on 5 interlocking assumptions, each of which represents a deliberate design bet:
+1. **ACT-R's full activation model does something CodeMemory ignores entirely: spreading activation from context.** The current formula only models recency/frequency (base-level activation). A memory about risk tolerance should be "hotter" when the user is working on risk analysis — regardless of when it was last accessed. This contextual dimension is the single largest missing piece.
 
-1. **"Memory = Markdown file"** — Every memory unit is a physical `.md` file. The filesystem is the database. Dependencies are declared in YAML frontmatter. This buys portability, Git-friendliness, and human-editable transparency at the cost of fine-grained granularity (no block-level references) and O(n^2) graph operations.
+2. **The "memory = file" metaphor is already cracking under its own success.** TransientDAG nodes are memories with no file. Snapshots flatten internal topology. DAG edges carry rich semantics (required/recommended/related, pin versions, reasons) but are compressed to a single integer (dependents count) in the heat formula. The real memory is the graph topology, not the individual files.
 
-2. **"Memory loading = deterministic DAG resolution, not probabilistic search"** — Explicit `imports` replace semantic similarity as the retrieval mechanism. This guarantees causal completeness for domains where it matters (investment decisions, legal reasoning, medical analysis), but creates a coverage gap for associative discovery.
+3. **The FSRS community has solved a problem we are only beginning to touch.** FSRS models each memory unit with three parameters (Difficulty, Stability, Retrievability) that create a personalized forgetting curve. Its key finding — reviewing when retrieval probability is low maximizes learning — **inverts** CodeMemory's current design where frequent access = promoted.
 
-3. **"Forgetting = path unreachability from the dependency graph"** — No deletion, no auto-archiving. A memory is "forgotten" when nothing imports it. This is philosophically elegant but operationally incomplete: it conflates deliberate forgetting with accidental isolation, and provides no proactive mechanism for memory hygiene.
+**Biggest opportunity:** Shift from a one-dimensional heat ranking to a **three-dimensional memory state model** (structural x temporal x stability), enabling distinct "surfacing" vs "reviewing" vs "fading" operations.
 
-4. **"The memory space is small to medium (10-100 units)"** — Algorithms assume O(n^2) is acceptable. `_count_dependents` scans all memories per memory in search/overview/validate. `build_dag` BFS's the entire dependency subgraph per validation check. At 10000 memories, these patterns break.
-
-5. **"The Agent sees bash, not Python"** — The agent interface is CLI subcommands, not importable libraries. The implementation language is transparent to the user. This is a constraint, not a limitation — but it shapes what operations are ergonomic for an agent to perform.
-
-### Biggest Research Finding: Which Dimension?
-
-The most fruitful research findings are in **adjacent domain pattern transfer**. Specifically:
-
-- **Cognitive architecture** (ACT-R/SOAR) provides a rigorous, experimentally validated framework for memory activation and decay that maps almost perfectly onto CodeMemory's existing data (access_count, last_access, dependents)
-- **Note-taking tools** (Roam/Tana) demonstrate that **typed relationships** and **block-level granularity** are the natural next evolutionary step beyond file-level bidirectional links — and CodeMemory's schema/imports system is ideally positioned to absorb these patterns
-- **Agent memory research** (SAGE, HAMR, GAM, MemAgent) confirms that **hierarchical memory with time-decayed activation** outperforms both flat-context and pure-RAG approaches by 2-4x — validating CodeMemory's structural approach while suggesting a more dynamic activation model
-- **Git's Merkle DAG** provides a battle-tested model for content-addressed identity, structural sharing, branching, and immutable history — all of which map onto unsolved problems in CodeMemory's version model
-
-### One Sentence: The Most Valuable Breakthrough Direction
-
-**Elevate edges from a node attribute to a first-class entity; replace static heat with time-decayed activation; and adopt content-addressed identity as the foundation for trustworthy, scalable memory resolution.**
-
-This is not a single change — it is three mutually reinforcing design shifts that together transform the system from a file-based dependency graph into a content-addressed, temporally-aware knowledge network. Each shift has a clear migration path that doesn't break backward compatibility.
+**One-sentence direction:** Replace the global 14-day half-life with per-memory stability learned from access history; add context-dependent activation from tags/domain; and treat edges as first-class entities with their own lifecycle.
 
 ---
 
 ## Phase 1: Core Assumption Questioning
 
-### 1.1 Complete Assumption Inventory
+### 1.1 Assumption Inventory (7 examined)
 
-The following is the full inventory of implicit assumptions discovered through source code analysis, CLI testing, and conceptual modeling. Each assumption is rated on how challengable it is and what the impact would be if it were revised.
+| # | Assumption | Where It Manifests | Stress Test |
+|---|-----------|-------------------|-------------|
+| A1 | Memory = file (.md with frontmatter) | `create.py`, `index.py`, `resolve.py` | TransientDAG nodes are memories with no file; snapshot compresses topology |
+| A2 | Heat = structural (dependents) + temporal (access decay) | `handle_overview()` in `handlers.py:256` | No spreading activation; no task-context awareness |
+| A3 | Access frequency signals importance | `MemoryEntry.access_count`, `handle_overview()` | A memory accessed 50 times by accident is "hotter" than a critical one accessed 3 times intentionally |
+| A4 | 14-day half-life is universal | `handle_overview():249` | Investment research and software architecture have different natural forgetting rates |
+| A5 | Primary user is an AI agent | All CLI commands, MCP integration | Human users need temporal browsing, social sharing, visual navigation |
+| A6 | Maturity moves forward only (draft->verified->proven) | `resolve.py:322-338` | A "proven" memory unaccessed for 2 years remains proven; no demotion path exists |
+| A7 | Dependents count = structural importance | `handle_overview():256` (`deps * 10`) | One `required` import carries more semantic weight than ten `related` imports, but all count equally |
 
-| # | Assumption | Where It Manifests | Challengeability | Impact If Revised |
-|---|-----------|-------------------|------------------|-------------------|
-| 1 | Memory is indivisible (one file = one unit) | Entire data model; `parse_frontmatter` assumes one YAML block per file | **High** — Roam's block model and Obsidian's heading anchors prove finer granularity is valuable | resolve would need to track which sections of a file are imported, not just which files |
-| 2 | Dependency edges are node attributes (imports stored in frontmatter) | `_get_imports()`, `_count_dependents()`, all graph construction | **High** — Edge-first models (Tana, knowledge graphs) enable O(1) reverse query and richer edge metadata | The entire DAG construction pipeline flips from node-scan to edge-lookup |
-| 3 | Three import strengths (required/recommended/related) cover all relationship semantics | `resolve.py` token trimming, `suggest_deps.py` scoring, `validate.py` cycle detection | **Medium-High** — Tana Supertags demonstrate typed relationships (supports/contradicts/extends) add significant value | resolve output gains semantic grouping; suggest-deps becomes more precise |
-| 4 | Memory IDs are human-readable paths (user/investment/context) | `create.py`, `get_memory_path()`, all import references | **High** — Content-addressed IDs (Git, IPFS) provide tamper-evidence, dedup, and structural sharing | References become cryptographically verifiable; ID assignment changes from human choice to content hash |
-| 5 | Heat/importance is static (dependents * 10 + access_count) | `handle_overview()` | **Medium** — ACT-R's time-decayed activation is experimentally validated and uses data already collected (access_count, last_access) | overview ranking becomes recency-aware; cold memories naturally fade without structural changes |
-| 6 | Memory set size is 10-100 | All O(n^2) algorithms: `_count_dependents` in 3+ locations, per-memory BFS in validate | **High** — Cold-start import can produce 1000+ memories instantly | Requires precomputed in-degree/out-degree in index; otherwise core operations become unusable |
-| 7 | Token budget = raw character count | `estimate_tokens()` returns `len(text)` | **Low** — Well-known approximation; actual tokenization varies by model | Improved budget control accuracy but doesn't change architecture |
-| 8 | Three maturity levels (draft/verified/proven) are sufficient | `resolve.py` maturity auto-upgrade; `validate.py` maturity staleness check | **Medium** — Missing "contested/disputed" and "superseded-by" states | Maturity state machine would need to support non-monotonic transitions and cross-reference |
-| 9 | Tags serve triple duty (domain, semantic type, filter target) | `search.py` semantic_type filter; `resolve.py` focus filter; `suggest_deps.py` tag overlap | **Medium** — Semantic conflation creates ambiguity; "decision" can be both a domain tag and a semantic role | Tags would need namespacing or a separate `semantic_role` field |
-| 10 | Protection is derived from intensity (>= 8) | `reindex()` sets `protected` based on `intensity`; `validate.py` decay exempts intensity >= 8 | **Low-Medium** — The derivation is arbitrary; explicit protection would be more intentional | Protection becomes an explicit user choice; decay eligibility is independently determined |
-| 11 | Forgotten = isolated (no imports pointing to this memory) | `orphans.py` defines orphan as in-degree 0 | **Medium** — Deliberate forgetting vs accidental isolation are indistinguishable | Would need an explicit "forget" or "archive" operation; orphan detection becomes about accidental isolation only |
-| 12 | The user/Agent will manually maintain imports | All CRUD operations; `suggest_deps` is a separate suggestion tool | **Medium** — Human-maintained link graphs degrade over time (link rot, missing connections) | Would need automated link maintenance, link suggestions on create, or query-based dynamic imports |
+### 1.2 Deep Dive: The "Memory = File" Metaphor Under Stress
 
-### 1.2 Deep Dive: Three Critical Assumptions
+The file metaphor holds well for the core atom model: one conceptual unit, one file, one path. But it breaks in three emerging use cases:
 
-#### Assumption #1: "Memory = Markdown File" — The Indivisibility Problem
+**Break 1: Compound memories (TransientDAG).** `transient.py` defines in-process memory nodes never written to disk. When a session reasoning chain produces a conclusion depending on 4 intermediate steps, where is the "memory"? The 5 transient nodes existed in memory. The snapshot (`snapshot.py`) flattens them into one file — losing the internal topology. The file is a lossy compression of the actual memory structure.
 
-This is the deepest assumption in the system, and it creates friction in three distinct scenarios:
+**Break 2: The DAG edges are memories too.** An import like `{required: [user/risk/tolerance], pin: "v3", reason: "underpins all sector analysis"}` encodes a judgment with author, timestamp, rationale. This judgment IS a memory — but edges are stored as metadata on nodes, not as first-class entities. You cannot search for "all edges that were added in the last month" or "all edges with pinned versions that need review."
 
-**Scenario A: Partial imports.** In the investment dataset, `user/investment/context` imports `user/investment/risk-tolerance`. But context only needs the *constraints* section of risk-tolerance — the historical changes section is noise. There is no way to declare "I need only section X of file Y." Everything is all-or-nothing.
+**Break 3: Version history is temporal memory.** `update.py` versions a file (v1->v2->v3). Version 3 of a memory represents an evolved understanding. But the index only stores one `MemoryEntry` per id. The temporal dimension of "how did my thinking change from v1 to v3?" is flattened into a version number and a changelog. The v1 DAG topology (which imports existed at v1) is lost — only the current topology is preserved.
 
-Roam Research solved this with block-level addressing (every paragraph has a unique ID). Obsidian solved it with heading anchors (`[[file#heading]]`). CodeMemory has no mechanism for intra-file dependency granularity.
+**Assessment:** The file metaphor is excellent for the atom unit (stable, authored, versioned). It is strained for compound, relational, and temporal memory. The system needs a **second representation** for edges as first-class and temporal sequences as queryable — augmenting rather than replacing the file model.
 
-**Implication if revised:** Introduce section-level anchors (`#section-name`) in import references. A memory's body sections can be individually addressed. This doesn't require splitting files into blocks — it's a lightweight annotation layer. The `parse_frontmatter` function would gain a `parse_sections()` companion that splits body by headings and assigns section-level IDs. Resolve would load only referenced sections when a section-specific import is declared.
+### 1.3 Is Time Decay Enough?
 
-**Cost of revision:** Low to medium. File format unchanged. ImportRef model gains an optional `section` field. Resolve output becomes more token-efficient by design. Migration: backward compatible — old imports (no section) continue to load full body.
+Round 12 formula: `heat = deps*10 + access * 0.5^(days_since/14)`
 
-#### Assumption #5: "Heat Is Static" — The Recency Blindness Problem
-
-The current heat formula `heat = dependents * 10 + access_count` treats all accesses equally. A memory accessed 100 times six months ago has higher heat than one accessed 5 times yesterday. This is temporally blind.
-
-ACT-R's base-level activation formula is:
+This models **base-level activation** (B_i) from ACT-R — frequency and recency. But ACT-R's full activation equation has three more components:
 
 ```
-A_i = ln( sum( t_j ^ -d ) )
+ACT-R Full:  A_i = B_i(base-level) + S_i(spreading activation) + P_i(partial matching) + noise
+CodeMemory:  heat = deps*10 + access * decay(days_since)
+              ↕                ↕
+         structural proxy   temporal recency
+         (approximates B_i)  (B_i component only)
 ```
 
-Where `t_j` is the time since the j-th access (in some unit) and `d` is the decay rate (typically 0.5). This means:
-- Recent accesses dominate the sum
-- Old accesses decay asymptotically
-- The natural log compresses the range, preventing extreme values
+**What's missing:**
 
-The 2025 SAGE paper demonstrated that this exact activation model, applied to agent memory, produces a 2.26x performance improvement over flat-context approaches. The data CodeMemory already collects — `access_count` and `last_access` — is the minimum needed. Adding an `access_history` list (timestamp per access) would enable full ACT-R computation.
+| ACT-R Component | Description | CodeMemory Equivalent | Status |
+|----------------|-------------|----------------------|--------|
+| Base-Level Activation: `ln(Σ t_j^(-d))` | Power-law sum over all access history | `access * 0.5^(days_since/14)` | Partially modeled — exponential instead of power-law, no sum over full history |
+| Spreading Activation: context-dependent boost | Boost from active goal/context | None | **Missing entirely** |
+| Partial Matching: relevance to retrieval request | Mismatch penalty for partial matches | None (search is binary substring) | **Missing entirely** |
+| Retrieval Threshold τ: below this, can't retrieve | Functional forgetting boundary | None (all memories always reachable) | **Missing entirely** |
+| Noise: logistic noise on retrieval | Probabilistic retrieval | None (deterministic) | Deliberately absent |
 
-**Implication if revised:** `overview` output becomes recency-weighted automatically. Cold memories (not accessed in months) fall to the bottom without being structurally orphaned. Wander's cool mode becomes more precise — it can target memories approaching the "retrieval threshold" (activation < theta) rather than randomly sampling low-access memories.
+The biggest gap is **spreading activation from context**. When a user resolves `user/investment/context` (tagged: investment, risk, portfolio), the memory `user/risk/tolerance` (tagged: investment, risk) should receive a context-dependent activation boost through shared tags — regardless of when it was last accessed. The DAG captures structural relationships, but activation should also be **context-dependent**.
 
-**Cost of revision:** Low. The formula change is ~15 lines in `handle_overview`. Adding `access_history` is optional for full ACT-R; the current two-field model supports a reasonable approximation.
+The second gap is the **decay function itself**. ACT-R uses power-law decay `t^(-d)` with d typically 0.5. CodeMemory uses exponential `0.5^(t/half_life)`. These behave differently:
+- Power-law: long tail, preserves signal of sustained historical importance
+- Exponential: sharp initial decay, near-zero after ~4-5 half-lives
 
-#### Assumption #12: "Users Will Manually Maintain Imports" — The Link Rot Problem
+For a memory accessed 1000 times 2 years ago:
+- Exponential: `1000 * 0.5^(730/14) = 1000 * 2.0e-16 ≈ 0` (completely erased)
+- Power-law (d=0.5): `1000 * (731)^(-0.5) ≈ 1000 * 0.037 = 37` (still meaningful)
 
-Every bidirectional linking system (Roam, Obsidian, Logseq) eventually faces link rot — connections that should exist but don't, and connections that exist but are no longer relevant. CodeMemory's approach is to make link creation deliberate and link maintenance manual.
+The power-law better preserves the signal of sustained historical engagement.
 
-But there is a structural asymmetry: creating a connection requires explicit human action, but *maintaining* that connection over time (updating when dependencies change, removing when dependencies become irrelevant) has no forcing function. The `suggest-deps` command helps with *missing* links but not with *stale* links.
+### 1.4 Human User vs AI Agent — Design Collapse Points
 
-**Implication if revised:** A `link-health` command that scans all imports and reports:
-1. **Dead links** — imports pointing to non-existent memories (already in validate)
-2. **Version-skewed links** — imports with pins behind the current version (already in resolve notices)
-3. **Unreciprocated links** — A imports B, but B's tags/body show no relationship to A (new)
-4. **Orphaned-by-oversight** — high-intensity memories with zero imports (already in orphans, but with no suggested fix)
-5. **Circular-opportunity links** — two memories with high tag overlap but no imports between them (suggest-deps already does this)
+If a human user opens CodeMemory directly (not through an AI agent), these assumptions break:
 
-**Cost of revision:** Low. Most of the detection logic already exists in validate/resolve/orphans/suggest-deps. Consolidating it into a unified `link-health` report is ~50 lines in a new handler.
+1. **Resolution = Token budget.** Humans don't think in token budgets. They think in "give me the gist" vs "show me everything." The `--budget` parameter is an agent-optimized concept.
 
-### 1.3 Where the Metaphor Strains
+2. **Overview as injection format.** `--format inject` produces `[id](type, heat:N)` — optimized for LLM system prompts. A human would want cards, timelines, or network views.
 
-**"Forgetting = unreachability" breaks when the user explicitly wants to forget.**
+3. **No temporal-first navigation.** Humans think in timelines: "what was I working on last Tuesday?" The system has `created`/`updated` fields, but no "browse by date" interface.
 
-The current model says: if nothing imports X, X is forgotten. This makes forgetting an emergent property, not an intentional action. But agents sometimes need to say "I no longer believe this" or "this information is outdated and should not influence future reasoning." There is no CLI command for that. `status: archived` prevents it from appearing in overview but doesn't remove it from the DAG — if another memory still imports it, resolve loads it.
+4. **No collaboration primitives.** `evidence.contributors` and `source.created_by` exist but are vestigial — no multi-user conflict detection, no shared ownership.
 
-This is a philosophy gap, not a bug. The designers chose to make forgetting a structural property (unreachability) rather than an operational one (explicit forget). But the metaphor strains when:
-- A belief is disproven (contradicted by new evidence)
-- A fact is corrected (superseded by a more accurate version)
-- A preference changes (replaced by a new value)
-
-In these cases, the system needs a way to propagate "this memory should no longer be used" through the dependency graph — a form of **deprecation signal** — without requiring all dependent memories to update their imports.
+5. **CLI semantics leak into UI.** `--depth required|recommended|full` is a CLI parameter. In the management panel, it maps to a Budget slider — a vastly different interaction model.
 
 ---
 
 ## Phase 2: Adjacent Domain Research
 
-### 2.1 Domain Scan Summary
+### 2.1 Domain 1: Cognitive Architectures (ACT-R, SOAR)
 
-| Domain | Core Ideas | Transferable to CodeMemory |
-|--------|-----------|---------------------------|
-| **Knowledge Graph Storage** (2025 survey) | Hybrid architectures dominate: Graph DB for relationships + Document DB for content + Vector DB for semantics. ISO GQL standard (2024) standardizes graph querying. GraphRAG is the #1 KG+LLM catalyst. | Precomputed in-degree index eliminates O(n^2); graph-native query language for path queries; typed edge properties with metadata |
-| **Cognitive Architecture** (ACT-R / SOAR comparison, Laird 2022) | Multiple interacting memory systems (working/declarative/procedural). Activation-based retrieval with decay. Impasse-driven learning (SOAR). Spreading activation along associative edges. | ACT-R activation formula for dynamic heat; three-memory-system mapping to Layer 0; impasse detection as "missing dependency" signal |
-| **Note-Taking Linking Models** (Roam / Obsidian / Tana / Logseq) | Block-level vs file-level granularity. Typed relationships (Tana Supertags). Bidirectional linking as default. Transclusion (embed, not just reference). Query-based dynamic content assembly. | Section-level imports; semantic edge types; embed/transclusion for content reuse; query blocks for dynamic imports |
-| **Git Object Model** (Merkle DAG, content-addressed storage) | Content-addressed identity (SHA of content). Immutable history with structural sharing. Branching for parallel exploration. Merge for reconciliation. Cryptographic provenance. | Content-addressed memory identity; version integrity guarantees; memory branching for speculative reasoning; structural sharing of unchanged dependencies |
-| **Spaced Repetition & Forgetting Curves** (FSRS, LECTOR, EDGE 2025) | Ebbinghaus forgetting curve formalized. SM-2 family algorithms. FSRS as modern open-source standard. LLM-enhanced semantic interference mitigation. Restless-bandit scheduling with optimality guarantees. | Review scheduling for memory maintenance; forgetting curve as dynamic importance; semantic interference detection between similar memories |
-| **2025 Agent Memory** (SAGE, HAMR, Mem0g, MemAgent, GAM, CoA) | Hierarchical memory (STM/MTM/LTM). Graph-based relational memory. Time-decayed activation universally adopted. RL-trained memory policies. Multi-agent collaboration for context assembly. | Three-tier memory architecture; graph edges for relational reasoning; learned importance weights; collaborative context assembly patterns |
+**Key sources:** ACT-R 7 reference (Carnegie Mellon), Pavlik & Anderson (2005) "Practice and Forgetting Effects," Laird (2022) "An Analysis and Comparison of ACT-R and Soar," Fisher, Houpt et al. (2025) "SFT-GMA framework for testing ACT-R core assumptions," MDPI Applied Sciences (2025) "Retrieving Memory Content from a Cognitive Architecture by Impressions from Language Models for Use in a Social Robot."
 
-### 2.2 Five Most Transferable Patterns (Updated for Sprint 13)
+**Findings:**
 
-These are the five patterns most worth borrowing, ranked by impact-to-effort ratio given the current codebase state:
+1. **Power-law vs exponential decay.** ACT-R's canonical base-level activation is `B_i = ln(Σ t_j^(-d))` — a power-law sum over all past accesses. CodeMemory's single-exponential `0.5^(days_since/14)` decays faster initially. The power-law form has stronger empirical support for human memory.
 
-#### Pattern 1: ACT-R Time-Decayed Activation (Cognitive Architecture)
+2. **Pavlik-Anderson recursive decay (the spacing effect).** In the most important ACT-R variant, decay rate is NOT constant. `d_k = c * e^(m_(k-1)) + alpha` — decay **accelerates** when activation is high (producing the spacing effect: you need longer gaps between reviews). This creates a natural optimization: review items right before they are forgotten. CodeMemory has no mechanism to adjust decay rate based on current activation state.
 
-**What it is:** Memory activation is not a static score but a function of access recency and frequency: `A = ln(sum(t_j ^ -d))`. Recent accesses matter exponentially more than old ones.
+3. **SOAR's explicit episodic memory.** SOAR separates episodic (temporal sequences) from semantic (general facts) memory. This maps to CodeMemory's TransientDAG (episodic) vs persistent atoms (semantic). SOAR's key mechanism: episodic traces are **mined** to create semantic knowledge through analogical generalization — exactly the pattern TransientDAG cannot currently do.
 
-**Why it fits CodeMemory now:** The data is already collected (`access_count`, `last_access`). The current `heat = deps * 10 + access` formula is a tensor-ready placeholder. Replacing it is a formula change in one function (`handle_overview`), ~20 lines. The SAGE paper (Sept 2025) provides experimental validation: 2.26x context quality improvement with this exact model.
+4. **SOAR's impasse-driven learning.** When SOAR doesn't know what to do, an "impasse" triggers subgoal reasoning and automatic knowledge creation (chunking). CodeMemory has no equivalent self-awareness — it cannot detect knowledge gaps in the memory graph.
 
-**Previous report status:** Proposed as R1 (High-Impact, Low-Effort). Accepted by product team, backlogged for next iteration. **Not yet implemented.** This remains the single highest-ROI design change available.
+5. **ACT-R + LLM integration (2025).** Recent research uses LLM-generated keywords to trigger ACT-R chunk retrieval in social robots. The LLM produces "impressions"; ACT-R retrieves matching chunks; this reduces hallucination. This is structurally similar to how CodeMemory could use an LLM to produce context keywords that then trigger spreading activation.
 
-#### Pattern 2: Typed Semantic Edges (Tana Supertags + Knowledge Graph)
+**Transferable patterns for CodeMemory:**
 
-**What it is:** Edges carry not just strength (required/recommended/related) but semantic type (supports/contradicts/extends/replaces/exemplifies). This enables resolve output to group dependencies by their semantic role.
+| Pattern | Source | Application |
+|---------|--------|-------------|
+| Spreading activation from buffer contents | ACT-R | Context-dependent heat boost: shared tags between current task and memory |
+| Power-law activation `ln(Σ t_j^(-d))` | ACT-R | Replace exponential decay with power-law sum for more realistic long-tail behavior |
+| Adaptive decay rate `d_k = c*e^m + alpha` | Pavlik-Anderson | Per-memory half-life that adjusts with access patterns |
+| Episodic -> Semantic mining | SOAR | Auto-propose atom creation from recurring TransientDAG patterns |
+| Impasse detection / knowledge gap | SOAR | Detect domains with high reference count but zero memories ("you depend on X but know nothing about it") |
+| Chunking (compile subgoal solutions) | SOAR | Auto-collapse repeated resolve patterns into composite atoms |
 
-**Why it fits CodeMemory now:** The `imports` structure is `{strength: [refs]}`. Adding a `semantic` field to `ImportRef` is backward-compatible (default: "supports"). The resolve output can group by semantic type without changing the DAG structure. This is ~50 lines across models and handlers.
+### 2.2 Domain 2: Human Memory & Spaced Repetition (FSRS, SM-2, Leitner)
 
-**Previous report status:** Proposed as part of "Edge Properties on Imports" (Pattern 3). Partially rejected — product team didn't see immediate value over the three-strength model. **Revisiting recommended**: the 2025 research consensus is that typed edges are the single biggest differentiator in knowledge graph quality.
+**Key sources:** Open Spaced Repetition community / FSRS-4.5 (2024), Jarrett Ye et al., Ebbinghaus (1885), Leitner (1972), Wozniak / SuperMemo, DRL-SRS (Xiao & Wang, 2024, Applied Sciences), DKVMN&MRI (PLoS ONE, 2024), "AI, Memorization, and Forgetting" (IERJ, 2024).
 
-#### Pattern 3: Content-Addressed Memory Identity (Git Merkle DAG)
+**Findings:**
 
-**What it is:** Memory versions are identified by content hash, not by human-assigned version numbers. The path-based ID becomes a mutable reference (like a Git branch) pointing to the latest content hash. This enables tamper-evident citations, structural sharing between versions, and time-travel queries.
+1. **FSRS DSR model (Difficulty-Stability-Retrievability).** Each memory item has three continuous parameters:
+   - **D (Difficulty):** [1, 10] — inherent difficulty, converges through practice
+   - **S (Stability):** [0, +inf) — days for retrieval probability to drop from 1.0 to 0.9
+   - **R (Retrievability):** [0, 1] — current probability of successful recall, `R(t) = 0.9^(t/S)`
 
-**Why it fits CodeMemory now:** `summary_hash` already exists and is computed for every memory. Extending its scope from body-only to full-content (frontmatter + body + imports structure) and using it as a content ID is conceptually straightforward. The implementation requires a `.codememory/objects/` store and reference management — significant code, but the mental model is Git-native.
+   After each review, stability is updated: `S' = S * (1 + exp(-0.2*D) * gain(R_at_review))`. The gain is largest when R is moderate (~0.7-0.8) — the "desirable difficulty" sweet spot. This is the most validated open-source spaced repetition model, integrated into Anki as the default alternative scheduler.
 
-**Previous report status:** Proposed as Alternative 2 (High-Impact, High-Effort). Accepted conceptually, deferred to "design document first." **No design document produced yet.** This remains the biggest architectural opportunity.
+2. **The counterintuitive optimization.** FSRS discovers that **reviewing when R is LOW maximizes stability gain, but also maximizes forgetting risk.** The optimal review balances these forces. For CodeMemory, this inverts current logic: a memory that is "cold" (low access, long gap since last access) might be at the **optimal review point**. The system should surface it for re-engagement, not bury it further.
 
-#### Pattern 4: Hierarchical Memory Tiers (SAGE/HAMR Agent Memory)
+3. **Leitner box model** — the simplest possible model: 5 boxes, correct answer moves up (longer interval), incorrect moves back to box 1. Creates an elegant self-correcting schedule with zero mathematical complexity. Formal queueing network analysis reveals sharp phase transitions in learning outcomes when new item introduction exceeds review capacity.
 
-**What it is:** Memories are not in a flat index. They occupy tiers: **hot** (in current context), **warm** (high-activation, loaded on demand), **cold** (low-activation, only loaded by explicit resolve). Tiers are dynamic — a cold memory becomes warm when accessed, a warm memory cools over time.
+4. **DRL-SRS (2024).** Deep reinforcement learning (DQN) applied to spaced repetition scheduling — uses Ebbinghaus forgetting curve parameterization as the reward function. Achieves state-of-the-art schedule optimization. Validates that learning the optimal review policy per item is possible.
 
-**Why it fits CodeMemory now:** The system already has the conceptual distinction between overview (hot), resolve (warm), and wander (cold), but it's implicit. Making tiers explicit in the index enables: reindex to recalculate tier assignments; resolve to skip cold memories by default; overview to only show warm+hot. This is ~30 lines in index.py + handlers.py.
+5. **Deep Knowledge Tracing + Ebbinghaus (2024).** DKVMN&MRI incorporates the Ebbinghaus forgetting curve directly into a neural knowledge tracing architecture, showing significant AUC improvements. Demonstrates that parameterized forgetting functions are essential for accurate memory modeling.
 
-**Previous report status:** Not previously proposed as a standalone pattern. New finding from 2025 agent memory research.
+**Transferable patterns for CodeMemory:**
 
-#### Pattern 5: Transclusion / Content Embedding (Roam/Obsidian)
+| Pattern | Source | Application |
+|---------|--------|-------------|
+| Per-memory Stability S | FSRS | Replace global 14-day half-life with learnable per-memory stability |
+| Retrievability R(t) = 0.9^(t/S) | FSRS | Replace binary access_count with continuous probability of "being remembered" |
+| Desirable difficulty scheduling | FSRS | Wander should target R ≈ 0.7 (optimal review), not just R ≈ 0 (coldest) |
+| Leitner boxes as explicit tiers | Leitner | Implement Hot/Warm/Cold/Cool/Frozen tiers with clear transition rules |
+| Phase transition in capacity | Leitner queueing | Warn when memory creation rate exceeds review capacity |
+| Per-item difficulty estimation | FSRS | Track "forgetting rate": if a memory requires frequent re-access, it's "difficult" (low stability) |
 
-**What it is:** Beyond referencing a dependency (import), a memory can *embed* content from another memory. The embedded content is part of the importing memory's body, but traces back to its source. This enables content reuse without duplication.
+### 2.3 Domain 3: Knowledge Graphs (Property Graph vs RDF)
 
-**Why it fits CodeMemory now:** The current imports model only supports "I depend on X" — it doesn't support "I include content from X." A simple `embed` field alongside `imports` would enable: `embed: [{id: "user/facts/nvidia-earnings", section: "## 对市场的影响"}]`. On resolve, the embedded content is inlined into the output. This is a natural extension of the existing imports model.
+**Key sources:** Neo4j knowledge graph documentation (2024), University of Murcia / L3S Hannover benchmark study (2024), Amazon Neptune Statement Graphs, ISO GQL standard (2024), Unified Knowledge Graph Model (Plain English, 2024).
 
-**Previous report status:** Not previously proposed. Addresses the "partial dependency" problem identified in Assumption #1 analysis.
+**Findings:**
 
-### 2.3 Competitive Design Philosophy Update
+1. **Property graph model maps directly to CodeMemory's DAG.** Nodes = atoms/schemas (with properties: type, summary, tags, intensity, maturity). Edges = imports (with properties: strength, pin version, reason). CodeMemory's edge model is actually richer than basic property graphs by distinguishing three edge strengths — but edges still lack temporal metadata (added_date, deprecated_date) and are not independently queryable.
 
-The competitive landscape has evolved since the previous research audit. Here is the updated philosophy comparison, with new entrants:
+2. **Performance findings (2024 benchmark).** Neo4j (property graph) outperformed GraphDB (RDF) for simple-to-moderate queries with lower memory consumption. GraphDB was more memory-efficient for complex subgraph traversals. Key finding: query complexity impacts performance more than graph size. For CodeMemory, most queries (overview, wander, resolve) are moderate complexity — property graph approach is well-suited.
 
-| Product | Core Metaphor | Retrieval Model | Forgetting Model | Interface Philosophy | Key Lesson for CodeMemory |
-|---------|--------------|----------------|------------------|---------------------|--------------------------|
-| **CodeMemory** | Memory = file; loading = compilation | DAG resolution (explicit imports) | Unreachability (advisory) | CLI for agents; Web for humans | Baseline |
-| **Tana** (2025) | Memory = typed node; Supertags as schemas | Live queries over typed graph | Manual archival | Interactive graph + structured views | Typed edges > untyped links; schemas as first-class concept |
-| **Mem0/Mem0g** (2025) | Memory = structured vectors + graph | Graph + embedding hybrid; multi-hop relational reasoning | Importance-weighted decay | API-first; auto-extraction | Hybrid DAG+embedding is validated; graph edges enable relational reasoning |
-| **SAGE** (Sept 2025) | Memory = forgetting-curve-positioned entity | Ebbinghaus-weighted retrieval with 3-agent collaboration | Explicit forgetting curve with RL optimization | Agent collaboration protocol | Forgetting curves measurably improve context quality (2.26x) |
-| **HAMR** (2025) | Memory = three-tier hierarchy (STM/MTM/LTM) | Semantic + temporal + learned-importance scoring | Simulated human consolidation | API with tier-aware routing | Explicit tiers outperform flat memory by design |
-| **DiffMem** (2025) | Memory = Git-tracked markdown | Git log/blame + BM25 | History-preserving (no deletion) | Writer Agent auto-commits | Git-native version model; store "now" in files, history in Git |
+3. **Edges as first-class citizens.** Property graph databases store edges with independent properties, metadata, and identity. CodeMemory stores edge data in frontmatter (file-level) but the index flattens imports to raw dicts — edge metadata is preserved in the file but not queryable from the index. You cannot query "all required imports that were pinned and are now behind by 3+ versions."
 
-**The convergence signal is unmistakable:** Every new system in this space is converging on a similar architecture: **explicit graph edges + time-decayed activation + tiered storage + hybrid deterministic/probabilistic retrieval**. CodeMemory is architecturally closer to this ideal than most — it has the DAG, the import edges, and the access tracking. What it needs is: (a) typed edges, (b) time-decayed activation, (c) explicit tiers.
+4. **The "unified model" trend (RDF*, Statement Graphs, Domain Graphs).** The research community is converging toward models that treat both nodes and edges as first-class with independent properties. CodeMemory's architecture (nodes in index, edges in frontmatter) is a split model — unifying them would align with the trend.
+
+5. **Transitive closure as precomputation.** RDF stores support ontological reasoning (transitive inference). CodeMemory's DAG traversal computes transitive dependencies at resolve time but never **precomputes** them. A materialized transitive closure would make overview/wander/validate O(1) for dependency queries rather than O(n) BFS.
+
+**Transferable patterns for CodeMemory:**
+
+| Pattern | Source | Application |
+|---------|--------|-------------|
+| First-class edge properties with independent metadata | Property Graph | Index imports as separate entities with added_date, deprecation status, pin history |
+| Incremental indexing (change detection) | Graph DB | Reindex only changed files using hash-based change detection |
+| Transitive closure precomputation | RDF Inference | Precompute "all ancestors" and "all descendants" for each node |
+| Graph query language (Cypher/GQL) | ISO GQL | `codememory query "MATCH (a)-[:required]->(b) WHERE b.maturity='proven'"` |
+| Graph-native storage backend | Neo4j/DuckDB | Research: replace index.json with embedded graph database at 10k+ memory scale |
+
+### 2.4 Cross-Domain Synthesis: Three Axes of Memory State
+
+Synthesizing across all three domains, a memory's state is best characterized along three independent axes:
+
+```
+                    STRUCTURAL IMPORTANCE
+                    (how connected? weighted
+                     incoming edges + PageRank)
+                         ▲
+                        /|\
+                       / | \
+                      /  |  \
+                     /   M   \
+                    /    E    \
+                   /     M     \
+                  /      O      \
+                 /       R       \
+                /        Y        \
+               ◄───────────────────►
+          TEMPORAL RECENCY       KNOWLEDGE STABILITY
+      (FSRS retrievability:     (how fast does it fade?
+       R = 0.9^(days/S))         per-memory S parameter)
+```
+
+| Axis | Current Model (R12) | Rich Model (from research) |
+|------|---------------------|---------------------------|
+| **Structural** | `dependents * 10` (flat count, no strength weighting) | Weighted incoming edges: required=5, recommended=3, related=1 + transitive PageRank on DAG |
+| **Temporal** | `access * 0.5^(days/14)` (exponential, global half-life) | FSRS retrievability `R = 0.9^(days/S)` with per-memory stability S |
+| **Stability** | Not modeled (constant 14-day half-life for all) | Per-memory S, updated on each access via FSRS formula; converges to domain-specific value |
+
+**The operational sweet spot:** Each axis creates distinct "attention zones" for different system behaviors:
+
+- High structural + High temporal + High stability = **Pillars** (core of current work — always surfaced)
+- High structural + Low temporal + Low stability = **Review targets** (important but fading — needs re-engagement)
+- Low structural + Low temporal + High stability = **Fragile gems** (important to someone, but unlinked — needs imports)
+- Low structural + Low temporal + Low stability = **Candidates for archiving** (not connected, not accessed, not stable)
 
 ---
 
 ## Phase 3: Logical Completeness
 
-### 3.1 Concept System Assessment (Updated)
+### 3.1 Conceptual Coherence After R12
 
-```
-MemoryEntry
-  ├── Identity
-  │   ├── id: str              (human-readable path)
-  │   ├── path: str             (filesystem location)
-  │   └── summary_hash: str     (body integrity — but not used as identity)
-  │
-  ├── Classification
-  │   ├── type: atom|schema     (structural role)
-  │   ├── tags: [str]           (domain + semantic role + lifecycle — triple duty)
-  │   ├── schema: str?          (structural template reference)
-  │   └── status: active|archived|superseded|draft
-  │
-  ├── Knowledge Quality
-  │   ├── intensity: 1..10      (subjective importance — static)
-  │   ├── maturity: draft|verified|proven|superseded  (epistemic confidence)
-  │   ├── protected: bool?      (derived from intensity >= 8)
-  │   └── evidence: dict?       (provenance data — underused)
-  │
-  ├── Versioning
-  │   ├── version: int          (linear, non-branching)
-  │   ├── created/updated: str  (timestamps)
-  │   ├── change_note: str?     (last change description)
-  │   └── change_log: [dict]    (linear history — no diff)
-  │
-  ├── Structure
-  │   ├── imports: {required, recommended, related}  (node-attached edges, untyped)
-  │   ├── source: dict?         (external origin metadata)
-  │   └── summary + body        (text content — indivisible)
-  │
-  └── Dynamics
-      ├── access_count: int     (total accesses)
-      └── last_access: str?     (timestamp of last access only — no history)
-```
+Time-decay activation (R12-UX5) changed overview output's semantic meaning while leaving wander, stale detection, and validate unchanged. This creates inconsistencies:
 
-**Fuzzy boundaries (new and persistent):**
+| Component | Pre-R12 Logic | Post-R12 Logic | Coherence Gap |
+|-----------|--------------|----------------|---------------|
+| **Overview** | Top 5 by dependents + raw access | Top 5 by `deps*10 + access*decay` | Internally consistent; ranks recency over raw frequency |
+| **Wander (cool)** | Weighted by `1/(access_count+1)` | Unchanged — uses raw access_count | Wander ignores time decay. A memory accessed 50 times 2 years ago (heat ~0) is treated as "hot" and excluded from cool mode. Inconsistent. |
+| **Stale detection** | body hash mismatch flag | Unchanged | Stale flag doesn't affect heat. A stale memory with high dependents ranks high in overview despite being out-of-date. No feedback loop. |
+| **Validate (decay)** | 30-day threshold in `_check_decay()` | Unchanged — hardcoded 30-day window | Uses a binary 30-day window while overview uses a continuous exponential function. Two different decay models in one system. |
+| **Maturity auto-upgrade** | access_count >= 3 -> verified | Unchanged — uses raw access_count | No recency consideration. 3 accesses in one day (burst) triggers "verified." 2 accesses over 3 years stays "draft." |
 
-1. **tags triple-duty** (persistent from previous audit) — The `search --semantic-type` filter treats tags as semantic roles. The `focus` filter treats tags as domain classifiers. The `overview` display treats tags as organizational labels. All three uses share the same flat string array. **Suggestion:** Add an optional `semantic_role: str` field (decision, fact, observation, preference, thesis, context, template) to separate "what kind of memory is this" from "what domain does it belong to."
+**Critical inconsistency:** `validate.py:_check_decay()` uses `last_access > now - 30 days` as a binary threshold. `handle_overview` uses `0.5^(days_since/14)` as a continuous decay. If the decay formula is the chosen model, validate should derive its warning from it — e.g., `retrievability < 0.3` rather than `days > 30`.
 
-2. **intensity protected derivation** (persistent) — `protected = intensity >= 8` is an implicit rule with no user-facing explanation. If a user sets `intensity: 8` and later changes it to `7`, does protection drop? Only on reindex. The derivation is temporal and invisible.
+### 3.2 Extreme Scenario Analysis
 
-3. **status.superseded vs maturity.superseded** (persistent) — Both fields have a "superseded" value but they mean different things. `status: superseded` means "don't use this memory anymore (lifecycle)." `maturity: superseded` means "this knowledge has been replaced by newer knowledge (epistemic)." The distinction is subtle and undocumented.
+**Scenario 1: All-zero-access memories (fresh dataset import).**
+- Heat = deps * 10 + 0 (access_bonus = 0 * 0.1 = 0)
+- All memories rank by structure only. This is defensible.
+- But: after first resolve, one memory gets access_count=1 with fresh last_access. Its heat jumps `deps*10 + 1.0`. This is a discontinuity — the access_bonus goes from 0 to 1 in one access. Better: give zero-access memories a floor of 0.5 rather than 0.
 
-4. **evidence field is underused** (new) — The `evidence` dict exists in the model and has `verified_in` tracking, but it's only populated by the maturity auto-upgrade in resolve. There's no way for a user to add evidence manually, no search filter for evidenced memories, and no display of evidence in overview or focus.
+**Scenario 2: One memory accessed 1000 times, 2 years ago.**
+- Exponential: `1000 * 0.5^(730/14) = 1000 * 2.0e-16 ≈ 0` — completely erased
+- The memory may have been genuinely important for 2 years. A power-law `1000 * (731)^(-0.5) ≈ 37` preserves the signal.
+- Implication: exponential decay over-erases sustained historical importance. Consider power-law or a hybrid (exponential for recent, power-law tail for historical).
 
-5. **access tracking is minimal** (new) — Only `access_count` (a running total) and `last_access` (the most recent timestamp). No access history, no per-agent tracking, no distinction between "accessed in overview" vs "accessed in focus" vs "loaded by resolve." This limits the precision of any activation model.
+**Scenario 3: 10,000 memories, frequent overview calls.**
+- Current loop: search (O(n) tag matching) -> for each result: datetime.fromisoformat + math.pow -> sort -> take top k.
+- At 10k memories with rich tags, search could return 5k matches. datetime.fromisoformat per memory is the bottleneck.
+- Mitigation options: (a) precompute days_since_last_access as an integer in the index, (b) two-phase approach: compute heat only for top 50 structurally-ranked results, (c) cache heat values until next access event.
 
-### 3.2 Extreme Scenario Validation
+**Scenario 4: Circular dependency + time decay interaction.**
+- A 3-node cycle A->B->C->A gives each node `dependents = 1`, multiplied by 10 = 10 heat structural contribution.
+- But these are structurally broken — none are resolvable in practice. Dependents count should exclude cycle participants.
 
-#### Scenario 1: 5000-Memory Cold Import
+### 3.3 Operational Gaps
 
-A user imports a year of notes via `codememory import --file notes.txt`. The import produces 5000 memory atoms, each with auto-generated summaries, spanning diverse topics. Few imports are declared — most memories are isolated.
+| Operation | Current | Gap |
+|-----------|---------|-----|
+| **Overview with --tags** | Filters search, computes heat | Heat formula is tag-agnostic. Matching tags should provide context boost (spreading activation). |
+| **Wander mode=cool** | `1/(access_count+1)` weight | Should use decayed access, not raw — otherwise old high-frequency memories are never surfaced |
+| **Validate decay check** | Hard 30-day binary threshold | Should use the same decay formula as overview (retrievability threshold) |
+| **Reindex** | Full directory scan every time | Should be incremental: hash file mtime + body, only reparse changed files |
+| **Focus --resolve** | Delegates to resolve(depth=recommended) | Should include active transient session nodes if a session is in progress |
+| **Snapshot** | Flattens TransientDAG to single file | Should preserve internal DAG topology as structured imports in the snapshot |
+| **Suggest-deps** | score = tag_overlap*3 + schema_score*5 + dependents | Should incorporate heat: higher-heat candidates are more "active" and thus better deps |
 
-**Does the design hold?**
-- `reindex`: O(5000) file parsing. ~2-5 seconds. **Works.**
-- `validate`: 5000 * O(imports_check) + 5000 * BFS for cycle detection. BFS per memory on a mostly-flat graph = O(5000 * 1). ~10-20 seconds. **Borderline.**
-- `search`: O(5000) scan + O(5000 * 5000) dependents count per result = **25M iterations. Fails.**
-- `overview`: Same O(n^2) dependents count. **Fails.**
-- `resolve user/some/entry`: BFS from entry over a flat graph = loads only itself. **Works.**
-- `orphans`: O(5000 * avg_imports) referent collection + O(5000) filter. **Works.**
-- `suggest-deps`: O(5000) tag overlap check + O(5000) schema pattern. ~1 second. **Works, and is the most useful command.**
+### 3.4 Evolution Bottlenecks
 
-**Diagnosis:** The cold-import scenario is the worst case because the graph is maximally flat (minimum edges / maximum nodes). The O(n^2) dependents counting in search and overview collapses. The fix — precomputed in-degree in the index — would reduce search/overview back to O(n). This has been proposed since the first research audit and remains unimplemented.
+**Bottleneck 1: Index.json as single serialization point.** Every resolve increments access_count and saves the entire index. At 10k memories with rich metadata, index.json could reach 5-10 MB. Every access event triggers a full save. Solution: batch access_count writes or use an append-only journal.
 
-#### Scenario 2: All Memories Form a Symmetric Complete Graph
+**Bottleneck 2: No version history in the graph view.** When a memory is updated (v2 -> v3), old imports may be removed. The v2 DAG topology is lost — only the current index reflects current imports. This prevents graph diffs and temporal queries like "what did my dependency structure look like in January?"
 
-Every memory imports every other memory. n=100.
-
-**Does the design hold?**
-- `validate`: Cycle detection finds every node is in a cycle with every other node. n=100 BFS = fine. **Works, but produces 100 cycle warnings — noisy.**
-- `resolve`: Builds a DAG then detects cycles and removes all nodes. Output is "[NOTICE] circular dependency involving..." with no content. **Technically correct but operationally useless.**
-- `search`: Dependents count = 99 for every memory. n=100 iterations. **Works.**
-- `overview`: 100 memories with heat = 99*10 + access_count. **Works but all heat scores are nearly identical.**
-
-**Diagnosis:** This is an adversarial scenario — no real knowledge graph looks like this. But it reveals a weakness: the system treats all cycles as errors rather than distinguishing between "mutually reinforcing concepts" (intentional) and "dependency loops that prevent resolution" (bugs). A cycle severity classification (benign/mutual vs blocking/contradictory) would improve the user experience.
-
-#### Scenario 3: All Knowledge Is Contested
-
-Two memories make contradictory claims about the same topic, and both are imported by different downstream memories. No mechanism exists to mark this contradiction.
-
-**Does the design hold?**
-- System state: Two memories exist with contradictory content. No imports between them. Dependents of each load their respective "truth."
-- `validate`: No errors. No mechanism detects semantic contradiction.
-- `resolve`: Loading a dependent of A gives A's view. Loading a dependent of B gives B's view. No warning that there's a contradiction.
-- `search`: Both memories appear, sorted by dependents. No "conflict" indicator.
-
-**Diagnosis:** The system has no concept of contradiction. This is a direct consequence of the "all imports are positive dependency" model. A `contradicts` semantic edge type would solve this: resolve could include a "Contradictory Perspectives" section when a loaded context includes memories connected by contradiction edges. This is Pattern 2 from the adjacent domain research.
-
-### 3.3 Operation Gaps (Updated)
-
-| Desired Operation | Current Workaround | Gap Severity | New Since Previous Audit? |
-|-------------------|-------------------|--------------|--------------------------|
-| "Which memories depend on X?" (reverse deps) | Manual scan via `search` output | **HIGH** — O(n) scan, no dedicated command | No — previously identified |
-| "What is the relationship between A and B?" (path query) | Manual resolve + inspection | **HIGH** — No graph traversal query | No |
-| "Show me the shortest path from A to B in the dependency graph" | Not possible | **HIGH** — Path query is fundamental to graph UX | Yes — identified through graph view usage |
-| "Mark this memory as contradicted by new evidence" | Change status to archived or superseded, add a note in body | **MEDIUM** — No contradiction primitive | Yes — identified through typed edges research |
-| "Embed section X of memory Y into memory Z" | Manual copy-paste into body | **MEDIUM** — No transclusion | Yes — identified through Roam/Obsidian research |
-| "What changed in my knowledge between January and March?" | Manual changelog inspection per memory | **MEDIUM** — No cross-memory temporal query | No |
-| "Which memories are approaching their review threshold?" | `validate` decay warnings (coarse) | **MEDIUM** — No scheduled review queue | No |
-| "Split this memory into two and update all imports" | Manual: create two new, update all referrers | **MEDIUM** — No refactoring primitive | No |
-| "Branch from this memory state and explore an alternative" | Manual: copy all files, modify, resolve separately | **LOW** — No branching concept | No — previously proposed as "Inspiration Bomb #2" |
-| "Find the most central/hub memories in the graph" | `overview` heat ranking (crude proxy) | **LOW** — No graph analytics | No |
-
-### 3.4 Evolution Bottlenecks (Updated)
-
-If the system needs to add new capabilities, where does the current code resist change?
-
-**1. Adding a new import strength or semantic type** — The import strength enumeration ("required", "recommended", "related") is scattered across 7+ locations: `_get_imports()` in resolve.py, multiple `_count_dependents()` functions, `_compute_in_degree()` in validate.py, `_resolve_import_ids()` in handlers.py, `_build_graph()` in transient.py, `suggest_deps.py` three-layer filter, and `search.py` has_imports filter. Any new strength requires changes in all these places. **Fix:** Centralize import strength enumeration in `models.py` as an `ImportStrength` enum; all consumers reference the enum.
-
-**2. Adding non-text memory types** — The entire pipeline is text-assumptive: `parse_frontmatter` splits on `---`, `compute_body_hash` hashes text, `estimate_tokens` counts characters. Adding image or structured data memories would require a new parsing pipeline, new hashing semantics, and new token estimation.
-
-**3. Multi-agent writes** — The filesystem-based storage means concurrent writes create file-level race conditions. Git merge is the only conflict resolution. No CRDT, no lock service, no write-ahead log.
-
-**4. Adding automatic import maintenance** — The system has no infrastructure for automated actions (cron-like scheduled tasks). Implementing progressive summarization, scheduled review reminders, or automatic link suggestions would require a scheduler component that doesn't exist.
+**Bottleneck 3: Single-machine, single-user by design.** File-based architecture assumes local filesystem. No multi-user collaboration path, no sync. The MCP server runs locally. Deliberate constraint (portability over collaboration) but limits future market.
 
 ---
 
@@ -325,328 +291,273 @@ If the system needs to add new capabilities, where does the current code resist 
 
 ### 4.1 Core Mechanism Alternatives
 
-#### Alternative A: Query-Based Dynamic Imports (inspired by Roam `{{query}}` / Obsidian Dataview)
+#### Alternative A: FSRS-Style Stability Model (Replaces time decay)
 
-**Current:** imports are static, declared at creation time, and manually maintained.
-
-**Proposed:** A memory can declare a `query` block alongside `imports`:
-
-```yaml
-query:
-  context:
-    - tags: [investment, thesis] AND maturity: [verified, proven]
-    - tags: [investment, fact] AND created: "> 2026-01-01"
-    - id: user/preferences/no-leverage
+**Current (R12):**
+```python
+heat = deps * 10 + access * 0.5^(days_since / 14)
 ```
 
-When resolved, the query is evaluated against the current index, and matching memories are dynamically included in the DAG. Static imports still work for fixed dependencies.
+**Proposed (FSRS-inspired):**
+```python
+# New fields on MemoryEntry
+stability: float = 14.0       # days for R to drop from 1.0 to 0.9 (initially = half-life)
+difficulty: float = 5.0       # [1, 10], converges through access patterns
 
-**Tradeoff analysis:**
+# On each access, update stability:
+R_at_review = 0.9^(days_since / stability)
+post_stability = stability * (1 + exp(-0.2 * difficulty) * 10 * max(0, 1 - R_at_review))
+difficulty = difficulty - 0.1 * (access_quality - 3)  # 1=forced, 3=neutral, 5=organic
 
-| Dimension | Static Imports Only | Static + Query Imports |
-|-----------|--------------------|-----------------------|
-| Determinism | Full — same resolve always gives same DAG | Partial — query results depend on index state |
-| Maintenance | Manual — imports go stale unless updated | Automatic — new memories matching query are auto-included |
-| Precision | High — only what was explicitly chosen | Medium — query may over-match or under-match |
-| Cold start | Works immediately (no query needed) | Queries need index to be populated |
-| Implementation | Current | ~100 lines: query parser + query evaluator in resolve.py |
-| When to adopt | Small, manually curated memory sets | Growing memory sets where manual import maintenance is unsustainable |
-
-**Verdict:** Not a replacement for static imports, but a powerful complement. The determinism loss is real and must be clearly communicated. Worth implementing as an optional feature gated behind a `--dynamic` flag on resolve.
-
-#### Alternative B: Edge-First Memory Model
-
-**Current:** dependencies are stored as a field on each node's frontmatter. Finding reverse dependencies requires scanning all nodes.
-
-**Proposed:** Edges are first-class entities stored independently in `.codememory/edges.json` or an edge index. Each edge has `from`, `to`, `strength`, `semantic`, `pin`, `reason`, and `created` fields. Both forward and reverse queries are O(1).
-
-```json
-{
-  "edges": [
-    {"id": "e1", "from": "user/investment/context", "to": "user/investment/semiconductor-thesis",
-     "strength": "required", "semantic": "summarizes"},
-    {"id": "e2", "from": "user/investment/february-buy", "to": "user/investment/risk-tolerance",
-     "strength": "required", "semantic": "constrained-by", "pin": "v1"}
-  ]
-}
+# Heat becomes:
+retrievability = 0.9^(days_since / stability)
+heat = deps * 10 + stability * retrievability
 ```
 
-The Markdown frontmatter's `imports` field remains as the **editing interface** — human-readable and file-contained. On reindex, the YAML imports are mirrored into the edge index.
+**Why better:**
+- Personalized per memory — investment research fades differently than software architecture
+- Burst access handled naturally: multiple accesses in one day produce minimal gain (R was already near 1.0)
+- "Desirable difficulty": reviewing when R is moderate maximizes stability gain
+- Produces a "next review" date: `next_review = now + stability * ln(0.9) / ln(target_R)`
+- FSRS has strong empirical validation (20-30% fewer reviews for same retention vs SM-2)
 
-**Tradeoff analysis:**
+**Cost:** +2 float fields on MemoryEntry, per-access stability update logic, slightly more complex overview computation.
 
-| Dimension | Node-Attached Imports (Current) | Edge-First Model |
-|-----------|-------------------------------|-----------------|
-| Simplicity | High — everything in one .md file | Medium — dual storage (files + edge index) |
-| Reverse query | O(n) scan | O(1) lookup |
-| Edge metadata | Limited to pin/reason | Unlimited — strength score, semantic type, validation status, temporal data |
-| Data purity | Single source of truth (.md file) | Dual source with sync guarantee |
-| Editability | Direct YAML editing | YAML editing still works; edge index is derived |
-| Implementation | Current | ~300 lines: edge index schema, sync on reindex, updated graph construction |
-| When to adopt | Small scale (< 500 memories) | Any scale where reverse queries or graph analytics are needed |
+#### Alternative B: Leitner Box Model (Replaces continuous heat with discrete tiers)
 
-**Verdict:** This is the single highest-impact architectural change available. The dual-source concern is mitigated by treating the edge index as a cache derived from frontmatter (similar to how `index.json` is already a cache derived from .md files). The sync is maintained on reindex and update.
+**Proposed:**
+```python
+# 5 explicit tiers
+Tier 1 (Hot):   active in current session, auto-resolved on startup
+Tier 2 (Warm):  accessed in last 7 days, full attention
+Tier 3 (Cool):  accessed in last 30 days, summary only
+Tier 4 (Cold):  accessed 30+ days ago, wander/search only
+Tier 5 (Frozen): archived/superseded, never surfaced automatically
 
-#### Alternative C: Progressive Summarization as Forgetting (inspired by human memory consolidation)
-
-**Current:** Forgetting is structural (unreachability). There is no graded degradation of memory fidelity.
-
-**Proposed:** Instead of binary remember/forget, implement a graded summarization pipeline:
-
-```
-Full memory (accessed this month)
-    ↓ 1 month without access
-Level 1 summary (key points extracted, details preserved in source file)
-    ↓ 3 months without access
-Level 2 summary (one-paragraph gist, structured data only)
-    ↓ 12 months without access
-Level 3 summary (single sentence, tags + schema reference only)
+# Transition rules:
+# - On access: promote one tier (ceil)
+# - No access for threshold[tier] days: demote one tier
+thresholds = {1: 2, 2: 7, 3: 30, 4: 90, 5: float('inf')}
 ```
 
-The original content is never deleted. Each level is progressively shorter and cheaper to load. On access, the full version is always available (with a budget cost). This mirrors human episodic-to-semantic memory consolidation.
+**Why better:**
+- Drastically simpler for users: no heat numbers, just "this lives in your Warm box"
+- Gamification natural: "You have 12 memories in Cold. Review 3 to warm them."
+- Self-correcting: predictable, debuggable behavior
+- Distinct visual treatment per tier in the management panel
 
-**Tradeoff analysis:**
+**Why worse:**
+- Loses fine-grained ranking within tiers
+- Hard boundaries create edge effects (29 vs 31 days = tier change)
+- Less mathematically grounded
 
-| Dimension | Structural Forgetting (Current) | Progressive Summarization |
-|-----------|-------------------------------|--------------------------|
-| Fidelity | Binary — remembered or forgotten | Graded — varying levels of detail |
-| Storage | Original only | Original + N summary levels |
-| Retrieval cost | Full text or skip | Selectable resolution per memory |
-| Automation | Manual (update imports) | Automatic (scheduled summarization) |
-| LLM dependency | None | Requires LLM for summarization |
-| Implementation | Current | ~200 lines: summarization pipeline + level tracking + LLM integration |
-| When to adopt | Small memory sets or when LLM cost is a concern | Large memory sets or when memory hygiene automation is needed |
+**Verdict:** Use FSRS as the mathematical engine, Leitner tiers as the presentation metaphor. Compute per-memory stability and retrievability via FSRS, but display them as "Hot (5) / Warm (12) / Cold (8) / Frozen (3)."
 
-**Verdict:** A genuinely novel approach to the forgetting problem. The LLM dependency is the main barrier — it makes the system less self-contained. But the graded degradation model is cognitively more accurate than binary forgetting, and it naturally produces token-efficient context without structural orphan detection. Best implemented as an opt-in feature for large memory sets.
+#### Alternative C: Graph-Native Storage (Replaces files with embedded graph DB)
 
-### 4.2 Concept Reorganization Proposal
+**Proposed:** Store memories in an embedded graph database (SQLite + graph extension or DuckDB with recursive CTEs). Memories and imports are nodes and edges directly. No reindex step, no file parsing, native graph queries.
 
-**Reorganize imports into a typed edge model with precomputed graph properties:**
+**Why better:**
+- Incremental updates (only changed nodes/edges recomputed)
+- "Find all nodes transitively depending on X" = one query
+- Edge properties first-class and queryable
+- Scales to 100k+ memories
+
+**Why worse:**
+- Loses filesystem portability (can't `ls`, `git diff` individual memories)
+- Adds a dependency (embedded graph DB)
+- Breaks "each .md is a memory" simplicity
+
+**Verdict:** This is a Phase 3 (distant future) consideration. The file model is strategically important now. But the system should be designed with a pluggable storage abstraction so the backend can be swapped without changing the cognitive model.
+
+### 4.2 Conceptual Reorganization: Three-Dimensional Memory State
+
+Replace the single `heat` integer with a state triple:
+
+```python
+class MemoryState(BaseModel):
+    structural_score: float     # weighted incoming edges + PageRank
+    retrievability: float       # R = 0.9^(days_since / stability)
+    stability: float           # learned half-life from FSRS
+```
+
+Each operation uses a different projection:
+
+| Operation | State Projection | Rationale |
+|-----------|-----------------|-----------|
+| **Overview (surfacing)** | structural_score * retrievability | Surface well-connected, currently relevant memories |
+| **Wander (cool recall)** | 1 / retrievability | Find memories at risk of being forgotten |
+| **Wander (optimal review)** | retrievability ≈ 0.7 | Find memories at FSRS optimal review point |
+| **Resolve (ordering)** | structural_score (deps before dependents) | Topological order with strength weighting |
+| **Validate (decay)** | retrievability < 0.3 AND structural_score < 0.2 | At-risk memories for archiving or re-linking |
+| **Focus (context display)** | All three dimensions shown | Full state awareness |
+| **Suggest-deps** | structural_score weighted by retrievability | Active, well-connected memories are better dependency candidates |
+
+### 4.3 Memory Lifecycle with Demotion
+
+Current model: draft -> verified -> proven (forward only).
+
+Proposed lifecycle with demotion paths:
 
 ```
-Edge (first-class entity, stored in edge index)
-  ├── from: str              (source memory ID)
-  ├── to: str                (target memory ID)
-  ├── strength: required | recommended | related
-  ├── semantic: supports | contradicts | extends | replaces | exemplifies | constrained-by | based-on | null
-  ├── pin: str?              (pinned version)
-  ├── reason: str?           (human explanation)
-  ├── weight: float?         (continuous strength, computed or explicit)
-  └── created: str           (when the edge was created)
-
-MemoryEntry (simplified)
-  ├── imports: {strength: [ImportRef]}  (editing interface — mirrored to Edge index)
-  ├── _dependents: int       (precomputed in-degree — cached in index)
-  ├── _dependencies: int     (precomputed out-degree — cached in index)
-  └── activation: float      (computed from access history — cached, recalculated on reindex)
+[Create] ──> DRAFT ──access≥3──> VERIFIED ──access≥10+deps>0──> PROVEN
+                ▲                    ▲         ▲                        │
+                │                    │         │                        │
+                │   imports broken   │  18mo   │   all deps            │  12mo
+                │   or body stale    │  no     │   superseded           │  no
+                │                    │  access │                        │  access
+                │                    │         │                        │
+                └────────────────────┴─────────┴────────────────────────┘
+                                    DEMOTION PATHS
 ```
 
-Key changes:
-1. `imports` still lives in frontmatter — the editing experience doesn't change
-2. On reindex, imports are mirrored into the edge index with computed properties
-3. `_dependents` and `_dependencies` are precomputed, eliminating O(n^2) scans
-4. `activation` replaces static `heat` — computed from access_count, last_access, and dependents
+Demotion rules:
+- PROVEN -> VERIFIED: 12 months without access (validate warns at 365 days already)
+- VERIFIED -> DRAFT: all imports broken or summary stale for 90+ days
+- Any -> SUPERSEDED: explicit user action (already exists)
+- SUPERSEDED -> ACTIVE: explicit user re-activation
 
-### 4.3 Tradeoff Matrix
+This makes maturity a true lifecycle reflecting the marriage of structural integrity and temporal engagement.
 
-| Proposal | Simplicity Impact | Power Gain | Migration Effort | Determinism Impact | When Worth It |
-|----------|------------------|------------|-----------------|-------------------|---------------|
-| A: Query-based dynamic imports | -1 | +2 | Low (~100 lines) | -2 (query results change over time) | When import maintenance burden exceeds determinism need |
-| B: Edge-first model | -2 | +3 | High (~300 lines + migration) | 0 (edge index mirrors frontmatter) | When O(n^2) becomes a bottleneck (>500 memories) |
-| C: Progressive summarization | -2 | +2 | Medium (~200 lines + LLM integration) | 0 (summaries are read-only derivatives) | When memory hygiene automation is needed |
-| Pattern 1: Activation decay | 0 | +2 | Low (~20 lines) | 0 (formula is deterministic given same data) | Immediately |
-| Pattern 2: Typed semantic edges | 0 | +2 | Low (~50 lines) | 0 (backward compatible) | Immediately |
-| Pattern 3: Content-addressed identity | -3 | +3 | High (~500 lines) | 0 (content hash is deterministic) | When integrity guarantees matter (multi-agent, compliance) |
-| Pattern 4: Hierarchical memory tiers | 0 | +1 | Low (~30 lines) | 0 (tiers are a cache) | When memory count > 200 |
-| Pattern 5: Transclusion/embedding | 0 | +1 | Low (~40 lines) | 0 (opt-in) | When content reuse without duplication is needed |
-| Concept reorganization (B + Patterns 1-4) | -2 | +4 | High (~500 lines) | 0 (all changes are backward compatible) | When multiple bottlenecks coincide |
+### 4.4 Tradeoff Matrix
 
-### 4.4 Inspiration Bombs
+| Dimension | Current (R12) | Alt A: FSRS Stability | Alt B: Leitner Tiers | Alt C: Graph DB |
+|-----------|---------------|----------------------|----------------------|-----------------|
+| Implementation cost | Baseline | +2 fields, stability math (~50 LOC) | +1 tier field, threshold logic (~30 LOC) | New storage layer (~500+ LOC) |
+| Mathematical grounding | Medium (ACT-R inspired) | High (FSRS, peer-reviewed) | Low (heuristic) | N/A (storage only) |
+| User understandability | Medium (heat number) | Low (stability is abstract) | High (boxes are intuitive) | Transparent |
+| Personalization | None (global half-life) | High (per-memory stability) | Low (global thresholds) | N/A |
+| Portability/Git-friendliness | High | High (same file model) | High (same file model) | Low (binary DB) |
+| 10k+ memory scalability | Medium (O(n) per overview) | Medium (more computation per item) | Medium (less computation per item) | High (native queries) |
+| Backward compatibility | — | High (additive fields) | High (additive field) | Low (migration) |
+| Synergy with DAG resolution | Medium | Medium | Medium | High (native graph traversal) |
 
-#### Bomb 1: The "Memory Compiler" — Static Pre-Assembly of Context Packages
+**Recommended path:** Adopt Alternative A (FSRS) as the math engine, present results through Alternative B (Leitner-style tiers) in the UI. This gives mathematical rigor under the hood with user-friendly presentation on the surface.
 
-**The idea:** What if DAG resolution were a compile-time operation rather than a runtime one? Just as a C compiler transforms `.c` files into `.o` object files and a linker assembles them into an executable, a Memory Compiler could:
+### 4.5 Inspiration Bombs
 
-1. Parse all `.md` memory files into an intermediate representation (IR)
-2. Pre-assemble common resolve paths into **static context packages**
-3. Apply token budget constraints at compile time via dead-code elimination
-4. Cache the results as `.ctx` files (binary or compressed markdown)
+#### Bomb 1: The Memory Compiler
 
-When an agent calls `resolve user/investment/context --budget 2000`, instead of dynamically building a DAG and trimming output, the system checks if a pre-compiled context package exists and serves it in O(1).
+**Core idea:** The DAG is not a visualization. It is a **program**. Resolution is compilation.
 
-**Why it changes the game:** It moves CodeMemory from an **interpreted memory system** (every resolve is a fresh computation) to a **compiled memory system** (contexts are pre-computed assets). At 10000 memories, this is the difference between seconds and milliseconds. At the limit, compiled context packages could be distributed, cached at CDN edges, or embedded in agent system prompts as static assets.
+In a compiler pipeline: source files (.md) → AST (index) → dependency analysis (imports) → linking + optimization (topological sort + token budget) → executable output (system prompt).
 
-**Feasibility:** The DAG structure is already deterministic given the same imports and versions. The compiler is a batch job that runs on reindex or on explicit `compile` command. This is concept-level research — no implementation exists.
+**What this changes:**
+- **Type checking:** A memory tagged `decision` importing only `observation` memories (missing `analysis` or `criterion`) = type error. The compiler suggests missing dependency types.
+- **Dead code elimination:** Orphaned low-intensity memories are "unreachable code." The compiler warns.
+- **Optimization passes beyond token budget:** inline expansion (embed dependency summaries), constant folding (precompute stable cross-references), loop detection (cyclic imports = infinite loop).
+- **Linking errors:** Importing a non-existent memory = undefined symbol error at "compile time" (validate already does this, but the metaphor unifies it).
+- **Hot reload:** When a dependency updates, all dependents marked stale = incremental build (Makefile semantics).
 
-#### Bomb 2: "Memory as a Story" — Narrative Coherence as an Organizing Principle
+**Killer feature:** `codememory build` — compile the entire graph into a single optimized, type-checked system prompt in one command. Fail with clear compiler-style error messages if the graph doesn't compile.
 
-**The idea:** What if memories were organized not by topic tags or dependency graphs, but by **narrative coherence** — the degree to which they form a coherent story when resolved together?
+#### Bomb 2: Forgetfulness as a Feature
 
-Humans don't recall facts in isolation. We recall them as part of narratives: "I was risk-tolerant in January, then the March crash happened, so I adjusted my risk tolerance, which affected my February buy decision." This is a temporal-causal narrative, not a DAG.
+**Core idea:** Current assumption: forgetting is failure, should be prevented. Counter-assumption: **intelligent forgetting is essential for knowledge quality.**
 
-The system could compute **narrative coherence scores** between memories by analyzing:
-- Temporal adjacency (created/updated timestamps)
-- Causal chains (A imports B, B imports C)
-- Semantic continuity (tag overlap, body text similarity)
-- Emotional arc (intensity changes over time — high → low or low → high)
+Cognitive science (ACT-R, SOAR) shows forgetting serves critical functions:
+- **Abstraction:** Forgetting details forces generalization — the principle is remembered, not the specifics
+- **Resource allocation:** Not everything deserves to be remembered
+- **Reconsolidation:** Each recall slightly modifies the memory; over time, memories become more useful (and less perfectly accurate)
 
-A `narrate` command would assemble the most coherent narrative path through a set of memories, optimized for "story quality" rather than dependency closure. This is a fundamentally different retrieval objective — not "what does A depend on?" but "what story connects A, B, and C?"
+**What this changes:**
+- **Auto-archive by retrievability:** When R < 0.05 for 90 consecutive days, propose archiving with user notification
+- **Summary distillation:** Before archiving, generate a 3-line "essence" and inject it as a `derived_from` note into all memories that imported the archived one. The detail is forgotten; the insight is preserved.
+- **Reconsolidation tracking:** Version updates record not just "what changed" but "how my understanding shifted" — this becomes the most valuable content
+- **Forgetting curve as audit trail:** R(t) for each memory reveals which memories were "sticky" vs "brittle." The system learns which types of memories tend to persist.
 
-**Why it changes the game:** It shifts the user's relationship to their memory from "query engine" to "story engine." Instead of thinking "I need to load the dependencies of my investment context," they think "tell me the story of my investment thinking." The output is narrative text, not a list of memory summaries. This is the difference between a file system and a biographer.
+**Killer feature:** `codememory distill <id>` — extract essence from an archived memory, inject it into dependent memories, then remove the original. Signal preserved, noise discarded.
 
-**Feasibility:** Requires LLM integration for narrative assembly and coherence scoring. The DAG structure provides the skeleton; the LLM provides the flesh. This is a "memory product" layer on top of the "memory engine."
+#### Bomb 3: Context-Aware Activation (Spreading Activation Engine)
 
-#### Bomb 3: "Memory Spectroscopy" — Decomposing Memories by Cognitive Function
+**Core idea:** The heat formula is static. Every memory has one heat score. But a memory's relevance depends on what the user is currently working on. A memory about risk tolerance should be "hotter" when the user resolves `investment/context`.
 
-**The idea:** What if every memory were analyzed and tagged not by its topic (investment, semiconductor) but by its **cognitive function** in the reasoning process?
+**Implementation sketch:**
+```python
+def context_aware_heat(memory, active_context_tags, active_context_memories):
+    base_heat = deps * 10 + access * 0.5^(days_since / stability)
 
-Inspired by Bloom's Taxonomy and the DIKW pyramid, each memory would be classified by:
-- **Data** — raw observations, facts without interpretation
-- **Pattern** — recognized regularities across data points
-- **Model** — causal explanations linking patterns
-- **Decision** — action commitments based on models
-- **Reflection** — meta-cognition about the decision process
+    # Spreading activation from context
+    context_boost = 0
+    for context_memory_id in active_context_memories:
+        if memory.id in index.memories[context_memory_id].imports:
+            # This memory is a dependency of what the user is working on
+            context_boost += 5  # structural relevance
 
-A `spectroscopy` analysis would show: "Your memory system is 60% Data, 20% Pattern, 15% Model, 5% Decision — you're collecting a lot of facts but not synthesizing them into decisions." This is a **cognitive health dashboard** for the memory system, analogous to how code quality tools report on codebase composition (test coverage, complexity distribution, dependency health).
+    # Tag overlap with current context
+    tag_overlap = len(set(memory.tags) & active_context_tags)
+    context_boost += tag_overlap * 3
 
-**Why it changes the game:** It transforms the memory system from a passive store into an active cognitive coach — not just "here are your memories" but "here's how your thinking is structured, and here's where the gaps are."
+    # Context-referenced memories get a boost
+    context_boost += _count_context_references(memory, active_context_memories) * 2
 
-**Feasibility:** The classification could be done via simple heuristics (memories with schema:decision are "Decision", memories with tags:fact are "Data", etc.) or via LLM analysis. The dashboard is a frontend visualization layer. This is achievable with ~200 lines of analysis code + a new dashboard panel.
+    return base_heat + context_boost
+```
+
+This makes overview/wander/resolve **situationally aware** — the same memory has different activation depending on what the agent or user is currently doing. This is exactly what ACT-R's spreading activation component provides and what CodeMemory currently lacks.
+
+#### Bomb 4: Memory as a Garden Ecosystem
+
+**Core idea:** Replace the library-catalog metaphor with a **garden ecosystem** metaphor. Memories are not books to be catalogued — they are plants in various states of growth.
+
+In a garden:
+- Some plants are in season (hot, actively growing — need daily attention)
+- Some are dormant (cold, alive but not growing — check occasionally)
+- Some cross-pollinate (new imports between domains = cross-pollination)
+- Some die and become compost (archived, their nutrients feed new growth)
+- The gardener walks through and **observes** — they don't "search" a catalog
+
+**What this changes:**
+- The overview becomes "the state of your garden" — not a query result, but ambient awareness
+- Access count becomes a growth metric, not a frequency counter
+- Wander becomes seasonal rotation — different memory domains come into focus on weekly cycles
+- Archive becomes composting — essence extracted, injected into dependents, original decomposed
+
+**Killer feature:** "Weekly Memory Digest" — an auto-generated report: which memories grew (new versions), which were pruned (archived), which cross-pollinated (new imports between domains), which are wilting (need review), and which sprouted (newly created).
 
 ---
 
 ## Prioritized Research Directions
 
-### Red (High-Impact, Low-Effort) — Consider for Current/Next Sprint
+### High-Impact, Low-Effort
 
-**R1: Replace static `heat` with time-decayed activation in `overview`.**
-- Replace `heat = deps * 10 + access` with `activation = ln(1 + sum(1 / sqrt(days_since_access + 1))) + deps * 2`
-- Uses existing `access_count` and `last_access` data
-- ~20 lines in `handle_overview`
-- **Status from previous report:** Proposed as R1, accepted, backlogged. Not yet implemented.
+**1. Unify decay models across overview, wander, and validate.**
+Replace the hard 30-day threshold in `validate.py:_check_decay()` with the same exponential/power-law formula used in overview. Replace wander's raw `access_count` weight with decayed access from the same formula. One decay model, used everywhere. ~20 LOC change across two files.
 
-**R2: Add optional `semantic` field to imports.**
-- Add `semantic: str | None = None` to `ImportRef` model (supports/contradicts/extends/replaces/exemplifies)
-- In resolve, group dependencies by semantic type in output
-- Backward compatible — old imports are treated as `supports`
-- ~50 lines across `models.py` + `resolve.py` + `handlers.py`
+**2. Exclude cycle participants from dependents count.**
+In `_count_dependents()` (search.py) and `handle_overview()`: when counting incoming references, skip nodes that participate in a cycle with the target. Prevents structurally misleading heat scores for unresolvable memories. ~15 LOC change.
 
-**R3: Precompute `in_degree` and `out_degree` in the index.**
-- During reindex, compute `_dependents: int` (how many memories import this one) and `_dependencies: int` (how many memories this one imports)
-- Store in `index.json` as computed fields
-- Replace all `_count_dependents()` calls with precomputed values
-- Eliminates O(n^2) bottleneck in search/overview/validate
-- ~30 lines in `index.py` + removal of redundant counting functions
-- **Status from previous report:** Proposed as R3, accepted, backlogged. Not yet implemented.
+**3. Precompute `days_since_last_access` in the index.**
+Store as integer in `MemoryEntry`, updated on each access. Avoids the most expensive operation in the overview O(n) loop — datetime.fromisoformat per memory. ~5 LOC for the field, ~3 LOC for the update, ~1 LOC replacement in overview.
 
-**R4: MCP tool annotations (readOnlyHint).**
-- Add `readOnlyHint: true` to resolve_context, search_memories, focus_memory, overview, changelog, log, find_orphans, validate_memories
-- Add `readOnlyHint: false` to create_memory, update_memory, snapshot, import_memories
-- ~10 lines in `tools.py` per tool definition
-- **Status from previous report:** Proposed as R4. Accepted (R11-P4). **Marked as not yet complete in sprint status.**
+**4. Add a `stability` field to MemoryEntry (default 14.0).**
+This single field enables per-memory half-life without changing the core formula: `heat = deps*10 + access * 0.5^(days_since / stability)`. Initially all 14.0 (backward compatible). Migrate to per-memory values in future rounds. ~5 LOC for field definition, ~3 LOC formula change in overview.
 
-### Yellow (High-Impact, High-Effort) — Backlog
+### High-Impact, High-Effort
 
-**Y1: Edge-First Memory Model.**
-- Independent edge storage with bidirectional indexing
-- O(1) reverse dependency queries
-- Semantic edge types fully integrated into all operations
-- Requires new edge index schema, sync mechanism on reindex, migration
-- ~500 lines across index/models/resolve/validate/handlers
-- **Status from previous report:** Proposed as "Edge-first data model" (R7). Accepted conceptually for long-term research.
+**5. Implement spreading activation from tag context.**
+When `overview --tags "investment,risk"` is called, boost heat for memories that share those tags: `context_boost = shared_tags * 5`. This adds the spreading activation dimension from ACT-R. Requires tag comparison in the overview loop. ~30 LOC.
 
-**Y2: Content-Addressed Memory Identity (Merkle DAG).**
-- Content hash as primary identity; path-based ID as mutable reference
-- Object store for immutable memory versions
-- Cryptographic provenance and tamper-evident references
-- Requires design document before implementation
-- **Status from previous report:** Proposed as "Alternative 2" (R6). Accepted for design document first. No design document exists yet.
+**6. Build FSRS-style per-memory stability updates.**
+On each access (resolve, focus, explicit review), update memory.stability and memory.difficulty using the FSRS-4.5 formulas. Over time, frequently-reviewed memories develop high stability (slow decay) and rarely-reviewed critical memories show low stability (fast decay — needs check-ins). Most transformative improvement. ~80 LOC across handlers and models. Requires schema migration for two new fields.
 
-**Y3: Hierarchical Memory Tiers.**
-- hot/warm/cold tier classification with dynamic promotion/demotion
-- Tier-aware resolve (skip cold by default)
-- Requires tier recomputation on reindex and after every resolve
-- ~200 lines
-- **Status:** New proposal based on 2025 agent memory research.
+**7. Memory tier visualization (Hot/Warm/Cold/Frozen).**
+Compute FSRS retrievability and map to explicit tiers with distinct visual treatments in the management panel: Hot (R > 0.7, auto-surfaced), Warm (0.3 < R <= 0.7, summary display), Cold (0.1 < R <= 0.3, wander/search only), Frozen (R <= 0.1, archived or dormant). Bridges mathematical model with user-friendly metaphor. ~100 LOC frontend + ~30 LOC backend.
 
-### Green (Thought-Provoking) — Long-Term Research
+### Thought-Provoking
 
-**G1: Belief Revision Framework.**
-- When a depended-upon memory is updated/corrected, propagate notifications to all dependents
-- AGM theory (Alchourron-Gardenfors-Makinson) formal framework for belief change
-- Requires dependency propagation infrastructure (enabled by Y1)
+**8. The Memory Compiler metaphor.** Reframe `resolve` as `compile` — a pipeline with type checking, linking, optimization, and executable output. Unifies validate (type checking), resolve (compilation), and stale detection (incremental build). Opens design space for optimization passes beyond token budget. Primarily a metaphor/positioning shift with architectural implications.
 
-**G2: Memory Network Analytics.**
-- PageRank for hub memory identification
-- Community detection for knowledge cluster discovery
-- Bridge detection for cross-domain connector memories
-- Graph theory applied to existing DAG data with no new infrastructure
+**9. Episodic-to-semantic mining.** Track recurring TransientDAG patterns. When the same reasoning chain appears N times across sessions, propose creating a schema atom that formalizes it. SOAR's chunking mechanism applied to CodeMemory. Requires TransientDAG pattern storage (not currently persisted).
 
-**G3: Multi-Agent Shared Memory Conflict Resolution.**
-- CRDT vs Git merge vs structured negotiation for concurrent writes
-- Memory "ownership" and "borrowing" concepts
-- Requires Y1 + Y2 as prerequisites
+**10. Demotion path for maturity.** Add explicit downgrade: proven -> verified (12 months no access, already warned by validate), verified -> draft (all imports broken for 90 days). Makes maturity a true lifecycle reflecting both structural integrity and temporal engagement. Requires ~30 LOC in maturity check logic + frontend indicator.
 
-**G4: Automatic Link Maintenance — Link Health Dashboard.**
-- Consolidate existing detection (dead links, stale summaries, decay warnings, orphan detection, suggest-deps) into a unified health report
-- ~100 lines consolidating existing logic
+### Wild Ideas
 
-### Blue (Wild Ideas) — High-Risk, Potentially Game-Changing
+**11. Auto-archiving with essence distillation.** When R < 0.05 for 90 consecutive days, automatically propose archiving. Before archiving, use the MCP-connected LLM to generate a 3-line essence of the memory body. Inject this essence as a `derived_from` note into all memories that import the archived one. The detail is forgotten; the insight is preserved. Intelligent forgetting as resource management.
 
-**B1: The "Memory Compiler" — Static Pre-Assembly of Context Packages.**
-- Compile-time DAG resolution → O(1) runtime context serving
-- Pre-computed, cached, distributable context packages
-- Analogous to compiled vs interpreted execution
-
-**B2: "Memory Spectroscopy" — Cognitive Function Analysis.**
-- Classify memories by cognitive function (Data/Pattern/Model/Decision/Reflection)
-- Cognitive health dashboard: "Your memory system composition and what it says about your thinking"
-- Coach, not just store
-
-**B3: "Memory as a Story" — Narrative Coherence Retrieval.**
-- Replace dependency resolution with narrative assembly
-- "Tell me the story of my investment thinking" instead of "Resolve dependencies of X"
-- LLM-powered narrative engine on top of DAG skeleton
+**12. Weekly Memory Digest.** Auto-generated report (markdown, optionally injected into agent context): which memories grew this week (new versions), which cross-pollinated (new inter-domain imports), which are wilting (R dropping below 0.3), and which sprouted (newly created). Transforms CodeMemory from a passive store into an active cognitive partner that reflects the user's own thinking patterns back at them.
 
 ---
 
-## Appendix: Research Sources (2026 Update)
-
-### Cognitive Architecture
-- Laird, J. (2022). "An Analysis and Comparison of ACT-R and Soar." arXiv:2201.09305.
-- Mohan, S. et al. (2020/2022). "Analogical Concept Memory for Architectures Implementing the Common Model of Cognition." arXiv:2006.01962 / arXiv:2210.11731.
-- Dhamne, S. (2026). "Cognitive Architecture as a Blueprint." Autodesk Research.
-
-### Knowledge Graph Storage & GraphRAG
-- Napoli et al. (2025). "How to Evaluate NoSQL Database Paradigms for Knowledge Graph Processing." IEEE/ACM BDCAT 2025.
-- "The Architecture of Connected Intelligence" (2025). Uplatz Blog.
-- Microsoft GraphRAG (2024). https://microsoft.github.io/graphrag/
-- Graphiti: Real-Time Knowledge Graphs for AI Agents. https://github.com/getzep/graphiti
-
-### Note-Taking & Knowledge Tools
-- Tana Supertags: "如何评价新一代知识管理工具 Tana?" 知乎. https://zhihu.com/question/558138387
-- "Obsidian vs Roam Research vs Logseq vs Tana" (2025). Multiple community analyses.
-- "Bidirectional Links vs Hierarchical Note Taking." DeepRead. https://deepread.com/bidirectional-vs-hierarchical-links/
-- SiYuan (思源): Block-level bidirectional linking with local storage.
-
-### Agent Memory (2025)
-- SAGE: "Self-evolving Agents with Reflective and Memory-augmented Abilities." Neurocomputing, Sept 2025.
-- Mem0/Mem0g: Scalable memory with graph-based relational reasoning. VentureBeat, 2025.
-- HAMR: "Hierarchical Adaptive Memory Retrieval." GitHub: ImZackAdams/hamr-ai.
-- GAM: "General Agentic Memory System." AiTechSuite, 2025.
-- MemAgent: "Reshaping Long-Context LLM with Multi-Conv RL-based Memory Agent." arXiv:2507.02259.
-- CoA: "Chain of Agents." Google Research, NeurIPS 2024 / Jan 2025.
-
-### Spaced Repetition & Forgetting
-- LECTOR: "LLM-Enhanced Concept-based Test-Oriented Repetition." arXiv:2508.03275, Aug 2025.
-- EDGE: "Misconception-Aware Adaptive Learning." arXiv:2508.07224, Sep 2025.
-- FSRS: "Free Spaced Repetition Scheduler." Open-source, used in Anki.
-
-### Git & Content-Addressed Storage
-- DiffMem: "Revolutionizing AI Memory Management with Git-Based Version Control." https://xugj520.cn/en/archives/diffmem-git-based-ai-memory-management
-- Noms/Dolt: Git-inspired versioned databases with Prolly Trees.
-- Chit (davidad): Version control for structured categorical data.
-
----
-
-*End of research audit report — Sprint 13.*
+*End of research audit report. Generated 2026-05-07. Adjacent domains researched: ACT-R/SOAR cognitive architectures (base-level activation, spreading activation, Pavlik-Anderson recursive decay, episodic/semantic separation), FSRS/spaced repetition/forgetting curves (DSR model, Leitner boxes, Ebbinghaus parameterization, DRL-SRS), property graph vs RDF knowledge graph models (performance benchmarks, edge-first-class, transitive closure, unified models).*

@@ -4,6 +4,7 @@ import remarkGfm from 'remark-gfm'
 import { fetchMemory } from '../api'
 import type { MemoryDetail as MemoryDetailType, ResolveResponse } from '../types'
 import { StatusBadge, MaturityBadge } from './Badges'
+import { useExitAnimation } from '../useExitAnimation'
 
 /** Build an LLM system prompt from resolved nodes and copy to clipboard. */
 function buildPromptContent(resolveData: ResolveResponse): string {
@@ -69,13 +70,14 @@ interface Props {
   onNavigateMemory?: (id: string) => void
   resolveData?: ResolveResponse | null
   resolveError?: string | null
+  isResolving?: boolean
   backlinks?: { id: string; strength: string }[]
 }
 
-export default function MemoryDetail({ memoryId, onClose, onResolve, onClearResolve, onNavigateMemory, resolveData, resolveError, backlinks }: Props) {
+export default function MemoryDetail({ memoryId, onClose, onResolve, onClearResolve, onNavigateMemory, resolveData, resolveError, isResolving, backlinks }: Props) {
   const [memory, setMemory] = useState<MemoryDetailType | null>(null)
   const [loading, setLoading] = useState(false)
-  const [visible, setVisible] = useState(false)
+  const { visible: panelVisible, closing } = useExitAnimation(!!memoryId)
   // PL3-6: track which strength groups are fully expanded
   const [expandedImports, setExpandedImports] = useState<Record<string, boolean>>({})
   const [copyLabel, setCopyLabel] = useState('Generate Prompt')
@@ -95,11 +97,9 @@ export default function MemoryDetail({ memoryId, onClose, onResolve, onClearReso
 
   useEffect(() => {
     if (!memoryId) {
-      setVisible(false)
       setMemory(null)
       return
     }
-    setVisible(true)
     setLoading(true)
     fetchMemory(memoryId)
       .then(setMemory)
@@ -114,26 +114,25 @@ export default function MemoryDetail({ memoryId, onClose, onResolve, onClearReso
     return () => window.removeEventListener('keydown', onKey)
   }, [memoryId, onClose])
 
-  if (!memoryId) return null
+  if (!panelVisible) return null
 
   return (
     <>
       {/* Backdrop */}
       <div
         onClick={onClose}
+        className={closing ? 'backdrop-fade-exit' : 'backdrop-fade-enter'}
         style={{
           position: 'absolute',
           inset: 0,
           background: 'rgba(28,25,23,0.08)',
           zIndex: 19,
-          opacity: visible ? 1 : 0,
-          transition: 'opacity 200ms ease',
         }}
       />
 
       {/* Slide-in panel */}
       <div
-        className="panel-slide-enter"
+        className={closing ? 'panel-slide-exit' : 'panel-slide-enter'}
         style={{
           position: 'absolute',
           top: 0,
@@ -148,8 +147,6 @@ export default function MemoryDetail({ memoryId, onClose, onResolve, onClearReso
           flexDirection: 'column',
           overflow: 'hidden',
           zIndex: 20,
-          transform: visible ? 'translateX(0)' : 'translateX(100%)',
-          transition: 'transform 250ms ease',
           boxShadow: '0 4px 16px rgba(28,25,23,0.08)',
         }}
       >
@@ -416,6 +413,42 @@ export default function MemoryDetail({ memoryId, onClose, onResolve, onClearReso
               )}
             </div>
           </div>
+
+          {/* Resolve loading skeleton (R13-D3) */}
+          {isResolving && (
+            <div
+              style={{
+                padding: '16px 24px',
+                borderBottom: '1px solid var(--cm-border)',
+                flexShrink: 0,
+              }}
+            >
+              <div
+                style={{
+                  fontSize: 12,
+                  fontWeight: 600,
+                  fontFamily: 'Raleway, sans-serif',
+                  color: 'var(--cm-text-secondary)',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.08em',
+                  marginBottom: 12,
+                }}
+              >
+                Resolving...
+              </div>
+              {[1, 2, 3].map((i) => (
+                <div
+                  key={i}
+                  className="skeleton-shimmer"
+                  style={{
+                    height: 16,
+                    marginBottom: 6,
+                    width: `${100 - i * 20}%`,
+                  }}
+                />
+              ))}
+            </div>
+          )}
 
           {/* Resolve error feedback (R6-resolve-error-feedback) */}
           {resolveError && (

@@ -61,6 +61,7 @@ class MemoryEntry(BaseModel):
     path: str = ""
     access_count: int = 0
     last_access: str | None = None
+    days_since_last_access: int | None = Field(default=None, description="Precomputed days since last access (R13-M3)")
     created: str = ""
     updated: str = ""
 
@@ -72,6 +73,9 @@ class MemoryEntry(BaseModel):
 
     # Staleness tracking
     summary_hash: str | None = None
+
+    # Per-memory half-life in days for exponential decay formula (R13-M4)
+    stability: float = Field(default=14.0, description="Half-life in days for access decay")
 
     # Protection flag (intensity >= 8)
     protected: bool | None = None

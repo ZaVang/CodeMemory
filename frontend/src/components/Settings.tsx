@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import type { DatasetInfo } from '../api'
+import { useExitAnimation } from '../useExitAnimation'
 
 const SETTINGS_KEY = 'codememory-settings'
 
@@ -83,13 +84,16 @@ export default function Settings({
     setTimeout(onClose, 600)
   }, [datasetValue, budgetValue, themeValue, currentDataset, onSwitchDataset, onBudgetChange, onThemeChange, onClose])
 
-  if (!open) return null
+  const { visible, closing } = useExitAnimation(open)
+
+  if (!visible) return null
 
   return (
     <>
       {/* Backdrop */}
       <div
         onClick={onClose}
+        className={closing ? 'backdrop-fade-exit' : 'backdrop-fade-enter'}
         style={{
           position: 'fixed',
           inset: 0,
@@ -100,7 +104,7 @@ export default function Settings({
 
       {/* Panel */}
       <div
-        className="panel-slide-enter"
+        className={closing ? 'panel-slide-exit' : 'panel-slide-enter'}
         style={{
           position: 'fixed',
           top: 0,

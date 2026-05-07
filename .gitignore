@@ -27,4 +27,4 @@ Thumbs.db
 /package.json
 /package-lock.json
 
-examples/quant_operators/
+examples/quant_operators/.claude/scripts/node_modules/

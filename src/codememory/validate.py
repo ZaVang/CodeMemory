@@ -1,6 +1,7 @@
 """Memory validation: broken links, schema compliance, cycle detection, decay suggestions."""
 
 import logging
+import math
 import sys
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -75,19 +76,33 @@ def _check_maturity_stale(memory_id: str, entry: MemoryEntry) -> list[str]:
 
 
 def _check_decay(memory_id: str, entry: MemoryEntry, index: IndexData) -> list[str]:
-    """Check whether a memory is at risk of decay."""
+    """Check whether a memory is at risk of decay (R13-M1: unified formula).
+
+    Uses the same continuous decay formula as overview/wander:
+        R = 0.5^(days_since / stability)
+    Triggers a warning when retrieval probability drops below 0.1
+    (roughly 3.3 half-lives — equivalent to ~46 days at default stability=14.0).
+    """
     warnings: list[str] = []
 
     if entry.intensity >= 8:
         return warnings
 
-    if entry.access_count > 0 and entry.last_access:
+    # Use precomputed days_since field, or compute from last_access
+    days_since = getattr(entry, 'days_since_last_access', None)
+    if days_since is None and entry.access_count > 0 and entry.last_access:
         try:
             last_access = datetime.fromisoformat(entry.last_access)
-            if last_access > datetime.now() - timedelta(days=30):
-                return warnings
+            days_since = max(0, (datetime.now() - last_access).days)
         except (ValueError, TypeError):
             pass
+
+    stability = getattr(entry, 'stability', 14.0)
+
+    if days_since is not None and days_since >= 0:
+        retrieval_prob = math.pow(0.5, days_since / stability)
+        if retrieval_prob > 0.1:
+            return warnings
 
     if _compute_in_degree(memory_id, index) > 0:
         return warnings

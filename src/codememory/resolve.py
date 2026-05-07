@@ -317,6 +317,7 @@ def resolve(
             entry = index.memories[mid]
             entry.access_count += 1
             entry.last_access = now_iso
+            entry.days_since_last_access = 0  # R13-M3: just accessed
 
             # Maturity auto-upgrade
             old_maturity = entry.maturity

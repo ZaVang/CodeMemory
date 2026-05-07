@@ -16,7 +16,7 @@ const StatusStyles: Record<string, { bg: string; color: string; label: string }>
 interface BadgeBaseOptions {
   /** Override padding. Detail view uses 2px 10px; List view uses 1px 8px. */
   padding?: string
-  /** Override font size. Detail view uses 11px; List view uses 10px. */
+  /** Override font size. Detail view uses 12px; List view uses 10px. */
   fontSize?: number
 }
 
@@ -28,7 +28,7 @@ export function MaturityBadge({ maturity, opts = {} }: { maturity: string; opts?
         display: 'inline-block',
         padding: opts.padding ?? '2px 10px',
         borderRadius: 2,
-        fontSize: opts.fontSize ?? 11,
+        fontSize: opts.fontSize ?? 12,
         fontWeight: 600,
         fontFamily: 'Raleway, sans-serif',
         textTransform: 'uppercase',
@@ -50,7 +50,7 @@ export function StatusBadge({ status, opts = {} }: { status: string; opts?: Badg
         display: 'inline-block',
         padding: opts.padding ?? '2px 10px',
         borderRadius: 2,
-        fontSize: opts.fontSize ?? 11,
+        fontSize: opts.fontSize ?? 12,
         fontWeight: 600,
         fontFamily: 'Raleway, sans-serif',
         textTransform: 'uppercase',

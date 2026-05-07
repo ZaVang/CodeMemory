@@ -3,7 +3,7 @@
 import json
 import logging
 import sys
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 from .core import compute_body_hash, parse_frontmatter
@@ -118,6 +118,16 @@ def reindex(root_dir: Path) -> int:
                     entry.maturity = str(meta["maturity"])
                 if "evidence" in meta:
                     entry.evidence = meta["evidence"]
+
+                # R13-M3: precompute days_since_last_access for fast heat calculation
+                if old_entry and old_entry.last_access:
+                    try:
+                        last_dt = datetime.fromisoformat(old_entry.last_access)
+                        if last_dt.tzinfo is None:
+                            last_dt = last_dt.replace(tzinfo=timezone.utc)
+                        entry.days_since_last_access = max(0, (datetime.now(timezone.utc) - last_dt).days)
+                    except (ValueError, TypeError, OSError):
+                        entry.days_since_last_access = None
 
                 index_data.memories[actual_id] = entry
                 count += 1

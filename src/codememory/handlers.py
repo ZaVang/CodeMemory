@@ -224,32 +224,42 @@ def handle_overview(
     elif not status or status != "all":
         results = [r for r in results if r.get("status") != "archived"]
 
+    # Pre-compute cycle participants from required-imports DAG (R13-M2)
+    index = load_index(root)
+    all_graph: dict[str, list[str]] = {}
+    for mid in index.memories:
+        entry = index.memories[mid]
+        imports_dict = entry.imports
+        if isinstance(imports_dict, dict):
+            all_graph[mid] = _resolve_import_ids(imports_dict, ("required",))
+        else:
+            all_graph[mid] = []
+    from .resolve import find_cycle_participants as _fcp
+    cycle_ids = set(_fcp(all_graph))
+
     lines: list[str] = []
-    now = datetime.now(timezone.utc)
     for r in results[:limit]:
         mid = r["id"]
         mem_type = r["type"]
         deps = r.get("dependents", 0)
         access = r.get("access_count", 0)
 
-        # R12-UX5: time-decay heat calculation.
-        # Structural importance (dependents) is the foundation.
-        # Access count is weighted by recency using exponential decay
-        # with a 14-day half-life. Recently-accessed memories rank
-        # higher than long-ago high-frequency ones.
+        # R13-M2: exclude cycle participants from dependents count
+        if mid in cycle_ids:
+            deps = 0
+
+        # R13-M1/M3/M4: time-decay heat calculation using precomputed
+        # days_since_last_access and per-memory stability (default 14.0).
+        # Standard formula: decay = 0.5^(days / stability)
+        # Access bonus = access_count * decay
         # Zero-access memories get minimal access bonus (10% weight).
-        last_access_str = r.get("last_access", None)
-        if access > 0 and last_access_str:
-            try:
-                last_dt = datetime.fromisoformat(last_access_str)
-                if last_dt.tzinfo is None:
-                    last_dt = last_dt.replace(tzinfo=timezone.utc)
-                days_since = max(0, (now - last_dt).days)
-                # Exponential decay: value halves every 14 days
-                decay = math.pow(0.5, days_since / 14.0)
-                access_bonus = access * decay
-            except (ValueError, TypeError, OSError):
-                access_bonus = access
+        entry = index.memories.get(mid)
+        stability = entry.stability if entry else 14.0
+        days_since = r.get("days_since_last_access") if isinstance(r, dict) else getattr(r, "days_since_last_access", None)
+        if access > 0 and days_since is not None:
+            days_since = max(0, days_since)
+            decay = math.pow(0.5, days_since / stability)
+            access_bonus = access * decay
         else:
             access_bonus = access * 0.1
 
@@ -280,12 +290,12 @@ def handle_overview(
 
     # --with-recall: append wander inject
     if with_recall:
-        index = load_index(root)
         all_mems = index.memories
         candidates = [
             (mid, e) for mid, e in all_mems.items() if e.intensity < 8
         ]
         if candidates:
+            # R13-M1: use unified decay formula for cool wander weighting
             candidates.sort(key=lambda x: x[1].access_count)
             cutoff = max(1, len(candidates) // 3)
             pool = candidates[:cutoff]
@@ -320,7 +330,7 @@ def handle_wander(
 
     inject_mode = inject
     if mode == "cool":
-        # Weighted random: lower access_count -> higher weight
+        # Weighted random: lower decay-adjusted access -> higher weight (R13-M1)
         cool_candidates = [
             (mid, entry)
             for mid, entry in candidates
@@ -329,10 +339,16 @@ def handle_wander(
         if not cool_candidates:
             cool_candidates = candidates
 
-        weights = [
-            1.0 / (entry.access_count + 1)
-            for _mid, entry in cool_candidates
-        ]
+        weights = []
+        for _mid, entry in cool_candidates:
+            stability = getattr(entry, 'stability', 14.0)
+            days_since = getattr(entry, 'days_since_last_access', None)
+            if entry.access_count > 0 and days_since is not None:
+                decay = math.pow(0.5, max(0, days_since) / stability)
+                weight = 1.0 / (entry.access_count * decay + 1)
+            else:
+                weight = 1.0  # Never accessed — maximally cool
+            weights.append(weight)
         mid, entry = random.choices(cool_candidates, weights=weights, k=1)[0]
         mode_label = "[cool]"
     else:

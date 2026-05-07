@@ -833,3 +833,110 @@ PYTHONPATH=src python tests/integration_test.py
 - **图 Minimap**（进化策略师 I10）—— Cytoscape 原生支持
 - **Schema purple 和 info blue 暖化**（体验官 Nice-to-have #22）—— 调色板和谐调整
 - **SVG 图标集**（体验官 Nice-to-have #21）—— 替换所有 Unicode/emoji 图标
+
+---
+
+## 第 13 轮追加任务
+
+> **日期**：2026-05-07
+> **上轮评估**：Round 12 — 15/15 PASS，零回归（86/86 测试），首次零 Critical 缺陷
+> **主题**：产品品质打磨 — 完成未竟的审美项、缩短发现路径、统一衰减模型
+> **筛选原则**：修复成本低（不超过 50 行变更）+ 用户感知价值高
+
+### 第一梯队：审美完成
+
+- [x] R13-A1: 退场动画接线
+  - 目标：面板关闭和模态关闭时播放退场动画（slide-out / fade-out），而非立即从 DOM 消失；创建通用的动画包装机制，一次实现覆盖所有 7 个面板/模态入口
+  - 验收：关闭 Settings 面板时可见 slide-out 动画（而非瞬间消失）；关闭 MemoryDetail 面板同理；关闭 Wander/Validate/Archive 模态时可见 fade-out + scale-down 动画；动画时长与入场一致（250ms ease）；退场动画播放期间不可与已关闭的组件交互；Escape 键触发的关闭同样播放退场动画
+  - 来源：体验官 Important #1（"Entrance animations — IMPLEMENTED. Exit animations — NOT IMPLEMENTED. The CSS exists but is dead code."）
+
+- [x] R13-A2: 修复残余 sub-12px 字号
+  - 目标：详情面板 StatusBadge 和 MaturityBadge 的 fontSize 从 11px 提升到 12px（与 List 视图一致）；搜索栏 "fuzzy matches" 指示器从 9px 提升到 11px；搜索栏 match quality badge 从 9px 提升到 11px
+  - 验收：MemoryDetail 面板中 StatusBadge 和 MaturityBadge 的渲染字号 >= 12px；SearchBar 下拉结果中 "includes fuzzy matches" 文字 >= 11px；SearchBar 下拉结果中 MATCH 标签（EXACT/FUZZY）>= 11px；深色模式下微标签可读；布局不破损
+  - 来源：体验官 Important #2（"The remaining stragglers are concentrated in three specific areas... Each can be fixed with a single-line change."）
+
+- [x] R13-A3: 搜索下拉框 fade-in 动画
+  - 目标：全局搜索下拉框出现时播放 150ms fade-in 动画，与面板/模态动画语言一致
+  - 验收：点击搜索框或输入文字时下拉框 fade-in（150ms ease）；动画模式与面板/模态入场一致（opacity 过渡）；深色模式适用
+  - 来源：体验官 Nice-to-have #5（"A 150ms fade-in on the dropdown appearing, matching the modal/panel animation language."）
+
+### 第二梯队：发现路径缩短
+
+- [x] R13-D1: 搜索结果添加 "Resolve →" 动作
+  - 目标：全局搜索下拉框中每条结果条目旁显示 "Resolve →" 链接或按钮；点击后关闭搜索下拉框、切换到 Graph 视图、自动对该记忆触发 resolve（使用默认 depth 和 budget）
+  - 验收：每条搜索结果旁有可见的 "Resolve →" 按钮或链接；点击后搜索下拉框关闭；视图切换到 Graph 且图已挂载后 resolve 自动触发；resolve 结果在 MemoryDetail 面板或 resolve 区域中展示；如果已经在 Graph 视图则无需切换，直接触发 resolve；快捷键或键盘导航不冲突
+  - 来源：体验官 Important #3（"Turns the aha moment from 4 clicks to 2 clicks from the most-used interface."）
+
+- [x] R13-D2: 视图切换按钮添加快捷键提示
+  - 目标：Graph/List/Dashboard 视图切换按钮标签旁显示对应小号快捷键提示（"1" / "2" / "3"），让用户自然发现快捷键
+  - 验收：Graph 按钮旁有 "1" 提示（小号、上标或 muted 颜色）；List 按钮旁有 "2" 提示；Dashboard 按钮旁有 "3" 提示；提示在亮色和深色模式下均可读但不喧宾夺主；Help 面板中快捷键条目保持一致
+  - 来源：体验官 Important #4（"Users discover the shortcuts organically rather than needing to press '?' or read the Help panel."）
+
+- [x] R13-D3: Resolve 加载状态
+  - 目标：点击 Resolve 按钮后，在 resolve 结果区域展示加载骨架或旋转指示器（而非 UI 冻结无反馈），直到 API 响应返回
+  - 验收：点击 Resolve 后 resolve 结果区域立即出现加载骨架或 spinner；加载指示器在深色模式下可见；API 返回后加载指示器消失，结果正常显示；API 错误时加载指示器消失，错误信息展示（已有 error banner 行为不变）
+  - 来源：进化策略师 Critical #C3（"Clicking Resolve freezes the UI for 1-3 seconds with zero user feedback. A loading spinner or skeleton... is table-stakes UX."）
+
+### 第三梯队：衰减模型统一
+
+- [x] R13-M1: 统一 overview/wander/validate 的衰减模型
+  - 目标：用同一套连续衰减公式替换当前三套并行逻辑——overview 的 `0.5^(days/14)` 保持不变（作为标准公式）；wander(cool) 的权重从原始 `1/(access_count+1)` 改为基于衰减公式（低检索概率 = 高冷却权重）；validate 的 `_check_decay()` 从硬编码 30 天二元阈值改为连续可配置的检索概率阈值（如 R < 0.1 触发警告）
+  - 验收：overview heat 评分行为不变（标准公式保持）；wander(cool) 现在对"很久以前被多次访问的记忆"给予合理的冷却权重（之前它们被错误地排除）；validate 衰减警告基于同一连续公式而非硬编码 30 天；57+24 测试无回归
+  - 来源：研究员 High-Impact #1（"Three different decay models in one system. Replace the hard 30-day threshold... with the same formula used in overview."）
+
+- [x] R13-M2: 排除循环参与者从 dependents 计数
+  - 目标：在计算 heat 公式的结构性分量（"deps * 10"）时，跳过检测到的循环参与者——不可解析的循环不应贡献误导性的高 dependents 计数
+  - 验收：3 节点循环 A→B→C→A 中每个节点的 dependents 有效计数为 0（循环成员被排除）；非循环的合法 imports 计数不受影响；无循环的正常 DAG 行为不变；57+24 测试无回归
+  - 来源：研究员 High-Impact #2（"A 3-node cycle gives each node dependents=1... But these are structurally broken... Dependents count should exclude cycle participants."）
+
+- [x] R13-M3: index 中预计算 days_since_last_access
+  - 目标：在 MemoryEntry 索引中添加一个整数 `days_since_last_access` 字段；reindex 时计算一次；每次 access 时更新；在 overview heat 循环中用该整数字段替代 `datetime.fromisoformat`
+  - 验收：index.json 中每条记忆条目包含 `days_since_last_access` 整数字段；overview heat 计算使用该预计算值而非实时解析 last_access 字符串；未被访问过的记忆有合理的默认值；57+24 测试无回归
+  - 来源：研究员 High-Impact #3（"Avoids the most expensive operation in the overview O(n) loop — datetime.fromisoformat per memory."）
+
+- [x] R13-M4: 添加 stability 字段（默认 14.0）
+  - 目标：在 MemoryEntry 数据模型上新增 `stability: float = 14.0` 字段——per-memory half-life 天数；heat 公式从 `0.5^(days / 14.0)` 改为 `0.5^(days / stability)`；所有记忆初始值 14.0（向后兼容，行为不变）
+  - 验收：MemoryEntry 模型包含 stability 字段，默认值 14.0；旧 index.json 中无 stability 字段的记忆加载后自动获取 14.0；reindex 后新生成的 index.json 包含 stability 字段；overview heat 公式使用 stability 替代硬编码 14.0；57+24 测试无回归
+  - 来源：研究员 High-Impact #4（"This single field enables per-memory half-life without changing the core formula... Initially all 14.0."）
+
+### 第四梯队：基础设施
+
+- [x] R13-I1: 启用 OpenAPI /docs 端点
+  - 目标：FastAPI 自带的交互式 Swagger UI 文档端点 `/docs` 当前未暴露——通过配置开启，为后端 API 提供自文档化的交互式文档
+  - 验收：浏览器访问 `http://localhost:8000/docs` 返回 Swagger UI 页面；页面列出所有 API 端点及其参数和响应格式；"Try it out" 功能可用；`/docs` 的启用不影响现有端点行为；所有端点回归测试通过
+  - 来源：进化策略师 Critical #C2（"FastAPI auto-generates interactive Swagger UI documentation... Enabling it costs zero code changes and immediately makes the API self-documenting."）
+
+---
+
+### 本轮延期项目（下轮评估）
+
+- **全文正文搜索**（进化策略师 C1/C4）—— 最大功能缺口，需搜索管道变更 + 前端双向接线，留给搜索聚焦轮次
+- **多级撤销栈**（进化策略师 I1）—— 组件状态管理重构，超出本轮单体任务上限
+- **交互式 onboarding demo**（进化策略师 I5）—— 需内嵌可交互 Cytoscape 实例
+- **版本 diff 查看器**（进化策略师 I2）—— 需新建前端组件 + diff 算法集成
+- **图键盘导航**（进化策略师 I3）—— 需 Cytoscape 事件绑定 + focus 管理
+- **Playwright 冒烟测试**（进化策略师 I6）—— 需新 dev 依赖，首次配置成本不可忽略
+- **视图切换过渡**（体验官 Nice-to-have #6）—— 等 A1 退场动画机制稳定后复用
+- **图节点 hover 微动画**（体验官 Nice-to-have #7）—— Canvas 动画模式与 DOM 不同
+- **FSRS 完整稳定性更新**（研究员 High-Effort #6）—— 需 schema 迁移 + per-access 数学更新，依赖 M4 先落地
+- **记忆层级可视化**（研究员 High-Effort #7）—— 前端 100+ 行 + 后端 30 行，依赖 FSRS 先落地
+
+### 本轮拒绝项目（需架构变更或新依赖）
+
+- **CSS 设计 token 系统**（进化策略师 I4）—— 覆盖 14 个组件的架构级重构
+- **扩散激活引擎**（研究员 High-Effort #5）—— 需先明确上下文模型设计
+- **移除 List 本地过滤条**（体验官 Nice-to-have #8）—— 需全局搜索接口功能扩展
+- **Markdown 预览**（体验官 Nice-to-have #9）—— 需新建 UI 组件
+
+### 长期 Backlog 新增
+
+- 协作 resolve / WebSocket（全新基础设施）
+- MCP 写入工具（新 MCP tool 设计 + 安全边界）
+- VS Code 扩展（独立产品）
+- 自动归档 + 精华蒸馏（依赖 LLM gateway）
+- 周度记忆摘要（依赖 LLM gateway + 调度）
+- 图原生存储后端（架构变更，Phase 3）
+- 记忆编译器隐喻（定位/营销层）
+- 多选 + 批量操作 / 保存过滤视图 / 快速捕获 API / Tabbed 检查 / 子图提取 / 快捷键速查表 / Git 集成指南（进化策略师 Nice-to-have N1-N7）
+- DAG-Aware 编辑 / 记忆提醒 / 图 Diff / 设置面板扩展 / 命令面板（体验官 Feature Ideas #10-#14）
+- 扩散激活 / 记忆层级可视化 / 降级成熟度路径 / memory compiler / episodic-to-semantic mining（研究员 #5-#10）

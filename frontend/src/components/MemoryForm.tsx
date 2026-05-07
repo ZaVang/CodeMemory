@@ -1,8 +1,11 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { fetchMemory, createMemory, updateMemory, fetchAllMemories, fetchStats } from '../api'
 import type { MemoryDetail, MemorySummary } from '../types'
+import { useExitAnimation } from '../useExitAnimation'
 
 interface Props {
+  /** Whether the form should be shown */
+  show: boolean
   /** If set, edit mode; otherwise create mode */
   memoryId: string | null
   onClose: () => void
@@ -12,8 +15,9 @@ interface Props {
   onUndoEntry?: (entry: { type: 'create' | 'update' | 'archive'; memoryId: string; previousState?: Record<string, unknown> }) => void
 }
 
-export default function MemoryForm({ memoryId, onClose, onChange, onUndoEntry }: Props) {
+export default function MemoryForm({ show, memoryId, onClose, onChange, onUndoEntry }: Props) {
   const isEdit = memoryId !== null
+  const { visible, closing } = useExitAnimation(show)
 
   // Form fields
   const [id, setId] = useState('')
@@ -34,7 +38,6 @@ export default function MemoryForm({ memoryId, onClose, onChange, onUndoEntry }:
   const [deleting, setDeleting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
-  const [visible, setVisible] = useState(false)
   const [showUnsavedWarning, setShowUnsavedWarning] = useState(false)
   const previousStateRef = useRef<Record<string, unknown> | null>(null)
   // Track initial values to detect unsaved changes
@@ -64,14 +67,12 @@ export default function MemoryForm({ memoryId, onClose, onChange, onUndoEntry }:
       setChangeNote('')
       setImportsText('')
       setImportStrengths({})
-      setVisible(true)
       initialValuesRef.current = {
         summary: '', tags: '', intensity: 5, body: '', status: 'active', maturity: 'draft', importsText: '',
       }
       return
     }
 
-    setVisible(true)
     setLoading(true)
     setError(null)
 
@@ -393,9 +394,9 @@ export default function MemoryForm({ memoryId, onClose, onChange, onUndoEntry }:
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && !showDeleteConfirm && !showUnsavedWarning) requestClose()
     }
-    window.addEventListener('keydown', onKey)
+    if (visible) window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [requestClose, showDeleteConfirm, showUnsavedWarning])
+  }, [requestClose, showDeleteConfirm, showUnsavedWarning, visible])
 
   if (!visible) return null
 
@@ -404,6 +405,7 @@ export default function MemoryForm({ memoryId, onClose, onChange, onUndoEntry }:
       {/* Backdrop */}
       <div
         onClick={() => requestClose()}
+        className={closing ? 'backdrop-fade-exit' : 'backdrop-fade-enter'}
         style={{
           position: 'fixed',
           inset: 0,
@@ -414,7 +416,7 @@ export default function MemoryForm({ memoryId, onClose, onChange, onUndoEntry }:
 
       {/* Slide-in panel */}
       <div
-        className="panel-slide-enter"
+        className={closing ? 'panel-slide-exit' : 'panel-slide-enter'}
         style={{
           position: 'fixed',
           top: 0,

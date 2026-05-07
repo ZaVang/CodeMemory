@@ -650,6 +650,7 @@ export default function App() {
         >
           <button
             onClick={() => setViewMode('graph')}
+            title="Graph view (keyboard: 1)"
             style={{
               padding: '6px 20px',
               border: 'none',
@@ -661,12 +662,16 @@ export default function App() {
               letterSpacing: '0.08em',
               backgroundColor: viewMode === 'graph' ? 'var(--cm-text-primary)' : 'transparent',
               color: viewMode === 'graph' ? 'var(--cm-text-inverse)' : 'var(--cm-text-secondary)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
             }}
           >
-            Graph
+            Graph<span style={{ fontSize: 10, opacity: 0.55, letterSpacing: 0 }}>1</span>
           </button>
           <button
             onClick={() => setViewMode('list')}
+            title="List view (keyboard: 2)"
             style={{
               padding: '6px 20px',
               border: 'none',
@@ -678,12 +683,16 @@ export default function App() {
               letterSpacing: '0.08em',
               backgroundColor: viewMode === 'list' ? 'var(--cm-text-primary)' : 'transparent',
               color: viewMode === 'list' ? 'var(--cm-text-inverse)' : 'var(--cm-text-secondary)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
             }}
           >
-            List
+            List<span style={{ fontSize: 10, opacity: 0.55, letterSpacing: 0 }}>2</span>
           </button>
           <button
             onClick={() => setViewMode('dashboard')}
+            title="Dashboard view (keyboard: 3)"
             style={{
               padding: '6px 20px',
               border: 'none',
@@ -695,9 +704,12 @@ export default function App() {
               letterSpacing: '0.08em',
               backgroundColor: viewMode === 'dashboard' ? 'var(--cm-text-primary)' : 'transparent',
               color: viewMode === 'dashboard' ? 'var(--cm-text-inverse)' : 'var(--cm-text-secondary)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
             }}
           >
-            Dashboard
+            Dashboard<span style={{ fontSize: 10, opacity: 0.55, letterSpacing: 0 }}>3</span>
           </button>
         </div>
 
@@ -759,6 +771,12 @@ export default function App() {
               onNavigate={(id) => {
                 setSelectedNode(id)
                 setViewMode('graph')
+              }}
+              onResolve={(id) => {
+                setSelectedNode(id)
+                setViewMode('graph')
+                // R13-D1: wait for GraphCanvas to mount before triggering resolve
+                setTimeout(() => doResolve(id, budget), 100)
               }}
             />
           )}
@@ -1203,6 +1221,7 @@ export default function App() {
             }}
             resolveData={resolveData}
             resolveError={resolveError}
+            isResolving={isResolving}
             backlinks={(() => {
               if (!graphData || !selectedNode) return []
               // Compute reverse references: which nodes import selectedNode?
@@ -1225,14 +1244,13 @@ export default function App() {
       </div>
 
       {/* Memory form (create/edit) — fixed overlay */}
-      {showCreateForm && (
-        <MemoryForm
-          memoryId={formMemoryId}
-          onClose={handleCloseForm}
-          onChange={handleMemoryChange}
-          onUndoEntry={showUndo}
-        />
-      )}
+      <MemoryForm
+        show={showCreateForm}
+        memoryId={formMemoryId}
+        onClose={handleCloseForm}
+        onChange={handleMemoryChange}
+        onUndoEntry={showUndo}
+      />
 
       {/* Help panel */}
       {showHelp && <HelpPanel onClose={() => setShowHelp(false)} />}

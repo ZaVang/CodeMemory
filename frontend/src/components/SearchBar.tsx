@@ -6,9 +6,10 @@ interface Props {
   value: string
   onChange: (value: string) => void
   onNavigate?: (id: string) => void
+  onResolve?: (id: string) => void
 }
 
-export default function SearchBar({ value, onChange, onNavigate }: Props) {
+export default function SearchBar({ value, onChange, onNavigate, onResolve }: Props) {
   const [results, setResults] = useState<SearchResultItem[]>([])
   const [showResults, setShowResults] = useState(false)
   const [searching, setSearching] = useState(false)
@@ -184,6 +185,7 @@ export default function SearchBar({ value, onChange, onNavigate }: Props) {
       {/* Tag suggestions + Results dropdown */}
       {((showResults && results.length > 0) || tagMatches.length > 0 || (hasSearched && results.length === 0 && !searching && value.trim())) && (
         <div
+          className="search-dropdown-enter"
           style={{
             position: 'absolute',
             top: '100%',
@@ -304,7 +306,7 @@ export default function SearchBar({ value, onChange, onNavigate }: Props) {
           >
             <span>{results.length} result{results.length !== 1 ? 's' : ''}</span>
             {results.some((r) => r.match_quality === 'fuzzy') && (
-              <span style={{ fontWeight: 400, textTransform: 'none', letterSpacing: '0', fontSize: 9 }}>
+              <span style={{ fontWeight: 400, textTransform: 'none', letterSpacing: '0', fontSize: 11 }}>
                 includes fuzzy matches
               </span>
             )}
@@ -341,9 +343,37 @@ export default function SearchBar({ value, onChange, onNavigate }: Props) {
                 >
                   {item.id}
                 </div>
+                {/* Resolve shortcut (R13-D1) */}
+                {onResolve && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setShowResults(false)
+                      onResolve(item.id)
+                    }}
+                    title={`Resolve context for ${item.id}`}
+                    style={{
+                      border: '1px solid var(--cm-accent)',
+                      background: 'transparent',
+                      cursor: 'pointer',
+                      fontSize: 10,
+                      fontWeight: 600,
+                      fontFamily: 'Raleway, sans-serif',
+                      color: 'var(--cm-accent)',
+                      padding: '1px 8px',
+                      borderRadius: 2,
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.06em',
+                      whiteSpace: 'nowrap',
+                      flexShrink: 0,
+                    }}
+                  >
+                    Resolve &rarr;
+                  </button>
+                )}
                 {/* Match quality indicator — always visible */}
                 <span style={{
-                  fontSize: 9,
+                  fontSize: 11,
                   fontWeight: 600,
                   fontFamily: 'Raleway, sans-serif',
                   textTransform: 'uppercase',

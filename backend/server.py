@@ -137,8 +137,8 @@ from starlette.middleware.base import BaseHTTPMiddleware  # noqa: E402
 class _DatasetContextMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request, call_next):
         path = request.url.path
-        # Exempt discovery endpoints from the header requirement
-        is_exempt = path == "/" or path == "/api/datasets"
+        # Exempt discovery endpoints and OpenAPI docs from the header requirement
+        is_exempt = path in ("/", "/api/datasets", "/docs", "/openapi.json")
         dataset = request.headers.get("X-Codememory-Dataset", "")
         if dataset and dataset.strip():
             _current_dataset.set(dataset)
