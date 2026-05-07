@@ -26,6 +26,19 @@ function _headers(extra?: Record<string, string>): Record<string, string> {
   return h
 }
 
+/** Map HTTP status codes to human-readable error messages (R11-UX7) */
+function _humanReadableError(status: number): string {
+  switch (status) {
+    case 400: return 'Bad request — check your input and try again'
+    case 404: return 'The requested resource was not found'
+    case 422: return 'Validation failed — check your input and try again'
+    case 500: return 'An unexpected server error occurred — try again or contact support'
+    case 502: return 'Server is temporarily unavailable — try again in a moment'
+    case 503: return 'Server is overloaded — try again shortly'
+    default: return `Request failed (${status}) — try again`
+  }
+}
+
 async function fetcher<T>(url: string, init?: RequestInit): Promise<T> {
   let res: Response
   try {
@@ -37,7 +50,7 @@ async function fetcher<T>(url: string, init?: RequestInit): Promise<T> {
   }
   if (!res.ok) {
     // Try to extract FastAPI detail field from the error response body
-    let detail = `${res.status} ${res.statusText}`
+    let detail = _humanReadableError(res.status)
     try {
       const body = await res.json()
       if (body && typeof body === 'object' && 'detail' in body) {

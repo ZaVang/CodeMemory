@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { fetchAllMemories } from '../api'
 import type { MemorySummary } from '../types'
 import { StatusBadge, MaturityBadge } from './Badges'
@@ -210,7 +210,7 @@ export default function MemoryList({ onSelectMemory, refreshTrigger, initialFilt
                   {mem.id}
                 </td>
                 <td style={{ ...tdStyle, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 300 }}>
-                  {mem.summary}
+                  <TruncatedCell text={mem.summary} />
                 </td>
                 <td style={tdStyle}>
                   <span style={{
@@ -332,6 +332,26 @@ const pageBtnStyle: React.CSSProperties = {
   textTransform: 'uppercase',
   letterSpacing: '0.06em',
   borderRadius: 2,
+}
+
+// ── R11-UX6: Truncated cell with hover tooltip ───────────────────────
+
+function TruncatedCell({ text }: { text: string }) {
+  const ref = useRef<HTMLSpanElement>(null)
+  const [isTruncated, setIsTruncated] = useState(false)
+
+  useEffect(() => {
+    const el = ref.current
+    if (el) {
+      setIsTruncated(el.scrollWidth > el.clientWidth)
+    }
+  }, [text])
+
+  return (
+    <span ref={ref} title={isTruncated ? text : undefined}>
+      {text}
+    </span>
+  )
 }
 
 // ── R9-loading-skeletons: List skeleton ──────────────────────────────

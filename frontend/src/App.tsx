@@ -144,6 +144,13 @@ export default function App() {
   const [networkError, setNetworkError] = useState<string | null>(null)
   const networkErrorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
+  // R11-UX7: Retry handler for network errors — refreshes all data
+  const handleRetryNetwork = useCallback(() => {
+    setNetworkError(null)
+    if (networkErrorTimerRef.current) clearTimeout(networkErrorTimerRef.current)
+    setRefreshTrigger((prev) => prev + 1)
+  }, [])
+
   const showUndo = useCallback((entry: UndoEntry) => {
     setUndoEntry(entry)
     if (undoToastTimerRef.current) clearTimeout(undoToastTimerRef.current)
@@ -248,10 +255,12 @@ export default function App() {
     }
   }, [currentDataset])
 
-  // Load graph data
+  // Load graph data — wait until dataset is known so the API layer
+  // can send the required X-Codememory-Dataset header.
   useEffect(() => {
+    if (!currentDataset) return
     fetchGraph().then(setGraphData).catch((err) => showOperationError(err instanceof Error ? err.message : 'Failed to load graph'))
-  }, [refreshTrigger])
+  }, [refreshTrigger, currentDataset])
 
   // Handle dataset switching (must be defined before R7-settings effects that reference it)
   const handleSwitchDataset = useCallback(
@@ -511,10 +520,18 @@ export default function App() {
         return
       }
 
-      // Ctrl+K — focus search bar
+      // Ctrl+K — focus search bar (always works, switches to graph view if needed)
       if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
         e.preventDefault()
-        document.getElementById('global-search-input')?.focus()
+        if (viewMode === 'dashboard') {
+          setViewMode('graph')
+          // Wait for SearchBar to mount, then focus
+          setTimeout(() => {
+            document.getElementById('global-search-input')?.focus()
+          }, 50)
+        } else if (!isInput) {
+          document.getElementById('global-search-input')?.focus()
+        }
         return
       }
 
@@ -550,7 +567,7 @@ export default function App() {
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [showShortcuts, showHelp, archiveConfirmId, undoEntry, handleUndo, handleOpenCreate])
+  }, [showShortcuts, showHelp, archiveConfirmId, undoEntry, handleUndo, handleOpenCreate, viewMode, activeTheme])
 
   return (
     <div
@@ -681,6 +698,7 @@ export default function App() {
             value={currentDataset}
             onChange={(e) => handleSwitchDataset(e.target.value)}
             disabled={switchingDataset}
+            title="Stats, validation, and reindex apply to the selected dataset"
             style={{
               padding: '4px 8px',
               border: '1px solid var(--cm-border-cool)',
@@ -707,12 +725,7 @@ export default function App() {
             Switching...
           </span>
         )}
-        {/* R7-N1: dataset disclaimer — operations are scoped to current dataset */}
-        {datasets.length > 1 && !switchingDataset && currentDataset !== 'quant_operators' && (
-          <span style={{ fontSize: 10, color: 'var(--cm-text-tertiary)', fontFamily: 'Raleway, sans-serif', fontStyle: 'italic' }}>
-            Stats, validation, and reindex apply to the selected dataset.
-          </span>
-        )}
+{/* Dataset disclaimer moved to tooltip on the select element (R11-P1) */}
         {/* R8-quant-disclaimer: informational message for quant_operators dataset */}
         {currentDataset === 'quant_operators' && !switchingDataset && (
           <span style={{
@@ -946,7 +959,7 @@ export default function App() {
         </button>
       </header>
 
-      {/* Network error banner (R6-network-error-feedback) */}
+      {/* Network error banner (R6-network-error-feedback) with Retry (R11-UX7) */}
       {networkError && (
         <div
           style={{
@@ -960,9 +973,31 @@ export default function App() {
             fontWeight: 500,
             flexShrink: 0,
             position: 'relative',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 16,
           }}
         >
-          {networkError}
+          <span>{networkError}</span>
+          <button
+            onClick={handleRetryNetwork}
+            style={{
+              background: 'var(--cm-bg-surface)',
+              color: 'var(--cm-error)',
+              border: 'none',
+              cursor: 'pointer',
+              fontSize: 11,
+              fontWeight: 600,
+              fontFamily: 'Raleway, sans-serif',
+              textTransform: 'uppercase',
+              letterSpacing: '0.08em',
+              padding: '4px 14px',
+              borderRadius: 2,
+            }}
+          >
+            Retry
+          </button>
           <button
             onClick={() => { setNetworkError(null); if (networkErrorTimerRef.current) clearTimeout(networkErrorTimerRef.current) }}
             style={{

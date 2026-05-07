@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { fetchStats, fetchWander, fetchValidate, fetchReindex } from '../api'
 import type { StatsResponse, WanderResponse, ValidateResponse } from '../types'
 import EmptyState from './EmptyState'
@@ -22,6 +22,8 @@ export default function Dashboard({ onSelectMemory, onNavigateToFilter, refreshT
   const [wandering, setWandering] = useState(false)
   const [validating, setValidating] = useState(false)
   const [reindexing, setReindexing] = useState(false)
+  const [reindexMessage, setReindexMessage] = useState<string | null>(null)
+  const reindexTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const loadData = useCallback(() => {
     setLoading(true)
@@ -41,6 +43,7 @@ export default function Dashboard({ onSelectMemory, onNavigateToFilter, refreshT
 
   const handleWander = useCallback(() => {
     setWandering(true)
+    setValidateOpen(false)  // R11-B2: prevent modal stacking
     fetchWander('cool')
       .then((result) => {
         setWanderResult(result)
@@ -52,6 +55,7 @@ export default function Dashboard({ onSelectMemory, onNavigateToFilter, refreshT
 
   const handleValidate = useCallback(() => {
     setValidating(true)
+    setWanderOpen(false)  // R11-B2: prevent modal stacking
     fetchValidate()
       .then((result) => {
         setValidateResult(result)
@@ -63,11 +67,24 @@ export default function Dashboard({ onSelectMemory, onNavigateToFilter, refreshT
 
   const handleReindex = useCallback(() => {
     setReindexing(true)
+    setReindexMessage(null)
     fetchReindex()
-      .then(() => loadData())
-      .catch((err) => onError?.(err instanceof Error ? err.message : 'Reindex failed'))
+      .then((res) => {
+        const count = (res as Record<string, unknown>)?.count
+        const msg = typeof count === 'number' ? `Reindexed ${count} memories` : 'Reindex completed'
+        setReindexMessage(msg)
+        if (reindexTimerRef.current) clearTimeout(reindexTimerRef.current)
+        reindexTimerRef.current = setTimeout(() => setReindexMessage(null), 4000)
+        loadData()
+      })
+      .catch((err) => {
+        setReindexMessage('Reindex failed: ' + (err instanceof Error ? err.message : 'Unknown error'))
+        if (reindexTimerRef.current) clearTimeout(reindexTimerRef.current)
+        reindexTimerRef.current = setTimeout(() => setReindexMessage(null), 6000)
+        onError?.(err instanceof Error ? err.message : 'Reindex failed')
+      })
       .finally(() => setReindexing(false))
-  }, [loadData])
+  }, [loadData, onError])
 
   // --- Render ---
 
@@ -89,6 +106,42 @@ export default function Dashboard({ onSelectMemory, onNavigateToFilter, refreshT
         backgroundColor: 'var(--cm-bg-primary)',
       }}
     >
+      {/* Reindex feedback toast */}
+      {reindexMessage && (
+        <div
+          style={{
+            padding: '10px 24px',
+            marginBottom: 16,
+            backgroundColor: reindexMessage.startsWith('Reindex failed') ? 'var(--cm-bg-error-subtle)' : 'var(--cm-bg-success-subtle)',
+            color: reindexMessage.startsWith('Reindex failed') ? 'var(--cm-error)' : 'var(--cm-success)',
+            borderRadius: 2,
+            fontSize: 13,
+            fontFamily: 'Raleway, sans-serif',
+            fontWeight: 500,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            borderLeft: `3px solid ${reindexMessage.startsWith('Reindex failed') ? 'var(--cm-error)' : 'var(--cm-success)'}`,
+          }}
+        >
+          <span>{reindexMessage}</span>
+          <button
+            onClick={() => setReindexMessage(null)}
+            style={{
+              border: 'none',
+              background: 'none',
+              cursor: 'pointer',
+              color: 'inherit',
+              fontSize: 14,
+              opacity: 0.7,
+              padding: '0 4px',
+            }}
+          >
+            x
+          </button>
+        </div>
+      )}
+
       {/* Header row */}
       <div
         style={{
@@ -355,27 +408,15 @@ export default function Dashboard({ onSelectMemory, onNavigateToFilter, refreshT
                       borderLeft: '3px solid var(--cm-error)',
                     }}
                   >
-                    <div>
-                      <div
-                        style={{
-                          fontSize: 13,
-                          fontFamily: 'Raleway, sans-serif',
-                          fontWeight: 600,
-                          color: 'var(--cm-text-primary)',
-                        }}
-                      >
-                        {memId}
-                      </div>
-                      <div
-                        style={{
-                          fontSize: 11,
-                          fontFamily: 'JetBrains Mono, monospace',
-                          color: 'var(--cm-text-tertiary)',
-                          marginTop: 2,
-                        }}
-                      >
-                        {memId}
-                      </div>
+                    <div
+                      style={{
+                        fontSize: 13,
+                        fontFamily: 'Raleway, sans-serif',
+                        fontWeight: 600,
+                        color: 'var(--cm-text-primary)',
+                      }}
+                    >
+                      {memId}
                     </div>
                     <div style={{ display: 'flex', gap: 8 }}>
                       <span

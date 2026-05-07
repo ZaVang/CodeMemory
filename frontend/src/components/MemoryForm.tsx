@@ -194,6 +194,16 @@ export default function MemoryForm({ memoryId, onClose, onChange, onUndoEntry }:
     return null
   }, [id, intensity, isEdit])
 
+  // Clear error when user modifies any input (R11-UX5)
+  const clearValidationError = useCallback(() => {
+    setError((prev) => {
+      if (prev && (prev === 'ID is required' || prev.startsWith('ID must contain') || prev.startsWith('Intensity must be'))) {
+        return null
+      }
+      return prev
+    })
+  }, [])
+
   // Dirty state detection (R5-unsaved-changes-warning)
   const isDirty = useCallback((): boolean => {
     const init = initialValuesRef.current
@@ -525,7 +535,7 @@ export default function MemoryForm({ memoryId, onClose, onChange, onUndoEntry }:
               <input
                 type="text"
                 value={id}
-                onChange={(e) => setId(e.target.value)}
+                onChange={(e) => { setId(e.target.value); clearValidationError() }}
                 disabled={isEdit}
                 placeholder="user/ideas/my-thesis"
                 style={inputStyle}
@@ -716,7 +726,7 @@ export default function MemoryForm({ memoryId, onClose, onChange, onUndoEntry }:
                   min={1}
                   max={10}
                   value={intensity}
-                  onChange={(e) => setIntensity(Number(e.target.value))}
+                  onChange={(e) => { setIntensity(Number(e.target.value)); clearValidationError() }}
                   style={{ flex: 1, accentColor: 'var(--cm-accent)', cursor: 'pointer' }}
                 />
                 <span
@@ -851,7 +861,7 @@ export default function MemoryForm({ memoryId, onClose, onChange, onUndoEntry }:
 
           <button
             onClick={isEdit ? handleUpdate : handleCreate}
-            disabled={saving || loading}
+            disabled={saving || loading || (error !== null && (error === 'ID is required' || error.startsWith('ID must contain') || error.startsWith('Intensity must be')))}
             style={{
               padding: '10px 24px',
               backgroundColor: 'var(--cm-text-primary)',
@@ -864,6 +874,7 @@ export default function MemoryForm({ memoryId, onClose, onChange, onUndoEntry }:
               textTransform: 'uppercase',
               letterSpacing: '0.08em',
               borderRadius: 2,
+              opacity: (saving || loading || (error !== null && (error === 'ID is required' || error.startsWith('ID must contain') || error.startsWith('Intensity must be')))) ? 0.5 : 1,
             }}
           >
             {saving ? 'Saving...' : isEdit ? 'Save Changes' : 'Create'}

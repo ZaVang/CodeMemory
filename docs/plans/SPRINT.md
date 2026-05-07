@@ -661,3 +661,67 @@ PYTHONPATH=src python tests/integration_test.py
   - 目标：使用 FastAPI 的 `TestClient` 添加 5 个覆盖最常用端点的 API 级冒烟测试。测试应验证基本正确性：`GET /api/memories` 返回分页结果，`GET /api/memories/{id}` 返回特定记忆，`POST /api/search` 返回匹配结果，`POST /api/resolve` 返回 DAG 解析上下文，`GET /api/stats` 返回聚合统计。这些是冒烟测试——验证 API 端到端与真实数据一起工作，而非穷尽测试每个边界情况。
   - 验收：`tests/test_api.py` 存在，至少包含 5 个使用 FastAPI `TestClient` 的测试函数；Test 1：`GET /api/memories` 返回结构正确的分页结果；Test 2：`GET /api/memories/{id}` 返回包含所有预期字段的特定记忆；Test 3：`POST /api/search` 带查询返回带匹配元数据的排名结果；Test 4：`POST /api/resolve` 带有效 ID 返回拓扑排序上下文；Test 5：`GET /api/stats` 返回 total_count、stale_count、maturity 分布、标签频次；测试基于真实 examples/ 数据（非 mock）使用 companion 数据集；测试可通过 `PYTHONPATH=src python -m pytest tests/test_api.py -v` 运行；现有 57+24 测试继续通过
   - 来源：进化策略师 Critical #4（零 API 测试意味着回归风险随每次端点变更而增加——Iteration 9 的 3 个关键 bug 本可以被基本 API 集成测试捕获）
+
+## 第 11 轮追加任务（基于体验官 + 进化策略师 + 研究员审计 — 2026-05-06）
+
+> **背景**: 体验官 7.0/10，发现 2 个 Critical UX bug（数据集切换竞态、模态叠加）和多项重要摩擦。进化策略师 4.5/10，核心完整性缺口巨大（导入 UI、语义搜索、空状态缺失）但多数为大型功能。研究员报告侧重长线架构方向。R10 eval.md 显示 18/18 PASSED，无回归。
+> **策略**: 本轮聚焦于高影响、低投入的缺陷修复和体验打磨。大型功能（导入 UI、语义搜索）纳入 backlog 规划但不在本轮实现。研究员建议中仅采纳一个低投入项（MCP 工具注解）。
+> **优先级**: 🔴 第一梯队 = 2 个 Critical bug + 3 个 Important UX fix；🟡 第二梯队 = 4 个重要改进；🟢 第三梯队 = 至少 3 项 polish。
+
+### 第一梯队（🔴 Critical Bug 修复 + 关键 UX — 本轮必须完成）
+
+- [x] R11-B1: 修复数据集切换时 List 和 Dashboard 视图数据不更新的竞态问题
+  - 目标：切换数据集后，List 和 Dashboard 视图能正确显示新数据集的数据，而非旧数据集的缓存数据
+  - 验收：在 List 视图切换 dataset 后记忆数量和 ID 列表更新为新数据集的数据（如切换到 quant_operators 后显示 "62 of 62" 而非 "10 of 10"）；在 Dashboard 视图切换后统计数据更新；多次快速切换数据集不出现数据混乱；Graph 视图切换行为不退化
+
+- [x] R11-B2: 防止模态叠加
+  - 目标：打开 Wander 或 Validate 模态时，若已有另一模态打开则自动关闭前者，确保同时仅显示一个模态
+  - 验收：先打开 Wander 模态，再点击 Validate 按钮，Wander 模态自动关闭后 Validate 模态出现；反之亦然；两个模态的关闭逻辑互不干扰
+
+- [x] R11-UX1: 修复 Ctrl+K 键盘快捷键失效
+  - 目标：Ctrl+K 快捷键能正确聚焦到搜索输入框
+  - 验收：按下 Ctrl+K 后光标出现在搜索输入框中；Help 面板中 Ctrl+K 描述与实际行为一致
+
+- [x] R11-UX2: 为 REINDEX 操作添加完成反馈
+  - 目标：Reindex 完成后显示成功 toast 或可见提示，而非静默刷新数据
+  - 验收：点击 Reindex 按钮后，在操作完成时出现成功提示（如 "Reindexed N memories" toast）；失败时出现错误提示；提示在合理时间内自动消失
+
+- [x] R11-UX3: 使搜索过滤 Graph 视图节点
+  - 目标：在搜索栏输入文字并提交后，Graph 视图中的节点能根据搜索结果高亮或过滤显示
+  - 验收：输入搜索关键词后非匹配节点变暗（dimmed）或隐藏；匹配节点保持高亮可见；清除搜索后所有节点恢复；搜索结果列表与 Graph 节点高亮同步（如搜索下拉结果 hover 时对应节点高亮）
+
+### 第二梯队（🟡 高价值改进 — 本轮尽量完成）
+
+- [x] R11-UX4: 为 Graph 视图添加加载骨架屏
+  - 目标：Cytoscape 初始化期间显示骨架屏（占位节点圆圈 + 连接线），而非空白画布
+  - 验收：切换到 Graph 视图时在 Cytoscape 渲染前显示骨架屏（含 placeholder 节点和边）；骨架使用现有 shimmer 动画；数据到达后骨架替换为真实图内容；已有缓存时不显示骨架
+
+- [x] R11-UX5: 表单校验失败时禁用 CREATE 按钮
+  - 目标：提交空表单或校验失败后 CREATE 按钮变为不可点击状态，防止重复提交
+  - 验收：提交空表单显示校验错误后，CREATE 按钮变为 disabled 状态；修正所有校验错误后按钮恢复可点击；已有编辑表单的 SAVE 按钮行为一致
+
+- [x] R11-UX6: 为 List 视图截断的摘要列添加 hover tooltip
+  - 目标：鼠标悬浮在 List 视图摘要列被截断的文本上时，显示完整摘要内容的 tooltip
+  - 验收：悬浮含省略号的摘要单元格时出现 tooltip 显示完整文本；摘要未截断时不显示 tooltip；tooltip 在合理延迟后出现（~300ms）
+
+- [x] R11-UX7: 改进关键操作的错误消息用户体验
+  - 目标：为网络错误和 CRUD 操作失败添加"Retry"按钮和人类可读的错误措辞，替代原始 HTTP 状态码文本
+  - 验收：网络错误 banner 上出现 "Retry" 按钮，点击后重试上次失败的操作；错误消息使用人类可读语言（如 "Unable to connect to server" 而非 "500 Internal Server Error"）；关键 CRUD 失败时提供可操作指引（如 "Try again" 或 "Check your input"）
+
+### 第三梯队（🟢 打磨 — 本轮至少完成三项）
+
+- [x] R11-P1: 移除 header 中的 "Stats, validation, and reindex apply to the selected dataset" 声明文字
+  - 目标：将这行 10px 斜体声明从 header 移除，改为 dataset 下拉框自身的 tooltip
+  - 验收：Header 中不再显示该声明文字；dataset 下拉框或其附近有简短 tooltip 说明 dataset 范围
+
+- [x] R11-P2: 移除 Dashboard stale 区域中重复的 memId 显示
+  - 目标：Dashboard stale 记忆列表中每条记忆的 ID 仅显示一次（作为可点击标题），移除重复的 monospace 副标题
+  - 验收：每条 stale 记忆仅显示一个 clickable ID；不再出现同一 ID 显示两次的情况
+
+- [x] R11-P3: 添加搜索"无结果"空状态反馈
+  - 目标：搜索查询返回零结果时显示用户可见提示（如 "No memories found matching 'xyz' — try different keywords"），而非下拉菜单静默消失
+  - 验收：输入无匹配结果的查询后搜索下拉菜单出现，显示 "No results" 提示含可操作建议；清除查询后提示消失；有结果时正常显示结果列表
+
+- [ ] R11-P4: 为 MCP server 工具添加读写注解
+  - 目标：在 MCP server 工具定义中将 `resolve_memory`、`overview`、`wander`、`focus` 标记为只读，`snapshot` 标记为写入操作
+  - 验收：MCP tools/list 响应中每个工具包含 `readOnlyHint` 或等效注解；现有 MCP 工具调用行为不变；现有后端 57+24 测试通过
