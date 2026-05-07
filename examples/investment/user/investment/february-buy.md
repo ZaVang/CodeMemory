@@ -25,7 +25,13 @@ imports:
   - id: user/investment/risk-tolerance
     pin: v1
     reason: 决策基于当时的激进风险偏好（v1），不是后来调整后的中高偏好
+stability: 155.0
+stability_source: manual
 ---
+
+
+
+
 # 2月重仓半导体决策
 
 基于半导体主线判断，结合当时的风险偏好，决定将仓位从 10% 大幅加到 40%。

@@ -30,46 +30,8 @@ _BACKEND = Path(__file__).resolve().parent
 if str(_BACKEND) not in sys.path:
     sys.path.insert(0, str(_BACKEND))
 
-# ---------------------------------------------------------------------------
-# Configuration
-# ---------------------------------------------------------------------------
-
-_EXAMPLES_DIR = Path(__file__).resolve().parent.parent / "examples"
-_DEFAULT_DATASET = os.environ.get("CODEMEMORY_DEFAULT_DATASET", "investment")
-
-from contextvars import ContextVar
-
-_current_dataset: ContextVar[str] = ContextVar("current_dataset", default=_DEFAULT_DATASET)
-
-
-def _resolve_root(dataset_name: str) -> Path:
-    if not dataset_name or not dataset_name.strip():
-        dataset_name = _DEFAULT_DATASET
-    return (_EXAMPLES_DIR / dataset_name).resolve()
-
-
-def _get_available_datasets() -> list[dict[str, str]]:
-    datasets: list[dict[str, str]] = []
-    if not _EXAMPLES_DIR.exists():
-        return datasets
-    for entry in sorted(_EXAMPLES_DIR.iterdir()):
-        if not entry.is_dir():
-            continue
-        idx = entry / ".codememory" / "index.json"
-        if idx.exists():
-            try:
-                with open(idx, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                count = len(data.get("memories", {}))
-            except Exception:
-                count = 0
-            datasets.append({
-                "name": entry.name,
-                "path": str(entry.resolve()),
-                "memory_count": count,
-            })
-    return datasets
-
+# Import shared state from shared.py (single source of truth for ContextVar etc.)
+from shared import current_dataset as _current_dataset, DEFAULT_DATASET as _DEFAULT_DATASET, resolve_root as _resolve_root, get_available_datasets as _get_available_datasets
 
 # ---------------------------------------------------------------------------
 # App creation
@@ -89,7 +51,7 @@ app.add_middleware(
 class _DatasetContextMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request, call_next):
         path = request.url.path
-        is_exempt = path in ("/", "/api/datasets", "/docs", "/openapi.json")
+        is_exempt = path in ("/", "/api/datasets", "/api/datasets/switch", "/docs", "/openapi.json")
         dataset = request.headers.get("X-Codememory-Dataset", "")
         if dataset and dataset.strip():
             _current_dataset.set(dataset)

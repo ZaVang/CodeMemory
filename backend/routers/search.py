@@ -70,15 +70,21 @@ def get_graph(focus: str | None = None):
             continue
 
         deps_count = _count_dependents(mem_id, index)
+        # Derive directory from the ID (e.g. user/beliefs/friendship-view → user/beliefs)
+        _parts = mem_id.rsplit("/", 1)
+        _directory = _parts[0] if len(_parts) > 1 else ""
         nodes.append({
             "data": {
                 "id": mem_id,
                 "label": mem_id.split("/")[-1],
+                "directory": _directory,
                 "type": d.get("type", "atom"),
                 "summary": d.get("summary", ""),
                 "intensity": d.get("intensity", 5),
                 "status": d.get("status", "active"),
                 "dependents": deps_count,
+                "maturity": d.get("maturity", "draft"),
+                "tags": d.get("tags", []),
             },
         })
 
