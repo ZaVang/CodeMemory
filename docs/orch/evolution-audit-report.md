@@ -2,48 +2,84 @@
 
 **Date:** 2026-05-07
 **Reviewer:** Product Evolution Reviewer (Product Strategy)
-**Build:** Post-Round 13 (8da78d8), entering Round 14
-**Previous score:** 7.5/10 (post-Round 12)
-**Round 13 eval:** 10/11 FULL PASS, 1 PARTIAL PASS (modal exit animations)
+**Build:** Post-Round 14 (62119d8), following Round 14 completion
+**Previous score:** 7.8/10 (post-Round 13)
+**Round 14 eval:** 7/8 PASS, 1 INTENTIONALLY DEFERRED (N3)
 **Datasets available:** companion (11), investment (10), software-architecture (11), quant_operators (62)
-**Methodology:** Full source code review (frontend 15 TSX components + 1 new hook, backend server.py, handlers.py, models.py, index.py, validate.py, resolve.py), live API testing (13 endpoints, /docs, /openapi.json), frontend service verification on localhost:5318, competitive intelligence analysis of Mem0, Zep/Graphiti, LangMem, Letta/MemGPT, paradigm-memory, and SuperLocalMemory.
+**Methodology:** Full source code review (handlers.py C1 fix, models.py C2 guards, server.py C3 API exposure, search.py output extension, Dashboard.tsx N1 + I1 wiring, App.tsx N2 context menu), live API testing (6 endpoints verified, /docs 200, decay fields confirmed in all responses), competitive intelligence update (Mem0 April 2026 algorithm, Zep/Graphiti MCP server, paradigm-memory 28 tools, Letta Code), code-quality verification (86/86 tests pass, TypeScript zero errors, Vite build 338ms).
 
 ---
 
 ## Executive Summary
 
-**Product Evolution Maturity Score: 7.8 / 10** (up from 7.5)
+**Product Evolution Maturity Score: 8.3 / 10** (up from 7.8, +0.5)
 
-Round 13 is a quiet but structurally significant milestone. Eleven targeted tasks advanced CodeMemory on four fronts simultaneously: aesthetic completion (exit animations on 3 panels, font stragglers fixed, search dropdown animation), discovery path (Resolve from search, shortcut hints, loading skeleton), conceptual coherence (three decay models unified into one formula, stability field laid as foundation for per-memory half-life curves), and developer infrastructure (OpenAPI /docs enabled).
+Round 14 is the build where CodeMemory stopped pretending. For three rounds, the unified decay model (`0.5^(days/stability)`) was a theoretical promise -- the code was written, the tests passed, the fields were populated, but the formula was never actually activated in the overview path. Round 14 fixed that. The flagship R13 feature now works on all three consumption paths (overview, wander, validate). This is the difference between "the feature exists in source code" and "the feature exists in the user experience."
 
-The headline achievement is NOT the features themselves -- it is that three independent Reviewer reports converged on the same conceptual gaps, and all three were addressed in a single sprint without architectural damage. The exit animation hook (`useExitAnimation.ts`) is a clean, reusable pattern. The decay model unification (R13-M1 through M4) eliminates a silent correctness issue that no user would notice but every power user would eventually suffer from: three different "what should I remember?" answers from three different code paths.
+The +0.5 score increase reflects four substantive improvements:
 
-The partial pass on modal exit animations (Wander/Validate/Archive) is a cosmetic gap -- 3 panels animate correctly, 3 modals don't. The fix is mechanical and should land in Round 14's first wave.
+| Area | Pre-R14 | Post-R14 | Impact |
+|------|---------|----------|--------|
+| **Decay correctness** | Formula broken in overview path (C1 bug) | Formula active on all 3 paths | Correctness: silent failure -> verified working |
+| **Stability safety** | `stability=0` crashed with ZeroDivisionError | Guarded by Pydantic validator + runtime clamps | Reliability: crash-prone -> crash-proof |
+| **Polish completion** | 3 of 6 close points had exit animations; 7 elements sub-12px | All 6 close points animate; all fonts >=11px | Polish: incomplete -> complete |
+| **Decay visibility** | Decay model invisible (pure backend) | API exposes stability/decay fields; Dashboard shows decay risk | Infrastructure: invisible -> API-accessible |
 
-**Why 7.8 (up +0.3 from 7.5):**
+The score didn't move higher because the three structural gaps that block external adoption remain untouched: full-text body search (the single biggest functional gap vs every competitor), zero frontend test coverage (the highest-risk technical debt), and READ-ONLY MCP tools (the agentic loop is half-closed). These were correctly deferred in the Round 14 negotiation and remain the product's glass ceiling.
 
-The +0.3 reflects genuine progress in three areas that were scored as gaps in the prior audit: Resolve loading state (previously "UI freezes 1-3 seconds" -- now shimmer skeleton), OpenAPI /docs (previously "unexposed" -- now live), and search dropdown polish (previously "appears instantly" -- now 150ms fade-in with translateY). The decay model unification is architecturally important but not user-visible, so it doesn't move the aesthetic or functional scores directly.
-
-The score didn't move more because the two biggest structural gaps from the prior audit remain untouched: full-text body search (the single biggest functional gap vs every competitor) and the lack of frontend tests (zero Playwright/Jest coverage). These were explicitly deferred in the negotiation -- correctly, as they exceed the "under 50 lines" threshold for a polish sprint -- but the product cannot cross 8.5/10 without them.
+**Ready to show to early users?** For developer early adopters who understand the explicit-DAG model -- yes, conditionally. The core loop works correctly, the UI is polished, the API is documented, and the unique differentiators (DAG resolve + time decay) are operational. For non-developer knowledge workers -- no. The missing full-text body search means their first search will fail to find content in memory bodies, and the lack of any onboarding experience means the "aha moment" is still buried behind manual exploration.
 
 ---
 
-## Phase 1: Core Completeness -- What Remains for the Core Loop to Close?
+## Phase 1: Core Completeness -- What Round 14 Delivered
 
-### 1.1 Round 13 Progress: What Was Completed
+### 1.1 Round 14 Task Verification (Eval Confirmed)
 
-| Gap (from prior audit) | Round 13 Status | Detail |
-|------------------------|-----------------|--------|
-| Exit animation dead code (R12-UX2) | **PARTIAL** (3/6) | `useExitAnimation` hook created and wired to MemoryDetail, Settings, MemoryForm panels + backdrop. Wander, Validate, Archive modals still lack exit animation. |
-| Sub-12px font stragglers (R12-UX1) | **DONE** | Badges.tsx default 11->12px; SearchBar fuzzy matches 9->11px; match quality badge 9->11px. Detail panel badges now 12px (was 11px). |
-| Search dropdown instant-appear | **DONE** | `dropdownFadeIn` keyframe (150ms ease + translateY 4px->0), applied to result list container. |
-| No Resolve from search (Feature Idea #19) | **DONE** | "Resolve ->" button per search result. Click: close dropdown, switch to Graph view, 100ms delay, trigger resolve. |
-| No shortcut hints on view buttons (R12-P4) | **DONE** | "1"/"2"/"3" hints at 10px/55% opacity on Graph/List/Dashboard buttons. Help panel also updated. |
-| Resolve UI freeze (Critical #C3) | **DONE** | `isResolving` state in App.tsx; MemoryDetail shows "Resolving..." header + 3-line shimmer skeleton during resolve. GraphCanvas skips trim-level style updates during resolve. |
-| Three parallel decay models | **DONE** | Overview, wander(cool), and validate all use `0.5^(days/stability)`. Cycle participants excluded from dependents heat. `days_since_last_access` precomputed in index. `stability` field (default 14.0) on MemoryEntry. |
-| OpenAPI /docs unexposed (Critical #C2) | **DONE** | `/docs` and `/openapi.json` added to middleware exemption list. Swagger UI accessible at `http://localhost:8000/docs`. 13 endpoints documented. |
+| Task | Status | Evidence |
+|------|--------|----------|
+| **C1: Fix overview decay pipeline bug** | PASS | `handlers.py:256` reads from `MemoryEntry` (not search dict). `search.py:85-86` outputs `days_since_last_access` + `stability`. Heat values confirmed different from old formula. |
+| **C2: Add stability boundary guards** | PASS | `models.py:78`: `stability: float = Field(default=14.0, gt=0.0)`. `models.py:111-122`: `@field_validator` rejects <=0, clamps <0.1. Runtime `max(stability, 0.1)` safety clamps in overview + wander. |
+| **C3: Expose decay fields in API** | PASS | `/api/memories`: all 4 decay fields present. `/api/stats`: `decay_risk` array present. `/api/search`: `days_since_last_access` + `stability`. `/api/wander`: same. `types.ts`: `DecayRiskEntry` synced. |
+| **I1: Wire modal exit animations** | PASS | `Dashboard.tsx` imports `useExitAnimation`, applies to wander/validate states. `Modal()` accepts `closing` prop, applies `modal-fade-exit` / `backdrop-fade-exit` CSS classes. Archive modal wired in `App.tsx`. |
+| **I2: Fix all sub-12px fonts** | PASS | Zero `fontSize: 9` or `fontSize: 10` in DOM UI text. All 7 documented violations fixed. All interactive elements >=12px. |
+| **N1: Dashboard decay risk** | PASS | `Dashboard.tsx:455-521`: Decay Risk `SectionCard` reads `stats.decay_risk`, shows count + top 3 IDs with R values + "N more at risk" overflow. |
+| **N2: Graph Resolve context menu** | PASS | `App.tsx:465`: `handleResolveFromContext` callback. `App.tsx:1326`: `<ContextMenuItem label="Resolve">` in graph node right-click menu. |
+| **N3: Remove List local filter bar** | DEFERRED | Intentionally skipped per plan. |
 
-### 1.2 The Core Loop -- Post-Round 13 Assessment
+### 1.2 The C1 Bug: A Post-Mortem
+
+The C1 bug is worth memorializing because it reveals a pattern that threatens future correctness. Here is what happened:
+
+1. **R13** introduced `days_since_last_access` as a precomputed field on `MemoryEntry` objects in `index.json`.
+2. `handle_overview()` reads memory data from the search result dict (a lightweight dict returned by `search()`), NOT from the `MemoryEntry` Pydantic model.
+3. `search()` builds its output dict by manually copying fields one-by-one (search.py lines 73-86). In R13, `days_since_last_access` was not in the copy list.
+4. `handle_overview()` at line 258 attempted `r.get("days_since_last_access")` from the search dict -- which always returned `None`.
+5. When `days_since_last_access` is `None`, the overview heat formula falls through to `access * 0.1` (the old pre-R13 formula).
+6. The 86 tests passed because they validate against the **old** formula output, which matched the **broken** code path. This is a test-validates-broken-code failure, not a test-coverage gap.
+
+**Root cause:** Two different data representations of the same memory -- `MemoryEntry` (Pydantic model, index.json) and search result dict (hand-rolled dict) -- diverged silently. The handler read from the wrong one.
+
+**The C1 fix is architecturally correct:**
+- `handlers.py` now reads `days_since_last_access` from `entry.days_since_last_access` (the `MemoryEntry` object fetched from `index.memories`), not from the search dict.
+- `search.py` now also includes both `days_since_last_access` and `stability` in its output dict -- closing the gap for future consumers.
+- This is a belt-and-suspenders fix: the handler no longer depends on search dict completeness, and the search dict is now complete anyway.
+
+**Lesson for future rounds:** Any new field added to `MemoryEntry` must be propagated to three places: (1) `models.py` field definition, (2) `search.py` output dict, (3) `server.py` API response shape. A Pydantic-to-dict auto-serializer for search results would eliminate this class of bug entirely.
+
+### 1.3 The C2 Stability Guards: Crash-Proofing
+
+The C2 guards protect against three failure modes:
+
+| Failure | Pre-R14 | Post-R14 |
+|---------|---------|----------|
+| `stability=0` | `ZeroDivisionError` crash in `0.5^(days/0)` | Pydantic validator rejects `<=0` with clear error |
+| `stability < 0` | `decay > 1.0` (memory "strengthens" over time -- nonsense) | Pydantic validator rejects negative values |
+| `stability < 0.1` (dangerously low) | Decay races to near-zero in hours | Pydantic validator clamps to 0.1 minimum (2.4h half-life); runtime `max(stability, 0.1)` double-guard |
+| `days_since_last_access=None` | Treated as `0` (no decay) in all three consumers | Unified: `None` falls through to `access * 0.1` (no-decay path); behavior identical but now **documented and intentional** |
+
+The Pydantic `@field_validator("stability", mode="before")` at line 111-122 of `models.py` is the correct defense-in-depth pattern. The runtime `max(stability, 0.1)` clamps in `handlers.py` (lines 257, 346) provide a second safety net for data that bypasses Pydantic validation (e.g., manually constructed objects).
+
+### 1.4 The Core Loop -- Post-Round 14 Assessment
 
 The product interaction loop remains:
 
@@ -51,131 +87,86 @@ The product interaction loop remains:
 Search/Graph Browse -> Inspect Memory -> Resolve Dependencies -> Edit/Maintain -> Validate
 ```
 
-Round 13 tightened three joints in this chain:
+Round 14 tightened two additional joints beyond Round 13:
 
-| Joint | Before R13 | After R13 |
-|-------|-----------|-----------|
-| **Search -> Resolve** | 4 clicks (search result -> close search -> graph -> resolve button) | 2 clicks (search -> "Resolve ->" button) |
-| **Resolve -> Feedback** | UI freezes silently for 1-3 seconds | Shimmer skeleton with "Resolving..." header |
-| **Panel Close** | Panel vanishes instantly (entrance animated, exit dead) | 3 of 6 panels now fade/slide out over 250ms |
+| Joint | Pre-R14 | Post-R14 |
+|-------|---------|----------|
+| **Graph -> Resolve** | No path. Had to switch to Search/List to resolve. | Right-click node -> "Resolve" context menu. |
+| **Dashboard -> Awareness** | Passive stats only (maturity, status, type counts). | Decay Risk section shows memories approaching the R < 0.1 threshold. |
+| **Modal Close** | Wander/Validate/Archive snapped away instantly. | All modals fade+scale out over 250ms with backdrop fade. |
+| **Font readability** | 7 elements below 12px, including 9px reference text. | All text >= 11px; all interactive elements >= 12px. |
 
-The core loop **works**. A user can search for a memory, resolve its dependency chain in two clicks, see loading feedback, and close panels with exit animations. The remaining gaps are:
+The core loop **works correctly end-to-end for the first time**. The decay formula that powers overview heat, wander cool-mode selection, and validate decay detection is now the same formula across all three paths. A user who resolves a memory, then views the overview dashboard, then runs wander, will see consistent decay behavior -- the same memory won't be "hot" in overview but "cold" in wander.
 
-1. **Body text search (Critical):** Search still only matches ID, summary, tags, and metadata. A memory titled "NVIDIA Analysis" with a 500-word body about "semiconductor supply chain" won't appear when searching "supply chain." This is the single biggest functional gap and was correctly deferred to a search-focused sprint.
+### 1.5 The Missing Table-Stakes Features (Unchanged from Prior Audit)
 
-2. **Modal exit animations (Partial):** Wander, Validate, and Archive modals still vanish instantly. Users who primarily interact through Dashboard modals will never see an exit animation. The fix requires refactoring the `Modal()` inline function in Dashboard.tsx to use `useExitAnimation`.
+These remain the structural gaps preventing CodeMemory from reaching feature parity:
 
-3. **Graph keyboard navigation (Deferred):** Arrow-key node traversal remains missing. Power users who prefer keyboard-only operation are locked out of the graph view.
+| Feature | Status | Competitor Standard |
+|---------|--------|---------------------|
+| Full-text body search | Missing | Mem0, Zep, paradigm, Obsidian, Notion -- all support |
+| Multi-select / batch ops | Missing | Notion, Obsidian standard |
+| Multi-level undo | Single-level | Every editor since 1984 |
+| Graph keyboard navigation | Missing | Cytoscape native, not wired |
+| Tabbed/multi-pane view | Missing | Obsidian, Notion, Logseq standard |
+| Pin/bookmark memories | Missing | Every knowledge tool |
+| Mobile responsive design | Missing | Standard in 2026 |
+| Frontend tests | 0 tests | Any production UI |
+| Semantic/embedding search | Missing | Mem0, Zep, paradigm standard |
+| Entity extraction / linking | Missing | Mem0, Zep standard |
+| Write-capable MCP tools | Snapshot only (1 of 5) | Mem0 (9 tools), paradigm (28 tools) |
+| Onboarding / first-run experience | Missing | Standard in 2026 |
 
-4. **Multi-level undo (Deferred):** Single-level undo feels jarringly primitive in 2026. Two consecutive edits where the second was a mistake cannot be reversed.
-
-### 1.3 The Missing Table-Stakes Features (Unchanged from Prior Audit)
-
-These remain the structural gaps preventing CodeMemory from reaching feature parity with any competitor:
-
-| Feature | Round 12 Status | Round 13 Status | Competitor Standard |
-|---------|----------------|-----------------|---------------------|
-| Full-text body search | Missing | Missing | Mem0, Zep, Obsidian, Notion, paradigm-memory -- all support |
-| Multi-select / batch ops | Missing | Missing | Notion, Obsidian standard |
-| Multi-level undo | Single-level | Single-level | Every editor since 1984 |
-| Graph keyboard navigation | Missing | Missing | Cytoscape native, not wired |
-| Tabbed/multi-pane view | Missing | Missing | Obsidian, Notion, Logseq standard |
-| Drag-and-drop tag assignment | Missing | Missing | Notion, Obsidian standard |
-| Pin/bookmark memories | Missing | Missing | Every knowledge tool |
-| Mobile responsive design | Missing | Missing | Standard in 2026 |
-| Frontend tests | 0 tests | 0 tests | Any production UI |
-| Semantic/embedding search | Missing | Missing | Mem0, Zep, paradigm-memory standard |
-| Entity extraction / linking | Missing | Missing | Mem0, Zep/Graphiti standard |
-
-**Assessment:** CodeMemory's functional completeness is sufficient for its current audience (the builder team) but would fail any external evaluator's first 5 minutes. The gaps are concentrated in Search (body text, semantic) and Editing (multi-select, multi-undo, keyboard nav) -- the two features users touch most.
+**Assessment:** The functional core is solid. The polish is complete. The correctness is verified. But the product still cannot perform the single most common user action -- "search for a word in a memory's body" -- which every competitor handles trivially. This is now the product's most acute functional gap and the primary blocker to external user adoption.
 
 ---
 
 ## Phase 2: Competitive Gap Analysis
 
-### 2.1 The 2026 AI Memory Landscape
+### 2.1 The 2026 AI Memory Landscape (Updated)
 
-Three distinct architectural approaches have emerged in the AI agent memory space:
+The landscape has shifted significantly since the prior audit. Three developments matter:
 
-| Architecture | System | Approach | Funding/Stars | Key Metric |
-|-------------|--------|----------|---------------|------------|
-| **Vector + Graph Hybrid** | Mem0 | Semantic + graph + KV store | $24M, 48K stars | 91.6% LoCoMo (new algo) |
-| **Temporal Knowledge Graph** | Zep/Graphiti | Bi-temporal entity-relation edges | 24K stars | 63.8% LongMemEval |
-| **Cognitive Map** | paradigm-memory | Tree + activation propagation | Apache 2.0 | 28 MCP tools |
-| **DAG Dependency Resolution** | **CodeMemory** | Explicit imports + topo sort + time decay | N/A | **Zero-ambiguity recall** |
+**1. Mem0's April 2026 Algorithm (v2.0/v3.0) raises the bar dramatically:**
+- 91.6% LoCoMo, 93.4% LongMemEval -- both up 20+ points from their prior algorithm
+- Single-pass ADD-only extraction with ~7K tokens per operation
+- Entity linking, multi-signal retrieval (semantic + BM25 + entity), temporal reasoning at 93%
+- 9 MCP tools via `mcp.mem0.ai` cloud server, lifecycle hooks for Claude Code/Cursor/Codex
+- CLI v0.2.2 (add, search, list, get, update, delete, import, entity management)
+- Skill Graph for in-context coding agent documentation
+- The gap between Mem0's "dump text, it figures out what to store" and CodeMemory's "manually create structured .md files" has **widened**.
 
-### 2.2 Competitor Deep Dives
+**2. Zep/Graphiti now has a first-class MCP server (Thoughtworks Trial, April 2026):**
+- Bi-temporal edges with 4 timestamps per relationship
+- MCP server for Claude/Cursor -- making temporal KG memory accessible to any agent
+- FalkorDB integration for multi-agent isolation
+- 63.8% LongMemEval (independent benchmark)
+- The bi-temporal model ("what was Alice's address before she moved in October?") is something CodeMemory cannot express natively.
 
-#### Mem0 (mem0ai/mem0) -- The Market Leader
+**3. paradigm-memory continues to expand its tool surface:**
+- 28 MCP tools (vs CodeMemory's 5), covering full CRUD + maintenance + audit + snapshot diff/restore
+- Desktop app (Tauri + React + react-flow) with nodal graph visualization
+- Consolidation/dream pass for auto-dedup and staleness detection
+- Local embeddings (ONNX/WASM) with no cloud dependency
+- Every mutation audited with actor + reason + diff
 
-**What they have that CodeMemory doesn't:**
-- **Self-editing memory**: ADD-only extraction pipeline that consolidates and deduplicates. No conflicting memories.
-- **Entity extraction + linking**: Automatically extracts entities (people, projects, dates) and links them across memories.
-- **Multi-signal retrieval**: Semantic (vector) + BM25 (keyword) + entity matching in parallel, fused by scoring.
-- **Graph memory (Pro tier)**: Neo4j/Memgraph/Kuzu backend for multi-hop queries ("What projects has Alice worked on with Bob?").
-- **Managed cloud hosting**: Free tier -> $19/mo -> $249/mo Pro. SOC2, HIPAA compliance path.
-- **LangGraph/CrewAI/AutoGen integrations**: Embedded in the major agent frameworks.
-- **9 MCP tools**: Including lifecycle hooks and cloud MCP server.
-- **91.6% LoCoMo, 93.4% LongMemEval** on their newest algorithm (self-reported).
+**4. Letta (formerly MemGPT) -- the OS-for-memory approach:**
+- Treats LLM context window like virtual memory (RAM/disk/cold storage tiers)
+- Agents self-edit their own memory -- no passive extraction pipeline
+- Letta Code (March 2026): memory-first coding agent with defragmentation and reflection
+- Task delegation to specialized subagents with project-specific memory
+- ~83.2% LoCoMo
+- The key insight: Letta's agents decide what to remember, not a pipeline. This is philosophically opposite to CodeMemory's explicit-imports model but practically similar in ambition: deterministic, agent-controlled memory.
 
-**Where CodeMemory wins:**
-- **Deterministic recall**: Mem0 relies on vector similarity = probabilistic. CodeMemory's `imports` DAG is fully deterministic. You get exactly what you asked for, not what was semantically nearby.
-- **Local-first, zero cloud**: Mem0's core operates cloud-side; self-hosting is possible but not the happy path.
-- **Explicit dependency model**: Mem0 infers relationships probabilistically. CodeMemory requires explicit `imports` -- fewer false positives, no "AI hallucinated a connection."
-- **Token budget control**: CodeMemory's `--budget N` + depth modes (required/recommended/full) give developers precise control over context window usage. Mem0 has no equivalent.
-- **Time decay as first-class concept**: Mem0's ADD-only model accumulates indefinitely; CodeMemory's decay formula naturally cools unused memories.
-
-**The gap that matters most:** Mem0's self-editing memory means a user can dump unstructured text and the system figures out what to store. CodeMemory requires users to manually create structured .md files with frontmatter. For developer power-users, this is acceptable (prefer explicit over implicit). For non-developer knowledge workers, this is a non-starter.
-
-#### Zep/Graphiti (getzep/graphiti) -- The Temporal Specialist
-
-**What they have that CodeMemory doesn't:**
-- **Bi-temporal edges**: Every relationship carries `valid_from`, `valid_to`, `created_at`, `invalid_at`. Can answer "What was Alice's address before she moved in October?"
-- **Episode subgraph**: Raw conversation/event data preserved for provenance and audit.
-- **Community subgraph**: High-level abstractions grouping related entities.
-- **Hybrid retrieval**: Semantic + BM25 + graph traversal in parallel, sub-second latency.
-- **Multiple graph backends**: Neo4j, FalkorDB, Kuzu, Amazon Neptune.
-- **Multi-LLM support**: OpenAI, Azure, Google Gemini, Anthropic, Groq, Ollama (local).
-- **63.8% LongMemEval** vs Mem0's 49.0% on temporal tasks (independent benchmark).
-
-**Where CodeMemory wins:**
-- **Explicit dependency model** (again): Zep's graphs are auto-extracted from text -- same probabilistic noise problem as Mem0.
-- **File-based architecture**: Zep requires running a graph database. CodeMemory's .md files + index.json can be version-controlled with Git.
-- **MCP server**: Zep has MCP but CodeMemory's 5 cognitive primitives (overview, focus, resolve, wander, snapshot) form a more structured cognitive interface than Zep's generic graph query tools.
-- **Warm-neutral design**: Zep is a developer tool with developer aesthetics. CodeMemory's crafted visual identity is a legitimate competitive advantage for knowledge-worker adoption.
-
-**The gap that matters most:** Zep's temporal reasoning is architecturally superior. CodeMemory's `days_since_last_access` tracks when you accessed a memory, but Zep tracks when facts were true. "NVIDIA's P/E was 45 in Q4 2025" is a temporal fact that CodeMemory cannot natively model -- it's just text in a body. A `valid_from`/`valid_to` concept on imports or body sections would be structurally additive.
-
-#### paradigm-memory (infinition/paradigm-memory) -- The Closest Conceptual Competitor
-
-**What they have that CodeMemory doesn't:**
-- **28 MCP tools**: vs CodeMemory's 5. Includes mutations (write, update, delete, move), review/audit tools, snapshot diff/restore, import/export, and maintenance (doctor, stats, warm).
-- **Activation propagation**: Three-level gating (open >=0.75, latent >=0.45, ignored <0.25) based on hybrid scoring (FTS BM25 + lexical + parent activation + importance + confidence + substring boost).
-- **Consolidation/dream pass**: Detects duplicates, stale items, overloaded nodes, and orphans automatically.
-- **Forensic audit log**: Every mutation records actor + reason + diff.
-- **Multi-workspace pooling**: One process serves N projects via `workspace` parameter.
-- **Desktop app**: Tauri + React + react-flow with nodal graph visualization.
-- **Local embeddings**: ONNX/WASM (`Xenova/all-MiniLM-L6-v2`, 90MB) or optional Ollama.
-- **Auto-snapshots**: Before every destructive operation.
-- **Apache 2.0 license**, fully free, zero cloud.
-
-**Where CodeMemory wins:**
-- **DAG dependency resolution**: paradigm-memory's tree + activation is NOT a dependency graph -- it's a hierarchical topic tree with relevance propagation. CodeMemory's `imports` DAG + topological sort produces a deterministic, ordered resolve output. paradigm-memory cannot answer "show me everything that led to this decision, in causal order."
-- **Explicit over inferred**: paradigm-memory auto-organizes based on content similarity. CodeMemory requires explicit imports -- again, fewer false positives.
-- **MCP protocol compliance**: CodeMemory's `readOnlyHint` annotations are correct and complete. paradigm-memory's 28 tools don't consistently declare read/write semantics.
-- **Token budget**: CodeMemory has `--budget N` + depth modes + trim levels. paradigm-memory's context packs don't expose explicit budget control.
-
-**The gap that matters most:** paradigm-memory's tool surface is 5.6x larger (28 vs 5 tools) and covers the full CRUD cycle + maintenance + audit. CodeMemory's MCP server is read-oriented (4 readOnly, 1 write via snapshot). Agents can read from but cannot write to CodeMemory's memory system. Adding `create_memory` and `update_memory` as MCP tools would close the most important integration gap.
-
-### 2.3 Competitive Landscape Summary
+### 2.2 Updated Competitive Positioning
 
 ```
                     Deterministic │
                     Dependency     │  CodeMemory  ← unique position
                     Resolution    │     ●
                                   │
-                    Explicit      │  CodeMemory     paradigm-memory
-                    Structure     │     ●               ●
+                    Explicit      │  CodeMemory  Letta ●
+                    Structure     │     ●          paradigm ●
                                   │
                     Probabilistic │       Mem0 ●
                     Similarity    │              ● Zep/Graphiti
@@ -185,149 +176,145 @@ Three distinct architectural approaches have emerged in the AI agent memory spac
                                   │
                     Mem0 ●        │     ● CodeMemory
                     Zep  ●        │     ● paradigm-memory
+                    Letta ●       │
 ```
 
-CodeMemory occupies a unique niche -- deterministic dependency resolution for AI memory, local-first, file-based -- that no competitor fills. But this niche has walls: it requires users who are willing to manually structure their knowledge with explicit imports, and it lacks the automated extraction, entity linking, and consolidation that make Mem0 and Zep accessible to non-developers.
+CodeMemory's niche -- deterministic dependency resolution for AI memory, local-first, file-based -- remains unique. But three competitors now occupy adjacent territory that was empty 6 months ago:
 
-### 2.4 Missing "Must-Have" Features Across All Competitors
+- **Letta** (deteministic + agent-controlled) has moved closer to CodeMemory's "explicit structure" axis by giving agents full control over what goes into memory.
+- **paradigm-memory** has expanded its MCP tool surface to 28 tools, making it the most complete read/write/audit memory MCP server.
+- **Mem0** has raised the accuracy bar to >90% on major benchmarks, making the argument for probabilistic memory harder to dismiss on quality grounds.
 
-These features are now table stakes for any AI memory product:
+### 2.3 Missing "Must-Have" Features -- Updated Competitor Matrix
 
-| Feature | Mem0 | Zep | paradigm | CodeMemory | Priority |
-|---------|------|-----|----------|------------|----------|
-| Full-text body search | Yes | Yes | Yes | **No** | CRITICAL |
-| Semantic/embedding search | Yes | Yes | Yes (local) | **No** | HIGH |
-| Entity extraction + linking | Yes | Yes | Partial | **No** | MEDIUM |
-| Write-capable MCP tools | Yes | Yes | Yes | **No** (except snapshot) | HIGH |
-| Multi-level undo | N/A | N/A | Yes (snapshot) | **No** | MEDIUM |
-| Auto-consolidation/dedup | Yes | Partial | Yes (dream pass) | **No** | LOW |
-| Managed cloud hosting | Yes | Yes | No | **No** | LOW (by design) |
-| Desktop app | No | No | Yes (Tauri) | **No** | LOW |
-| Frontend tests | Yes | Yes | Unknown | **No** | HIGH |
+| Feature | Mem0 | Zep | paradigm | Letta | CodeMemory | Priority |
+|---------|------|-----|----------|-------|------------|----------|
+| Full-text body search | Yes | Yes | Yes | Yes | **No** | CRITICAL |
+| Semantic/embedding search | Yes | Yes | Yes (local) | Yes | **No** | HIGH |
+| Entity extraction + linking | Yes | Yes | Partial | Yes | **No** | MEDIUM |
+| Write-capable MCP tools | Yes (9) | Yes | Yes (28) | Yes | **Snapshot only** | HIGH |
+| Self-editing memory | Yes | No | Partial | Yes (core) | **No** | MEDIUM |
+| Multi-level undo | N/A | N/A | Yes (snapshot) | N/A | **No** | MEDIUM |
+| Auto-consolidation/dedup | Yes | Partial | Yes (dream) | Yes | **No** | LOW |
+| Managed cloud hosting | Yes | Yes | No | Yes | **No** | LOW (by design) |
+| Desktop app | No | No | Yes (Tauri) | Yes (ADE) | **No** | LOW |
+| Frontend tests | Yes | Yes | Unknown | Yes | **No** | HIGH |
+| Temporal fact tracking | No | Yes (core) | No | No | **No** | LOW |
+| Onboarding/first-run | Yes | Partial | No | Partial | **No** | MEDIUM |
+
+### 2.4 The Competitive Moat -- Three Risks
+
+**Risk 1: The "explicit imports" moat is also a wall.** CodeMemory's core differentiator -- deterministic recall through explicit imports -- requires users to manually declare dependencies between memories. Every competitor that uses auto-extraction (Mem0, Zep, paradigm) can ingest unstructured text and infer relationships. CodeMemory cannot. The question is not whether explicit > implicit (it is, for correctness) but whether the market of users willing to do explicit memory engineering is large enough to sustain the product.
+
+**Mitigation:** The `suggest_deps.py` module already exists CLI-only. Surfacing it in the MemoryForm UI (auto-complete import suggestions as the user types) would bridge the gap between "manual only" and "AI-assisted manual." This is proposed as Recommendation I4 below.
+
+**Risk 2: Mem0's benchmark numbers are becoming impossible to ignore.** 91.6% LoCoMo and 93.4% LongMemEval mean Mem0 correctly recalls the right memory in the right context >90% of the time. The "probabilistic = unreliable" argument weakens when probabilistic hits 93%. CodeMemory's "deterministic = 100% accurate" argument remains true for structured recall but applies only to memories with explicit imports. CodeMemory cannot claim high recall on unstructured content.
+
+**Mitigation:** This is not a feature gap to fix but a positioning decision. CodeMemory should lean harder into the use cases where deterministic recall matters most: investment decisions with audit trails, software architecture decisions with rationale chains, compliance-sensitive workflows where "the AI hallucinated a connection" is unacceptable. Full-text body search (C1 in recommendations) would close the unstructured-content recall gap enough to make the product defensible.
+
+**Risk 3: paradigm-memory's 28 MCP tools make CodeMemory's 5-tool MCP server look thin.** Agents that connect to paradigm-memory can read, write, update, delete, move, audit, snapshot, diff, restore, dream, doctor, warm, and self-update. CodeMemory's agents can: resolve, overview, wander, focus, and snapshot. The gap is not just tool count -- it's the closed vs open agentic loop. CodeMemory's agents can READ context but cannot CONTRIBUTE to the knowledge base.
+
+**Mitigation:** Write-capable MCP tools (`propose_create`, `propose_update`, `propose_imports`) would close the loop. This is Recommendation I1 below and should be the centerpiece of the MCP-focused round (suggested R16).
 
 ---
 
 ## Phase 3: Feature Depth -- Where Can We Go Deeper?
 
-### 3.1 The stability Field: A Door Opening
+### 3.1 The Decay Model: From Invisible to API-Visible
 
-R13-M4's `stability: float = 14.0` on every MemoryEntry is the most strategically significant change in Round 13 -- not for what it does today (backward-compatible default; all memories have identical 14-day half-life), but for what it enables tomorrow.
+Round 14 transforms the decay model from pure backend infrastructure into API-accessible data. The `/api/stats` endpoint now returns `decay_risk` -- an array of memories with R < 0.1, sorted by decay multiplier. The `/api/memories` endpoint now returns `stability` and `days_since_last_access` for every memory. The `/api/search` and `/api/wander` endpoints include the same fields.
 
-**Current state:** `stability` is a passive, uniform constant. Every memory decays at the same rate: `0.5^(days/14)`. A one-line fact about NVIDIA earnings decays identically to a deeply-researched investment thesis.
+This is not user-visible depth (the Dashboard N1 section is minimal -- count + top 3 IDs) -- but it is the **necessary infrastructure for all future decay features**. The next step is making it user-controllable:
 
-**What stability unlocks per-memory:**
-- **Spaced repetition (FSRS-lite):** Increase stability each time a memory is accessed via `resolve` or `focus`. Memories you use stay fresh longer. Memories you ignore cool faster.
-- **Intensity-weighted stability:** High-intensity memories (8-10) could have longer half-lives (21-28 days). Low-intensity memories (1-3) could have shorter half-lives (7-10 days). This mirrors human memory: important things fade slower.
-- **Maturity-gated stability:** `proven` memories decay at 21 days, `draft` at 7 days. The system naturally prioritizes proven knowledge.
-- **Schema-directed stability:** `schema` type memories (templates) could have infinite stability (never decayed) since they define structure, not content.
+- **Per-memory stability slider** in MemoryForm/MemoryDetail (Recommendation I2)
+- **Decay column in List view** with color-coded recency (Recommendation I3)
+- **Full "Cooling Memories" Dashboard section** with sortable list (Recommendation I5)
+- **Per-tag stability defaults** ("investment" = 30d, "facts" = 7d) (long-term F2)
+- **FSRS-lite stability updates** on resolve/focus access (long-term F3)
 
-The formula is already uniform across overview/wander/validate. Changing `stability` per-memory is a parameter change, not an architecture change. This is low-hanging personalization fruit.
+The `stability` field is now guarded, exposed, and computed correctly. It is a door waiting to be walked through.
 
-### 3.2 days_since_last_access: Personalization Primitive
+### 3.2 Feature Depth Scores -- Updated
 
-R13-M3's `days_since_last_access` integer is another strategic door-opener. Today it's used only for heat calculation. Tomorrow it enables:
+| Feature | R13 Score | R14 Score | Delta | Notes |
+|---------|----------|----------|-------|-------|
+| **Resolve** | 8.5/10 | **9.0/10** | +0.5 | Graph context menu adds second discovery path. Resolve-from-graph completes the triad (search + list + graph all lead to resolve). |
+| **Overview (heat)** | 8/10 | **8.5/10** | +0.5 | Decay formula now actually works (C1). Heat values reflect real access decay for the first time. |
+| **Wander** | 6.5/10 | **7.0/10** | +0.5 | Now uses correct decay formula; cool mode genuinely surfaces cooled memories. Exit animation added. |
+| **Focus** | 4/10 | **4/10** | 0 | Unchanged. Still a binary full/summary toggle. |
+| **Snapshot** | 6/10 | **6/10** | 0 | Unchanged. |
+| **Search** | 4.5/10 | **4.5/10** | 0 | Unchanged. Body text search still missing. Resolve button now 12px (readable). |
+| **Validate** | 7/10 | **7.5/10** | +0.5 | Decay detection now uses the correct, working formula. Exit animation added. |
+| **Graph** | 6/10 | **7.0/10** | +1.0 | Resolve context menu is the single biggest graph UX improvement since initial Cytoscape integration. |
+| **List** | 5.5/10 | **5.5/10** | 0 | Unchanged. |
+| **Dashboard** | 4/10 | **5.0/10** | +1.0 | Decay Risk section (N1) transforms Dashboard from passive stats to active awareness. First time decay data is user-visible. |
 
-- **"Last accessed N days ago" display** in MemoryDetail panel -- gives users visibility into their own memory usage patterns.
-- **"Due for review" Dashboard section** -- memories where `days_since_last_access > stability` sort to the top with a warning icon. This transforms the Dashboard from a passive stats display into an active knowledge maintenance tool.
-- **Access frequency trend** -- track the last 5 access timestamps to compute access velocity. "Is this memory being used more or less over time?" Surfaces shifting relevance before decay detection catches it.
-- **"Since your last visit" resolve augmentation** -- when resolving a memory, highlight which dependencies have been accessed more recently than the memory itself (potential "context you have but haven't connected").
+**Weighted average: 6.4/10 (up from 6.0).** Four of ten features deepened measurably. Graph and Dashboard each gained a full point from single, high-impact additions. Resolve, Overview, Wander, and Validate each gained 0.5 from correctness (C1) and polish (I1) improvements.
 
-### 3.3 Feature Depth Scores -- Updated
+### 3.3 The Personalization Frontier (Unchanged Opportunities)
 
-| Feature | R12 Score | R13 Score | Delta | Can Go Deeper? |
-|---------|----------|----------|-------|----------------|
-| **Resolve** | 8/10 | **8.5/10** | +0.5 | Resolve-from-search shortens path; loading state removes friction. Next: incremental resolve (only changed deps), cycle-aware partial resolution. |
-| **Overview (heat)** | 7/10 | **8/10** | +1.0 | Decay model unified; cycle participants excluded; days precomputed. Next: per-memory stability curves, user feedback loop ("this was useful"). |
-| **Wander** | 5/10 | **6.5/10** | +1.5 | Now uses same decay formula as overview. Cool wander genuinely surfaces cooled memories. Next: spaced-repetition scheduling, serendipity streaks. |
-| **Focus** | 4/10 | **4/10** | 0 | Unchanged. Still a summary/full binary toggle. Next: progressive disclosure (3+ levels), inline editing from focus, context-aware related suggestions. |
-| **Snapshot** | 6/10 | **6/10** | 0 | Unchanged. Next: snapshot diff/comparison, auto-snapshot triggers. |
-| **Search** | 3/10 | **4.5/10** | +1.5 | Resolve button + dropdown animation add quality. Next: full-text body search (the 3->6 jump), semantic search, saved searches. |
-| **Validate** | 6/10 | **7/10** | +1.0 | Decay detection now uses continuous formula (R < 0.1 threshold), not hardcoded 30 days. Next: auto-fix suggestions, pre-commit hooks. |
-| **Graph** | 6/10 | **6/10** | 0 | Unchanged. Resolve loading state integrated. Next: keyboard navigation, subgraph extraction, Hover micro-animations. |
-| **List** | 5/10 | **5.5/10** | +0.5 | Badge fonts now 12px in list. Next: column customization, multi-select, batch ops. |
-| **Dashboard** | 4/10 | **4/10** | 0 | Unchanged. Next: activity timeline, memory health score, "due for review" section. |
+The three personalization features identified in the prior audit remain equally feasible, now with the decay pipeline verified correct:
 
-**Weighted average: 6.0/10 (up from 5.5).** Three of ten features deepened measurably. Seven features are at the same depth as Round 12. The decay model work deepens Overview, Wander, and Validate simultaneously -- a force multiplier from a single code change.
+**A. Per-Memory Decay Curves** -- stability slider + "Decay" column in List view. Now that the API exposes stability and days_since_last_access, the frontend can consume this data directly.
 
-### 3.4 The Personalization Frontier
+**B. "Since You Last Visited" Context Injection** -- when resolving a long-untouched memory, inject a summary of what changed in its dependency chain. CodeMemory uniquely tracks both structure (DAG) and time (decay).
 
-Three features that the `stability` + `days_since_last_access` pairing opens:
-
-**A. Per-Memory Decay Curves Dashboard.** A Settings-like panel where power users can adjust stability per-memory or per-tag. "Investment theses: 30-day half-life. Market facts: 7-day half-life." This makes the decay model visible and controllable -- transforming it from an invisible algorithm to a user-controlled feature.
-
-**B. "Since You Last Visited" Context Injection.** When a user resolves a memory they haven't touched in 30 days, inject a summary block: "Since your last visit to this dependency chain: 3 memories updated, 2 new dependencies added, 1 memory cooled below threshold." This is the "Recap" feature from social media but for personal knowledge -- and uniquely feasible because CodeMemory tracks both structure (DAG) and time (decay).
-
-**C. Memory Health Dashboard.** A 0-100 score computed from: cycle count, stale ratio, broken links, average days since access, decay rate distribution, dependency depth distribution. Gamifies knowledge maintenance. "Your knowledge base health is 72. Resolve 3 stale memories and validate to reach 85." This was F2 in the prior audit and gains feasibility now that the decay model is unified and the data is precomputed.
+**C. Memory Health Dashboard** -- a 0-100 score from: cycle count, stale ratio, broken links, avg days since access, decay distribution. Now feasible because all decay data is API-accessible.
 
 ---
 
 ## Phase 4: Differentiation -- Strengthening the Moat
 
-### 4.1 The Core Differentiator: DAG + MCP + Time Decay
+### 4.1 The Core Differentiator: Sharpened
 
-CodeMemory's unique value proposition has sharpened since Round 12:
+CodeMemory's unique value proposition post-Round 14:
 
-**"Deterministic dependency resolution for AI memory, with time-decay activation management, exposed as a native MCP protocol server."**
+**"Correctly working deterministic dependency resolution for AI memory, with time-decay activation management exposed via API, and a native MCP protocol server with cognitive-primitive tools."**
 
-This is now a three-legged stool:
+The three-legged stool:
 
-| Leg | What it means | Competitor comparison |
-|-----|---------------|----------------------|
-| **DAG (explicit imports)** | Memory loading is dependency resolution, not vector search | Mem0/Zep: probabilistic. paradigm: tree+activation. CodeMemory: deterministic DAG topo sort. |
-| **MCP (native protocol)** | 5 cognitive primitives as agent tools | Mem0: 9 MCP tools (utility). Zep: MCP. paradigm: 28 MCP tools (utility). CodeMemory: 5 tools aligned with cognitive model, not utility functions. |
-| **Time decay (unified)** | `0.5^(days/stability)` across overview/wander/validate | Mem0: ADD-only (accumulates forever). Zep: temporal facts (validity windows). CodeMemory: activation decay (recency-weighted recall). |
+| Leg | R13 Status | R14 Status | Competitor comparison |
+|-----|-----------|-----------|----------------------|
+| **DAG (explicit imports)** | Working | Working (unchanged) | Mem0/Zep: probabilistic. paradigm: tree+activation. CodeMemory: deterministic DAG topo sort. |
+| **MCP (5 cognitive primitives)** | 4 readOnly + 1 write | 4 readOnly + 1 write (unchanged) | Mem0: 9 tools (utility). paradigm: 28 tools (utility). CodeMemory: 5 tools aligned with cognitive model. |
+| **Time decay (unified)** | Formula defined but broken in overview | **Formula correct and verified on all 3 paths** | Mem0: ADD-only. Zep: temporal facts. CodeMemory: activation decay (recency-weighted recall). |
 
-No competitor has all three. Mem0 has MCP + time-agnostic retrieval. Zep has temporal modeling + probabilistic graphs. paradigm-memory has MCP + activation + local-first. Only CodeMemory combines deterministic DAG resolution with time-decay activation management behind an MCP protocol.
+The decay leg is now load-bearing. The C1 fix means CodeMemory is the only AI memory product with a **correctly implemented, internally consistent, cross-cutting time-decay activation model**. This is a legitimate technical moat -- building a unified decay model that works identically across overview, wander, and validate is architecturally non-trivial and no competitor has attempted it.
 
-### 4.2 Strengthening the Moat -- Three Strategic Bets
+### 4.2 Three Strategic Bets (Updated)
 
-#### Bet 1: Expose the Decay Model as a User-Visible Feature
+#### Bet 1: Expose the Decay Model as a User-Visible Feature (Progress: 20%)
 
-The time-decay model is currently invisible -- it operates silently in overview/wander/validate with no user-facing UI. Making it visible and controllable transforms it from infrastructure into differentiation.
+Round 14 completed the API exposure (C3) and the minimal Dashboard widget (N1). This is ~20% of the journey to making decay a user-visible differentiator. The remaining 80%:
 
-**Specific steps:**
-- Show `days_since_last_access` in MemoryDetail panel ("Last accessed: 23 days ago")
-- Add a "Decay" column to List view (sortable by days since access)
-- Dashboard "Cooling Memories" section: top 5 memories closest to `R < 0.1` threshold
 - Per-memory stability slider in MemoryForm/MemoryDetail
-- Make the decay curve visual: a small sparkline showing `0.5^(days/stability)` over time
+- "Decay" column in List view with color coding
+- Full "Cooling Memories" Dashboard section with sortable list
+- Decay curve sparkline showing `0.5^(days/stability)` over time
+- "Days since last access" display in MemoryDetail panel
 
-This is the "make the algorithm your friend" strategy. CodeMemory's decay model produces deterministic, explainable results ("this memory's relevance is 23% because you last accessed it 32 days ago with a 14-day half-life"). Contrast Mem0, where a memory surfaced or didn't because of an opaque vector distance.
+**Next step:** R15 should make decay **controllable** (stability slider) and **sortable** (Decay column). This transforms the decay model from API infrastructure to user-facing feature.
 
-#### Bet 2: Close the MCP Write Gap
+#### Bet 2: Close the MCP Write Gap (Progress: 0%)
 
-CodeMemory's MCP server is read-oriented: 4 readOnly tools (resolve, overview, wander, focus) + 1 write tool (snapshot). An AI agent can recall context but cannot contribute to the knowledge base.
+CodeMemory's MCP server is unchanged from Round 13: 4 readOnly tools + 1 write (snapshot). An agent can recall context but cannot contribute to the knowledge base. This is the single biggest integration gap.
 
-**Specific steps:**
-- Add `create_memory` MCP tool: agent creates a memory from conversation insights
-- Add `update_memory` MCP tool: agent updates body/summary/status based on new information
-- Add `suggest_imports` MCP tool: agent proposes dependency edges between memories
+**Next step:** Adding `propose_create_memory` and `propose_update_memory` MCP tools (with `propose_*` staging pattern for safety) would close the agentic loop. Suggested as the centerpiece of an MCP-focused round (R16).
 
-This closes the agentic loop: agent reads context via resolve, reasons, acts, and writes learnings back. This is Mem0's core value proposition ("self-editing memory") but done with explicit imports instead of probabilistic extraction -- CodeMemory can offer "self-editing memory you can reason about."
+#### Bet 3: Ship the "Aha Moment" as a One-Click Demo (Progress: 0%)
 
-**Risk:** Write-capable MCP tools mean an AI agent can corrupt a carefully structured knowledge base. Mitigation: all MCP writes should be `propose_*` (staged, not applied) and require human review. paradigm-memory's `memory_propose_write` pattern is the right model.
+The "Demo Resolve" button proposed in the prior audit (Recommendation I3) remains unbuilt. With the graph Resolve context menu (N2) and Resolve-from-search (R13-D1), users now have two discovery paths to the Resolve flow. But neither is a one-click "here's what this product does" experience.
 
-#### Bet 3: Ship the "Aha Moment" as an Interactive Onboarding Demo
+**Next step:** A 3-node demo dataset (Observation -> Analysis -> Decision) with a "Try Resolve" button on the Dashboard that auto-executes the full flow. Cost: ~50 lines + 3 .md files. This delivers the aha moment for new users and can be built in a single afternoon.
 
-The prior audit identified this as I5. The Negotiation deferred it due to cost (medium, needs embedded Cytoscape). But with Resolve-from-search (R13-D1) shortening the path to 2 clicks, and Resolve loading state (R13-D3) removing the freeze, the aha moment is now 2 clicks from the global search bar.
+### 4.3 What NOT to Build (Unchanged)
 
-**Lower-cost alternative:** Add a one-click "Demo Resolve" button to the Dashboard that:
-1. Switches to a pre-built demo dataset (3-node DAG: Observation -> Analysis -> Decision)
-2. Auto-triggers resolve on the Decision node
-3. Shows the animation
-4. Displays the resolved context
-5. Returns the user to their original dataset
+CodeMemory should continue to consciously NOT compete on:
 
-This doesn't require interactive cytoscape in the onboarding overlay. It uses the existing Graph view, existing Resolve pipeline, and existing MemoryDetail panel. Cost: ~50 lines of App-level orchestration + 3 .md files in a `examples/demo/` dataset. The aha moment becomes: "click one button, watch your entire thinking chain animate."
-
-### 4.3 What NOT to Build (Differentiation Through Omission)
-
-CodeMemory should consciously choose NOT to compete on:
-
-- **Entity extraction / NLP pipeline:** Mem0 and Zep have multi-LLM extraction pipelines. Building one would be a year-long distraction. CodeMemory's explicit model is the differentiator -- lean into it, don't dilute it.
-- **Collaborative editing / WebSocket sync:** This is Notion-level infrastructure. The MCP-native collaboration model (shared Git repository) is more aligned with the developer target.
-- **Mobile app:** The file-based architecture doesn't map to mobile. A read-only mobile companion (browse graph, view memories) is feasible; full editing is not.
-- **Plugin ecosystem:** Obsidian's 1,000+ plugins is not a target. CodeMemory's simplicity (three views, five cognitive primitives) IS the product.
+- **Entity extraction / NLP pipeline** -- Mem0 and Zep have multi-year head starts. CodeMemory's explicit model is the differentiator.
+- **Collaborative editing / WebSocket sync** -- Notion-level infrastructure. Git-based collaboration is more aligned with developer users.
+- **Mobile app** -- File-based architecture doesn't map to mobile.
+- **Plugin ecosystem** -- Obsidian's 1,000+ plugins is not a target. Simplicity is the product.
 
 ---
 
@@ -336,7 +323,7 @@ CodeMemory should consciously choose NOT to compete on:
 ### 5.1 Architecture Assessment
 
 ```
-Frontend (React 19 + TypeScript 6 + Vite 8, port 5318)
+Frontend (React 19 + TypeScript 6 + Vite 8, port 5299)
     |  REST API (fetch)
     v
 Backend (FastAPI, port 8000)
@@ -353,59 +340,50 @@ MCP Server (JSON-RPC over stdio, separate process)
 Core (src/codememory/)
 ```
 
-**Round 13 architecture changes:**
-- Frontend: +1 file (`useExitAnimation.ts`, 46 lines -- reusable hook)
-- Frontend: +2 CSS animations (`dropdownFadeIn` keyframe in index.css)
-- Backend: +4 fields on MemoryEntry (`days_since_last_access`, `stability`)
-- Backend: ~20 lines of decay formula changes in handlers.py, validate.py
-- Backend: +16 lines in index.py for precomputation
-- Backend: +1 line in resolve.py for access tracking
-- Backend: +2 exemption paths in server.py middleware
+**Round 14 architecture changes:**
+- `models.py`: +1 `@field_validator` for stability (15 lines)
+- `search.py`: +2 fields in output dict (2 lines)
+- `handlers.py`: ~8 lines changed (C1 fix: read from entry, not dict; C2 runtime clamp)
+- `server.py`: +4 fields in `/api/memories` response, +`decay_risk` in `/api/stats` (~20 lines)
+- `Dashboard.tsx`: +65 lines (N1 decay risk section + I1 modal exit animations)
+- `App.tsx`: +5 lines (N2 resolve context menu + I1 archive exit animation)
+- `types.ts`: +4 fields on `MemorySummary`, +`DecayRiskEntry` interface, +`decay_risk?` on `StatsResponse`
 
-**Assessment:** Clean, minimal changes. No architecture violations. The handler delegation pattern (server.py -> handlers.py, mcp_server.py -> handlers.py) remains intact. The new `useExitAnimation` hook is the right abstraction -- used in 3 components, single source of truth for exit animation timing.
+**Assessment:** Clean, minimal, targeted changes. Zero architecture violations. The handler delegation pattern (server.py -> handlers.py, mcp_server.py -> handlers.py) remains intact. No new files were created. No dependencies were added.
 
 ### 5.2 Technical Debt -- Updated
 
-| Item | R12 Status | R13 Status | Trend |
+| Item | R13 Status | R14 Status | Trend |
 |------|-----------|-----------|-------|
-| CSS-in-JS everywhere | Medium friction | Medium friction | UNCHANGED -- no design token work done |
-| No frontend tests | 0 tests | 0 tests | UNCHANGED -- deferred to Round 14 |
+| CSS-in-JS everywhere | Medium friction | Medium friction | UNCHANGED |
+| No frontend tests | 0 tests | 0 tests | UNCHANGED -- Playwright deferred to R15 |
 | Tailwind installed, unused | Low waste | Low waste | UNCHANGED |
-| OpenAPI /docs unexposed | Missing | **FIXED** | + |
+| OpenAPI /docs unexposed | FIXED | FIXED | Maintained |
 | No TypeScript strict mode | Medium risk | Medium risk | UNCHANGED |
 | No CI pipeline | Medium risk | Medium risk | UNCHANGED |
 | Single-level undo | User-facing gap | User-facing gap | UNCHANGED |
+| Search-result dict / MemoryEntry duality | **Bug-causing** | **Mitigated** (belt+suspenders) | IMPROVED -- but root cause (two data representations) persists |
 
-**Net technical debt movement: -1 item resolved (OpenAPI docs), 0 items added, 6 items unchanged.**
+**New item from R14: Search result dict / MemoryEntry duality.** The C1 bug was caused by the existence of two different data structures representing the same memory. The fix adds the missing fields to the search dict (belt) AND makes the handler read from MemoryEntry directly (suspenders). But the fundamental design risk remains: any future field added to MemoryEntry must be manually propagated to the search dict and the API response shape. A single-source-of-truth approach (Pydantic model -> serialized output via `model_dump`) would eliminate this risk permanently.
 
 ### 5.3 Test Health
 
-| Suite | Count | R12 | R13 | Delta |
+| Suite | Count | R13 | R14 | Delta |
 |-------|-------|-----|-----|-------|
-| Unit tests | 57 | 57/57 PASS (0.31s) | 57/57 PASS (0.27s) | UNCHANGED |
+| Unit tests | 57 | 57/57 PASS (0.27s) | 57/57 PASS (0.33s) | UNCHANGED |
 | Integration tests | 24 | 24/24 PASS | 24/24 PASS | UNCHANGED |
-| API tests | 5 | 5/5 PASS (0.46s) | 5/5 PASS (0.43s) | UNCHANGED |
+| API tests | 5 | 5/5 PASS (0.43s) | 5/5 PASS (0.44s) | UNCHANGED |
 | TypeScript | -- | 0 errors | 0 errors | UNCHANGED |
-| Vite build | -- | Built (339ms) | Built (365ms) | UNCHANGED (normal variance) |
+| Vite build | -- | Built (365ms) | Built (338ms) | IMPROVED (7% faster) |
 | **Total** | **86** | **86/86 PASS** | **86/86 PASS** | **UNCHANGED** |
 
-**Assessment:** 100% pass rate, zero regressions. The test suite correctly validates the decay model unification (CLI overview heat values match expected: 31,31,21,21,20). All 4 datasets reindex with correct `stability` and `days_since_last_access` fields. The OpenAPI /docs endpoint returns 200.
+**Assessment:** 100% pass rate, zero regressions, zero new tests. The C1 bug was a test-design failure (tests validated broken formula output), not a coverage gap. A new test that validates overview heat values change when `days_since_last_access` changes would permanently close this gap.
 
-**Critical gap unchanged:** Zero frontend tests. 15 TSX components, 1 hook, and the entire user-facing surface have no automated test coverage. This is now the single highest-risk technical debt item. Every UI regression is undetectable until manual inspection.
+**Critical gap unchanged:** Zero frontend tests. 15 TSX components, 1 hook, and the entire user-facing surface have no automated test coverage. The Playwright constraint (promised for R15 first task) is now three rounds overdue (deferred R12, R13, R14). This is not a sustainable pattern.
 
-### 5.4 New Pitfalls Introduced in Round 13
+### 5.4 Dependency Health
 
-From the evaluator's code review:
-
-1. **R13-A1: Inline Modal function blocks exit animation reuse.** Dashboard.tsx's `Modal({ children, onClose })` is a local function component that hardcodes `backdrop-fade-enter` / `modal-fade-enter` and cannot receive a `closing` prop. When multiple modals share this function, exit animation must be managed at the call site, not the component. Fix: refactor to use `useExitAnimation` pattern.
-
-2. **R13-M3: days_since_last_access None vs 0 semantic ambiguity.** `None` means "never accessed" (treated as `days_since=0` in decay formula = no decay). `0` means "just accessed" (also no decay). These are semantically different states (never used vs just used) that collapse to the same decay value. Future wander logic may want to differentiate "never accessed" as higher priority for serendipitous recall.
-
-3. **R13-I1: /docs middleware exemption creates a new bypass path.** The dataset header middleware now exempts `/docs` and `/openapi.json` from the `X-Codememory-Dataset` requirement. This is correct (API docs are dataset-agnostic) but creates a precedent for exempt paths. Any future endpoint that doesn't require a dataset must be explicitly added to the exemption list -- a manual maintenance point.
-
-### 5.5 Dependency Health
-
-Unchanged from Round 12. Python: pyyaml, pydantic v2, jinja2, python-dotenv. Frontend: React 19, TypeScript 6, Vite 8, cytoscape 3.33, dagre 0.8, react-markdown 10. Zero AI/ML dependencies. Zero transitive vulnerabilities. Python 3.13+ requirement is acceptable for developer tools. Suppy chain risk: minimal.
+Unchanged from prior audit. Python: pyyaml, pydantic v2, jinja2, python-dotenv. Frontend: React 19, TypeScript 6, Vite 8, cytoscape 3.33, dagre 0.8, react-markdown 10. Zero AI/ML dependencies. Zero transitive vulnerabilities. Python 3.13+ requirement acceptable for developer tools. Supply chain risk: minimal.
 
 ---
 
@@ -415,64 +393,62 @@ Unchanged from Round 12. Python: pyyaml, pydantic v2, jinja2, python-dotenv. Fro
 
 | # | Recommendation | Rationale | Effort | Status |
 |---|---------------|-----------|--------|--------|
-| **C1** | **Add full-text body search** | The single biggest functional gap vs every competitor. Search currently only matches ID, summary, tags, and metadata. A user with a 500-word memory body cannot find it by searching its content. Also wire into frontend search bar. | Medium | DEFERRED (search sprint) |
-| **C2** | **Complete modal exit animations** | Wander, Validate, and Archive modals still vanish instantly. 3 of 6 UI exit points are dead. Fix: refactor Dashboard `Modal()` to use `useExitAnimation` pattern. ~25 lines. | Small | **FOR ROUND 14** |
-| **C3** | **Add Playwright smoke tests** | 15 TSX components with zero automated test coverage. 5 tests (app loads, graph renders, node click, search, CRUD cycle) would catch ~80% of regressions. This is now the highest-risk technical debt item -- the prior audit's I6, deferred again. | Small | **FOR ROUND 14** |
+| **C1** | **Add full-text body search** | The single biggest functional gap vs every competitor. Search matches ID, summary, tags only. A 500-word memory body is invisible to search. This is the #1 blocker to external user adoption. Wire into frontend search bar with result highlighting. | Medium (2-3 days) | DEFERRED (search sprint) |
+| **C2** | **Add Playwright smoke tests** | Zero frontend test coverage across 15 TSX components. 5 tests (app loads, graph renders, node click, search, CRUD cycle) would catch ~80% of regressions. Now 3 rounds deferred. **Must be R15's first task.** | Small (1 day) | **COMMITTED for R15** |
+| **C3** | **Eliminate search dict / MemoryEntry duality** | The C1 bug was caused by two data representations diverging. Refactor `search()` to build output from `MemoryEntry.model_dump()` instead of manual field copying, or refactor consumers to use MemoryEntry objects directly. This eliminates the entire class of "field missing from output dict" bugs. | Small (~30 lines) | **NEW -- suggested for R15** |
 
 ### Important (Build Before Seeking Early Adopters)
 
 | # | Recommendation | Rationale | Effort |
 |---|---------------|-----------|--------|
-| **I1** | **Add write-capable MCP tools** | 4 of 5 MCP tools are readOnly. Agents can recall but cannot contribute. Add `create_memory`, `update_memory` as MCP tools (with `propose_*` staging pattern for safety). This closes the agentic loop and is Mem0's #1 differentiator. | Medium |
-| **I2** | **Per-memory stability UI** | The `stability` field (R13-M4) exists but is invisible. Add a slider in MemoryForm/MemoryDetail and a "Decay" column in List view. Make the time-decay model user-visible and user-controllable. Transforms an invisible algorithm into a differentiator. | Small |
-| **I3** | **"Demo Resolve" button on Dashboard** | One-click demo: switch to 3-node demo dataset, auto-resolve Decision node, show animation, return to original dataset. Costs ~50 lines + 3 .md files. Delivers the aha moment in one click. Lower-cost alternative to interactive onboarding (deferred I5 from prior audit). | Small |
-| **I4** | **Full-text body search -- frontend side** | The frontend search bar must match against body text alongside ID/summary/tags. This is blocked on C1 (backend body search) but the frontend wiring is independent. | Small (after C1) |
-| **I5** | **Dashboard "Cooling Memories" section** | Top 5 memories closest to decay threshold (R < 0.1). Uses already-computed `days_since_last_access` and `stability`. Transforms Dashboard from passive stats to active knowledge maintenance. | Small |
-| **I6** | **Multi-level undo stack** | Single-level undo is unacceptable for any product positioning. Push operations onto a stack (20 deep), expose via Ctrl+Z / Ctrl+Shift+Z. The undo data model exists -- this is wiring, not new architecture. | Small |
+| **I1** | **Add write-capable MCP tools** | 4 of 5 MCP tools are readOnly. Agents recall but cannot contribute. Add `propose_create_memory`, `propose_update_memory`, `propose_imports` as MCP tools with staging pattern for safety. Closes the agentic loop. This is Mem0's and paradigm's #1 differentiator over CodeMemory. | Medium (~150 LOC) |
+| **I2** | **Per-memory stability UI** | The `stability` field exists, is guarded, and is API-exposed -- but users cannot control it. Add a slider in MemoryForm/MemoryDetail. This is the single highest-impact user-facing feature from the decay model investment. | Small (~40 lines) |
+| **I3** | **Decay column in List view** | Expose `days_since_last_access` and `stability` as sortable columns in the List view with color coding (warm for recent, cool for old). Gives users visibility into their memory access patterns. | Small (~20 lines) |
+| **I4** | **Auto-complete import suggestions in MemoryForm** | `suggest_deps.py` exists CLI-only. Surface it as auto-complete suggestions when typing import IDs in the MemoryForm UI. Reduces manual linking friction and bridges the "explicit imports" wall. | Medium (~80 lines) |
+| **I5** | **Full "Cooling Memories" Dashboard section** | Expand N1's minimal decay risk widget into a sortable list of all at-risk memories with decay values, access counts, and last-access dates. Clickable to open MemoryDetail. | Small (~50 lines) |
+| **I6** | **Multi-level undo stack** | Single-level undo is unacceptable for any product positioning. Push operations onto a 20-deep stack, expose via Ctrl+Z / Ctrl+Shift+Z. The undo data model exists; this is wiring. | Small (rearchitecture of undo state) |
 
 ### Nice-to-Have (Build After Early Adopter Feedback)
 
 | # | Recommendation | Rationale | Effort |
 |---|---------------|-----------|--------|
-| **N1** | **Graph keyboard navigation** | Arrow keys to traverse nodes, Enter to open detail, Escape to close. Cytoscape supports this natively -- needs event binding. Enables mouse-free exploration. | Small |
-| **N2** | **Version diff viewer** | Backend stores full change_log per memory. Frontend shows only version number. Add "View changes" button in MemoryDetail showing side-by-side diff. | Medium |
-| **N3** | **"Since your last visit" context injection** | When resolving a memory untouched for N days, inject summary of what changed in its dependency chain since last access. Uniquely feasible because CodeMemory tracks both DAG and time. | Medium |
-| **N4** | **Memory health score Dashboard** | A 0-100 number from: cycle count, stale ratio, broken links, avg days since access, decay distribution. Gamifies knowledge maintenance. | Medium |
-| **N5** | **Semantic/embedding search** | Vector similarity search as complement to deterministic DAG resolve. Not a replacement -- an addition for discovery. Use local embeddings to keep zero-cloud promise. | Large |
-| **N6** | **Git integration guide + GitHub Action** | Documented workflow for version-controlling .md datasets. GitHub Action that runs validate on push. "Memory as code" story for developers. | Small |
-| **N7** | **Settings panel expansion** | From 3 items (theme, dataset, font size) to meaningful configuration: default budget, default depth, default stability, review cadence. Settings currently feels like a placeholder. | Medium |
+| **N1** | **"Demo Resolve" button on Dashboard** | One-click demo: switch to 3-node demo dataset, auto-resolve Decision node, show animation, return. Delivers the aha moment in one click. ~50 lines + 3 .md files. | Small |
+| **N2** | **Graph keyboard navigation** | Arrow keys to traverse nodes, Enter to open detail, Escape to close. Cytoscape supports natively; needs event binding. | Small |
+| **N3** | **Version diff viewer** | Backend stores full change_log. Frontend shows only version number. Add "View changes" showing side-by-side diff. | Medium |
+| **N4** | **"Since your last visit" context injection** | When resolving a long-untouched memory, inject summary of what changed in its dependency chain. Uniquely feasible because CodeMemory tracks both DAG and time. | Medium |
+| **N5** | **Memory health score Dashboard** | A 0-100 number from cycle count, stale ratio, broken links, avg days since access, decay distribution. Gamifies knowledge maintenance. | Medium |
+| **N6** | **Semantic/embedding search** | Vector similarity as complement to deterministic DAG resolve. Use local embeddings (ONNX/WASM) to keep zero-cloud promise. | Large |
+| **N7** | **Git integration guide + GitHub Action** | Documented workflow for version-controlling .md datasets. GitHub Action that runs validate on push. "Memory as code" story for developers. | Small |
 
 ### Feature Ideas (Long-Term Strategic Assets)
 
 | # | Idea | Why It Matters |
 |---|------|---------------|
-| **F1** | **Incremental resolve** | Only re-resolve changed dependencies instead of the full DAG. Reduces token cost for repeated resolves on active memories. Unique to CodeMemory's explicit dependency model -- possible because we know exactly what changed. |
-| **F2** | **Per-tag stability defaults** | Set stability at the tag level ("investment" = 30 days, "facts" = 7 days). New memories inherit stability from their tags. Makes the decay model tag-aware. |
-| **F3** | **FSRS-lite stability updates** | When a memory is accessed via resolve or focus, update its stability using a simplified FSRS formula (increase for successful recall, adjust for timing). This makes the decay model adaptive -- memories you use stay fresh longer. |
-| **F4** | **DAG-aware editing sidebar** | When editing, show upstream dependencies and downstream dependents in a sidebar. Warn if changing this memory semantically breaks downstream assumptions. The core product insight, surfaced where it matters. |
-| **F5** | **"Memory as code" CI pipeline** | GitHub Action + pre-commit hook that runs validate/reindex on every push. Reject PRs that introduce cycles or broken links. This is the developer adoption wedge. |
-| **F6** | **Auto-suggested imports in MemoryForm** | The `suggest_deps.py` module exists (CLI-only). Surface it in the MemoryForm UI as auto-complete suggestions when typing import IDs. Reduces manual linking friction. |
+| **F1** | **Incremental resolve** | Only re-resolve changed dependencies. Reduces token cost for repeated resolves. Unique to explicit dependency model. |
+| **F2** | **Per-tag stability defaults** | Tag-level stability ("investment"=30d, "facts"=7d). New memories inherit from tags. |
+| **F3** | **FSRS-lite stability updates** | Update stability on resolve/focus access. Makes decay adaptive -- memories you use stay fresh longer. |
+| **F4** | **DAG-aware editing sidebar** | Show upstream deps and downstream dependents while editing. Warn on semantic breakage. The core product insight, surfaced where it matters. |
+| **F5** | **"Memory as code" CI pipeline** | GitHub Action + pre-commit hook running validate/reindex. Reject PRs with cycles or broken links. Developer adoption wedge. |
+| **F6** | **Temporal fact modeling** | `valid_from`/`valid_to` on imports or body sections. "NVIDIA's P/E was 45 in Q4 2025" as a temporal fact. Unique differentiator vs Zep's bi-temporal edges. |
 
 ---
 
 ## Summary: The Path to v1.0
 
-CodeMemory is approaching a pivotal threshold. The engine is proven (86 tests, 100% pass, zero regressions across 13 rounds). The design has identity (Warm-neutral palette, typography trio, animated panels). The integration story is unique (MCP server, 5 cognitive primitives, time-decay activation). The architecture is clean (handler delegation, uniform decay formula, reusable animation hooks).
+CodeMemory has crossed an important threshold. The engine is correct (C1 bug fixed, all decay paths verified). The design is complete (all modals animate, all fonts readable). The API is documented and decay-aware. The test suite is stable at 86/86 with zero regressions. The architecture is clean with no Round 14 violations.
 
-What separates the product from v1.0 readiness is now three concrete deliverables:
+Three deliverables separate the product from v1.0 readiness:
 
-1. **Full-text body search** -- the last missing table-stakes feature. Without it, any external user's first search will fail to find their content. This was deferred in Round 13 and must be the centerpiece of the search sprint.
+1. **Full-text body search** -- the last missing table-stakes feature. Without it, any external user's first search will fail to find their content. This is the single highest-priority functional gap and must be the centerpiece of the search-focused sprint.
 
-2. **Frontend test coverage** -- 15 components at zero test coverage. This is a ticking time bomb. Every new feature risks regressions in existing views with no automated detection. Five Playwright smoke tests would be the minimum viable safety net.
+2. **Frontend test coverage** -- 15 components at zero coverage. The Playwright commitment (5 smoke tests) has been deferred for three consecutive rounds. It must be R15's first commit before any new feature code lands.
 
-3. **The aha moment in the first minute** -- currently buried at 2+ clicks. The "Demo Resolve" button (Recommended I3) would deliver the product's most compelling moment in one click. The interactive onboarding (deferred I5) would deliver it in the first 30 seconds.
+3. **The agentic loop closure** -- 4 of 5 MCP tools are readOnly. CodeMemory cannot be a full agent memory partner until agents can write back. Write-capable MCP tools (with `propose_*` staging) would close this gap and match the minimum standard set by Mem0 and paradigm-memory.
 
-The decay model unification (R13-M1-M4) has done something subtle but important: it made the time dimension of memory computationally real and internally consistent. The `stability` field is a door. The question for Round 14 is whether to walk through it -- making decay visible, controllable, and per-memory -- or to close the functional gaps first.
+The product's identity question from the prior audit remains unresolved but is becoming clearer: **CodeMemory is a developer tool for structured, auditable, explicit knowledge management.** The DAG model, CLI interface, MCP server, token budget controls, file-based architecture, and Git compatibility all point in this direction. The warm-neutral design and serif typography suggest broader ambitions, but the feature set has converged on developer power-users. This is not a problem -- developer tools are a large and profitable market (GitHub, Linear, Obsidian, VS Code). But the team should consciously embrace this identity rather than straddling two audiences.
 
-**Recommendation:** Close gaps before deepening features. Full-text search + modal exit animations + Playwright smoke tests should be Round 14's mandate. The decay model personalization (per-memory stability UI, cooling memories dashboard) is Round 15's natural agenda.
-
-The product's identity question from the prior audit remains unresolved: **developer tool vs knowledge worker tool.** The feature set increasingly serves developers (MCP, CLI, token budgets, explicit imports) while the visual design serves knowledge workers (warm palette, serif fonts, onboarding tour). This tension is not harmful yet -- both paths converge on the same technical foundation -- but it will become acute the moment CodeMemory seeks external users. The Round 14 plan should include a strategic decision on this question.
+**Round 15 recommendation:** Playwright tests first, then full-text body search. R16: MCP write tools + per-memory stability UI. R17: onboarding + demo resolution. This sequence closes the glass ceiling in priority order: safety net (tests), functional completeness (body search), agentic integration (MCP writes), user control (stability UI), user acquisition (onboarding).
 
 ---
 
-*Audit completed 2026-05-07. Next review: post-Round 14.*
+*Audit completed 2026-05-07. Next review: post-Round 15.*

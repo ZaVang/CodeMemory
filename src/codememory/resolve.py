@@ -1,11 +1,12 @@
 """Memory resolution: DAG construction, cycle detection, topological sort, token budget."""
 
 import logging
+import math
 import sys
 from datetime import datetime
 from pathlib import Path
 
-from .core import compute_body_hash, estimate_tokens, parse_frontmatter
+from .core import compute_body_hash, compute_retrieval_probability, estimate_tokens, parse_frontmatter
 from .index import load_index, save_index
 from .models import IndexData, MemoryEntry
 
@@ -315,6 +316,18 @@ def resolve(
     for mid in full_text_nodes:
         if mid in index.memories:
             entry = index.memories[mid]
+
+            # R15-C1: Adaptive stability — compute retrieval probability BEFORE
+            # updating access fields (days_since represents time before this access).
+            old_days_since = entry.days_since_last_access
+            if old_days_since is not None and old_days_since > 0 and entry.stability > 0:
+                R = compute_retrieval_probability(old_days_since, entry.stability)
+                # Simplified SInc — Gaussian peak at R ~ 0.78, range 1.05-1.80
+                s_inc = 1.05 + 0.75 * math.exp(-((R - 0.78) ** 2) / 0.125)
+                # Diminishing returns at high stability
+                diminish = math.sqrt(14.0 / max(entry.stability, 14.0))
+                entry.stability = min(entry.stability * s_inc * diminish, 365.0)
+
             entry.access_count += 1
             entry.last_access = now_iso
             entry.days_since_last_access = 0  # R13-M3: just accessed

@@ -11,11 +11,11 @@ import json
 import logging
 import random
 import sys
-import math
 from datetime import datetime, timezone
 from pathlib import Path
 
 from .core import compute_body_hash as _cbh
+from .core import compute_retrieval_probability as _retrieval_prob
 from .core import get_memory_path, get_root_dir, parse_frontmatter as _pfm
 from .create import create
 from .import_cmd import import_text
@@ -79,6 +79,7 @@ def handle_create(
     tags: list[str] | None = None,
     dry_run: bool = False,
     maturity: str = "draft",
+    stability: float | None = None,
 ) -> str:
     """Create a new memory.  Returns path string or dry-run preview."""
     file_path = create(
@@ -90,6 +91,7 @@ def handle_create(
         tags=tags,
         dry_run=dry_run,
         maturity=maturity,
+        stability=stability,
     )
     if file_path is None:
         return "dry-run: no file created"
@@ -260,7 +262,7 @@ def handle_overview(
         days_since = entry.days_since_last_access if entry else None
         if access > 0 and days_since is not None:
             days_since = max(0, days_since)
-            decay = math.pow(0.5, days_since / stability)
+            decay = _retrieval_prob(days_since, stability)
             access_bonus = access * decay
         else:
             access_bonus = access * 0.1
@@ -346,7 +348,7 @@ def handle_wander(
             stability = max(getattr(entry, 'stability', 14.0), 0.1)  # C2: clamp to safe minimum
             days_since = getattr(entry, 'days_since_last_access', None)
             if entry.access_count > 0 and days_since is not None:
-                decay = math.pow(0.5, max(0, days_since) / stability)
+                decay = _retrieval_prob(max(0, days_since), stability)
                 weight = 1.0 / (entry.access_count * decay + 1)
             else:
                 weight = 1.0  # Never accessed — maximally cool

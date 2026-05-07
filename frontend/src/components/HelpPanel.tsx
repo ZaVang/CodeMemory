@@ -1,4 +1,7 @@
+import { useExitAnimation } from '../useExitAnimation'
+
 interface Props {
+  show: boolean
   onClose: () => void
 }
 
@@ -144,12 +147,17 @@ const UI_GUIDE = [
   },
 ]
 
-export default function HelpPanel({ onClose }: Props) {
+export default function HelpPanel({ show, onClose }: Props) {
+  const { visible, closing } = useExitAnimation(show)
+
+  if (!visible) return null
+
   return (
     <>
       {/* Backdrop */}
       <div
         onClick={onClose}
+        className={closing ? 'backdrop-fade-exit' : 'backdrop-fade-enter'}
         style={{
           position: 'fixed',
           inset: 0,
@@ -160,7 +168,7 @@ export default function HelpPanel({ onClose }: Props) {
 
       {/* Panel */}
       <div
-        className="panel-slide-enter"
+        className={closing ? 'panel-slide-exit' : 'panel-slide-enter'}
         style={{
           position: 'fixed',
           top: 0,
@@ -334,7 +342,7 @@ export default function HelpPanel({ onClose }: Props) {
                 )}
                 <span
                   style={{
-                    fontSize: 11,
+                    fontSize: 12,
                     fontFamily: 'Raleway, sans-serif',
                     fontWeight: 600,
                     textTransform: 'uppercase',
@@ -402,7 +410,7 @@ export default function HelpPanel({ onClose }: Props) {
                   display: 'inline-block',
                   padding: '1px 6px',
                   borderRadius: 2,
-                  fontSize: 11,
+                  fontSize: 12,
                   fontWeight: 600,
                   fontFamily: 'JetBrains Mono, monospace',
                   textTransform: 'uppercase',

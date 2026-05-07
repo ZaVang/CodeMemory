@@ -1,89 +1,126 @@
-# Generator Status — Iteration 14
+# Generator Status — Iteration 15
 
-## 完成的任务 (7/8)
+## 完成的任务 (8/8)
 
-### 第一梯队：Critical — 修复阻塞正确性的 Bug
-- [x] **R14-C1**: 修复 overview 衰减公式管道 bug — `search.py` 输出字典中添加 `days_since_last_access` 和 `stability` 字段；`handle_overview()` 从 `entry` (MemoryEntry) 读取 `days_since_last_access` 替代从 search dict 读取。统一衰减公式 `0.5^(days/stability)` 现在正确激活。
-- [x] **R14-C2**: 添加 stability 边界防护 — `MemoryEntry.stability` 添加 `gt=0.0` Field 约束 + `@field_validator(mode="before")` 将 <0.1 的值钳制到 0.1，对 <=0 抛出 ValueError。`handle_overview()` 和 `handle_wander()` 添加 `max(stability, 0.1)` 安全钳。
-- [x] **R14-C3**: 在 API 响应中暴露衰减字段 — `/api/memories` 添加 `access_count`/`last_access`/`days_since_last_access`/`stability`；`/api/stats` 添加 `decay_risk` 数组（R<0.1 的衰减风险记忆）；`/api/wander` 添加 `stability`/`days_since_last_access`；search 输出添加 `stability`/`days_since_last_access`。前端类型同步更新。
+### 第一梯队：必达 — 承诺兑现 + 已知缺陷
 
-### 第二梯队：Important — 完成 R13 遗留
-- [x] **R14-I1**: 接线模态退场动画 — 导入 `useExitAnimation` 到 Dashboard.tsx；Wander/Validate 模态通过 `wanderVisible`/`validateVisible` 控制渲染；Modal 组件接受 `closing` prop 并应用 `modal-fade-exit`/`backdrop-fade-exit` CSS 类（利用 R13-A1 已存在的 CSS 退出动画）。
-- [x] **R14-I2**: 修复所有 sub-12px 字体 — 7 处全部修复：HelpPanel layer badge 9→11px、API method badge 9→11px、MemoryDetail trim badge 9→11px、SearchBar Resolve button 10→12px、view shortcut hints 10→11px、search "includes fuzzy matches" 11→12px、archive backlink IDs 11→12px。零 fontSize:9 和 fontSize:10 残留。
+- [x] **R15-P1: Playwright 冒烟测试（5 条）** — 安装 `@playwright/test` dev dependency 和 Chromium 浏览器。创建 `frontend/playwright.config.ts`（webServer 自动启动前端，60s 超时，失败截图+trace）。5 条测试：页面加载验证标题+视图切换按钮、视图切换（Graph→List→Dashboard→Graph）、搜索栏输入、记忆详情面板打开/关闭、数据集切换。首次访问时自动处理 onboarding 弹窗。`npm run test:e2e` 脚本已加入 `package.json`。
 
-### 第三梯队：Nice to Have
-- [x] **R14-N1**: Dashboard 衰减风险暴露 — `/api/stats` 添加 `decay_risk` 数组；Dashboard 新增 "Decay Risk" SectionCard 显示风险记忆数量和 top 3 记忆（ID + R 值 + 详情）。
-- [x] **R14-N2**: 图节点右键菜单添加 Resolve — `App.tsx` 添加 `handleResolveFromContext` 回调；右键菜单新增 "Resolve" 选项，对当前节点触发 resolve 并打开 MemoryDetail 面板。
-- [ ] **R14-N3**: 移除 List 视图本地过滤条 — 未执行。计划建议移除，但 `MemoryList.tsx` 中的本地过滤条先保留（客户端子串匹配可作为即时过滤，与搜索栏的服务器端匹配互补）。如需移除放在 R15。
+- [x] **R15-I1: HelpPanel 退场动画接线** — 将 `useExitAnimation` hook 接入 HelpPanel 组件。组件接受 `show` prop（替代条件渲染），使用 `visible`/`closing` 状态 gate 渲染。关闭时应用 `panel-slide-exit` CSS 类（250ms ease），遮罩同步使用 `backdrop-fade-exit`。App.tsx 调用处改为 `<HelpPanel show={showHelp} .../>`。
+
+- [x] **R15-I2: 修复残留 11px straggler** — 修复全部 6 处 11px 文本（比计划多 2 处——全扫描覆盖）：
+  1. HelpPanel.tsx CLI 层标签 badge
+  2. HelpPanel.tsx API method 徽章
+  3. MemoryDetail.tsx trim 标签（full/summary/skipped）
+  4-6. App.tsx 视图快捷键提示（Graph/List/Dashboard 的 "1"/"2"/"3"）
+
+### 第二梯队：研究驱动 — 高价值、低投入、后端核心
+
+- [x] **R15-C1: 自适应 stability 更新（访问时 SInc）** — 在 `resolve.py` 中，访问计数递增之前计算旧 retrieval probability R。使用以 R=0.78 为中心的高斯 SInc 乘数（范围 1.05-1.80），集中练习（R>0.95）增长最小，最优间隔（R~0.7-0.85）增长最大。应用收益递减因子 `sqrt(14.0/max(stability,14.0))`，上限 365。仅 resolve 触发。从未访问（days_since=None）的记忆不触发稳定性更新。
+
+- [x] **R15-C2: 长期保留底线（混合衰减公式）** — 在 `core.py` 中添加共享函数 `compute_retrieval_probability()`，实现 `max(0.5^(days/stability), min_retention/(1+days/(10*stability)))`，默认 `min_retention=0.05`。在 4 个消费点应用（handlers.py overview heat、handlers.py wander cool 权重、validate.py 衰减检查、backend/server.py 衰减风险计算）。短期行为不变，长期保留 ~3-6% baseline。
+
+- [x] **R15-C3: 领域差异化默认 stability** — 在 `create.py` 中添加 `SEMANTIC_TYPE_STABILITY` 查找表：schemas/api=365d、decision/research=90d、context=30d、meeting=7d、daily=5d、默认=14.0。`create()` 新增可选 `stability` 参数用于显式覆盖。`handle_create()` 透传 stability 参数。仅影响新创建的记忆，reindex 不追溯更新。
+
+### 第三梯队：容量允许时 — 小范围高价值改进
+
+- [x] **R15-C4: 消除 search dict / MemoryEntry 双重表示** — 重构 `search()` 函数，从 `entry.model_dump(mode="json")` 构建输出 dict，添加计算字段 `id`（使用索引键）和 `dependents`。消除手动字段复制——MemoryEntry 新增字段自动出现在搜索输出中，永久消除"输出 dict 缺失字段"类 bug。
+
+- [x] **R15-N1: MemoryDetail 中显示访问新鲜度** — 更新后端 `get_memory` 端点，在响应中包含 `days_since_last_access`、`stability`、`access_count`。更新前端 `MemoryDetail` 类型和组件，在元数据卡下方显示"Access Freshness"区块。有访问记录的记忆显示"Last accessed X days ago"+"Stability: X.Xd"+"R: XX.X%"+"Access count: N"。从未访问的显示"Never accessed · R=N/A"。R 值使用 C2 混合衰减公式计算。
+
+## 未完成的任务
+
+无。全部 8 项任务完成。
 
 ## 验收命令输出
 
-### TypeScript 类型检查
+### TypeScript
 ```
-npx tsc --noEmit
-(无错误，通过)
+cd frontend && npx tsc --noEmit
 ```
+零错误，通过。
 
-### Frontend 构建
+### Vite Build
 ```
-npx vite build
-✓ built in 395ms
-dist/index.html                   0.48 kB
-dist/assets/index-DzG4uodV.css   14.80 kB
-dist/assets/index-Cyl4NFqr.js   998.97 kB
+cd frontend && npx vite build
 ```
+```
+✓ built in 484ms
+dist/index.html                     0.48 kB │ gzip:   0.32 kB
+dist/assets/index-UGWmOg9z.css     14.82 kB │ gzip:   3.97 kB
+dist/assets/index-DAddQaXt.js   1,000.33 kB │ gzip: 299.57 kB
+```
+构建成功。
 
-### Python 单元测试 (57/57)
+### Python 单元测试
 ```
 PYTHONPATH=src python -m pytest tests/unit/ -v --tb=short
-============================= 57 passed in 0.29s ==============================
 ```
+**57/57 passed** (0.31s)
 
-### Python 集成测试 (24/24)
+### Python 集成测试
 ```
 PYTHONPATH=src python tests/integration_test.py
-Results: 24/24 passed
-All tests PASSED
 ```
+**24/24 passed**
 
-### API 测试 (5/5)
+### API 测试
 ```
 PYTHONPATH=src python -m pytest tests/test_api.py -v --tb=short
-============================== 5 passed in 0.44s ==============================
+```
+**5/5 passed** (0.46s)
+
+### Backend 端点
+```
+GET  /api/stats    → 200 OK (total:11, maturity/type/status/tags 统计正确)
+POST /api/wander   → 200 OK (返回 days_since_last_access + stability 字段)
+POST /api/validate → 200 OK (validated_count:11, error_count:0, warning_count:1)
+GET  /api/docs     → 200 OK
 ```
 
-### Backend 端点回归
-```
-GET  /api/stats    → 200 OK (decay_risk 字段已存在，companion 数据集当前无衰减风险记忆)
-POST /api/wander   → 200 OK (返回 stability + days_since_last_access 字段)
-POST /api/validate → 200 OK (validated_count: 11, error_count: 0, warning_count: 1)
-GET  /api/memories → 200 OK (返回 access_count/last_access/days_since_last_access/stability)
-```
-
-### Overview 衰减验证
+### CLI Overview
 ```
 PYTHONPATH=src python -m codememory.cli --root examples/companion overview --limit 5
 ```
-companion 记忆有 access_count>0 且有 days_since_last_access=7，衰减公式 `0.5^(7/14)=0.5^0.5≈0.707` 已激活，heat 值由 `deps*10 + access*decay` 计算。
+正确输出 top 5 记忆摘要，含 heat 分数、status、tags。
+
+### Playwright 冒烟测试
+```
+cd frontend && npx playwright test
+```
+**5/5 passed** (30.2s) — 零失败、零重试。
 
 ## 文件变更清单
 
 | 文件 | 任务 |
 |------|------|
-| `src/codememory/search.py` | R14-C1 输出添加 days_since_last_access + stability |
-| `src/codememory/handlers.py` | R14-C1 overview 从 entry 读取 days_since；R14-C2 stability 安全钳 |
-| `src/codememory/models.py` | R14-C2 stability gt=0 验证器 + @field_validator |
-| `backend/server.py` | R14-C3 /api/memories、/api/stats、/api/wander、search 暴露衰减字段 |
-| `frontend/src/types.ts` | R14-C3 MemorySummary、WanderResponse、StatsResponse、DecayRiskEntry 类型更新 |
-| `frontend/src/api.ts` | R14-C3 SearchResultItem 添加 days_since_last_access + stability |
-| `frontend/src/components/Dashboard.tsx` | R14-I1 useExitAnimation + Modal closing prop；R14-N1 Decay Risk section |
-| `frontend/src/components/HelpPanel.tsx` | R14-I2 layer badge 9→11px、API method badge 9→11px |
-| `frontend/src/components/MemoryDetail.tsx` | R14-I2 trim badge 9→11px |
-| `frontend/src/components/SearchBar.tsx` | R14-I2 Resolve 按钮 10→12px、fuzzy matches 11→12px、match quality 11→12px |
-| `frontend/src/App.tsx` | R14-I2 view shortcut hints 10→11px、archive backlinks 11→12px；R14-N2 右键菜单 Resolve |
+| `frontend/package.json` | P1: 添加 @playwright/test devDep + test:e2e 脚本 |
+| `frontend/playwright.config.ts` | P1: Playwright 配置（新增） |
+| `frontend/tests/smoke.spec.ts` | P1: 5 条 Playwright 冒烟测试（新增） |
+| `frontend/src/components/HelpPanel.tsx` | I1: useExitAnimation hook 接线 + I2: 2处 11px→12px |
+| `frontend/src/App.tsx` | I1: HelpPanel show prop + I2: 3处 11px→12px |
+| `frontend/src/components/MemoryDetail.tsx` | I2: 1处 11px→12px + N1: 访问新鲜度显示 |
+| `src/codememory/core.py` | C2: compute_retrieval_probability() 共享函数 |
+| `src/codememory/handlers.py` | C2: 使用共享衰减公式 + C3: stability 参数透传 |
+| `src/codememory/validate.py` | C2: 使用共享衰减公式 |
+| `src/codememory/resolve.py` | C1: 自适应 stability 更新逻辑 |
+| `src/codememory/create.py` | C3: SEMANTIC_TYPE_STABILITY 查找表 + stability 参数 |
+| `src/codememory/search.py` | C4: model_dump() 替代手动字段复制 |
+| `backend/server.py` | C2: 使用共享衰减公式 + N1: get_memory 包含索引字段 |
+| `frontend/src/types.ts` | N1: MemoryDetail 添加 days_since_last_access/stability/access_count |
 
-## 新增陷阱
-无。
+## 新发现的陷阱
+
+1. **Playwright 测试需要后端预启动**：webServer 配置只启动前端（port 5299）。Playwright 测试依赖后端（port 8000）提前启动。`reuseExistingServer` 已启用。
+
+2. **Onboarding 弹窗阻塞干净会话**：Clean 浏览器中 localStorage 为空，onboarding 覆盖主界面。测试函数 `dismissOnboarding()` 在测试开始时检测并关闭弹窗。
+
+3. **Cytoscape 渲染到 div 非 canvas**：GraphCanvas 使用 cytoscape 渲染到 div 容器（`containerRef`），不产生 `<canvas>` 元素。测试改用文本标签（"Loading graph..."）或其他通用定位器验证图视图。
+
+4. **C4 `model_dump()` 产生额外字段**：search 输出新增 `version`、`created`、`updated`、`imports`、`schema`、`summary_hash`、`change_note`、`change_log`、`source`、`evidence` 等字段。所有现有消费者使用 `.get()` 访问，零破坏。
+
+5. **C1 不对 days_since=None 的记忆更新 stability**：从未访问或 `days_since=0` 的记忆在 resolve 时不触发 stability 更新。这是正确行为——无间隔则无可计算 R。
 
 ## 状态
-**PASSED** — 7/8 任务完成（N3 有意跳过），62/62 测试通过（57 unit + 5 API），24/24 集成测试，TypeScript 零错误，Vite 构建成功，所有 Backend 端点正常。
+
+**PASSED** — 8/8 任务完成，91/91 测试通过（57 unit + 24 integration + 5 API + 5 Playwright），TypeScript 零错误，Vite 构建成功，所有 Backend 端点正常。

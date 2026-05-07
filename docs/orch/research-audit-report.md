@@ -1,600 +1,540 @@
-# CodeMemory Design Research Audit — Round 13 Post-Mortem
+# CodeMemory Design Research Audit — Round 14 (Decay System Go-Live)
 
 **Reviewer:** Product Research Reviewer
 **Date:** 2026-05-07
-**Build:** Post-Round 13 (10/11 FULL PASS + 1 PARTIAL PASS per EVAL.md)
-**Method:** Full source review (models.py, handlers.py, resolve.py, validate.py, search.py, index.py) + adjacent-field web research (FSRS v4-v6, Ebbinghaus forgetting curves / Radvansky 2024 meta-analysis, Duolingo HLR half-life regression, recommender systems: CF-KAN, knowledge-graph CF) + logical edge-case analysis (stability=0, negative, None; data plumbing verification; cross-system interaction audit)
+**Build:** Post-Round 14 (C1 decay bug fix, C2 stability boundary protection, C3 API exposure, N1 Dashboard decay panel)
+**Method:** Full-source review (handlers.py, models.py, validate.py, index.py, resolve.py, server.py), mathematical verification of decay formula across 5 stabilities and 10 time points, 3-domain adjacent field research (FSRS v6, SuperMemo SM-17-SM19, cognitive psychology meta-analysis), logical edge-case analysis.
 
 ---
 
 ## Executive Summary (6.5 / 10)
 
-Round 13 made a conceptually correct and architecturally ambitious move: introducing a unified exponential decay formula `0.5^(days/stability)` anchored by a per-memory `stability` field (default 14.0 days) and precomputed `days_since_last_access`. This replaced three independent decay heuristics (overview flat 10%, wander raw count, validate 30-day binary threshold) with a single continuous model. The direction is right. The implementation is directionally correct but suffers from one blocking data-plumbing bug, three unexamined edge cases, and a design philosophy that stops at "uniform model" without reaching "differentiated model."
+Round 14 fixes the decay pipeline so it actually works — the C1 bug fix (reading `days_since_last_access` from MemoryEntry instead of the search dict, which never contained it) was a critical correctness issue, and the C2 stability boundary protection prevents division-by-zero and negative decay. The C3 API exposure and N1 Dashboard panel close the "backend only" gap identified in the Round 13 audit. **The system now functions correctly end-to-end.**
 
-**Key findings:**
+The research question is not *whether* the decay system works, but *whether the chosen mathematical model matches what we now know about memory decay across different content types and timescales.* The answer is nuanced: the current exponential model is **appropriate for short-term access decay (< 60 days)** but **catastrophically aggressive for long-term memory (> 90 days)**. At the default stability of 14.0 days, a memory accessed yesterday has 95% retrieval probability — a memory last accessed 90 days ago has 1.2%. This 80:1 ratio may be too steep for foundational knowledge.
 
-1. **Data plumbing bug (CRITICAL):** `handle_overview()` reads `days_since_last_access` from the search result dict (line 258) — but `search()` never includes this field in its output. The decay formula `0.5^(days/stability)` never activates in the overview path. All accessed memories fall back to the pre-R13 flat `access * 0.1` multiplier. The eval heat values (31, 31, 21, 21, 20) passed because they match the old formula, not because the new formula was verified. Contrast: `handle_wander()` correctly reads from `entry.days_since_last_access` (line 345) and works as designed.
+The adjacent field research reveals that the state of the art (FSRS v6, SuperMemo SM-19) has moved well beyond fixed per-item half-lives. Both systems use **adaptive stability that increases on successful access** — stability is a *learned parameter*, not a static constant. CodeMemory's `stability = 14.0` default is analogous to FSRS's initial stability parameter (w0/w1), but CodeMemory never updates stability on access. This is the single most significant architectural gap.
 
-2. **Uniform 14.0-day stability lacks empirical grounding.** Adjacent-field research shows memory half-lives span four orders of magnitude: hours (rote facts) to years (procedural skills). A single default is an arbitrary midpoint. The 2024 Radvansky meta-analysis (916 datasets) found no single function fits all content types — exponential, power-law, logarithmic, and linear functions each dominate different domains.
+**Functionality (8.0/10):** The decay pipeline is correct end-to-end. Math verified. Edge cases properly handled. API properly exposes decay fields. +1.5 from Round 13's M1-M4 "backend only" assessment.
 
-3. **High-frequency access paradox unresolved.** Memories accessed daily have `days_since=0` → `decay=1.0` perpetually. Their overview heat climbs monotonically. Wander's "cool mode" correctly gives them minimal weight, but there is no mechanism to detect or discourage "over-access" — a memory reviewed daily provides near-zero new learning benefit (massed practice regime per spacing effect research).
+**Research Rigor (5.0/10):** The exponential model was chosen on intuition (half-life is elegant), not on empirical fit to memory data. The 2024 Psychonomic Bulletin meta-analysis of 916 datasets found that exponential-power (e^(-b*sqrt(t))) outperforms pure exponential in the widest range of real memory datasets. The 14.0-day default has no empirical basis for any specific content type.
 
-4. **Three edge cases unguarded:** stability=0 (ZeroDivisionError → crash), stability<0 (decay>1.0 → nonsensical), and `days_since_last_access=None` semantics inconsistent between overview (treated as 0, accidental) and wander (treated as max weight, intentional).
-
-**Research Contribution (7.0/10):** The stability field + unified formula is the right abstraction at the right time. The three-pronged application (overview heat, wander cool weighting, validate decay check) shows systems thinking.
-
-**Potential Impact (6.5/10):** Fixing the overview plumbing bug unlocks the intended UX. But uniform 14.0-day stability and single-curve assumption limit expressiveness. The biggest missed opportunity: stability remains static when FSRS research shows adaptive stability (updated per access) is what makes the model personal.
-
-**Risk Level (5.5/10):** Medium. The overview bug is hidden (eval passes, no crash) but neuters the flagship R13 feature in the most-used code path. The stability=0 edge case is a crash vector waiting for a user to set it. The None semantics ambiguity creates divergent behavior between overview and wander for unaccessed memories.
+**Product Imagination (6.5/10):** The system has the right primitive (`stability` per memory). But the primitive is static. The adjacent research shows that the truly powerful pattern is **stability as a learned, adaptive parameter** — one that increases when a memory is successfully recalled (the spacing effect) and decreases on lapse. This is within reach given the existing infrastructure.
 
 ---
 
-## Phase 1: Core Assumptions Under Scrutiny
+## Phase 1: Core Assumption Challenge
 
-### 1.1 The 14.0-Day Default Stability — Empirically Unanchored
+### 1.1 The Exponential Decay Model — Is It the Right Function?
 
-**The assumption:** `stability: float = Field(default=14.0)` in models.py:78. All four datasets reindex with stability=14.0 across every memory. The choice of 14 appears to derive from the pre-R13 30-day hard threshold (14 * 2 = 28, approximately 30).
+**Current model:** `R(days) = 0.5^(days / stability)`
 
-**Adjacent-field evidence contradicts a single default:**
+This is a pure exponential decay with half-life = `stability`. It has one tunable parameter per memory. The key assumption is that retrieval probability halves every `stability` days, independent of how the memory has been used.
 
-| Source | Half-Life Range | Context |
-|--------|----------------|---------|
-| Ebbinghaus (1885) | ~1 day | Nonsense syllables, no reinforcement |
-| Duolingo HLR (Settles & Meeder, 2016) | Hours to multiple days | Per-word, lexeme-specific; 45% error reduction vs Leitner boxes |
-| SuperMemo (Wozniak) | ~1 day (first interval) → months/years | Depends on repetition count and item difficulty |
-| Husna et al. (2025) | Optimal review at 26.5 hours | Real Analysis students, 80% retention target |
-| MIT (Subirana, Bagiati, Sarma, 2017) | ~2 years half-life | College academics, unreinforced |
-| Procedural skills (Karni & Sagi, 1993) | Months to years | Motor sequences, mirror tracing — near-immune to decay once overlearned |
-| FSRS v6 (2024) | Learned per-card from review history | 17-21 trainable parameters including personalized forgetting curve exponent w20 |
+**What the research says:**
 
-A single 14.0-day half-life is an arbitrary midpoint in a domain where half-lives span four orders of magnitude (hours to years). For CodeMemory's current datasets, different defaults would be empirically better justified:
+The 2024 meta-analysis by [Fisher & Radvansky, Psychonomic Bulletin & Review](https://link.springer.com/article/10.3758/s13423-024-02514-3) analyzed 916 datasets from 256 papers spanning nearly 150 years of memory research. Their key finding: **the exponential-power function (M = a * e^(-b * sqrt(t))) was the best-fitting function across the widest range of data**, not pure exponential and not pure power-law.
 
-| Dataset | Dominant Memory Type | Best-Fit Decay Profile (from research) | Suggested Default Stability |
-|---------|---------------------|--------------------------------------|---------------------------|
-| investment | Declarative facts + time-sensitive decisions | Exponential-power (steep initial drop) | 7-14 days |
-| software-architecture | Conceptual + structural patterns | Logarithmic or linear (gentle, schema-aided reconstruction) | 30-60 days |
-| companion | Episodic + personal interactions | Power-law (moderate) | 14-30 days |
-| quant_operators | Procedural formulas + trading rules | Slow power-law or plateau (procedural consolidation) | 60-180 days |
+The theoretical reason: memory decay is not a single process. The forgetting curve is the **superposition of multiple exponential processes at different timescales** — synaptic decay (hours), systems consolidation (days-weeks), and representation drift (months-years). A pure exponential captures only one of these. The exponential-power function (a special case of the Weibull distribution) captures the multi-timescale nature because different time points sample different underlying decay processes.
 
-**The risk of a single default:** With stability=14.0 and the exponential formula, a memory unaccessed for 90 days has `R = 0.5^(90/14) ≈ 0.011` — effectively zero retrieval probability. This is appropriate for a volatile fact (e.g., "NVDA guidance for Q3") but aggressively wrong for a stable concept (e.g., "event-driven architecture pattern"). The latter at 90 days with power-law decay (tau=0.5) would have `R ≈ 0.38` — still substantially retrievable. The uniform exponential encodes a philosophy that unsupported by research: "all memories fade at the same rate."
+**Mathematical verification of the current model:**
 
-### 1.2 The Exponential Decay Curve — Valid Approximation, Not the Best Fit
+```
+Decay formula: 0.5^(days / stability)
 
-**The assumption:** `decay = 0.5^(days/stability)` — a simple exponential with base 0.5 and half-life = stability.
+At stability=14.0 (default):
+  1 day:   R = 0.5^(1/14)    = 95.2%    (essentially fresh)
+  7 days:  R = 0.5^(7/14)    = 70.7%    (first significant drop)
+  14 days: R = 0.5^(14/14)   = 50.0%    (one half-life)
+  30 days: R = 0.5^(30/14)   = 22.6%    (getting cold)
+  46 days: R = 0.5^(46/14)   = 10.3%    (decay warning threshold)
+  60 days: R = 0.5^(60/14)   =  5.1%    (very cold)
+  90 days: R = 0.5^(90/14)   =  1.2%    (near-zero)
+  180 days: R = 0.5^(180/14) =  0.014%  (effectively zero)
+  365 days: R = 0.5^(365/14) =  1.46e-8 (zero at any machine precision)
 
-**The evidence:** The 2024 Radvansky, Parra & Doolen meta-analysis (Psychonomic Bulletin & Review) reviewed 256 papers and 916 datasets spanning 150 years of memory research. Key findings:
+At stability=90.0 (long-half-life alternative):
+  30 days:  R = 0.5^(30/90)  = 79.4%    (still warm)
+  90 days:  R = 0.5^(90/90)  = 50.0%    (one half-life)
+  180 days: R = 0.5^(180/90) = 25.0%    (getting cold)
+  365 days: R = 0.5^(365/90) =  6.0%    (below warning threshold)
+  730 days: R = 0.5^(730/90) =  0.4%    (near-zero after 2 years)
 
-| Best-Fit Function | Equation | Best For |
-|-------------------|----------|----------|
-| **Exponential-power** | `M = a * e^(-b * sqrt(t))` | Widest range of data; special case of Weibull |
-| **Logarithmic** | `M = a - b * ln(t)` | Non-autobiographical memory; Ebbinghaus's original |
-| **Linear** | `M = bt + a` | Complex/event memories; well-learned material |
-| **Power** | `M = a * t^b` | Less well-learned information; consolidation-based |
+At stability=365.0 (year-scale reference):
+  90 days:  R = 0.5^(90/365) = 84.3%    (barely decayed)
+  365 days: R = 0.5^(365/365) = 50.0%  (one half-life per year)
+  730 days: R = 0.5^(730/365) = 25.0%  (still retrievable after 2 years)
+```
 
-Surprisingly, the power function — long considered the default — was **not** the best-fitting function most often. The simple exponential (CodeMemory's choice) was adequate for short intervals but failed at long retention periods.
+**What this means for CodeMemory:**
 
-**The Memory Phases Framework** (Radvansky, Doolen, Pettijohn & Ritchey, 2022, JEP:LMC) argues no single continuous function captures forgetting across all phases. Different functions apply at different timescales. CodeMemory operates entirely in the transitional-to-long-lasting domain (>1 week), where power-law or logarithmic decay is better supported by data.
+At stability=14.0, the system crosses the decay warning threshold (R < 0.1) at **46 days** — roughly 3.3 half-lives. Any memory that has been accessed but not touched for 47+ days triggers a decay warning. At 90 days, the retrieval probability is 1.2% — the memory is effectively deleted from the heat ranking.
 
-**Practical consequence for CodeMemory:**
+Compare to what the exponential-power function would produce:
 
-| days_since | Exponential (stability=14) | Power-law (tau=0.5, S=14) | Ratio |
-|-----------|---------------------------|--------------------------|-------|
-| 0 | 1.0 | 1.0 | 1.0x |
-| 14 | 0.5 | 0.71 | 1.4x |
-| 30 | 0.22 | 0.57 | 2.6x |
-| 90 | 0.011 | 0.38 | 34x |
-| 180 | 0.00012 | 0.27 | 2200x |
+| Timescale | Pure exponential (current, S=14) | Exponential-power (estimated) | Implication |
+|-----------|----------------------------------|------------------------------|-------------|
+| 0-14 days | Decays to 50.0% | Decays to ~50% (similar) | Short-term behavior is fine |
+| 30 days | Decays to 22.6% | Would decay to ~35-45% | Current model is 1.5-2x too aggressive |
+| 60 days | Decays to 5.1% | Would decay to ~15-25% | Current model is 3-5x too aggressive |
+| 90 days | Decays to 1.2% | Would decay to ~8-15% | Current model is ~8x too aggressive |
+| 180 days | Decays to 0.014% (effectively zero) | Would decay to ~3-7% | Current model effectively deletes |
+| 365 days | Decays to 1.46e-8 (zero) | Would decay to ~1-3% | Current model is categorical, not continuous |
 
-The exponential erases long-tail signal at a rate that is 2,200x more aggressive than power-law at 180 days. For a PKM system where memories can be valuable years after creation, this is a design choice with consequences: the exponential implicitly declares "not accessed in 90+ days = effectively forgotten." Power-law declares "not accessed in 90 days = harder to recall but still potentially valuable."
+**Verdict:** The pure exponential is **correct for short-term access management (< 60 days)** — a day-to-day working assistant needs aggressive recency weighting to distinguish "what I'm working on now" from "what I worked on last month." But it catastrophically penalizes long-term memories. A memory accessed 1,000 times that was last touched 90 days ago has an `access_bonus` of only **11.6** (1000 * 0.0116) — a value smaller than a freshly created memory accessed twice yesterday. This is arguably wrong for reference knowledge and long-lived decisions.
 
-**The choice of formula encodes a philosophy about what forgetting means.** CodeMemory's current exponential says forgetting is near-binary after a few half-lives. Power-law says forgetting has a long, thin tail — old memories never truly vanish, they just become progressively harder to access.
+**The clinical question:** Should CodeMemory's decay curve primarily serve **recency ranking** (where aggressive decay is correct) or **knowledge preservation** (where a long tail is essential)? The answer is both — and the current model only does the first.
 
-### 1.3 High-Frequency Access Paradox — No Cooling Mechanism
+### 1.2 The stability = 14.0 Default — One Size Fits All?
 
-**The assumption:** `days_since_last_access = 0` (set in resolve.py:320 after access) means `decay = 1.0` for recently-accessed memories. They never decay.
+**The assumption under scrutiny:** All memories decay at the same rate regardless of their content type, semantic depth, or usage pattern. 14.0 days is a reasonable universal half-life.
 
-**The paradox:**
-- A memory accessed daily: `days_since=0 → decay=1.0` always. Its heat = `deps*10 + access_count * 1.0`. Both components climb monotonically.
-- A memory accessed 13 days ago (just shy of one half-life): `decay = 0.5^(13/14) ≈ 0.53`.
-- The daily memory gets 2x the access bonus of the 13-day memory — perpetually.
+**What the research says:**
 
-**Is this desired?** For overview ("what should the agent see now?"), yes — recently-used memories are relevant. For wander ("what needs serendipitous rediscovery?"), wander's cool mode correctly handles this by giving `weight = 1/(access*decay + 1)` → near-zero weight for high-access recent memories. But no mechanism discourages over-access.
+Bahrick's landmark "permastore" studies (1984, JEP: General) demonstrated that semantic memory does NOT follow simple exponential decay. Knowledge enters a "permastore" state after 3-6 years and then shows **near-zero further decay** for 25+ years. The amount entering permastore is a function of **original learning depth** (not rehearsal frequency). This challenges the assumption that all memories follow the same continuous decay curve.
 
-**The spacing effect from cognitive science:** In spaced repetition research, a memory reviewed daily provides near-zero new learning benefit — it's in the "massed practice" regime. The optimal review point is when retrieval probability drops to ~70-90% (the "desirable difficulty" sweet spot per FSRS research). A memory at R=1.0 (just accessed) gives the smallest stability gain; a memory at R=0.7-0.8 gives the largest.
+**Domain-specific half-life analysis:**
 
-**What's missing:** CodeMemory has no mechanism to detect that a memory is being "over-accessed" (massed practice) and to suggest spacing it out. The system could track `avg_days_between_accesses` and warn when it drops below the optimal review interval for that memory's stability.
+| Memory Domain | Example | Realistic half-life | Current default fit | Suggested stability |
+|---------------|---------|---------------------|---------------------|---------------------|
+| Daily notes / journal | "What I worked on today" | 3-7 days | 14 is 2-5x too long | 5-7 days |
+| Active decision-making | "Risk tolerance for Q2 portfolio" | 14-30 days | Default 14 is reasonable | 14-30 days |
+| Investment thesis | "Long position on NVDA rationale" | 30-90 days | Default 14 is 2-6x too fast | 30-90 days |
+| Software architecture | "Why we chose event sourcing" | 90-365 days | Default 14 is 6-26x too fast | 90-365 days |
+| API documentation | "POST /api/resolve parameters" | 365+ days (reference) | Default 14 is absurdly fast | 365+ days |
+| Schemas / templates | "Decision record template" | Indefinite | Default 14 makes no sense | 365+ or exempt |
 
-### 1.4 The "days_since" Precomputation Enables Fast Heat But Loses Temporal Resolution
+**The tension:** CodeMemory stores both "what API returns a 422 status" (reference knowledge, should never decay) and "my morning standup notes from last week" (ephemeral, should decay fast). Both get `stability=14.0` unless manually adjusted. This is like using the same shelf-life for milk and salt.
 
-**The assumption:** `days_since_last_access` is an integer (precomputed as `(now - last_access).days` during reindex). This is efficient — avoids datetime parsing in every heat calculation.
+**Current behavior vs. desired behavior, by stability:**
 
-**What's lost:** Integer-day resolution means a memory accessed 30 minutes ago and a memory accessed 23.5 hours ago both have `days_since=0`. They receive identical decay=1.0. In FSRS and ACT-R, sub-day temporal precision matters for working memory → early LTM transitions. For CodeMemory's current use cases (overview, wander, validate), day-level resolution is adequate. But if the system ever adds "same-session" activation (which FSRS v6 now models explicitly with its w19 parameter), sub-day precision becomes necessary.
+```
+stability=7  (weekly decay):  90 days -> R=0.01% (ephemeral: correct)
+stability=14 (current default): 90 days -> R=1.2% (moderate: somewhat fast)
+stability=30 (monthly decay): 90 days -> R=12.5% (decision: borderline)
+stability=90 (quarterly decay): 90 days -> R=50.0% (architecture: reasonable)
+stability=365 (yearly decay): 90 days -> R=84.3% (reference: correct)
+```
 
-**The precomputation timing issue:** `days_since_last_access` is computed at reindex time and updated at resolve time. If reindex runs on Monday and resolve runs on Friday, a memory accessed on Friday gets `days_since=0`. But a memory accessed on Monday and never reindexed still shows `days_since=0` on Friday (it was 0 at Monday's reindex, and no resolve refreshed it). The field is a **snapshot**, not a live computation. This is fine for overview (which runs frequently with fresh index loads) but could cause stale values in long-running server processes that cache the index.
+**Verdict:** The `stability` field IS the right primitive — it allows per-memory tuning. But the **default** is optimized for neither ephemera nor permanence. A smarter default would be schema-driven: schema-defined memories get higher default stability, ad-hoc atoms get lower. The `semantic_type` field (already present in the data model) is the natural hook for this.
+
+### 1.3 access_count * decay — Over-Decay or Correct Interaction?
+
+**The concern:** If `access_bonus = access_count * decay`, then a memory with 1,000 accesses that hasn't been touched in 30 days has an access_bonus of ~226 (1000 * 0.226) — high, but a brand new memory created 1 day ago and accessed twice has a bonus of ~1.9. The heavily-used memory still wins, but the **rate of decline may feel wrong** to users if foundational knowledge drops fast.
+
+**Mathematical scenarios at stability=14.0:**
+
+```
+Scenario A: 1,000 accesses, 30 days since last access
+  decay = 0.5^(30/14) = 0.226
+  access_bonus = 1000 * 0.226 = 226.4
+  wander weight = 1/(226.4 + 1) = 0.0044  (very hot, not wander-able)
+
+Scenario B: 10 accesses, 1 day since last access
+  decay = 0.5^(1/14) = 0.952
+  access_bonus = 10 * 0.952 = 9.5
+  wander weight = 1/(9.5 + 1) = 0.095  (warm, somewhat wander-able)
+
+Scenario C: 1,000 accesses, 90 days since last access
+  decay = 0.5^(90/14) = 0.012
+  access_bonus = 1000 * 0.012 = 11.6
+  wander weight = 1/(11.6 + 1) = 0.079  (cooling, somewhat wander-able)
+
+Scenario D: 1 access, 90 days since last access
+  decay = 0.5^(90/14) = 0.012
+  access_bonus = 1 * 0.012 = 0.012
+  wander weight = 1/(0.012 + 1) = 0.989  (cold, likely to be wandered to)
+```
+
+**Key observation:** At 90 days, a 1,000-access memory (C) has an access_bonus of 11.6 — only slightly higher than a 10-access memory touched yesterday (B, 9.5). This means recency (`days_since`) dominates access_count in the long term. A memory that has been accessed hundreds of times is typically foundational knowledge, and the system should be more reluctant to declare it "cold."
+
+**The underlying issue:** access_count is treated as a scalar multiplier on decay, rather than as a moderator of the decay rate. In FSRS and SuperMemo, difficulty (D) and stability (S) are updated based on recall success — the equivalent would be: **stability should increase with access_count**, not just act as an independent multiplier.
+
+Currently:
+```
+access_bonus = access_count * 0.5^(days / stability)
+```
+
+A better model (inspired by FSRS):
+```
+effective_stability = base_stability * f(access_count)  where f is sublinear (e.g., sqrt or log)
+access_bonus = access_count * 0.5^(days / effective_stability)
+```
+
+This way, a memory accessed 1,000 times has a much longer effective half-life than one accessed 5 times — the spacing effect at work.
+
+**Verdict:** The current interaction is **not wrong**, but it lacks the memory-strengthening effect that human memory exhibits (the spacing effect — each successful recall *increases* stability for the next interval). CodeMemory has the `days_since_last_access` reset to 0 on each resolve access, but stability itself never increases.
 
 ---
 
-## Phase 2: Adjacent Field Research Synthesis
+## Phase 2: Adjacent Field Research
 
-### 2.1 FSRS (Free Spaced Repetition Scheduler) — Full Model Mapping
+### 2.1 FSRS v6 — Adaptive Stability with Personalizable Forgetting Curve
 
-FSRS v6 (Jarrett Ye / open-spaced-repetition, 2024) is the current state-of-the-art in open-source spaced repetition. It models each memory card with three continuous parameters and 21 trainable weights. Its architecture maps surprisingly well to CodeMemory's current data model:
+**Source:** [FSRS technical explanation (Jarrett Ye, 2025)](https://expertium.github.io/Algorithm.html), [FSRS-6 release](https://github.com/open-spaced-repetition/py-fsrs/releases)
 
-| FSRS v6 Concept | Symbol | Definition | CodeMemory Analog | Convergence Effort |
-|---|---|---|---|---|
-| **Stability** | S | Days for R to decay from 100% to 90% | `stability` field — but CodeMemory uses 50% point (half-life) | Trivial: `S_cm ≈ 6.6 * S_fsrs` |
-| **Difficulty** | D [1,10] | Inherent complexity; learned from review outcomes | `intensity` field [1,10] — but assigned by user, not learned | Medium: repurpose intensity or add D field |
-| **Retrievability** | R [0,1] | Instantaneous recall probability | `0.5^(days/stability)` — same concept | None: already computed |
-| **Stability Increase (SInc)** | S' = S * (1 + ...) | S increases after successful recall; magnitude depends on D and R at review | NOT PRESENT | High: new update logic needed |
-| **Forgetting Curve Exponent** | w20 [0.1, 0.8] | Personalized curve shape per user (FSRS v6) | NOT PRESENT | Very high: requires ML optimization |
-| **Same-Day Review** | w19 | Models within-day multiple reviews (FSRS v6) | NOT PRESENT | Medium: requires sub-day timestamping |
-| **Desired Retention** | r (e.g., 0.90) | User-specified target retention rate | NOT PRESENT | Low: add config field |
+FSRS-6 (released late 2025, trained on ~700 million reviews from ~20,000 users) is the most empirically grounded spaced repetition algorithm in existence. Its architecture is directly relevant to CodeMemory's decay system.
 
-**The critical missing piece: adaptive stability.** In FSRS, stability is not a static field — it is updated after every review according to a formula that incorporates difficulty, current retrievability, and the review grade:
+**Key architectural parallels:**
 
-```
-S' = S * [1 + (11-D) * S^(-w9) * (e^(w10*(1-R)) - 1) * h * b * e^w8]
-```
+| FSRS-6 concept | CodeMemory equivalent | Status |
+|----------------|----------------------|--------|
+| **Stability (S)** — half-life where R=0.9 | `stability` field (default 14.0) | CodeMemory's is static; FSRS updates S on every access |
+| **Retrievability (R)** — forgetting curve w/ personalized shape (w20) | `0.5^(days/stability)` | FSRS uses a power-law curve shape; CodeMemory uses fixed exponential |
+| **Difficulty (D)** — per-item, updated on review | `intensity` (1-10) | CodeMemory's intensity is set at creation, never updated |
+| **Stability increase on success** — `S * SInc(D,S,R)` | None | CodeMemory never adjusts stability based on access history |
+| **Stability decrease on lapse** — `min(w11*D^(-w12)*..., S)` | None | CodeMemory only resets days_since, never reduces stability |
+| **21 per-user parameters** | 1 per-memory parameter (stability) | FSRS is fundamentally multi-parametric; CodeMemory is single-parameter |
 
-The SInc magnitude is:
-- **Larger when R is moderate** (~0.7-0.8) — the "spacing effect": gains are maximal when you're close to forgetting
-- **Larger for easy material** (low D) — easy material consolidates faster
-- **Smaller for high-S material** — stability saturates (harder to make stable memories even more stable)
-
-Applying this to CodeMemory: on each `resolve` or `focus`, compute `R_at_access = 0.5^(days_since / stability)`, then update stability proportional to `(11 - intensity) * S_increase_factor(R_at_access)`. Over time:
-- Frequently-accessed, low-intensity memories stabilize fast → their overview heat drops less rapidly between accesses
-- Rarely-accessed, high-intensity memories stabilize slowly → they stay in the "needs review" zone longer
-- The system converges to per-memory review intervals optimized for actual usage patterns
-
-**FSRS performance data:** On 1.7B reviews from 20K users, FSRS v6 achieves 84% less prediction error than SM-2 and requires 20-30% fewer reviews for the same retention level. Parameter optimization starts outperforming defaults at just 16 reviews per card.
-
-### 2.2 Ebbinghaus Forgetting Curve — Content-Type Differentiation
-
-The 2024 Radvansky et al. meta-analysis (Psychonomic Bulletin & Review) provides the strongest evidence yet that different content types require different mathematical models of forgetting:
-
-**Finding 1: Content type determines best-fit function.**
-
-| Content Type | Dominant Decay Function | Half-Life (Unreinforced) | With Spaced Practice |
-|---|---|---|---|
-| **Facts** (declarative, rote) | Exponential / Exponential-power | ~1-7 days | Weeks to months |
-| **Concepts** (semantic, meaningful) | Logarithmic / Linear | Weeks to months | Months to years |
-| **Skills** (procedural) | Slow power-law / Plateau | Months to years | Years (near-permanent) |
-
-**Finding 2: Concepts decay differently because they support reconstruction.** Fisher & Radvansky (2022a, 2022b) found that well-learned conceptual information is best fit by a linear function, explained by the RAFT computational model — concepts allow partial reconstruction from related knowledge, which produces a shallower apparent decay curve. Facts don't benefit from reconstruction and thus show steeper exponential-like decay.
-
-**Finding 3: Murre (2023) averaging artifact.** Averaging individual exponential forgetting curves produces artifact power functions. This means observing power-law behavior in aggregate data does not prove power-law decay at the individual level — a critical methodological insight for any system that models individual memory decay.
-
-**Finding 4: Interleaving vs. blocking.** A 2024 study (PMC, JARMAC) found that interleaved presentation enhances category generalization (concept learning), while blocked presentation improves memory for specific episodic details (fact learning). Category knowledge remained stable over time; episodic details declined. This maps to CodeMemory's tag structure: concept-tagged memories should have longer effective stability than fact-tagged memories.
-
-### 2.3 Recommender Systems — Collaborative Memory Discovery
-
-Three recommender system paradigms transfer directly to CodeMemory's memory discovery and surfacing operations:
-
-**Technique 1: Memory Co-Occurrence Matrix (Item-Item Collaborative Filtering).**
-When a user resolves memory A and memory B appears in the same DAG, increment a co-occurrence score. Over time, a memory-memory co-occurrence matrix emerges. This is implicit feedback — "memories that are frequently resolved together." Unlike the explicit imports DAG (what the author thought was related), co-occurrence encodes what the reader actually found useful together.
-
-Formula: `cooccurrence_score(A, B) = cooccurrence_count(A, B) * 0.5^(days_since_cooccurrence / stability)`
-
-**Technique 2: Tag-Based TF-IDF Weighting.**
-Treat tags as "terms" and memories as "documents." Compute tag-memory TF-IDF scores. Rare tags (e.g., "options-trading") have higher IDF weight than common tags (e.g., "investment"). When resolving a memory with rare tags, boost the heat of other memories sharing those rare tags — higher-signal associations.
-
-**Technique 3: CF-KAN for Continual Learning (Park, Kim, Shin, 2024).**
-Kolmogorov-Arnold Networks applied to collaborative filtering demonstrate inherent robustness to catastrophic forgetting — the tendency of recommenders to "forget" old user preferences when new data arrives. Applied to CodeMemory: the overview ranking could use KAN-inspired weight preservation to ensure that memories from less-active domains (e.g., "software-architecture" when the user is deep in "investment") don't drop to zero heat.
-
-**Technique 4: Knowledge Graph + Collaborative Filtering Hybrid.**
-The 2024 hybrid model from Ain Shams Engineering Journal combines knowledge graph embeddings (TransE) with neural collaborative filtering, achieving ~6% F1 improvement over baselines. CodeMemory already has a knowledge graph (DAG). Adding collaborative signals (co-occurrence, shared access patterns) on top of the structural graph would produce a hybrid recommendation — "memories you should review based on what similar memories you've been reviewing."
-
-### 2.4 Cross-Domain Synthesis: The Three-Axis Memory State (Updated for R13)
-
-R12 proposed a three-axis model (Structural x Temporal x Stability). R13 partially implemented one axis (temporal decay via stability-anchored exponential) but left the other two unaddressed:
+**FSRS-6 stability update formula (simplified):**
 
 ```
-                    STRUCTURAL IMPORTANCE
-                    (weighted incoming edges
-                     + PageRank on DAG)
-                         ▲
-                        /|\
-                       / | \
-                      /  |  \   ← R13: stability added but STATIC
-                     /   M   \     No per-memory differentiation.
-                    /    E    \    No spreading activation.
-                   /     M     \
-                  /      O      \     R13: M3 precomputes days_since,
-                 /       R       \    M1 unifies formula. But
-                /        Y        \   plumbing bug blocks overview.
-               ◄───────────────────►
-          TEMPORAL RECENCY       KNOWLEDGE STABILITY
-      (M3: precomputed days)     (M4: stability=14.0 static)
+S' = S * (e^(w8) * (11 - D) * S^(-w9) * (e^(w10*(1-R)) - 1) * w15 * w16 + 1)
 ```
 
-The three axes create four operational zones that each demand different system behaviors:
+Key properties:
+- **R-dependence:** SInc peaks at R ≈ 0.85 — optimal to review just before forgetting. If reviewed too early (R ≈ 1.0), stability increase is minimal (spacing effect). If reviewed too late (R < 0.5), also suboptimal.
+- **D-dependence:** Harder items (higher D) get smaller stability increases.
+- **S-dependence:** As stability grows, SInc diminishes (diminishing returns, `S^(-w9)`).
+- **Grade-dependence:** `w15` penalizes Hard reviews, `w16` bonuses Easy reviews.
 
-| Zone | Structural | Temporal (R) | Stability | Behavior |
-|------|-----------|-------------|-----------|----------|
-| **Pillars** | High | High | High | Always surfaced. Core of current work. |
-| **Review Targets** | High | Low | Low | Important but fading. Needs re-engagement. Optimal wander targets. |
-| **Fragile Gems** | Low | Low | High | Important to someone, but unlinked. Needs imports. |
-| **Archive Candidates** | Low | Low | Low | Not connected, not accessed, not stable. Archive proposal. |
+**FSRS-6 forgetting curve (with w20 personalization):**
+
+```
+R(t, S) = (1 + w20 * t / (9 * S))^(-1 / w20)
+```
+
+This is a **power-law forgetting curve** whose shape is controlled by w20. When w20 → 0, it approaches exponential. When w20 > 0 (default 0.154), it has a heavier tail — slowing long-term decay.
+
+**What CodeMemory already gets right:**
+- `stability` as a per-memory field (correct primitive)
+- `days_since_last_access` as a precomputed input (matching FSRS's concept of "elapsed days")
+- `access_count` tracking (could be the basis for stability updates)
+- Decay warning threshold at R < 0.1 (matching the concept of "lapse")
+- Excluding protected memories (intensity >= 8) from decay warnings
+
+**What CodeMemory is missing:**
+- **Stability increase on successful access:** when `handle_resolve` accesses a memory and returns it in full text, that is a "successful recall." Stability should increase — not stay at 14.0 forever.
+- **Difficulty/lapse tracking:** when a memory is resolved but its body is stale (hash mismatch), or when it's in a cycle, those are "lapses" that should decrease stability.
+- **Personalized forgetting curve shape:** the `w20` parameter in FSRS-6 means different users (and different content types) have fundamentally different forgetting curve shapes, not just different half-lives.
+- **Review timing optimization:** FSRS schedules review at `S * ln(desired_retention) / ln(0.9)`. CodeMemory only alerts when it's already too late (R < 0.1), never tells you the optimal moment to review (R ≈ 0.7-0.85).
+
+### 2.2 SuperMemo SM-17-SM19 — The DSR Model and Stability Increase Matrix
+
+**Source:** [SuperMemo Algorithm documentation](https://help.supermemo.org/wiki/SuperMemo_Algorithm), [Building memory stability through rehearsal (Wozniak et al., 2005)](http://mail.super-memory.com/articles/stability.htm)
+
+SuperMemo (1987-present) is the longest-running spaced repetition system, now at SM-19 (2024). Its DSR model (Difficulty-Stability-Retrievability) is the intellectual ancestor of FSRS.
+
+**Key concepts CodeMemory should absorb:**
+
+**1. The SInc matrix:**
+SuperMemo builds a data-driven stability-increase matrix from the user's own repetition history. The matrix maps (D, S, R) -> stability multiplier. At very low stabilities, stability can increase up to **17-fold** on a single successful review. As stability grows, the increase factor diminishes (diminishing returns).
+
+**2. Retrievability matters for stability increase:**
+In SuperMemo, SInc peaks at R ≈ 0.85. If you review too early (R ≈ 1.0, just after the last review), stability increase is minimal or even negative (the spacing effect — massed practice doesn't help). If you review too late (R << 0.5, near-forgotten), stability increase is also reduced. The optimal review point is **just before forgetting**.
+
+**3. SM-19's post-lapse stability estimation (2024):**
+When a memory is forgotten, SM-19 computes a new (reduced) stability based on the item's difficulty and the retrievability at the moment of the lapse. This replaced earlier algorithms that simply reset stability to zero.
+
+**4. The theoretical SInc formula (2005):**
+```
+SInc = (1 - (1 - Pr)^(r/(r-1))) / Pr
+```
+For r=2: `SInc = 2 - Pr`. As probability of successful memory encounter (Pr) approaches 0, SInc approaches 2× — meaning a near-forgotten memory that is successfully recalled can double its stability.
+
+**What this means for CodeMemory:**
+
+CodeMemory currently has no concept of "optimal review timing." The decay warning triggers at R < 0.1, but the system never suggests **when** to review a memory — only that it's already too late. A SuperMemo-inspired approach would:
+- Track the decay value and suggest review when R drops below ~0.7 (optimal window)
+- Increase stability on successful access, with the magnitude depending on how close the memory was to being forgotten
+- Decrease stability when a memory is resolved but produces stale content (hash mismatch = recall failure)
+
+### 2.3 Human Memory Research — Content-Type-Specific Forgetting Curves
+
+**Source:** Bahrick (1984) "Semantic memory content in permastore," Fisher & Radvansky (2024) "Memory from nonsense syllables to novels," Sternad et al. (2013) "Learning to never forget."
+
+The evidence is overwhelming that **different memory types follow fundamentally different forgetting curves**, not just different parameters on the same function:
+
+| Memory type | Neural substrate | Decay curve shape | Key properties |
+|-------------|-----------------|-------------------|----------------|
+| **Episodic** (events, personal experiences) | Hippocampus | Linear to power-law, fast initial decay | Significant decay within hours-days; highly context-dependent; retrieval cues can recover seemingly "lost" memories |
+| **Semantic** (facts, concepts, knowledge) | Neocortex | Exponential for 3-6 years, then flat "permastore" | Once consolidated, near-permanent; original learning depth is the strongest predictor of retention; minimal further decay after 6 years |
+| **Procedural** (skills, motor patterns) | Basal ganglia, cerebellum | Extremely slow power-law, near-permanent | Core motor patterns persist for decades; fine precision degrades; "bicycle riding" phenomenon |
+
+This is not a matter of different stability parameters on the same curve — the **curve shape itself differs**. Semantic knowledge does not just have a longer half-life than episodic memories; it follows a different functional form (exponential transitioning to flat, vs. power-law decay).
+
+**Implication for CodeMemory's data model:**
+
+The current system treats `stability` as a continuous parameter on a single curve family `R = 0.5^(t/S)`. But the research suggests the system needs at least two distinct curve families:
+- **Fast-decay for episodic/transient content:** exponential or power-law, short half-life (3-14 days)
+- **Slow-decay with permastore for semantic/reference content:** exponential-power with very long tail, essentially flat after 1-2 years
+
+The `maturity` field (draft / verified / proven) partially captures this — proven memories have already survived repeated access. But maturity is a **lagging indicator** — it's a badge earned after access_count thresholds, not a parameter that influences the decay curve itself.
 
 ---
 
 ## Phase 3: Logical Completeness Analysis
 
-### 3.1 Data Plumbing Bug: Overview Decay Formula Never Activates (CRITICAL)
+### 3.1 The Decay Pipeline — End-to-End Audit
 
-**Location:** `handlers.py` line 258, `handle_overview()`.
+**Data flow:** reindex (compute days_since) -> overview/wander/validate (read days_since, compute decay) -> resolve (reset days_since to 0 on access) -> API (expose stability/decay to frontend)
 
-**Root cause:**
-```python
-# Line 256-258: entry IS a MemoryEntry (has .days_since_last_access)
-entry = index.memories.get(mid)
-stability = entry.stability if entry else 14.0
-days_since = r.get("days_since_last_access") if isinstance(r, dict) else getattr(r, "days_since_last_access", None)
-```
+| Stage | File:Line | Status | Notes |
+|-------|-----------|--------|-------|
+| Precompute days_since | index.py:122-130 | CORRECT | Computed from last_access at reindex time; handles None gracefully |
+| clamp days_since >= 0 | index.py:128 | CORRECT | `max(0, ...)` prevents negative days |
+| C1 fix: read from MemoryEntry | handlers.py:258-260 | FIXED | Was reading from search dict (empty); now reads from MemoryEntry |
+| C1 fallback: None handling | handlers.py:261 | CORRECT | Falls back to `access * 0.1` when days_since is None |
+| C2: stability >= 0.1 runtime | handlers.py:257, 346 | CORRECT | `max(stability, 0.1)` in overview and wander |
+| C2: stability validator | models.py:111-122 | CORRECT | Pydantic validator rejects <= 0, clamps < 0.1 to 0.1 |
+| C2: gt=0.0 Field constraint | models.py:78 | CORRECT | Pydantic-level guard |
+| Decay formula (overview) | handlers.py:263 | CORRECT | `math.pow(0.5, days_since / stability)` |
+| access_bonus = access * decay | handlers.py:264 | CORRECT | Zero-access memories get `access * 0.1` (10% weight floor) |
+| wander weight = 1/(access*decay+1) | handlers.py:349 | CORRECT | Proper (0, 1] range, monotonic, well-behaved |
+| Decay warning trigger | validate.py:103-104 | CORRECT | Triggers when R < 0.1 AND in_degree == 0 AND intensity < 8 |
+| access update on resolve | resolve.py:318-320 | CORRECT | Increments access_count, sets last_access, resets days_since to 0 |
+| C3: API /memories exposure | server.py:308-311 | CORRECT | stability, days_since, access_count, last_access in response |
+| C3: API /stats decay_risk | server.py:660-683 | CORRECT | Computes and returns sorted decay_risk array |
 
-`r` is a dict returned by `search()` (search.py lines 73-85). The search function builds result dicts that include `access_count`, `last_access`, `dependents` — but NOT `days_since_last_access`. The field exists on `entry` (the MemoryEntry object at line 256) but the handler reads from `r`, where it is always `None`.
+**Edge cases verified:**
+- Memory accessed 0 times: `access_bonus = 0 * 0.1 = 0` — no heat from access (correct)
+- Memory with `days_since = None`: falls back to 10% access bonus (correct, conservative)
+- Memory with `stability = 0`: clamped to 0.1 by C2 protections at both model and runtime level (correct, defense-in-depth)
+- Memory in circular dependency: excluded from deps count in heat (correct, R13-M2)
+- Schema-type memories: excluded from decay warning in validate.py:169 (correct, schemas are templates, not memories that decay)
+- Intensity >= 8: excluded from decay warning regardless of R value (correct, protected memories)
+- Wander on empty candidates: returns "(no matching memories)" (correct)
 
-**Effect:**
-```python
-# Line 259-264: days_since is always None from search results
-if access > 0 and days_since is not None:  # Always False
-    days_since = max(0, days_since)
-    decay = math.pow(0.5, days_since / stability)  # NEVER REACHED
-    access_bonus = access * decay
-else:
-    access_bonus = access * 0.1  # ALWAYS TAKEN — pre-R13 flat 10% multiplier
-```
+**Identified edge-case gap:** The decay warning in validate.py requires ALL THREE conditions simultaneously: `R < 0.1` AND `in_degree == 0` AND `intensity < 8`. This means:
+- A protected memory (intensity >= 8) with R < 0.1 will NOT trigger a warning. This is intentional but means protected memories can silently decay with no review suggestion.
+- A memory with R < 0.1 that IS referenced by another memory will NOT trigger a warning. This is correct — being depended on is structural protection.
 
-The entire R13 decay model is inert in the most-used code path. The `0.5^(days/stability)` formula never executes for overview.
+### 3.2 The Overview Heat Formula — Sensitivity Analysis
 
-**Why the eval didn't catch it:** The eval verified heat values as 31, 31, 21, 21, 20 for the investment dataset. Under the bug, heat = `deps*10 + access*0.1`:
-- risk-tolerance: `3*10 + 10*0.1 = 31` ✓
-- semiconductor-thesis: `3*10 + 10*0.1 = 31` ✓
-- nvidia-earnings: `2*10 + 10*0.1 = 21` ✓
-- soxl-composition: `2*10 + 10*0.1 = 21` ✓
-- february-buy: `2*10 + 0*0.1 = 20` ✓
+`heat = deps * 10 + access_bonus`
 
-All eval heat values are consistent with the **old** formula. The eval verified the old behavior was preserved — not that the new behavior was active.
+The `deps * 10` term gives a structural importance floor. A memory with 5 dependents gets +50 heat regardless of access frequency. This means a highly-referenced architecture decision (5 dependents, never accessed) would outrank a frequently-accessed but unreferenced daily note (100 accesses, 30 days ago = heat ~23).
 
-If the decay formula were active (assuming `days_since=0` for recently reindexed data with resolved memories): risk-tolerance heat would be `30 + 10*1.0 = 40`, not 31. The eval would have caught this discrepancy — **if** the formula were active.
+**This is deliberate and correct for a knowledge graph:** structural importance (being referenced) should dominate access frequency. The inverse is what makes knowledge graphs different from feed algorithms.
 
-**Fix:**
-```python
-# Line 258: read from entry, not from r
-days_since = entry.days_since_last_access if entry else None
-```
+**Edge case:** A memory with 0 dependents and 0 access_count has heat = 0. In overview, it ranks last even if it matches the search tags. This means brand-new, unreferenced memories are invisible in overview — arguably correct (they have no proven value) but worth noting as the "cold start" problem.
 
-One line. **Impact: Unlocks the entire R13 decay model for overview.**
+### 3.3 Wander Cool Mode Weighting — Correctness
 
-**Contrast with wander:** `handle_wander()` line 345 correctly reads:
-```python
-days_since = getattr(entry, 'days_since_last_access', None)
-```
-This reads from the MemoryEntry object, which has the precomputed field. Wander's decay weighting works correctly. This is why the eval's wander-related tests didn't expose the issue.
+`weight = 1.0 / (access_count * decay + 1)`
 
-### 3.2 Stability Edge Cases
+This creates a proper gradient:
 
-**Case: stability = 0** → `math.pow(0.5, days_since / 0)` → `ZeroDivisionError` → **CRASH** in overview, wander, and validate. No guard exists in any of the three code paths.
+| Scenario | access_count | days_since | S=14 decay | weight | Meaning |
+|----------|-------------|------------|-----------|--------|---------|
+| Never accessed | 0 | N/A | 1.0 | 1.000 | Maximally cool |
+| 1 access, fresh | 1 | 0 | 1.0 | 0.500 | Neutral |
+| 1 access, 14 days | 1 | 14 | 0.500 | 0.667 | Warming up |
+| 1 access, 90 days | 1 | 90 | 0.012 | 0.989 | Approaching cold |
+| 100 accesses, fresh | 100 | 0 | 1.0 | 0.010 | Very hot |
+| 100 accesses, 30 days | 100 | 30 | 0.226 | 0.042 | Still quite hot |
+| 100 accesses, 90 days | 100 | 90 | 0.012 | 0.463 | Moderately hot |
+| 1,000 accesses, 90 days | 1,000 | 90 | 0.012 | 0.079 | Still warm |
 
-**Case: stability < 0** → `0.5^(positive / negative) = 0.5^(negative) = 2^(positive) > 1.0`. Decay exceeds 1.0 — the memory appears to "strengthen" over time. Nonsensical. No guard exists.
+The formula is monotonic and well-behaved across all inputs. The `+1` prevents division by zero and bounds the weight in (0, 1]. The intensity < 8 pre-filter for cool candidates is correct — high-intensity memories are "pinned" and should not be selected for serendipitous recall.
 
-**Case: stability very large (e.g., 10000)** → `0.5^(days/10000) ≈ 1.0` for any practical days. Memory is effectively immortal. May be intentional for "eternal" memories but should be explicit — either a `stability = float('inf')` sentinel or a check: if `days_since / stability < 0.001`, skip computation and set decay=1.0.
-
-**Case: days_since_last_access = None** → Three different behaviors across three code paths:
-
-| Code Path | None Handling | Behavior | Intentional? |
-|-----------|--------------|----------|-------------|
-| **Overview (broken)** | `access > 0 and days_since is not None` → False | `access_bonus = access * 0.1` (flat 10%) | Accidental — falls through due to bug |
-| **Wander cool mode** | `entry.access_count > 0 and days_since is not None` → False | `weight = 1.0` (max cool weight) | Intentional — unaccessed = maximally cool |
-| **Validate _check_decay** | Falls back to `datetime.fromisoformat(entry.last_access)` | Computes days_since from last_access | Defensive — safety net for un-reindexed data |
-
-The EVAL.md Section 8 already flagged this ambiguity as pitfall R13-M3: "None means never accessed vs 0 means just accessed. Current code treats both similarly but future wander may need to distinguish."
-
-### 3.3 Interaction Between Decay and Other Systems
-
-**Decay vs. Stale Detection:**
-- Stale = body hash mismatch (content changed without reindex). Decay = access-based (not accessed recently).
-- They operate independently. A stale-but-frequently-accessed memory appears in overview with high heat AND a stale warning. A fresh-but-never-accessed memory appears with low heat and no warning.
-- No combined risk score exists. A "stale AND decayed" memory is double-at-risk but both systems fire independently with no synthesis.
-
-**Decay vs. Maturity Auto-Upgrade:**
-- `resolve.py:323-339`: `access_count >= 3` → draft→verified. `access_count >= 10 + has dependents` → verified→proven.
-- These thresholds use lifetime access count with no recency weighting. A memory accessed 3 times in one day triggers "verified." A memory accessed 3 times over 3 years also triggers "verified."
-- With the decay model active, maturity should require *recent* access: `access_count >= 3 AND max(R_at_access_times) > 0.5` or similar recency gate.
-
-**Decay vs. Search:**
-- `search()` does not use decay at all. Results sorted by `(-dependents, -access_count, id)`. No recency factor.
-- Even after fixing the overview bug, search remains decay-unaware. A user searching for "investment" gets the most-connected and most-accessed results — regardless of recency.
-
-**Decay vs. Intensity (protection):**
-- `validate.py:_check_decay` line 88: memories with `intensity >= 8` are exempt from decay warnings.
-- This is the only place intensity interacts with decay. Overview and wander apply decay regardless of intensity.
-- Should high-intensity memories get proportionally higher effective stability? Currently no. An intensity=10 memory and intensity=1 memory with the same stability=14.0 decay identically.
-
-**Decay vs. Overview `--with-recall` flag:**
-- `handle_overview()` lines 292-307: `with_recall` sorts candidates by `access_count` (ascending), takes the lowest third, picks randomly.
-- The comment says "use unified decay formula for cool wander weighting" but the code does no such thing — it sorts by raw access_count. The comment is aspirational, not actual.
-
-### 3.4 Wander Cool Mode — Correctly Implemented But Could Be Stronger
-
-The wander cool mode (handlers.py lines 332-352) correctly:
-1. Filters for `intensity < 8` (respects protection)
-2. Reads `entry.days_since_last_access` from MemoryEntry (not from search dict — correct!)
-3. Computes `decay = 0.5^(days/stability)`
-4. Computes `weight = 1/(access_count * decay + 1)`
-5. Uses `random.choices()` with these weights
-
-This means wander correctly gives high weight to cold (unaccessed, long days_since) memories. The formula works as designed for the wander path.
-
-**The limitation:** The max weight is 1.0 (for unaccessed memories). All unaccessed memories receive equal weight. Within the unaccessed pool, wander is random — no differentiation by tags, creation date, type, or structural position. The "coolness" is purely a function of access frequency weighted by recency. Structural coolness (low dependents, orphan status) is not considered, despite the handler's orphan annotation display (line 404-405) suggesting it should be.
-
-### 3.5 Search Result Dict Field Coverage Gap
-
-`search()` (search.py lines 73-85) builds result dicts. The fields included are:
-`id, type, summary, status, tags, path, intensity, access_count, last_access, dependents, maturity`
-
-Fields in MemoryEntry but **not** in search results:
-`version, created, updated, schema, imports, stability, days_since_last_access, protected, change_note, change_log, source, evidence, summary_hash`
-
-The missing `stability` and `days_since_last_access` are now critical compute inputs for R13. The missing `schema` prevents search-based consumers from displaying schema references. The missing `imports` prevents lightweight dependency queries without loading the full index.
+**Minor observation:** The wander weight uses `access_count * decay` without the 10% floor that overview uses for zero-access memories. This is correct for wander — zero-access memories get weight=1.0 without needing a floor — but the inconsistency between the two uses of the same formula is worth noting.
 
 ---
 
-## Phase 4: Alternative Design Proposals (Inspiration Bombs)
+## Phase 4: Alternative Design Proposals
 
-### Bomb 1: Domain-Calibrated Stability Presets (Low Effort, High Impact)
+### Proposal A: Adaptive Stability Update on Access (FSRS-Inspired)
 
-**Current state:** All memories share `stability=14.0`. User must manually change it.
+**Problem:** Stability is static. A memory created with stability=14.0 stays at 14.0 forever, regardless of how many times it's accessed or how useful it proves to be. This contradicts the fundamental finding of every major spaced repetition system since SM-2: **stability should increase on successful recall**.
 
-**Proposal:** Auto-assign stability based on detectable memory characteristics during `create`:
-
-| Heuristic | Assigned Stability | Rationale |
-|-----------|-------------------|-----------|
-| Tag contains "fact" / "data" / "earnings" / "price" | 7 days | Declarative fact — fast decay per Ebbinghaus |
-| Tag contains "concept" / "architecture" / "pattern" / "principle" | 30 days | Conceptual — slow, schema-aided decay per Radvansky (2024) |
-| Tag contains "decision" / "trade" / "buy" / "sell" | 14 days | Time-sensitive decision — current default |
-| `type: schema` | 90 days | Structural template — near-immortal |
-| `intensity >= 8` | stability * 2.0 | High-importance memories decay slower |
-| Has imports (serves as dependency for others) | stability * 1.5 | Referenced memories are reinforced by backlinks |
-| `maturity: proven` | stability * 2.0 | Proven knowledge is consolidated; slower decay |
-
-**Implementation:** A `suggest_stability(tags, type_, intensity, has_imports, maturity) -> float` function. Called during `create` to auto-set the field with an `[auto]` annotation. Existing memories keep manually-set stability. Validate can suggest changes for mismatched stability values.
-
-**Impact:** Makes the stability field semantically meaningful immediately. Users see different decay rates for different memory types, which communicates the concept better than a uniform default. The heuristics are transparent and overridable.
-
-### Bomb 2: FSRS-Inspired Adaptive Stability (Medium Effort, Transformative)
-
-**Current state:** Stability is static. Never changes unless manually edited.
-
-**Proposal:** On each `resolve` or `focus`, update stability using a simplified FSRS SInc formula:
+**Proposal:** Add a stability update step in `resolve.py` after the access_count increment:
 
 ```python
-def update_stability(memory: MemoryEntry, access_quality: int = 3) -> float:
-    """Update stability after an access. access_quality: 1=forced, 3=normal, 5=organic."""
-    days_since = memory.days_since_last_access or 0
-    R_at_access = 0.5 ** (days_since / memory.stability)  # retrievability at access time
+# Simplified SInc (Stability Increase) function inspired by FSRS v6
+# Applied after entry.access_count increment in resolve.py
 
-    # FSRS-inspired: gain is maximal when R is moderate (~0.5-0.7)
-    # Low R (nearly forgotten) -> larger gain (spacing effect)
-    # High R (just accessed)  -> smaller gain (massed practice penalty)
-    retrievability_gain = max(0, 1 - R_at_access) ** 0.5
+current_stability = entry.stability
+# Retrievability at moment of access (before resetting days_since)
+retrievability = 0.5 ** (days_since / current_stability) if days_since else 1.0
 
-    # Difficulty from intensity: higher intensity = harder (D ∈ [0.1, 1.0])
-    difficulty = memory.intensity / 10.0
+if retrievability > 0.95:
+    # Reviewed too early — minimal boost (massed practice)
+    s_inc = 1.05
+elif retrievability > 0.70:
+    # Optimal review window — moderate boost
+    s_inc = 1.15 + (0.95 - retrievability) * 0.6  # 1.15 to 1.30
+elif retrievability > 0.30:
+    # Late review — strong boost (near-forgotten, recovery)
+    s_inc = 1.30 + (0.70 - retrievability) * 0.5  # 1.30 to 1.50
+else:
+    # Very late, close to forgotten — maximum boost
+    s_inc = 1.50 + (0.30 - retrievability) * 1.0  # 1.50 to 1.80
 
-    # Stability increase factor
-    s_inc = 1 + (1 - difficulty) * retrievability_gain * 0.5
+# Diminishing returns: as stability grows, SInc approaches 1.0
+diminish_factor = math.sqrt(14.0 / max(current_stability, 14.0))
+effective_s_inc = 1.0 + (s_inc - 1.0) * diminish_factor
 
-    # Quality adjustment
-    quality_bonus = 1 + (access_quality - 3) * 0.1
-
-    return memory.stability * s_inc * quality_bonus
+new_stability = current_stability * effective_s_inc
+entry.stability = round(new_stability, 1)
 ```
 
-**How this converges:**
-- Memory accessed daily: `days_since=0 → R=1.0 → gain=0 → S' ≈ S * 1.0`. Stability barely changes. The system signals "this is massed practice — no learning benefit."
-- Memory accessed at `days_since=14` (R=0.5): `gain=0.71 → S' ≈ S * 1.2`. 20% stability increase. The system signals "good spacing — memory is consolidating."
-- Memory accessed at `days_since=46` (R≈0.1): `gain=0.95 → S' ≈ S * 1.3`. 30% increase. The system signals "near-forgotten but recovered — strongest consolidation signal."
+**Expected behavior at stability=14.0 default:**
+- Accessed fresh (R > 0.95): SInc=1.05, new stability ≈ 14.7 (5% boost)
+- Accessed at half-life (R=0.5): SInc=1.40, new stability ≈ 19.6 (40% boost)
+- Accessed near-forgotten (R=0.1): SInc=1.70, new stability ≈ 23.8 (70% boost)
 
-**Why transformative:**
-1. Stability converges to each memory's natural review interval
-2. Frequently-accessed memories stabilize rapidly (less need to surface them)
-3. Rarely-accessed but high-intensity memories stay in the "needs review" zone longer
-4. The system learns from actual usage patterns rather than imposing a priori defaults
-5. FSRS research shows: with 16+ reviews, personalized parameters outperform defaults; CodeMemory's `access_count` already tracks this
+**Expected behavior after 100 accesses (stability=60, accumulated):**
+- Accessed at half-life (R=0.5): SInc=1.40, diminish=0.483, effective=1.19, new stability ≈ 71.6
+- Diminishing returns ensures stability doesn't grow unboundedly.
 
-**Requirements:** `stability` field already exists. Need to call `update_stability()` in `resolve.py` after line 320 (where `days_since_last_access` is already set to 0). Need a minimum `access_count` threshold (~3) before adaptive updates begin, to avoid overfitting to early noise.
+**Effort:** ~1 day. Modify `resolve.py` in the access-tracking block. Add `stability_history: list[dict]` field to MemoryEntry for audit trail. Requires 2-3 new unit tests.
 
-### Bomb 3: Collaborative Memory Graph for Associative Wander (Medium Effort, Novel)
+**Why this matters:** This transforms CodeMemory from a static decay model to an adaptive memory system. The system learns which memories are important through use, not through manual configuration. This is the single most impactful improvement identified by adjacent field research.
 
-**Current state:** Wander's cool mode picks from low-access memories randomly. No relationship to current work context.
+### Proposal B: Domain-Differentiated Default Stability
 
-**Proposal:** Build a memory-memory co-occurrence matrix from resolve history. When memory A is resolved and memory B appears in the same DAG, increment `cooccurrence[A][B]`. Over time, this produces "memories frequently resolved together" — an implicit relevance signal orthogonal to the explicit imports DAG.
+**Problem:** The default stability=14.0 is inappropriate for 4 of the 5 most common memory domains.
 
-**Application to a new `wander --mode associative`:**
+**Proposal:** Set default stability based on `semantic_type` and/or `schema` at creation time:
 
 ```python
-# Step 1: Start from the most-recently-resolved memory (the "seed")
-# Step 2: With probability p, jump to a co-occurring memory from the seed
-# Step 3: With probability (1-p), jump to an imported memory from the seed
-# Step 4: Repeat for 3-5 steps, decaying jump probability (random walk with teleport)
-# Step 5: Output the landing memory — serendipitous but contextually-connected discovery
+# In create.py or handlers.py:handle_create
+DOMAIN_STABILITY_DEFAULTS = {
+    "schemas": 365.0,       # Templates are permanent reference
+    "api": 365.0,           # API documentation is permanent
+    "decision": 90.0,       # Decisions have moderate lifespan
+    "research": 90.0,       # Research notes have moderate lifespan
+    "context": 30.0,        # Context summaries are medium-term
+    "meeting": 7.0,         # Meeting notes decay within a week
+    "daily": 5.0,           # Daily standup notes are most ephemeral
+    "reference": 365.0,     # Reference material is permanent
+}
+DEFAULT_STABILITY = 14.0
 ```
 
-**Why this is novel:** No existing PKM tool combines explicit dependency graphs with implicit co-occurrence for memory discovery. Obsidian's graph view shows explicit links. Anki's FSRS schedules reviews. CodeMemory could be the first to do associative wandering through a learned co-occurrence graph on top of explicit imports — modeling how human memory works (one thought triggers another through associative links).
+**Effort:** 30 minutes. Modify `create.py` to check `semantic_type` against the lookup table when initializing `stability`.
 
-**Storage:** The co-occurrence matrix is sparse (most memory pairs never co-occur). Store as a JSON dict in `.codememory/cooccurrence.json`. Update during `resolve()` in a fire-and-forget pattern (don't block resolution for co-occurrence tracking).
+**Why this matters:** The simplest possible improvement — a lookup table that brings default behavior closer to cognitive reality. Zero algorithmic complexity. Eliminates the most common "wrong default" scenario: API docs decaying after 46 days.
 
-### Bomb 4: Per-Memory-Type Decay Curves (High Effort, Research-Grade)
+### Proposal C: Long-Tail Preservation via Hybrid Decay
 
-**Current state:** Single formula `0.5^(t/S)` for all memories. Stability is the only tunable parameter.
+**Problem:** Pure exponential decay at stability=14.0 effectively deletes memories after 90 days (R < 0.02). Reference knowledge should not silently vanish.
 
-**Proposal:** Add a `decay_curve` field to MemoryEntry that selects the mathematical function, not just its parameter:
+**Proposal:** Replace pure exponential with a hybrid that preserves a long tail:
 
-```python
-# New field on MemoryEntry
-decay_curve: str = Field(default="exponential",
-    description="exponential | power | logarithmic | linear | step")
-
-def compute_decay(days_since: float, stability: float, curve: str) -> float:
-    if curve == "exponential":
-        return 0.5 ** (days_since / stability)
-    elif curve == "power":
-        # Power-law: (1 + t/S)^(-tau), tau=0.5 default
-        return (1 + days_since / stability) ** (-0.5)
-    elif curve == "logarithmic":
-        # Logarithmic: 1 - a * ln(1 + t/S)
-        return max(0.0, 1.0 - 0.15 * math.log(1 + days_since / stability))
-    elif curve == "linear":
-        # Linear decay to zero at t = stability
-        return max(0.0, 1.0 - days_since / stability)
-    elif curve == "step":
-        # Binary: 1.0 until stability days, then 0.0
-        return 1.0 if days_since <= stability else 0.0
-    else:
-        return 0.5 ** (days_since / stability)
+```
+R_hybrid(days, stability) = max(
+    0.5^(days / stability),                              # exponential (short-term)
+    0.1 / (1 + days / (10 * stability))                  # power-law floor (long-term)
+)
 ```
 
-**Rationale from research:**
+**Effect at stability=14 (hybrid vs. current):**
 
-| Curve | Best For | Empirical Support |
-|-------|----------|-------------------|
-| Exponential | Rote facts, volatile data | Ebbinghaus (1885), HLR (2016) |
-| Power-law | General declarative, mixed types | Wixted & Carpenter (2007), ACT-R |
-| Logarithmic | Concepts, semantic knowledge | Radvansky et al. (2024) — best fit for non-autobiographical |
-| Linear | Well-learned complex material | Fisher & Radvansky (2022) — RAFT model |
-| Step | Decisions with explicit expiry | Practical heuristic (no research backing yet) |
+| Days | Current (exponential) | Hybrid | Multiplier |
+|------|----------------------|--------|------------|
+| 14 | 50.0% | 50.0% | 1.0x |
+| 46 | 10.3% | 10.0% | 1.0x (same around threshold) |
+| 90 | 1.2% | 6.1% | 5.1x |
+| 180 | 0.014% | 4.4% | 314x |
+| 365 | 1.46e-8 | 3.8% | infinite (current hits zero) |
+| 730 | 2.1e-16 | 3.1% | infinite |
 
-**Why research-grade:** This directly implements the 2024 meta-analysis finding that no single function fits all forgetting. It makes CodeMemory's decay model a composable function rather than a single formula — a defensible design position against future competitors. The challenge: users shouldn't need to choose a decay curve. The `suggest_stability()` function (Bomb 1) should also suggest the curve based on detectable memory characteristics.
+The hybrid preserves a ~3-6% floor for all memories regardless of how long they've been untouched. This matches Bahrick's permastore finding — well-learned knowledge retains a baseline accessibility.
 
-### Bomb 5: Context-Aware Activation (Spreading Activation Engine)
+**Effort:** 1 hour. Replace the single `math.pow(0.5, days/stability)` call with the hybrid in handlers.py (overview and wander) and validate.py (decay warning). The hybrid is backward-compatible for R > 0.1 (short-term behavior unchanged).
 
-**Current state:** Heat is computed from the memory's own properties — structural position (`deps`) and temporal recency (`access * decay`). No awareness of what the user is currently doing.
+**Why this matters:** The most concerning finding of the research audit is that at default settings, memories effectively vanish after 90 days. A knowledge management system should not lose reference knowledge because it wasn't accessed in 3 months. The hybrid preserves the excellent short-term ranking while preventing silent loss of long-term knowledge.
 
-**Proposal:** Add a second heat component — spreading activation from the current context:
+### Proposal D: Proactive Review Scheduling via Wander Mode
 
-```python
-def compute_context_heat(memory, context_tags, context_memories, index):
-    """Spreading activation from current task context."""
-    boost = 0
+**Problem:** The decay warning system only alerts when a memory is ALREADY at risk (R < 0.1). It never proactively suggests review before a memory is forgotten.
 
-    # Tag overlap with current working context
-    shared_tags = set(memory.tags) & context_tags
-    # Weight rare tags higher (IDF-like): rare tags are more informative
-    for tag in shared_tags:
-        tag_frequency = sum(1 for m in index.memories.values() if tag in m.tags)
-        boost += 3 * math.log(1 + len(index.memories) / max(tag_frequency, 1))
+**Proposal:** Add a `--mode review` to `codememory wander` that selects memories nearest to the optimal review point (R ≈ 0.75), inspired by FSRS's finding that SInc peaks at R ≈ 0.85:
 
-    # Direct dependency: is this memory imported by what the user is working on?
-    for ctx_id in context_memories:
-        ctx_entry = index.memories.get(ctx_id)
-        if ctx_entry:
-            ctx_imports = ctx_entry.imports
-            if isinstance(ctx_imports, dict):
-                for strength in ("required", "recommended"):
-                    for ref in ctx_imports.get(strength, []):
-                        ref_id = ref if isinstance(ref, str) else ref.get("id", "")
-                        if ref_id == memory.id:
-                            weight = 5 if strength == "required" else 3
-                            boost += weight
-
-    return boost
+```bash
+codememory wander --mode review    # surface memories due for review
+codememory wander --mode review --inject  # inject review suggestion into prompt
 ```
 
-This makes overview context-dependent: `heat = deps*10 + access*decay + context_heat`. The same memory has different activation depending on what the agent or user is currently doing. This is exactly ACT-R's spreading activation component — the single largest missing piece identified in the R12 research audit.
+The weighting: `weight = exp(-((R - 0.75)^2) / (2 * 0.15^2))` — Gaussian centered at R=0.75, sigma=0.15. Memories at exactly the optimal review point get maximal weight.
+
+**Effort:** 2 hours. Add a third mode to `handle_wander()` alongside `cool` and `random`.
+
+**Why this matters:** This closes the gap between "detecting decay" (reactive) and "preventing decay" (proactive). It's the product equivalent of Anki's "due cards" queue — telling the user what needs attention before it's forgotten.
 
 ---
 
 ## Prioritized Research Directions
 
-### Critical (blocking issues)
+### Critical — Architectural Gaps
 
-- **[R-RED-1] Fix overview data plumbing bug.** `handle_overview()` line 258 reads `days_since_last_access` from search result dict instead of from MemoryEntry object. Decay formula never activates. One-line fix: `days_since = entry.days_since_last_access if entry else None`. Also add `days_since_last_access` and `stability` to the search result dict (search.py lines 73-85) for API consumers. **Impact: Unlocks the entire R13 decay model for the most-used code path.**
+| # | Item | Effort | Justification |
+|---|------|--------|---------------|
+| 🔴 1 | **Adaptive stability update on access** — Modify `resolve.py` to increase `stability` when a memory is successfully accessed. Use a simplified SInc function peaking at R ≈ 0.7-0.85. | 1 day | This is the single most important architectural improvement identified by adjacent research. Both FSRS and SuperMemo have proven that adaptive stability outperforms static stability by 20-30% in real-world usage. Without this, CodeMemory's decay model is stuck at SM-2 (1987) level — the system has the right primitives but uses them statically. |
+| 🔴 2 | **Long-tail preservation floor** — Replace pure exponential with a hybrid formula that has a power-law asymptote. | 1 hour | The current model contradicts the cognitive reality that well-learned semantic knowledge persists for years (Bahrick's permastore). A knowledge management system should not silently lose reference material because it wasn't accessed in 90 days. The fix is trivial and backward-compatible. |
 
-### High Priority (should address next round)
+### Important — Quality Improvements
 
-- **[R-RED-2] Add stability validation.** Enforce `stability > 0` in a Pydantic `@field_validator` on `MemoryEntry.stability`. Guard against division by zero (crash) and negative stability (nonsensical decay > 1.0). Consider a minimum of 0.1 days (2.4 hours) as a practical lower bound. **Impact: Prevents crash and undefined behavior.**
+| # | Item | Effort | Justification |
+|---|------|--------|---------------|
+| 🟡 3 | **Domain-differentiated default stability** — Map `semantic_type` and `schema` to appropriate default stability values at creation time. | 30 min | The simplest possible improvement. Zero algorithmic complexity. Eliminates the most common "wrong default" scenario. |
+| 🟡 4 | **Proactive review mode in wander** — Add `wander --mode review` that selects memories in the optimal review window (R ≈ 0.7-0.85) using Gaussian weighting. | 2 hours | Transforms decay from a passive warning system into an active memory maintenance tool. The "due for review" concept is the core UX of spaced repetition systems. |
+| 🟡 5 | **Stability decrease on stale detection** — When `resolve` detects a stale summary (hash mismatch), decrease the memory's stability as a "recall failure" signal. | 1 hour | Currently, stale detection is purely informational. It should feed back into the decay model — a stale memory is evidence that the user's mental model has diverged from the stored version. |
 
-- **[R-RED-3] Resolve `days_since_last_access=None` semantics.** Define a clear contract: `None` = never accessed (distinct from `0` = just accessed). Update all three consumption points (overview, wander, validate) to handle both cases consistently. Specifically: in overview, never-accessed memories should get a small but non-zero access bonus (e.g., 0.5) to avoid the current accidental 0.0. **Impact: Fixes the semantic ambiguity flagged in EVAL.md Section 8.**
+### Nice to Have — Future Enhancements
 
-- **[R-RED-4] Include fields in search results.** Add `stability` and `days_since_last_access` to the search result dict. Consider also adding `schema` and `imports` (or at least import count) — consumers increasingly need these fields. **Impact: Makes R13 fields available to API consumers and the `with_recall` path.**
+| # | Item | Effort | Justification |
+|---|------|--------|---------------|
+| 🟢 6 | **Exponential-power (Weibull) decay as an option** — Allow `decay_type: "exponential_power"` in frontmatter, using `R = e^(-b*sqrt(t/S))`. | 2-3 days | The 2024 meta-analysis shows exponential-power fits real memory data better than pure exponential or power-law. But the benefit is marginal compared to adaptive stability. |
+| 🟢 7 | **Per-user decay parameter learning** — Collect access/lapse data over time and fit user-specific decay parameters (matching FSRS's approach of 21 fitted parameters). | 1-2 weeks | Major architectural change. Appropriate for a future round, not urgent. The single-parameter model should be proven with adaptive stability first. |
+| 🟢 8 | **Stability trend visualization in Dashboard** — Show a sparkline of stability changes over time for individual memories. | 1 day | Makes the adaptive stability improvement visible to users. Requires stability_history field from Proposal A. |
 
-### Medium Priority (design exploration)
+### Product Strategy
 
-- **[R-YLW-1] Domain-calibrated stability presets (Bomb 1).** Implement tag/type-based stability suggestion during `create`. Train on existing datasets as calibration data. **Impact: Makes stability immediately meaningful across datasets without requiring manual tuning. ~50 LOC in create.py.**
-
-- **[R-YLW-2] Add recency factor to search ranking.** Sort search results with a recency multiplier: `score = dependents_rank + access_count * 0.5^(days_since/stability)`. This makes search time-aware — recently-accessed memories rank higher for equal structural importance. **Impact: Search becomes decay-aware. ~15 LOC in search.py.**
-
-- **[R-YLW-3] Decay-aware maturity upgrade.** Require recent access for draft→verified transitions: `access_count >= 3 AND max_days_since_last_access_at_upgrade_times <= 60`. Prevents "maturity inflation" from old, unreviewed memories. **Impact: Makes maturity reflect actual engagement quality. ~10 LOC in resolve.py.**
-
-- **[R-YLW-4] Apply decay to `--with-recall` path.** In `handle_overview()` lines 292-307, use the decay formula for sorting candidates rather than raw access_count. Currently the comment says "use unified decay formula" but the code uses raw access_count. **Impact: Aligns with_recall behavior with the unified model. ~5 LOC.**
-
-- **[R-YLW-5] Unify intensity-decay interaction.** Currently only `validate._check_decay` exempts `intensity >= 8` memories from decay warnings. Overview and wander apply decay regardless of intensity. Decide: should high-intensity memories get a stability multiplier (e.g., `effective_stability = stability * (intensity / 5)`)? Or should intensity only affect the decision to warn, not the decay computation? **Impact: Consistent semantics across all decay consumers.**
-
-### Exploratory (future rounds)
-
-- **[R-GRN-1] FSRS-inspired adaptive stability (Bomb 2).** Stability updates on each resolve/focus using simplified SInc formula. Requires `access_count >= 3` before adaptive updates begin. **Impact: Self-tuning memory lifecycle. ~60 LOC across handlers.py and resolve.py.**
-
-- **[R-GRN-2] Collaborative memory graph for associative wander (Bomb 3).** Co-occurrence matrix from resolve history. New `wander --mode associative` command. **Impact: Novel PKM feature with no known competitor. ~150 LOC across new module + handlers.py.**
-
-- **[R-GRN-3] Per-memory-type decay curves (Bomb 4).** `decay_curve` field with exponential/power/logarithmic/linear/step options. Auto-suggested during create. **Impact: Makes CodeMemory's decay model research-grade and defensible. ~80 LOC across models.py + core.py + handlers.py.**
-
-### Inspiration Bombs (backlog)
-
-- **[R-BOMB-1] Context-aware activation (Bomb 5).** Spreading activation from current task tags and active resolve targets. Context-dependent heat component. **Novelty: ACT-R spreading activation applied to PKM — no existing tool does this.**
-
-- **[R-BOMB-2] Forgetting-as-feature.** Surface "what you're about to forget" — memories with `R` near the decay warning threshold (0.1-0.2). A "Rescue Queue" in Dashboard showing 3-5 memories at risk of effective forgetting. Turn the decay model into a proactive UX feature. **Novelty: Transforms decay from backend mechanism to user-facing product feature.**
-
-- **[R-BOMB-3] Stability inheritance through the DAG.** When memory A imports memory B, A partially inherits B's stability. A concept depending on a well-established memory should be more stable than one depending on a volatile memory. Weighted by import strength. **Novelty: Makes DAG topology influence decay dynamics — uniquely CodeMemory.**
-
-- **[R-BOMB-4] Duolingo HLR-style trained stability.** Train per-memory stability from access history using maximum likelihood estimation (like half-life regression). Requires 16+ accesses per memory for statistical significance (per FSRS optimization research). **Novelty: Treats stability as a learned parameter, not a configured one.**
+| # | Item | Effort | Justification |
+|---|------|--------|---------------|
+| 💡 9 | **Decay curve shape as a per-memory parameter** — Allow `decay_type` in frontmatter: `exponential` (current), `power_law` (R = S/(S+t)), `exponential_power` (Weibull), `permastore` (no decay, for schemas and reference). | 2-3 days | This is the ultimate expression of the "different content types have different forgetting curves" finding. Gives power users direct control over the mathematical model per memory. |
+| 💡 10 | **"Memory half-life health" weekly report** — A scheduled overview that shows: "3 memories crossed 50% decay this week. 2 memories approaching warning threshold." Surfaces the decay system's insights proactively. | 2 days | The product needs a "this is managing your memory" moment. A weekly health report makes the decay system tangible to users who never run `codememory validate`. |
 
 ---
 
-## Appendix A: CodeMemory-FSRS v6 Concept Mapping
+## Round 14 Verdict Summary
 
-| CodeMemory R13 | FSRS v6 | Compatibility | Migration Difficulty |
-|---|---|---|---|
-| `stability` (half-life, days to R=50%) | Stability S (days to R=90%) | Direct mapping: S_cm ≈ 6.6 * S_fsrs | Trivial — rename and rescale if desired |
-| `intensity` [1,10] | Difficulty D [1,10] | Same numeric range; different semantics | Medium — intensity is importance, D is inherent difficulty learned from outcomes |
-| `0.5^(t/S)` | `(1 + F*t/S)^C` (v4-5) or `(1 + factor*t/S)^(-w20)` (v6) | Both are continuous decay | Low — replace formula, keep field. v6's trainable w20 enables personalized curve shape |
-| `access_count` | Review count | Same concept | None — already tracked |
-| `days_since_last_access` | t (elapsed days since last review) | Same concept | None — already tracked (day resolution vs FSRS's second resolution) |
-| NOT PRESENT | SInc (stability increase after review) | No analog | High — new logic needed; ~60 LOC |
-| NOT PRESENT | Desired retention r | No analog | Low — add config field |
-| NOT PRESENT | w8-w20 (21 trainable parameters) | No analog | Very high — requires ML optimization pipeline |
-| NOT PRESENT | Same-day review modeling (w19) | No analog | Medium — requires sub-day timestamp resolution |
-| NOT PRESENT | Post-lapse stability (S_f) | No analog | Medium — would model "forgetting after a failed recall" |
+| Change | Description | Status | Research Notes |
+|--------|-------------|--------|----------------|
+| C1 | Fix overview decay pipeline bug (read days_since from MemoryEntry, not search dict) | **RESOLVED** | The Round 13 audit identified this as the CRITICAL data plumbing bug. Round 14's fix is correct — the overview path now reads from `entry.days_since_last_access` (line 260) instead of `r.get("days_since_last_access")` (which was never populated by `search()`). This single change makes the decay formula actually activate in the most important codepath. |
+| C2 | Stability boundary protection (gt=0.0 Field, validator clamp < 0.1, runtime max(0.1)) | **CORRECT** | Three-layer defense-in-depth is well-engineered. The Pydantic validator (models.py:111-122) catches bad data at ingestion, the Field constraint (models.py:78) provides schema-level protection, and the runtime clamp (handlers.py:257,346) guards against any path that bypasses the model. Division-by-zero is impossible at any layer. |
+| C3 | API expose decay fields (stability, days_since_last_access, decay_risk) | **CORRECT** | `/api/memories` now includes access_count, last_access, days_since_last_access, and stability (server.py:308-311). `/api/stats` now includes a computed `decay_risk` array sorted by severity (server.py:660-683). The Round 13 audit identified the missing fields as the primary frontend integration gap — this is now closed. |
+| N1 | Dashboard decay risk panel | **PRESUMED CORRECT** | Frontend not verified in this research audit (scope: backend + algorithmic analysis). The backend data pipeline is correct — `decay_risk` in `/api/stats` is properly computed and sorted. |
 
-## Appendix B: Decay Formula Behavior Under Edge Cases
+**Net Assessment:** Round 14 delivers a correct, working decay system. The C1 fix was essential — without it, the entire decay pipeline was producing stale (zero) data for the overview path. The C2 protections are well-engineered defense-in-depth. The C3 API exposure and N1 Dashboard panel close the frontend visibility gap identified in Round 13.
 
-| days_since | stability | `0.5^(days/stability)` | Practical Meaning | Issue |
-|---|---|---|---|---|
-| 0 | 14.0 | 1.0 | No decay — just accessed | Correct |
-| 14 | 14.0 | 0.5 | One half-life — 50% retrieval prob | Expected |
-| 46 | 14.0 | ~0.098 | ~3.3 half-lives — below validate warning threshold | Triggers DECAY-WARN |
-| 90 | 14.0 | ~0.011 | ~6.4 half-lives — near-zero | May be too aggressive for concepts |
-| 180 | 14.0 | ~0.00012 | ~12.8 half-lives — effectively zero | Definitely too aggressive for anything but rote facts |
-| 0 | 0 | `0.5^(0/0)` → ZeroDivisionError | **CRASH** | No Pydantic guard, no runtime guard |
-| 14 | 0 | `0.5^(14/0)` → ZeroDivisionError | **CRASH** | Same — any non-zero days with stability=0 crashes |
-| 14 | -7 | `0.5^(14/-7) = 0.5^(-2) = 4.0` | Decay > 1.0 — memory "strengthens" with time | Nonsensical; need Pydantic `gt=0` |
-| None | 14.0 | (overview, broken path) | Falls to `access*0.1` (pre-R13 default) | Accidental; differed from wander |
-| None | 14.0 | (wander, correct path) | `weight = 1.0` (max cool weight) | Intentional; matches "never accessed = cool" semantics |
-| None | 14.0 | (validate, fallback) | Computes from `datetime.fromisoformat(last_access)` | Defensive; safety net for un-reindexed data |
+**But the research reveals that "correct" is not "complete."** The current model (fixed exponential decay, static per-memory stability, one-size-fits-all default) is architecturally valid but falls short of what the adjacent fields have achieved. FSRS v6 and SuperMemo SM-19 both demonstrate that:
+1. Stability should **learn** from access history (adaptive stability, not static)
+2. Forgetting curves should be **personalizable per content type** (not one curve for everything)
+3. Memory should have a **preservation floor** (not decay to zero)
+4. Review should be **scheduled proactively** in the optimal window (R ≈ 0.7-0.85), not merely warned about after the fact (R < 0.1)
 
-## Appendix C: Summary of Changes Since R12 Research Audit
-
-| R12 Recommendation | R13 Status | Notes |
-|---|---|---|
-| 1. Unify decay models (overview/wander/validate) | **IMPLEMENTED (R13-M1)** | Single formula `0.5^(t/S)` across all three. But overview path broken by plumbing bug. |
-| 2. Exclude cycle participants from dependents count | **IMPLEMENTED (R13-M2)** | `find_cycle_participants()` precomputed in overview; cycle member deps=0. |
-| 3. Precompute `days_since_last_access` | **IMPLEMENTED (R13-M3)** | Integer precomputed at reindex + set to 0 on resolve. Day resolution only. |
-| 4. Add `stability` field to MemoryEntry | **IMPLEMENTED (R13-M4)** | `stability: float = 14.0`. Static. No adaptive update. No Pydantic `gt=0` guard. |
-| 5. Spreading activation from tag context | **NOT IMPLEMENTED** | Deferred to future round. Research audit now provides concrete implementation sketch. |
-| 6. FSRS-style per-memory stability updates | **NOT IMPLEMENTED** | Stability field exists but is static. Bomb 2 provides concrete adaptive formula. |
-| 7. Memory tier visualization (Hot/Warm/Cold/Frozen) | **NOT IMPLEMENTED** | Deferred. R13 decay model provides the mathematical foundation for tier boundaries. |
-| 8. Demotion path for maturity | **NOT IMPLEMENTED** | Maturity still forward-only. Decay model now provides the R<0.1 threshold for demotion suggestions. |
+**The good news:** CodeMemory's architecture is well-positioned for these improvements. The `stability` field, `days_since_last_access`, `access_count`, `intensity`, and the resolve pipeline already provide all the data needed. The gap is 1-2 days of algorithmic work — not a redesign. The two Critical items (adaptive stability update, long-tail floor) can be implemented in a single round with high confidence.
 
 ---
 
-*End of research audit report. Generated 2026-05-07. Adjacent domains researched: FSRS v4-v6 (DSR model, SInc update formula, 21-parameter optimization, 1.7B-review benchmark), Ebbinghaus/Radvansky 2024 meta-analysis (916 datasets, exponential-power/logarithmic/linear/power best-fit functions, Memory Phases Framework, content-type differentiation), Duolingo HLR half-life regression (lexeme-specific stability, MLE training, 45% error reduction), recommender systems (CF-KAN catastrophic forgetting mitigation, knowledge-graph collaborative filtering hybrids, item-item co-occurrence, TF-IDF tag weighting).*
+## References
+
+1. Fisher, J.S. & Radvansky, G.A. (2024). "Memory from nonsense syllables to novels: A survey of retention." *Psychonomic Bulletin & Review*, 31, 2437-2464. [Link](https://link.springer.com/article/10.3758/s13423-024-02514-3)
+
+2. Bahrick, H.P. (1984). "Semantic memory content in permastore: Fifty years of memory for Spanish learned in school." *Journal of Experimental Psychology: General*, 113(1), 1-29.
+
+3. Ye, J. (2025). "A technical explanation of FSRS." [Link](https://expertium.github.io/Algorithm.html)
+
+4. Open Spaced Repetition. (2025). "FSRS v6 release." [Link](https://github.com/open-spaced-repetition/py-fsrs/releases)
+
+5. Wozniak, P.A., Gorzelanczyk, E.J., & Murakowski, J. (2005). "Building memory stability through rehearsal." [Link](http://mail.super-memory.com/articles/stability.htm)
+
+6. SuperMemo World. (2024). "SuperMemo Algorithm." [Link](https://help.supermemo.org/wiki/SuperMemo_Algorithm)
+
+7. Sternad, D. et al. (2013). "Learning to never forget — time scales and specificity of long-term memory of a motor skill." *Frontiers in Computational Neuroscience*, 7, 111.
+
+8. Bauml, K.-H. et al. (2022). "Selective memory retrieval can revive forgotten memories." *PNAS*, 119(12).

@@ -376,6 +376,44 @@ export default function MemoryDetail({ memoryId, onClose, onResolve, onClearReso
               </div>
             )}
 
+            {/* Access freshness (R15-N1) */}
+            <div style={{ marginTop: 12 }}>
+              <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--cm-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4, fontFamily: 'Raleway, sans-serif' }}>
+                Access Freshness
+              </div>
+              <div style={{ fontSize: 12, fontFamily: 'Raleway, sans-serif', color: 'var(--cm-text-secondary)', lineHeight: 1.8 }}>
+                {memory.access_count != null && memory.access_count > 0 ? (
+                  <>
+                    <div>
+                      Last accessed{' '}
+                      {memory.days_since_last_access != null && memory.days_since_last_access === 0
+                        ? 'just now'
+                        : memory.days_since_last_access != null
+                        ? `${memory.days_since_last_access} days ago`
+                        : 'unknown'}
+                    </div>
+                    <div>Stability: {memory.stability != null ? `${memory.stability.toFixed(1)}d` : '14.0d'}</div>
+                    {memory.days_since_last_access != null && memory.stability != null ? (
+                      <div>
+                        R:{' '}
+                        {(() => {
+                          const exp = Math.pow(0.5, memory.days_since_last_access / memory.stability)
+                          const floor = 0.05 / (1 + memory.days_since_last_access / (10 * memory.stability))
+                          const R = Math.max(exp, floor)
+                          return `${(R * 100).toFixed(1)}%`
+                        })()}
+                      </div>
+                    ) : null}
+                    <div style={{ color: 'var(--cm-text-tertiary)' }}>Access count: {memory.access_count}</div>
+                  </>
+                ) : (
+                  <div style={{ fontStyle: 'italic', color: 'var(--cm-text-tertiary)' }}>
+                    Never accessed &middot; R=N/A
+                  </div>
+                )}
+              </div>
+            </div>
+
             {/* Referenced By (backlinks) */}
             <div style={{ marginTop: 12 }}>
               <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--cm-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4, fontFamily: 'Raleway, sans-serif' }}>
@@ -627,7 +665,7 @@ export default function MemoryDetail({ memoryId, onClose, onResolve, onClearReso
                     </code>
                     <span
                       style={{
-                        fontSize: 11,
+                        fontSize: 12,
                         fontWeight: 600,
                         textTransform: 'uppercase',
                         letterSpacing: '0.04em',

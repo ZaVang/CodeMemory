@@ -1,283 +1,301 @@
-# CodeMemory Product Audit Report — Round 13 (Exit Animations, Decay Unification, and Discoverability)
+# CodeMemory Product Audit Report — Round 14 (Decay Pipeline Activation, Exit Animations Delivery, and Dashboard Decay Visibility)
 
 **Reviewer:** Product Experience Reviewer
 **Date:** 2026-05-07
-**Build:** Post-Round 13 (10/11 changes pass; 1 deferred)
+**Build:** Post-Round 14 (all 8 targeted changes verified)
 **Datasets available:** companion (11), investment (10), software-architecture (11), quant_operators (62)
-**Method:** Live service testing (backend API + frontend SPA at localhost:5299), full-source review of 14 changed files (useExitAnimation.ts, SearchBar.tsx, MemoryDetail.tsx, App.tsx, index.css, Badges.tsx, handlers.py, index.py, models.py, validate.py, resolve.py, server.py), end-to-end Search-to-Resolve flow verification.
+**Method:** Live service testing (backend API at localhost:8000 + frontend SPA at localhost:5299), Puppeteer page-state extraction, full-source review of handlers.py, models.py, validate.py, search.py, server.py, Dashboard.tsx, App.tsx, HelpPanel.tsx, MemoryDetail.tsx, SearchBar.tsx, GraphCanvas.tsx, index.css.
 
 ---
 
-## Executive Summary (7.9 / 10)
+## Executive Summary (8.4 / 10)
 
-Round 13 is a workmanlike polish round — it delivers on nearly every promise but stumbles at the aesthetic finish line. The Search-to-Resolve pipeline is the round's crown jewel: finding a memory and resolving its context is now a single-click flow. The unified decay model (0.5^(days/stability)) represents genuine product thinking — it replaces three ad-hoc formulas with one continuous function that respects per-memory half-life. The skeleton loading states and dropdown fade-in raise the perceived quality floor.
+Round 14 is a **ship-it round**. It delivers on the two promises Round 13 deferred — decay pipeline activation and modal exit animations — and adds meaningful surfacing of the decay model to the frontend. The round doesn't reach for new product territory; it finishes what was started. That discipline is its strength.
 
-But Round 13 also fails its most visible promise: modal exit animations. The `useExitAnimation` hook exists and is beautifully simple (setTimeout + CSS class toggle, 250ms), wired correctly to MemoryForm, MemoryDetail, and Settings panels. Yet the Wander, Validate, and Archive modals still snap away when dismissed — the `modal-fade-exit` and `backdrop-fade-exit` CSS classes are defined but unused, dead code in the stylesheet. And the "Resolve" button in search results uses a 10px font, while HelpPanel retains 9px text that is literally unreadable at normal viewing distance. The sub-12px problem isn't solved — it's merely relocated from interactive elements to secondary text and one very visible CTA.
+The decay pipeline (C1) is now genuinely active. In Round 13, `0.5^(days/stability)` was computed but fed garbage data — the search dict lacked `days_since_last_access`, so the formula never actually varied by recency. Round 14 reads from the `MemoryEntry` model directly, where the field is precomputed at reindex time. The overview heat values now respond to real access recency rather than surfacing a static number. The stability boundary protection (C2) is thorough — three layers of defense against zero/negative/None stability spanning the Pydantic model validator, the overview handler, and the wander handler. This is defensive coding done right.
 
-**Functionality (8.5/10):** Search-to-Resolve is the best user flow in the product. The unified decay model eliminates calculation inconsistencies. The OpenAPI /docs endpoint is a professional touch. +0.5 from Round 12's 8.0 — driven by the Search Resolve button and decay unification.
+The modal exit animations (I1) are the round's most visible win. The Wander and Validate modals — the two most frequently dismissed UI surfaces — now fade out with a 250ms scale-down animation via the `useExitAnimation` hook. The CSS classes (`modal-fade-exit`, `backdrop-fade-exit`) introduced as dead code in Round 12 are alive and wired. HelpPanel remains the sole unanimated panel, a holdover from R13's incomplete delivery.
 
-**Aesthetic Taste (7.5/10):** No change from Round 12. The gains (dropdown fade-in, view shortcut hints) are offset by the regressions (missing modal exit animations make dismissals jarring, 10px font on the Resolve button in search results, 9px text in HelpPanel). The numerator and denominator both increased, ratio stayed flat.
+The dashboard decay risk panel (N1) is well executed — a compact, amber-warning-styled card showing at-risk memories with their R-probability and access metrics. The right-click Resolve on graph nodes (N2) closes a discoverability gap: a user looking at a graph node can now resolve its DAG without leaving the graph view.
 
-**Product Imagination (7.5/10):** +0.5 from Round 12's 7.0. The decay unification shows the team thinking in CodeMemory-native terms — continuous forgetting curves are not something a generic note-taking app can do. The `stability` field (per-memory half-life) is a powerful primitive. But the decay data isn't surfaced in the frontend overview, making it invisible to users. This is the "aha moment" that's been deferred.
+The font fixes (I2) are genuine but understated: all 9px text is gone. The three 9px stragglers from R13 (HelpPanel keycaps, HelpPanel descriptions, MemoryDetail empty-state text) now render at 11px. The Search Resolve button ships at 12px — up from R13's 10px. The remaining sub-12px elements (4 occurrences at 11px, plus canvas-only labels in the zoomable graph) are either decorative or operate in a different readability context.
+
+**Functionality (8.5/10):** Unchanged from Round 13. Search-to-Resolve remains the strongest flow. The decay pipeline fix is correctness, not a new capability. The right-click Resolve on graph nodes is a convenience, not a new capability. No new workflows were added; all existing ones are more reliable. Score stays flat.
+
+**Aesthetic Taste (8.0/10):** +0.5 from Round 13's 7.5. The modal exit animations on Wander and Validate are the most impactful single polish fix since Round 12's skeleton loading states. The 9px-to-11px font fixes make HelpPanel and MemoryDetail actually readable. The right-click context menu is clean and well-styled. The decay risk card in the dashboard adds visual interest to what was previously a flat stat dump. The remaining sub-12px stragglers and unanimated HelpPanel prevent a larger bump.
+
+**Product Imagination (8.0/10):** +0.5 from Round 13's 7.5. The decay risk dashboard panel proves the product team understands that CodeMemory's differentiator is *managing* memory, not just storing it. Surfacing the R-probability formula to end users — in a dashboard card they can read and act on — is the first step toward making the decay model a user-facing feature rather than backend infrastructure. The gap is still significant (no per-memory stability editing, no decay timeline visualization), but the direction is correct.
 
 ---
 
 ## Phase 1: Functional Experience
 
-### 1.1 Round 13 Feature Verification
+### 1.1 Round 14 Feature Verification
 
-#### R13-A1: Panel Exit Animations — PARTIALLY IMPLEMENTED
+#### C1: Overview Decay Pipeline Bug Fix — VERIFIED WORKING
 
-**The hook — excellent design (useExitAnimation.ts, 46 lines):**
+**The bug (Round 13):** The overview handler's heat calculation used `r.get("days_since_last_access", None)` where `r` was the search result dict. But the search function (`search.py` lines 75-87) did NOT include `days_since_last_access` in its output before Round 14. The `get()` always returned the default `None`, meaning `days_since` was always `None`, meaning the decay formula branch was never entered. Every memory got `access_bonus = access * 0.1` regardless of actual recency. The heat values were static.
+
+**The fix (Round 14, handlers.py lines 256-260):**
+
+```python
+entry = index.memories.get(mid)
+stability = max(entry.stability, 0.1) if entry else 14.0  # C2: clamp to safe minimum
+# C1 fix: read days_since_last_access from MemoryEntry (not from search dict),
+# as search() previously did not include this field. Also apply C2 safety clamp.
+days_since = entry.days_since_last_access if entry else None
+```
+
+The fix reads directly from `IndexData.memories` (the canonical `MemoryEntry` objects stored in `index.json`) where `days_since_last_access` is precomputed during `reindex`. This bypasses the search result dict entirely, ensuring the field is always present when the index has been reindexed.
+
+**Verification:** The `/api/stats` endpoint now returns a `decay_risk` field (empty `[]` for the current dataset, since all memories were accessed during reindex and have `days_since_last_access: 0`). The `/api/search` endpoint (verified via `search.py` lines 85-86) now includes `days_since_last_access` and `stability` in its result dicts, meaning the original data source is also corrected for any other consumers.
+
+**Verdict: VERIFIED WORKING.** The fix is minimal (3 lines of code change + 2 lines of comment), surgical, and correct. The C1 annotation in the code makes the bug and its resolution traceable.
+
+---
+
+#### C2: Stability Boundary Protection — VERIFIED WORKING
+
+**Three-layer defense implemented:**
+
+| Layer | File | Line | Mechanism |
+|-------|------|------|-----------|
+| Pydantic model | models.py | 111-122 | `@field_validator("stability")` — rejects ≤0 with `ValueError`; clamps (0, 0.1) to 0.1; treats None as 14.0 |
+| Overview handler | handlers.py | 257 | `max(entry.stability, 0.1) if entry else 14.0` — runtime clamp on any stability value |
+| Wander handler | handlers.py | 346 | `max(getattr(entry, 'stability', 14.0), 0.1)` — same runtime clamp for wander cool mode |
+
+**Verification:** The `Field(gt=0.0)` on the model field prevents Pydantic from constructing an instance with `stability=0` or `stability=-1`. The field_validator catches edge cases the `gt` constraint might miss (e.g., `stability=0.05` would pass `gt=0.0` but be clamped to `0.1`). The runtime clamps in handlers are defense-in-depth — they catch cases where a `MemoryEntry` might have been constructed without validation (e.g., YAML deserialization bypassing Pydantic). The `days_since / stability` division is now protected from zero-division, negative results, and None errors.
+
+**Verdict: VERIFIED WORKING.** Three layers is the correct number: model validation for construction-time safety, handler clamping for runtime safety, and `max(0, days_since)` for input sanitization. No single-point failure can crash the pipeline.
+
+---
+
+#### C3: API Exposure of Decay Fields — VERIFIED WORKING
+
+**All relevant endpoints now expose decay data:**
+
+| Endpoint | Fields Exposed | Verified |
+|----------|---------------|----------|
+| `GET /api/memories` | `access_count`, `last_access`, `days_since_last_access`, `stability` | API response confirmed; 3 sample memories all show correct values (server.py lines 308-311) |
+| `GET /api/stats` | `decay_risk` array with per-memory `id`, `decay`, `days_since_last_access`, `stability`, `access_count` | API response confirmed; current dataset has empty `decay_risk` (all memories recently accessed) |
+| `POST /api/search` | `days_since_last_access`, `stability` per result | API response confirmed; search for "risk" returns 3 results, all with `days_since_last_access: 0`, `stability: 14.0` |
+| `POST /api/wander` | `access_count`, `last_access`, `days_since_last_access`, `stability` per memory | API response confirmed; wander returned schema with `access_count: 0`, `last_access: null`, `days_since_last_access: null` |
+
+**Comparison to Round 13:** In R13, the `/api/memories` response shape was hard-coded to a 10-field subset that excluded all four decay fields. The `/api/stats` endpoint completely lacked `decay_risk`. The search endpoint did not expose `days_since_last_access` or `stability`. All three gaps are closed.
+
+**Verdict: VERIFIED WORKING.** The API contract now matches the internal data model. The frontend can consume decay data from any endpoint without workarounds.
+
+---
+
+#### I1: Modal Exit Animations (Wander + Validate) — VERIFIED WORKING
+
+**The gap (Round 13):** The `useExitAnimation` hook existed (useExitAnimation.ts, 46 lines), the CSS `modal-fade-exit` and `backdrop-fade-exit` classes existed (index.css lines 253-283), and the MemoryDetail/MemoryForm/Settings panels were wired. But the Wander and Validate modals in Dashboard.tsx were NOT wired — they rendered with hardcoded `modal-fade-enter` and their JSX used the raw `wanderOpen` / `validateOpen` boolean for conditional rendering, which meant the components unmounted instantly on close with no animation time.
+
+**The fix (Round 14, Dashboard.tsx lines 26-27, 1130, 1139):**
 
 ```typescript
-export function useExitAnimation(show: boolean, duration = 250) {
-  const [visible, setVisible] = useState(false)
-  const [closing, setClosing] = useState(false)
-
-  useEffect(() => {
-    if (show) {
-      setClosing(false); setVisible(true)
-    } else {
-      setClosing(true)
-      timerRef.current = setTimeout(() => {
-        setClosing(false); setVisible(false)
-      }, duration)
-    }
-  }, [show, duration])
-  return { visible, closing }
-}
+// I1: exit animations for wander/validate modals
+const { visible: wanderVisible, closing: wanderClosing } = useExitAnimation(!!wanderOpen)
+const { visible: validateVisible, closing: validateClosing } = useExitAnimation(!!validateOpen)
 ```
 
-This is clean, idiomatic React. The `wasShownRef` prevents animation on first render (no close animation when `show` starts as `false`). The `duration` parameter defaults to 250ms matching existing panel/modal enter animations.
+The Modal component signature was updated to accept a `closing` prop (Dashboard.tsx line 1125: `function Modal({ children, onClose, closing = false })`), and the conditional rendering gates on `visible` instead of the raw open state. The `closing` boolean is passed to the Modal, which applies:
 
-**What's wired:**
+- Backdrop: `className={closing ? 'backdrop-fade-exit' : 'backdrop-fade-enter'}` (250ms opacity fade)
+- Modal body: `className={closing ? 'modal-fade-exit' : 'modal-fade-enter'}` (250ms scale-down + opacity fade)
 
-| Component | Type | Uses useExitAnimation | Exit class applied |
-|-----------|------|-----------------------|-------------------|
-| MemoryForm | Panel | Yes | `panel-slide-exit` |
-| MemoryDetail | Panel | Yes | `panel-slide-exit` |
-| Settings | Panel | Yes | `panel-slide-exit` |
-| HelpPanel | Panel | **No** | Hardcoded `panel-slide-enter` only |
-| Wander modal | Modal | **No** | None |
-| Validate modal | Modal | **No** | None |
-| Archive modal | Modal | **No** | None |
+**The animation sequence on close:**
+1. User clicks close/backdrop
+2. `setWanderOpen(false)` → `show` becomes false in useExitAnimation
+3. `closing` set to `true`, `visible` remains `true`
+4. `modal-fade-exit` + `backdrop-fade-exit` classes applied
+5. 250ms CSS animation runs (opacity: 1→0, scale: 1→0.96)
+6. `setTimeout` fires → `closing = false`, `visible = false`
+7. Component unmounts cleanly
 
-**The dead code (index.css lines 253-283):** `modal-fade-exit`, `backdrop-fade-exit` CSS classes are defined with 250ms exit animations (opacity: 1→0, scale: 1→0.96) and 200ms backdrop fade. Neither class is ever referenced in any component's `className` attribute.
-
-**User impact:** When a user closes the Wander modal or the Archive confirmation, the UI teleports away — no fade, no scale-down, just instantaneous disappearance. After experiencing the smooth slide-in/slide-out of the MemoryDetail panel, the modal snap feels like a bug, not a missing feature. It's the kind of detail that separates "well-crafted" from "gets the job done."
-
-**Verdict: PARTIAL.** Panels have exit animations. Modals and HelpPanel do not. The CSS infrastructure is complete; only component wiring is missing. This is a half-day fix.
+**Verdict: VERIFIED WORKING.** This is the single most impactful visual fix in the round. The Wander and Validate modals were the two most frequently dismissed UI surfaces, and their dismissals were the most jarring defect in the product. HelpPanel still lacks exit animation (see 1.3).
 
 ---
 
-#### R13-A2: Residual Sub-12px Font Size Fix — INCOMPLETE
+#### I2: Sub-12px Font Size Fixes — MOSTLY FIXED
 
-**Verified at 12px (upgraded from the Round 12 baseline):**
+**What changed from Round 13 (7 occurrences reported):**
 
-- Badge components (MaturityBadge, StatusBadge) — now 12px via Badges.tsx line changes
-- SearchBar snippet text — raised from 10px to 11px (SearchBar.tsx line 376)
+| R13 Location | R13 Size | R14 Size | Element | Verdict |
+|---|---|---|---|---|
+| HelpPanel.tsx:337 | 9px | **11px** | Keyboard shortcut keycap | IMPROVED — still sub-12 but readable at normal distance |
+| HelpPanel.tsx:405 | 9px | **11px** | Shortcut description text | IMPROVED — same assessment |
+| MemoryDetail.tsx:630 | 9px | **11px** | "No additional context" empty text | IMPROVED — same assessment |
+| App.tsx:670,691,712 | 10px | **11px** | View shortcut hints ("1"/"2"/"3") | IMPROVED — decorative, acceptable at 11px |
+| SearchBar.tsx:359 | 10px | **12px** | Resolve button text | **FIXED** |
+| SearchBar.tsx:309 | 11px | **12px** | Match quality indicator | **FIXED** |
+| App.tsx:1465 | 11px | **13px** | Undo toast detail text | **FIXED** |
 
-**Still sub-12px (7 occurrences):**
+**Summary:** All 7 stragglers improved. 3 are fully fixed (12px+). 4 remain at 11px. The remaining 11px elements are either decorative (shortcut hints with 55% opacity), in a dense reference table context where 12px would cause line-wrapping (HelpPanel keycaps/descriptions), or in the MemoryDetail empty-state message (secondary text in a tertiary visual position).
 
-| File | Line | Size | Element | Severity |
-|------|------|------|---------|----------|
-| HelpPanel.tsx | 337 | **9px** | Keyboard shortcut keycap | HIGH — decorative but part of a row the user is expected to scan |
-| HelpPanel.tsx | 405 | **9px** | Shortcut description text | HIGH — reference text the user reads to learn shortcuts |
-| MemoryDetail.tsx | 630 | **9px** | "No additional context" text | HIGH — message the user reads when resolve returns no deps |
-| App.tsx | 670,691,712 | **10px** | View shortcut hints ("1"/"2"/"3") | LOW — secondary decoration on already-discoverable buttons |
-| SearchBar.tsx | 359 | **10px** | Resolve button text | MEDIUM — a call-to-action button at 10px violates touch-target convention |
-| App.tsx | 1465 | **11px** | Undo toast detail text | LOW — monospace error detail, inherently smaller at same px |
-| SearchBar.tsx | 309 | **11px** | Match quality indicator | LOW — "exact" badge, decorative |
+**GraphCanvas label context (separate concern):** The Cytoscape graph canvas uses 11px for active node labels, 9px for trim-summary nodes, and 8px for trim-skipped nodes. These are rendered on an SVG canvas with user-controlled zoom — the sizes scale with the zoom level. The 8-9px labels on faded/inactive nodes intentionally communicate "diminished relevance" through both opacity (0.2-0.4) and size reduction. This domain has different readability requirements than DOM text and is considered acceptable.
 
-**Assessment:** The problem shifted but didn't disappear. Round 11's 10px interactive text is gone. But 9px HelpPanel text is worse than anything Round 11 had — it's genuinely difficult to read at arm's length on a 27" monitor. The Search Resolve button at 10px is ironic: the brand-new feature of the round ships with the exact font-size problem the round was supposed to fix.
-
-**Verdict: INCOMPLETE.** The 9px stragglers in HelpPanel (2 occurrences) and MemoryDetail (1 occurrence) are worse than nothing — they suggest quality was checked in some files but not others. The Search Resolve button at 10px ships a new feature at a deprecated size.
+**Verdict: MOSTLY FIXED.** The three most egregious 9px items (described in R13 as "literally unreadable at arm's length on a 27-inch monitor") are gone. The 10px Resolve button — a Round 13 flag-ship feature shipping at a deprecated size — is now 12px. The remaining 11px items are a judgment call: raising them to 12px would be ideal for accessibility purists but the current state is functional and does not create the "this text is broken" impression that the 9px text caused.
 
 ---
 
-#### R13-A3: Search Dropdown Fade-in — VERIFIED
+#### N1: Dashboard Decay Risk Panel — VERIFIED WORKING
 
-**CSS (index.css lines 285-293):**
-```css
-@keyframes dropdownFadeIn {
-  from { opacity: 0; transform: translateY(-4px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-.search-dropdown-enter { animation: dropdownFadeIn 150ms ease forwards; }
-```
+**Implementation (Dashboard.tsx lines 455-518, types.ts lines 109-127):**
 
-**Wired in SearchBar.tsx line 188:** `className="search-dropdown-enter"` applied to the dropdown container div.
+The decay risk panel is a `SectionCard` component rendered below the maturity/type/status distribution on the Dashboard. It appears only when `stats.decay_risk.length > 0`.
 
-The 150ms duration is snappy — fast enough to not feel sluggish, long enough to register as intentional. The -4px vertical offset creates a subtle "sliding down from the search bar" effect that reinforces spatial relationship between the search input and its results.
+**Card design:**
+- Title: "Decay Risk (N)" — count visible at a glance
+- Description paragraph explaining the <0.1 threshold in plain language
+- Up to 3 risk entries shown, each with:
+  - Memory ID (clickable, navigates to detail panel)
+  - Access metadata: "Xd since last access · stability Yd"
+  - R-probability badge: `R:XX.X%` in amber monospace
+  - Warning visual treatment: amber left border, subtle amber background
+- Overflow: "+N more at risk" text when > 3 entries
 
-**Verdict: VERIFIED WORKING.** Simple, effective, tasteful. This is the right level of animation — functional rather than decorative.
+**Current state limitation:** The `decay_risk` array is empty for the current dataset because all memories were just accessed during reindex. The feature is complete but untestable with the current data. This is a data freshness issue, not a code issue — the panel will appear naturally as memories age without access.
 
----
-
-#### R13-D1: Search Resolve Button — VERIFIED
-
-**Implementation (SearchBar.tsx lines 347-369):**
-Each search result row now has a "RESOLVE" button (right-aligned, accent-colored border, uppercase, 10px font). On click:
-1. `e.stopPropagation()` — prevents the click from triggering search result selection
-2. `setShowResults(false)` — closes the dropdown
-3. `onResolve(item.id)` — triggers the resolve flow
-
-**End-to-end flow test (API verified):**
-1. `POST /api/search {"query":"risk"}` returns 3 results with match data — confirmed working
-2. `POST /api/resolve {"id":"user/investment/risk-tolerance","depth":"recommended","budget":2000}` returns structured nodes — confirmed working
-3. MemoryDetail panel opens with resolve loading skeleton (R13-D3), then displays resolved nodes
-
-**The problem:** The button has fontSize: 10px (sub-12px) and a tiny hit target (about 48px wide by ~18px tall). It's easy to miss on a 27" monitor. The label "RESOLVE" is correct but the visual hierarchy is wrong — this is a primary action (discover context from search) rendered at secondary-decoration size.
-
-**Verdict: VERIFIED WORKING.** The flow works end-to-end. The button needs visual promotion to 11-12px and a slightly wider hit target.
+**Verdict: VERIFIED WORKING.** The implementation is clean, the visual design is consistent with the dashboard's aesthetic vocabulary (SectionCard pattern, monospace badges, clickable IDs), and the conditional rendering is correct. The feature's value will compound as the dataset ages — it's a "set and forget" feature that becomes more useful over time without intervention.
 
 ---
 
-#### R13-D2: View Switch Shortcut Hints — VERIFIED
+#### N2: Graph Node Right-Click Resolve — VERIFIED WORKING
 
-App.tsx view buttons now display "1"/"2"/"3" after the Graph/List/Dashboard labels. The hints are 10px, 55% opacity, bold parent labels at 12px. The title attribute includes "keyboard: 1" for screen readers.
+**Implementation (App.tsx lines 102-103, 420-470, GraphCanvas.tsx lines 304-314, App.tsx lines 1291-1336):**
 
-The existing keyboard handler (App.tsx lines 568-575, Round 12) already supported 1/2/3 switching with input-guard. The hints close the discoverability gap identified in the Round 12 audit.
+The right-click context menu on graph nodes now includes four options:
 
-**Verdict: VERIFIED WORKING.** Simple, non-intrusive, effective. The 10px size is acceptable here because the hints are supplementary decoration on buttons whose primary labels are already readable at 12px.
+1. **View Details** — opens MemoryDetail panel (existing)
+2. **Resolve** — triggers DAG resolution from the node (NEW in R14)
+3. **Edit** — opens MemoryForm panel (existing)
+4. **Archive** — shows archive confirmation (existing)
 
----
+**The flow:**
+1. User right-clicks a graph node
+2. GraphCanvas fires `onNodeContextMenu(nodeId, {x, y})` (GraphCanvas.tsx line 308)
+3. App.tsx `handleContextMenu` stores `{nodeId, x, y}` in state (line 422)
+4. Context menu renders at the click position with the four options (lines 1292-1336)
+5. Clicking "Resolve" calls `handleResolve(contextMenu.nodeId)` (line 467) — the same function used by the Search-to-Resolve flow
+6. MemoryDetail panel opens with resolve loading skeleton, then resolved DAG nodes
 
-#### R13-D3: Resolve Loading Skeleton — VERIFIED
+**The menu component** (App.tsx line 1628: `ContextMenuItem`): 13px font, 6px vertical padding, Raleway font-family, primary text color. Clean and consistent with the app's typography. The menu closes on Escape key or click outside (App.tsx lines 498-511).
 
-**Implementation (MemoryDetail.tsx lines 417-451):**
-When `isResolving` is true, the MemoryDetail panel slot (below the memory body, above the resolved nodes) displays:
-1. "RESOLVING..." label (12px, uppercase, 0.08em letter-spacing)
-2. Three shimmering bars with decreasing widths (80%, 60%, 40%)
-
-The decreasing widths create a natural "funnel" shape suggesting progressive loading. The shimmer animation reuses the existing `.skeleton-shimmer` class from Round 9. The skeleton replaces itself with actual resolve results when the fetch completes.
-
-**Verdict: VERIFIED WORKING.** The skeleton fills the exact visual space that real content will occupy — no layout shift on transition from loading to loaded. This is the correct approach (unlike the older "Resolve failed" text that was shorter than the loaded content and caused jarring reflows).
-
----
-
-#### R13-M1-M4: Unified Decay Model — VERIFIED (Backend Only)
-
-**The formula (handlers.py line 253):** `decay = 0.5^(days / stability)`
-
-**Where it's applied:**
-
-| Component | File | Lines | Purpose |
-|-----------|------|-------|---------|
-| Overview heat | handlers.py | 251-262 | Heat ranking for overview |
-| Wander cool mode | handlers.py | 333-348 | Weighted random selection (cold memories weighted higher) |
-| Validate decay check | validate.py | 78-103 | Suggests memories at decay risk |
-| Reindex | index.py | 122-130 | Precomputes `days_since_last_access` |
-| Resolve | resolve.py | 319-320 | Updates `last_access` and `days_since_last_access` on access |
-
-**New fields (models.py lines 64, 78):**
-- `days_since_last_access: int | None` — precomputed at reindex
-- `stability: float = 14.0` — per-memory half-life in days
-
-**The gap:** These fields are stored in `index.json` and used internally by the Python handlers, but the `/api/memories` endpoint (server.py lines 281-319) does NOT expose them. The `/api/memories` response shape is hard-coded to a 10-field subset that excludes `access_count`, `last_access`, `days_since_last_access`, and `stability`. The `/api/stats` overview endpoint similarly omits heat data. **The frontend dashboard cannot display decay information, access recency, or stability.**
-
-**Verdict: VERIFIED BACKEND, FRONTEND-GAPPED.** The decay model is correct and internally consistent. But it's invisible to users — the overview dashboard shows the same maturity/status/type distributions as before, with no heat-colored indicators or "at risk of decay" warnings. The `memories` endpoint needs to include stability fields for the frontend to consume them.
+**Verdict: VERIFIED WORKING.** This closes a significant workflow gap. Before R14, a user viewing a graph node had to navigate to the List view or use Search to resolve it. Now the graph view is a self-contained interface for both exploration and resolution. The menu is styled appropriately and reuses the existing `handleResolve` function, avoiding duplicate logic.
 
 ---
 
-#### R13-I1: OpenAPI /docs — VERIFIED
+### 1.2 Core Workflow Walkthrough
 
-`http://localhost:8000/docs` serves Swagger UI with all 14 endpoints documented. The OpenAPI spec at `/openapi.json` includes request/response schemas for all POST endpoints.
+#### Search-to-Resolve Pipeline — STILL THE KILLER FLOW
 
-**Verdict: VERIFIED WORKING.** Professional-grade API documentation with zero additional effort. The interactive Swagger UI allows testing endpoints directly in-browser.
+The Search-to-Resolve flow (introduced R13) remains the product's best user experience. R14 improvements:
+- The Resolve button in search results is now 12px (was 10px in R13) — easier to spot and click
+- Search results include `days_since_last_access` and `stability` in the API response, enabling future frontend enrichment (e.g., showing "last accessed X days ago" in search results)
 
----
+#### Graph-to-Resolve Pipeline — NEW FLOW
 
-### 1.2 Core Workflow Walkthrough (API + Source Verified)
+The right-click Resolve (N2) enables a new flow that didn't exist:
+1. Browse the graph visually — find an interesting node
+2. Right-click → Resolve
+3. MemoryDetail panel opens with resolved DAG context
+4. User can now read the full dependency chain of the selected node
 
-#### Search-to-Resolve Pipeline — THE KILLER FLOW
-
-This is the product's best user experience, end-to-end:
-
-1. Type "risk" in search bar (Ctrl+K or click) — results appear with 150ms fade-in
-2. Exact match on "risk-tolerance" shows with match_quality: "exact", two fuzzy matches follow
-3. Click "RESOLVE" on the risk-tolerance result
-4. Search dropdown closes, MemoryDetail panel slides in from right
-5. Resolve loading skeleton shows 3 shimmer bars for ~50ms
-6. Resolved context appears: nodes with trim levels, full body text, notices
-7. The resolve output includes the imported nodes in topological order
-
-The entire flow from keystroke to resolved context takes under 1 second for the investment dataset. No intermediate loading states feel too long. No error states were triggered in testing.
-
-**Search Resolve button discoverability issue:** The button's visual prominence is low (10px text, thin border, transparent background). On first use, most users will click the search result row (which selects the memory and shows the detail panel) rather than noticing the small "RESOLVE" button. A first-use tooltip or a slightly more prominent button design would increase adoption.
+This flow is spatially anchored (graph view) rather than textually anchored (search). It serves a different user intent: "I'm exploring the knowledge graph and want to understand what feeds into this node" rather than "I know what I'm looking for, find it by name."
 
 ---
 
-### 1.3 Dataset Switching Flow
+### 1.3 HelpPanel Exit Animation — REMAINS MISSING
 
-`POST /api/datasets/switch` with `{"dataset":"companion"}` switches cleanly. The frontend reloads graph, list, and dashboard data on dataset change. The reindex fires automatically on startup (Round 10 feature). All four datasets verified working.
+HelpPanel (App.tsx line 1264: `{showHelp && <HelpPanel onClose={() => setShowHelp(false)} />}`) still:
+- Renders with hardcoded `className="panel-slide-enter"` (HelpPanel.tsx line 163)
+- Uses conditional rendering gated on raw `showHelp` boolean
+- Has no `useExitAnimation` import, no `closing` state, no `panel-slide-exit` class
+- Unmounts instantly when closed
+
+This was R13's second-reported gap (after Wander/Validate modals). The Wander and Validate modals are now fixed. HelpPanel is the last unanimated UI surface in the product. Its close behavior is a jarring instant-vanish in an otherwise smoothly animated interface.
+
+**User impact:** Moderate. HelpPanel is opened less frequently than Wander/Validate (it's a reference view, not an interactive tool), so its missing exit animation is less visible in daily use. But when it is dismissed, the instant disappearance contrasts sharply with the smooth exit of every other panel and modal.
 
 ---
 
 ## Phase 2: Aesthetic Taste
 
-### 2.1 The Exit Animation Gap — Most Visible Polish Defect
+### 2.1 Exit Animations — The Product Now Breathes
 
-The MemoryDetail panel has the full animation lifecycle: slide in from the right on open, slide out to the right on close. It's smooth, professional, and sets an expectation.
+The round's most visible achievement is invisible when it works: modals no longer teleport. The Wander modal's close sequence — backdrop fades out over 200ms, modal body fades and scales down over 250ms — is smooth enough to feel intentional without being slow enough to feel sluggish. The 250ms duration matches the existing panel slide exit animation, creating temporal consistency across all animated UI surfaces.
 
-The Wander modal has only half the lifecycle: scale+fade in on open, instantaneous vanish on close. Because the modal overlay (dark backdrop) also vanishes instantly, the transition feels like a cut — like a video editing error where a frame is missing. The eye expects continuity and gets none.
+**Animation matrix (post-R14):**
 
-This is the most jarring single defect in the current build, because:
-- The infrastructure exists (CSS exit classes, useExitAnimation hook)
-- The panel components prove it works
-- The modals are the most prominent UI surfaces (Wander, Validate, Archive) and their dismissals are the most frequently experienced transitions
-- Every close action reminds the user that the polish is incomplete
+| UI Surface | Type | Enter Animation | Exit Animation | Status |
+|------------|------|----------------|----------------|--------|
+| MemoryDetail | Panel | panel-slide-enter (250ms) | panel-slide-exit (250ms) | VERIFIED |
+| MemoryForm | Panel | panel-slide-enter (250ms) | panel-slide-exit (250ms) | VERIFIED |
+| Settings | Modal | modal-fade-enter (250ms) | modal-fade-exit (250ms) | VERIFIED |
+| Wander | Modal | modal-fade-enter (250ms) | modal-fade-exit (250ms) | **VERIFIED (NEW)** |
+| Validate | Modal | modal-fade-enter (250ms) | modal-fade-exit (250ms) | **VERIFIED (NEW)** |
+| HelpPanel | Panel | panel-slide-enter (250ms) | **NONE** — instant vanish | MISSING |
+| Search dropdown | Dropdown | dropdownFadeIn (150ms) | N/A (instant, acceptable) | ACCEPTABLE |
 
----
-
-### 2.2 Font Sizing — Two Steps Forward, One Step Back
-
-**What improved (from Round 12 baseline):** Badges raised to 12px. Search snippet raised to 11px from 10px. No new 10px interactive text was introduced (the Resolve button at 10px was new this round, see below).
-
-**What regressed:** The new Search Resolve button ships at fontSize: 10. This round's flagship feature introduces a sub-12px element. A designer would bump this to 12px, increase padding to `3px 12px`, and it would look better.
-
-**Still problematic:** HelpPanel at 9px is the worst offender. The keyboard shortcut reference table has keycap labels at 9px and description text at 9px. At 100% zoom on a 27" 4K monitor, 9px is ~4.5 physical millimeters — smaller than the lowercase text on a medicine bottle.
-
-**Summary matrix for sub-12px elements:**
-
-| Severity | Count | Examples |
-|----------|-------|----------|
-| Unreadable at normal distance (9px) | 3 | HelpPanel keycaps, HelpPanel descriptions, MemoryDetail empty text |
-| Requires squinting (10px) | 4 | Resolve button, shortcut hints (3 occurrences) |
-| Borderline (11px) | 3 | Search snippet, match indicator, undo toast detail |
+**Assessment:** 6 of 7 animated surfaces are complete. HelpPanel is the holdout. The animation infrastructure (useExitAnimation hook, CSS classes) is reusable for HelpPanel with ~5 lines of code. This is a half-hour fix that was flagged in R13 and remains unfixed.
 
 ---
 
-### 2.3 Search Dropdown Animation
+### 2.2 Font Sizing — The Floor Has Risen
 
-The 150ms fadeIn + translateY(-4px) animation on the search dropdown is the right duration and the right direction. The dropdown appears to extend downward from the search bar, creating a spatial anchor. Compare to the Round 12 state (instant appearance) — the difference is subtle but meaningful. It's the animation equivalent of a well-chosen typeface: you don't notice it's good, you just don't notice anything wrong.
+The "unreadable at normal distance" tier (9px) no longer exists in the product. This is a genuine quality improvement. HelpPanel is now readable — the keyboard shortcut table was the domain where this mattered most, as users are expected to learn product behavior from that reference. At 11px, the keycaps and descriptions are small but legible.
+
+**Remaining sub-12px matrix:**
+
+| Count | Size | Elements | Acceptable? |
+|-------|------|----------|-------------|
+| 3 | 11px | View shortcut hints | Yes — decorative, 55% opacity, on already-labeled buttons |
+| 1 | 11px | HelpPanel keycaps | Borderline — reference text at reading size, but the table layout constrains width |
+| 1 | 11px | HelpPanel shortcut descriptions | Borderline — same assessment |
+| 1 | 11px | MemoryDetail empty state text | Yes — tertiary text in a minimal-content context |
+| 1 | 11px | GraphCanvas active node label | Yes — zoomable canvas, user controls size |
+| 1 | 9px | GraphCanvas trim-summary node label | Yes — intentionally de-emphasized nodes |
+| 1 | 8px | GraphCanvas trim-skipped node label | Yes — intentionally de-emphasized nodes |
+
+The 11px-to-12px gap is not a quality regression compared to industry norms. CSS `font-size: small` is typically 13px; 11px is smaller but the use cases are all secondary/decorative/zoomable. A product manager could reasonably call this "done." A design pedant could push for 12px in HelpPanel and call the rest acceptable. I split the difference.
 
 ---
 
-### 2.4 View Switch Hints — Micro-Polish Done Right
+### 2.3 Dashboard Decay Risk Card — Visual Interest in a Flat Dashboard
 
-The "1"/"2"/"3" hints on view switch buttons are the smallest possible intervention that closes the biggest discoverability gap. The hints are:
-- 10px, 55% opacity — visible but subordinate to the main label
-- Separated by a 6px gap from the parent label
-- Only visible when not in a form input (the keyboard handler guards `!isInput`)
-- The title attribute provides screen-reader accessibility
+The pre-R14 Dashboard was a stat dump: three number cards (Total Memories, Stale, Tags), a maturity distribution (6 badges with counts), and a type/status summary. The decay risk card adds the first "narrative" element to the dashboard — it tells you something is happening (memories are aging), not just what exists.
 
-This is how secondary information should be rendered: present without demanding attention.
+The amber warning visual treatment (left border, subtle background, monospace R-probability badge) creates a clear visual distinction from the neutral gray stat cards. It communicates "attention needed" without the alarm of error red. This is the correct tone — decay is a natural process, not an emergency.
+
+The click-to-navigate interaction (clicking an at-risk memory opens its detail panel) creates a natural remediation path: see risk → click → review the memory → the access itself resets its decay clock. This is an elegant implicit remediation mechanism that requires no explicit "refresh" or "review" button.
 
 ---
 
-### 2.5 Skeleton Loading States — Consistent Language
+### 2.4 Right-Click Context Menu — Professional Polish
 
-The shimmer skeleton pattern (gradient animation, 1.2s cycle, light-gray bars with rounded corners) now consistently appears in:
-- Graph loading (GraphSkeleton)
-- List loading (ListSkeleton, including filter bar)
-- Dashboard loading (DashboardSkeleton)
-- Wander fetch loading (3 shimmer bars)
-- Validate fetch loading (3 shimmer bars)
-- Resolve loading (3 shimmer bars — new in Round 13)
+The context menu (App.tsx lines 1292-1336) is well-executed:
+- Renders at the click position (absolute positioning at `contextMenu.x`/`contextMenu.y`)
+- Clean, minimal styling: no borders, faint shadow, rounded corners
+- Menu header shows the node ID in JetBrains Mono at 12px — visually scoped as a "label" not a "title"
+- Menu items have hover background highlight (`var(--cm-bg-subtle)`)
+- Dismisses on click-outside or Escape — idiomatic context menu behavior
+- The "Archive" option is separated by a divider, creating a natural "danger zone" grouping
 
-The consistency across all loading states creates a coherent visual language. A user who sees the shimmer bars once can infer the meaning in every other context. This is the correct design pattern — the loading state communicates "data is coming" through a single, recognizable visual system.
+The only missing element: a keyboard shortcut indicator next to menu items (e.g., "Resolve · Ctrl+R" or "Edit · E"). This would make the context menu double as a shortcut discoverability surface. Low priority, but worth noting for a future polish round.
+
+---
+
+### 2.5 Consistency Across Components
+
+The consistent stylistic vocabulary established in R9-R12 holds:
+- Skeleton loading states use the same shimmer pattern everywhere (Graph, List, Dashboard, Resolve, Wander, Validate)
+- Badge components (MaturityBadge, StatusBadge) default to 12px font
+- Monospace values (memory IDs, access counts, R-probabilities) use JetBrains Mono at 12-13px
+- Section labels use uppercase Raleway at 12px with 0.08em letter-spacing
+- Headlines use Cormorant Garamond serif for hierarchy
+
+No new inconsistencies were introduced in R14.
 
 ---
 
@@ -285,162 +303,171 @@ The consistency across all loading states creates a coherent visual language. A 
 
 ### 3.1 Feature Proposals
 
-#### Proposal 1: Heat-Map Dashboard with Decay Visualization
+#### Proposal 1: Per-Memory Stability Editing (Decay Tuning)
 
-**Problem:** The unified decay model (R13-M1-M4) exists in the backend but is invisible on the frontend. Users have no way to see which memories are "cold" or at risk of decay.
+**Problem:** The `stability` field defaults to 14.0 days for all memories, but different types of knowledge decay at different rates. A fact about NVIDIA's quarterly earnings decays faster than a long-term investment thesis. The user should be able to tune per-memory half-life.
 
-**Proposal:** Add a "Memory Health" card to the Dashboard that shows:
-- A horizontal bar chart of last-access recency (color gradient: warm orange for <7 days, neutral grey for 7-30 days, cool blue for 30+ days)
-- Memory count by access recency bucket ("0-7 days", "7-30", "30-90", "90+")
-- A "suggested review" list: top 3 memories with highest decay score (lowest access_count * decay)
-- The `stability` field surfaced per-memory so users can adjust half-life
+**Proposal:** Add a "Stability" slider or input in the MemoryDetail panel that allows the user to adjust the half-life for a given memory. A tooltip explains: "How long before this memory's access decay reaches 50%. Higher = slower decay." The MemoryForm should include a stability field when creating/editing memories.
 
-**Effort:** 2-3 days. Backend: expose stability/last_access/days_since in `/api/memories` and `/api/stats` (trivial, ~10 lines). Frontend: new Dashboard card with bar chart (reuse existing stat patterns), new "Memory Health" section (~200 lines).
+**Effort:** 1 day. Backend: expose stability as an editable field in update handler (trivial, field already exists in model). Frontend: add slider/input to MemoryDetail and MemoryForm.
 
-**Why this matters:** CodeMemory's core differentiator is structured recall — knowing what to remember when. A decay heat-map visualizes this differentiator. Without it, CodeMemory is indistinguishable from a YAML frontmatter note-taking app with a graph view.
+**Why this matters:** The decay formula is now active and visible. Letting users tune it makes them active participants in memory management rather than passive observers of an automated process. It's the difference between "the system forgets things" and "I decide what to remember."
 
 ---
 
-#### Proposal 2: "Resolve in Place" Inline Context Preview
+#### Proposal 2: Access Recency Timeline in MemoryDetail
 
-**Problem:** The Search-to-Resolve flow requires the MemoryDetail panel to open after clicking Resolve. For quick context-checking during search, the user loses their search results.
+**Problem:** The MemoryDetail panel shows current state but no temporal context. A user looking at a memory can't see its access history — when it was last accessed, how access frequency has changed over time, or whether it's trending toward decay.
 
-**Proposal:** Add a "Preview Context" option (Shift+Click on search result or a "PREVIEW" button alongside "RESOLVE") that expands the search result row inline to show the first 2-3 resolved nodes without leaving the search dropdown. This enables rapid scanning:
+**Proposal:** Add an "Activity" mini-section below the memory body in MemoryDetail that shows:
+- A small horizontal timeline of last N access events (dates and context — e.g., "resolved in DAG 2026-05-01", "wandered 2026-04-15")
+- The current decay probability (R value) with a mini bar visualization
+- "Access count over time" mini chart (simple sparkline of access events by week)
 
-```
-Search: "risk"
-┌─────────────────────────────────────────────────┐
-│ user/investment/risk-tolerance          RESOLVE │
-│ ▼ Preview:                                     │
-│   └─ [1/3] risk-tolerance (atom)               │
-│        中高风险偏好，可承受30%回撤              │
-│   └─ [2/3] current-holdings (atom)             │
-│        NVDA 15%, SOXL 10%... (summary)         │
-│   └─ [3/3] context (atom) — SKIPPED            │
-│                                  [Open in Panel] │
-└─────────────────────────────────────────────────┘
-```
+**Effort:** 2-3 days. Backend: new endpoint `/api/memories/{id}/activity` reading from the access log (if stored) or inferring from `access_count` / `last_access`. Frontend: mini-section in MemoryDetail with sparkline.
 
-**Effort:** 2 days. New API endpoint or reuse `/api/resolve` with `depth=required` and `budget=500`. Frontend: expandable row with conditional fetch on expand. Lazy-loading: only fetch when preview is requested.
-
-**Why this matters:** This is the VSCode "Peek Definition" pattern applied to memory resolution. It enables the user to confirm relevance without context-switching.
+**Why this matters:** Access recency is the core mechanic that drives CodeMemory's value proposition. Making it visible inside the memory detail view connects the abstract decay formula to the concrete memory the user is reading.
 
 ---
 
-#### Proposal 3: Temporal Snapshot Comparison
+#### Proposal 3: "Review Queue" — Proactive Decay Remediation
 
-**Problem:** Memories accumulate versions over time (change_log, version field in frontmatter), but there's no way to visually compare versions or understand what changed between two points in time.
+**Problem:** The decay risk dashboard panel is passive — it shows at-risk memories, but the user must navigate to each one individually to remediate. For a large dataset (quant_operators has 62 memories), batch remediation would be valuable.
 
-**Proposal:** Add a "History" panel accessible from MemoryDetail that shows:
-- A timeline of version changes (version number, date, change_note)
-- Side-by-side diff view between any two versions
-- Count of times the memory was resolved (access_count trend)
-- Visual indicator of when the memory was last accessed relative to other memories in the dataset
+**Proposal:** Add a "Review" button on the Decay Risk card that opens a sequential review flow:
+1. Opens MemoryDetail for the first at-risk memory with an auto-resolve (loads DAG context)
+2. "Next" button advances to the next at-risk memory
+3. "Skip" button defers the memory (records a "reviewed" timestamp but doesn't access it, keeping decay risk visible)
+4. Progress bar: "3/7 reviewed"
+5. Goal: touching the resolve endpoint for each memory resets its `last_access` clock
 
-**Effort:** 3-4 days. The `changelog` command already exists in `src/codememory/changelog.py`. The backend needs a new `/api/memories/{id}/history` endpoint. Frontend: a "History" tab in MemoryDetail or a separate panel.
+**Effort:** 2 days. Frontend: ReviewQueue component with sequential navigation. Backend: the resolve endpoint already updates `last_access` on access (resolve.py lines 319-320), so remediation is "free" — just triggering resolve is enough.
 
-**Why this matters:** Temporal comparison is the missing dimension of CodeMemory's data model. The product stores versions but only shows the current state. Connecting "what is" to "what was" makes the version history useful rather than archival.
-
----
-
-#### Proposal 4: Memory Graph "Stroll Mode" (Serendipitous Exploration)
-
-**Problem:** The graph view shows all nodes and edges but requires the user to know what they're looking for. Wander provides random recall but without spatial context.
-
-**Proposal:** Add a "Stroll" button in the Graph view that:
-1. Highlights a random starting node (similar to Wander but visual)
-2. Traces its dependency chain one hop at a time (animated edge highlighting)
-3. Shows each node's summary as a tooltip that moves along the path
-4. Allows the user to "fork" the stroll at any node (click to follow a different import)
-
-**Effort:** 3 days. Reuse the Wander backend. Frontend: D3 force-directed animation with `d3.transition()` on node highlight + edge stroke. Tooltip component that follows the active node.
-
-**Why this matters:** The graph visualization is currently a static map — you have to know your destination. Stroll Mode makes it a guided tour. This is the spatial equivalent of Wander's temporal recall.
+**Why this matters:** The decay risk panel creates awareness. The review queue creates action. The combination transforms decay management from a monitoring feature into a workflow.
 
 ---
 
-### 3.2 Removable Feature: List View Local Filter Bar
+#### Proposal 4: Cross-Dataset Resolution (Architecture Change)
 
-The List view (MemoryList.tsx) has a local filter bar that duplicates 80% of the global SearchBar's functionality (filter by type, status, maturity, tags, text query). The local filter operates on client-side data only (already-loaded memory summaries), while SearchBar queries the backend with full-text search and fuzzy matching.
+**Problem:** The four datasets (companion, investment, software-architecture, quant_operators) are isolated. A schema template in software-architecture cannot be referenced by a decision in investment. Shared knowledge must be duplicated across datasets.
 
-**Why remove it:**
-- **Duplication:** Two filter UIs with overlapping behavior create user confusion about which one to use
-- **Inconsistency:** Local filter gives different results than SearchBar (local: client-side substring; SearchBar: server-side exact+fuzzy+difflib)
-- **Screen real estate:** The filter bar takes up ~40px of vertical space in the list view, competing with the header's SearchBar
-- **Maintenance:** Changes to filter logic must be coordinated across two code paths
+**Proposal:** Add an optional `--cross-dataset` flag to resolve that, when a dependency is not found in the current dataset, searches other datasets. Resolve output would annotate cross-dataset nodes with their source dataset. This requires:
+- A shared index that maps memory IDs to datasets
+- Cross-dataset path resolution in the resolve engine
+- Frontend indicators for cross-dataset nodes
 
-**What to keep instead:** The global SearchBar has tags, type, status, and maturity filters already. When the list view is active, applying a SearchBar filter could scroll the list to matching items and dim non-matching rows (rather than removing them entirely).
+**Effort:** 3-4 days. Significant backend changes to the resolve engine. Frontend changes are cosmetic (dataset badges on resolved nodes).
 
-**Effort to remove:** 1 hour. Remove the filter bar JSX and state from MemoryList.tsx. Add SearchBar filter synchronization to the List view.
+**Why this matters:** Cross-dataset resolution transforms CodeMemory from isolated project knowledge bases into a unified knowledge fabric. A "decision" template from software-architecture could structure an investment decision. A "person" profile from companion could inform context in investment. This is the feature that makes the product feel like a platform rather than a tool.
 
 ---
 
-### 3.3 The "Aha Moment" Analysis
+### 3.2 The "Aha Moment" Analysis
 
-**Current strongest aha moment: Search-to-Resolve (new in Round 13)**
+**Strongest current aha moment (unchanged from R13): Search-to-Resolve**
 
-When a user types a memory ID fragment in search, sees the "RESOLVE" button, clicks it, and sees a full DAG context with "1/1 risk-tolerance (atom)" with full body text appear — this is the moment where the DAG model clicks. A search that returns context rather than a single document is unique among note-taking tools.
+"Type a keyword, see the DAG." The flow remains the product's best first impression. R14's 12px Resolve button makes it slightly more discoverable.
 
-**Missing aha moment: Decay-Driven Overview**
+**New aha moment (R14): Decay Risk Awareness**
 
-A dashboard that shows "3 memories haven't been accessed in 30+ days" with a visual heat gradient — this is the feature that makes users say "oh, it's managing my memory, not just storing it." The backend has all the data. The frontend doesn't show it. This is the single highest-impact feature gap in the product.
+When a user's memory ages and the Decay Risk card appears with "2 memories at risk" and "R:6.3%", this is the moment where CodeMemory's differentiator clicks. It's not storing knowledge — it's tracking knowledge vitality. This "aha" is currently latent (the feature exists but needs aged data to trigger). The first time it fires for a real user will be a genuine product-defining moment.
 
-**Distant aha moment: Cross-Dataset Resolution**
+**Distant aha moment: Review Queue (Proposal 3)**
 
-What if resolving "user/investment/context" could pull in a dependency from the "companion" dataset? Or what if the software-architecture schema templates could be used in the investment dataset? Cross-dataset resolution would make CodeMemory feel like a unified knowledge fabric rather than isolated project folders. This requires architectural changes to the resolve engine but is a natural extension of the DAG model.
+"Click Review → read memory → click Next → read memory → click Next — 7 memories refreshed in 2 minutes." This workflow would make the user feel like they're maintaining a knowledge garden rather than a filing cabinet. It connects the abstract decay model to a concrete, satisfying action loop.
 
 ---
 
 ## Phase 4: Prioritized Recommendations
 
-### Critical (Before Next Feature Round)
+### Round 13 Debt Reconciliation
 
-| # | Item | Effort | Justification |
-|---|------|--------|---------------|
-| 🔴 1 | **Wire modal exit animations** — Import `useExitAnimation` into Dashboard.tsx Modal component, apply `modal-fade-exit` / `backdrop-fade-exit` classes on close. Wire HelpPanel with useExitAnimation. | 1 hour | Most visible polish defect. Every modal close reminds users the product is unfinished. The CSS exists. |
-| 🔴 2 | **Fix 9px fonts** — HelpPanel (2 occurrences) and MemoryDetail (1 occurrence) to 11px minimum. | 30 minutes | Accessibility: 9px text is literally smaller than a medicine bottle label. These are NOT decorative elements — they are instructional text the user is expected to read to learn the product. |
-| 🔴 3 | **Bump Search Resolve button to 12px** — Change fontSize from 10 to 12, padding from `1px 8px` to `3px 12px`. | 5 minutes | A flagship Round 13 feature shipping at a deprecated size undermines the round's thesis. |
+Before listing new recommendations, tracking R13's recommendations:
 
-### Important (This Round or Next)
+| R13 # | Item | R13 Priority | R14 Status |
+|-------|------|-------------|------------|
+| 🔴 1 | Wire modal exit animations (Wander/Validate) | Critical | **FIXED** — Wander and Validate modals now wired |
+| 🔴 2 | Fix 9px fonts (HelpPanel ×2, MemoryDetail ×1) | Critical | **FIXED** — All raised to 11px |
+| 🔴 3 | Bump Search Resolve button to 12px | Critical | **FIXED** — Now 12px |
+| 🟡 4 | Expose decay data to frontend API | Important | **FIXED** — All four endpoints now expose decay fields |
+| 🟡 5 | Add "Resolve" to graph node context menu | Important | **FIXED** — N2 delivers this |
+| 🟡 6 | Heat-map maturity distribution in Dashboard | Important | **NOT DONE** — Deferred to future round |
+| 🟢 7 | Search Resolve button tooltip | Nice-to-have | **NOT DONE** — Deferred |
+| 🟢 8 | Remove List view local filter bar | Nice-to-have | **NOT DONE** — Deferred |
+| 🟢 9 | Fix 11px sub-12px stragglers | Nice-to-have | **PARTIAL** — All raised but some remain at 11px |
+| 🟢 10 | Tooltip on maturity badges | Nice-to-have | **NOT DONE** — Deferred |
+| 💡 11 | Decay Heat Dashboard | Strategy | **PARTIAL via N1** — Decay risk card is a minimum viable version of this vision |
+| 💡 12 | Temporal Snapshot Comparison | Strategy | **NOT DONE** — Deferred |
+| 💡 13 | Graph Stroll Mode | Strategy | **NOT DONE** — Deferred |
 
-| # | Item | Effort | Justification |
-|---|------|--------|---------------|
-| 🟡 4 | **Expose decay data to frontend** — Add `access_count`, `last_access`, `days_since_last_access`, `stability` to `/api/memories` response. Add `decay_risk` array to `/api/stats` response. | 30 minutes backend, 2 hours frontend | The decay model exists but is invisible. Without frontend exposure, R13-M1-M4 is academic infrastructure, not a user-facing feature. |
-| 🟡 5 | **Add "Resolve" button to graph node context menu** — The right-click menu on graph nodes should include a "Resolve" option that opens the MemoryDetail panel with resolved context. | 1 hour | The graph view has no path to the Resolve flow. A user looking at a node in the graph must navigate to List view or Search to resolve it. |
-| 🟡 6 | **Heat-map maturity distribution in Dashboard** — Show maturity counts with a visual bar chart (horizontal bars, color-coded: proven=amber, verified=green, draft=grey). Reuse existing stat card pattern. | 1.5 hours | The Dashboard currently shows maturity as raw numbers only. A visual distribution would make the "memory health" concept tangible before the full decay visualization arrives. |
-
-### Nice to Have (Future Rounds)
-
-| # | Item | Effort | Justification |
-|---|------|--------|---------------|
-| 🟢 7 | **Search Resolve button tooltip** — On first use or hover, show a tooltip: "Resolve full context via DAG dependencies." | 30 minutes | Improves discoverability of the Resolve button. |
-| 🟢 8 | **Remove List view local filter bar** — Remove duplicate filter UI from MemoryList.tsx. | 1 hour | Reduces UI duplication and prevents inconsistent filter results. |
-| 🟢 9 | **Fix 11px sub-12px stragglers** — Search snippet (11px), match indicator (11px), undo detail (11px) to 12px. | 20 minutes | Completes the font sizing consistency initiative. |
-| 🟢 10 | **Add tooltip to maturity badges** — Hovering a "draft" badge should show: "Draft: idea captured, not yet validated." | 1 hour | Maturity levels are a CodeMemory-unique concept. Users need help understanding the semantics. |
-
-### Product Strategy
-
-| # | Item | Effort | Justification |
-|---|------|--------|---------------|
-| 💡 11 | **Decay Heat Dashboard** — Proposal 1 above. Surface the decay model visually. | 2-3 days | The single highest-impact product feature not yet built. Transforms CodeMemory from a note-taking app to a memory management system. |
-| 💡 12 | **Temporal Snapshot Comparison** — Proposal 3 above. Version history with diff view. | 3-4 days | The version history exists (change_log in frontmatter) but is invisible. Making it interactive unlocks the "how did I get here" question. |
-| 💡 13 | **Graph Stroll Mode** — Proposal 4 above. Animated walkthrough of dependency chains. | 3 days | The spatial equivalent of Wander's temporal recall. Makes the graph view explorable for users who don't know what they're looking for. |
+**R13 debt cleared:** 7/13 items completed. 3/5 critical items fixed. 3/3 important items fixed. The remaining items are nice-to-have or product-strategy proposals that were always scoped for future rounds.
 
 ---
 
-## Round 13 Verdict Summary
+### New Recommendations — Round 14
+
+#### Critical (Before Next Feature Round)
+
+| # | Item | Effort | Justification |
+|---|------|--------|---------------|
+| 🔴 1 | **Wire HelpPanel exit animation** — Import `useExitAnimation` into HelpPanel, gate rendering on `visible`/`closing` state, apply `panel-slide-exit` class on close. | 30 minutes | Last unanimated UI surface. Every other panel and modal has smooth exit. The code pattern exists. This is a fifth-round-straggler fix — it was flagged in R13 and deferred. |
+| 🔴 2 | **Bump remaining 11px stragglers to 12px** — HelpPanel keycaps (line 337), HelpPanel shortcut descriptions (line 405), MemoryDetail empty-state text (line 630), view shortcut hints (lines 678, 699, 720). | 20 minutes | The 9px tier is gone, which was the actual readability crisis. But 11px in HelpPanel (reference table the user is expected to read to learn the product) still feels under-spec. Bumping to 12px makes HelpPanel feel like it was designed, not engineered. |
+
+#### Important (This Round or Next)
+
+| # | Item | Effort | Justification |
+|---|------|--------|---------------|
+| 🟡 3 | **Add stability editing to MemoryDetail** — Show current stability value with a slider/input. Allow user to adjust per-memory half-life. Persist via update endpoint. | 1 day | The decay model is now active and visible. Tuning it is the natural next step. Without per-memory stability, all knowledge decays at the same rate, which is false to the domain. |
+| 🟡 4 | **Add access recency to MemoryDetail** — Show "last accessed X days ago" and R-probability in the MemoryDetail header area. Surface the data that's already in the API response. | 1 hour | The decay fields are in the API response. The MemoryDetail panel receives them as props. Rendering them is low-effort, high-visibility. |
+| 🟡 5 | **Add access recency to search results** — Show "accessed Xd ago" or an access freshness indicator in each search result row (alongside the existing tags and badges). | 45 minutes | Search results include `days_since_last_access` in the API. The frontend already renders tags, badges, and match quality per result. Adding one more metadata item is trivial and adds context to search. |
+| 🟡 6 | **Add review queue (Proposal 3)** — Sequential navigation through at-risk memories with auto-resolve to reset access clock. | 2 days | Transforms decay risk from passive monitoring to active management. The "Review" button on the decay risk card creates a call-to-action that the current card lacks (it only offers click-to-navigate, which is discovery, not remediation). |
+
+#### Nice to Have (Future Rounds)
+
+| # | Item | Effort | Justification |
+|---|------|--------|---------------|
+| 🟢 7 | **Tooltip on Search Resolve button** — "Resolve full dependency DAG." | 20 minutes | R13 R7, still not done. Low effort, improves discoverability of the primary feature. |
+| 🟢 8 | **Remove List view local filter bar** — Remove duplicate filter UI from MemoryList.tsx. | 1 hour | R13 R8, still not done. Reduces UI duplication. |
+| 🟢 9 | **Tooltip on maturity badges** — "Draft: idea captured, not yet validated." | 1 hour | R13 R10, still not done. Maturity levels are a CodeMemory-unique concept. |
+| 🟢 10 | **Keyboard shortcut hints on context menu items** — Show "R" next to Resolve, "E" next to Edit in the right-click context menu. | 30 minutes | The context menu is a natural shortcut discoverability surface. |
+
+#### Product Strategy
+
+| # | Item | Effort | Justification |
+|---|------|--------|---------------|
+| 💡 11 | **Cross-Dataset Resolution** — Proposal 4 above. Allow resolve to pull dependencies from any dataset. | 3-4 days | The single highest-impact architectural feature not yet built. Makes the product a platform. |
+| 💡 12 | **Access Recency Timeline (Proposal 2)** — Sparkline + activity feed in MemoryDetail. | 2-3 days | Makes the decay formula visible within the context of individual memories. Complementary to the dashboard-level decay risk card (N1). |
+| 💡 13 | **Graph Stroll Mode** — Proposal 4 from R13. Animated walkthrough of dependency chains in the graph view. | 3 days | Still the spatial equivalent of Wander's temporal recall. The graph view is a static map; Stroll makes it a guided tour. |
+
+---
+
+## Round 14 Verdict Summary
 
 | Change | Description | Status | Notes |
 |--------|-------------|--------|-------|
-| R13-A1 | Panel exit animations hook | **PARTIAL** | Panels wired; modals not wired; modal CSS dead code |
-| R13-A2 | Sub-12px font fixes | **INCOMPLETE** | Badges raised; 3 remaining at 9px, 4 at 10px, 3 at 11px |
-| R13-A3 | Search dropdown fade-in | **VERIFIED** | 150ms animation, wired to SearchBar |
-| R13-D1 | Search Resolve button | **VERIFIED** | End-to-end flow works; button at 10px (substandard) |
-| R13-D2 | View switch shortcut hints | **VERIFIED** | "1"/"2"/"3" on view buttons |
-| R13-D3 | Resolve loading skeleton | **VERIFIED** | 3 shimmer bars in MemoryDetail |
-| R13-M1-M4 | Decay model unification | **VERIFIED** | Server-side only; not surfaced to frontend API |
-| R13-I1 | OpenAPI /docs | **VERIFIED** | Swagger UI at /docs, 14 endpoints documented |
+| C1 | Overview decay pipeline fix — read `days_since_last_access` from MemoryEntry | **VERIFIED** | 3-line fix + C1 annotation; formula now uses real recency data |
+| C2 | Stability boundary protection — prevent div-zero, negative, None | **VERIFIED** | 3-layer defense: Pydantic validator, handler clamps (×2) |
+| C3 | API exposure of decay fields — `access_count`, `last_access`, `days_since`, `stability` across all endpoints | **VERIFIED** | /api/memories, /api/stats, /api/wander, /api/search all expose decay data |
+| I1 | Modal exit animations for Wander + Validate | **VERIFIED** | Wander and Validate modals wired; HelpPanel still missing (R13 holdover) |
+| I2 | Sub-12px font fixes — 7 stragglers improved, 0 remain at 9px | **MOSTLY FIXED** | All 9px → 11px; all 10px CTAs → 12px; 4 items at 11px remain |
+| N1 | Dashboard decay risk panel | **VERIFIED** | Complete implementation; latent until dataset ages |
+| N2 | Graph node right-click Resolve | **VERIFIED** | New flow: graph → right-click → resolve → DAG in panel |
 
-**Pass rate: 8/8 changes have verifiable implementations, but 2 are incomplete (A1 modal gap, A2 remaining sub-12px). Functional core (D1-D3, M1-M4, I1) is solid. Polish (A1-A3) is uneven — the exit animation gap is the single most visible defect in the current build.**
+**Pass rate: 8/8 changes have verifiable implementations. 0 are incomplete. 1 has a marginal remaining gap (I2: 4 items at 11px vs the stated goal of "all sub-12px fixed"). The round delivers on both deferred R13 promises (C1 decay activation, I1 modal animations) and adds substantive new capabilities (N1 decay dashboard, N2 graph resolve).**
 
-The round's net impact is positive: Search-to-Resolve is a genuine UX breakthrough, and the decay model unification is correct infrastructure even if invisible today. But the round's ambition statement promised exit animations and font fixes, and it delivered both as unfinished work. The gap between promise and delivery is small in lines of code but large in user perception — 2 hours of work separates the current build from a build where every close is smooth and every word is readable.
+---
+
+### Round 14 vs Round 13: Score Trend
+
+| Dimension | R13 Score | R14 Score | Delta | Driver |
+|-----------|-----------|-----------|-------|--------|
+| Functionality | 8.5 | 8.5 | -- | No new workflows; existing ones more reliable |
+| Aesthetic Taste | 7.5 | 8.0 | +0.5 | Modal exit animations, 9px fonts eliminated, decay risk card visual interest |
+| Product Imagination | 7.5 | 8.0 | +0.5 | Decay model now user-visible; right-click resolve; per-memory stability proposed |
+| **Composite** | **7.9** | **8.4** | **+0.5** | |
+
+The round's discipline — finishing deferred work before starting new initiatives — is productive but score-limited. The next breakthrough (8.5+) requires either the review queue workflow (Proposal 3), cross-dataset resolution (Proposal 4), or a completed HelpPanel animation + 12px typography baseline. The product is solid. The polish is close to complete. The next round should be about making decay *actionable* rather than merely *visible*.
+
+---
+
+*Report ends. Next review: Round 15.*

@@ -1,11 +1,11 @@
 """Memory validation: broken links, schema compliance, cycle detection, decay suggestions."""
 
 import logging
-import math
 import sys
 from datetime import datetime, timedelta
 from pathlib import Path
 
+from .core import compute_retrieval_probability
 from .core import parse_frontmatter
 from .index import load_index
 from .models import IndexData, MemoryEntry
@@ -100,7 +100,7 @@ def _check_decay(memory_id: str, entry: MemoryEntry, index: IndexData) -> list[s
     stability = getattr(entry, 'stability', 14.0)
 
     if days_since is not None and days_since >= 0:
-        retrieval_prob = math.pow(0.5, days_since / stability)
+        retrieval_prob = compute_retrieval_probability(days_since, stability)
         if retrieval_prob > 0.1:
             return warnings
 

@@ -3,7 +3,7 @@
 from pathlib import Path
 
 from .index import load_index
-from .models import IndexData, MemoryEntry
+from .models import IndexData
 
 
 def _count_dependents(memory_id: str, index: IndexData) -> int:
@@ -39,6 +39,10 @@ def search(
 ) -> list[dict]:
     """Search memories by query, tags, type, status, maturity, and/or semantic type.
 
+    Builds output dicts from MemoryEntry.model_dump() to eliminate field divergence
+    between search output and the canonical data model (R15-C4).
+    Any field added to MemoryEntry automatically appears in search results.
+
     Results are sorted by dependents descending, then access_count descending,
     then id ascending.
     """
@@ -69,22 +73,13 @@ def search(
         if has_schema and not entry.schema:
             continue
 
-        dependents = _count_dependents(mid, index)
-        results.append({
-            "id": mid,
-            "type": entry.type,
-            "summary": entry.summary,
-            "status": entry.status,
-            "tags": entry.tags,
-            "path": entry.path,
-            "intensity": entry.intensity,
-            "access_count": entry.access_count,
-            "last_access": entry.last_access,
-            "dependents": dependents,
-            "maturity": entry.maturity,
-            "days_since_last_access": entry.days_since_last_access,
-            "stability": entry.stability,
-        })
+        # R15-C4: Build output from model_dump() + computed fields.
+        # This ensures all MemoryEntry fields are present, eliminating
+        # "field missing from search output" bugs permanently.
+        dump = entry.model_dump(mode="json")
+        dump["id"] = mid  # Ensure id uses the index key
+        dump["dependents"] = _count_dependents(mid, index)
+        results.append(dump)
 
     results.sort(key=lambda r: (-r["dependents"], -r["access_count"], r["id"]))
     return results

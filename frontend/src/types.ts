@@ -41,6 +41,9 @@ export interface MemoryDetail {
   maturity?: string
   evidence?: Record<string, unknown>
   source?: Record<string, unknown>
+  days_since_last_access?: number | null
+  stability?: number
+  access_count?: number
   [key: string]: unknown
 }
 

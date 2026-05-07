@@ -1038,3 +1038,115 @@ PYTHONPATH=src python tests/integration_test.py
 - **搜索衰减感知排名**：对搜索结果排序应用衰减乘数。最近访问的记忆在同等结构重要性下排名更高。约 15 LOC。（研究员 R-YLW-2）
 - **领域校准稳定性预设**：在 create 期间基于标签/类型/maturity 建议稳定性值。投资事实 7-14 天，软件架构概念 30-60 天，量化操作员公式 60-180 天。约 50 LOC。（研究员 R-YLW-1 / Bomb 1）
 - **Git 集成指南 + GitHub Action**：为开发者受众提供文档化的 .md 数据集版本控制工作流。在 push 时运行 validate 的 GitHub Action。"代码式记忆"叙事。（进化策略师 N3）
+
+
+## 第 15 轮追加任务
+
+> **日期**：2026-05-07
+> **上轮评估**：Round 14 — 7/8 PASS + 1 项有意延期（N3）。衰减管道修复确认生效（C1），stability 边界防护就位（C2），API 衰减字段暴露（C3），模态退场动画接线（I1），sub-12px 字体修复（I2），Dashboard 衰减风险面板（N1），图右键 Resolve（N2）。86/86 测试通过，零回归。
+> **主题**：完整性 & 打磨 & 自适应衰减 — 兑现 Playwright 承诺、消除最后已知 UI 缺陷、采纳研究员的高价值低投入发现
+> **筛选原则**：本轮为投资循环倒数第二轮（4/5）。规则：(1) Playwright 必须作为首个任务——连续三轮延期已成本轮阻塞性约束；(2) 修复而非新建——消除最后两个已知 UI 缺陷；(3) 采纳研究员标记为 Critical 或 Important 且投入不超过 1 天的发现；(4) 为 R16（最终轮）保留大型功能（全文搜索、可写 MCP 工具）。
+
+### 第一梯队：必达 — 承诺兑现 + 已知缺陷
+
+- [x] R15-P1: Playwright 冒烟测试（5 条）
+  - 目标：为前端添加 Playwright 端到端冒烟测试覆盖。5 条测试：app 加载并渲染、图 canvas 挂载并显示节点、点击图节点打开详情面板、搜索栏输入返回结果、创建-读取-更新-删除（CRUD）完整周期。这是 R12 首次承诺、R13 和 R14 连续延期的项目。必须作为 R15 首个任务——在任何功能代码之前交付。
+  - 验收：`npx playwright test` 5 条测试全部通过；测试在 headless 和 headed 模式均可运行；测试之间独立（不依赖执行顺序）；测试产出包含失败截图；测试纳入 `package.json` 脚本（`test:e2e`）；Playwright 作为 devDependency 添加到 `package.json`；无 TypeScript 错误。
+  - 来源：进化策略师 Critical #C2（"Playwright constraint... now three rounds overdue. This is not a sustainable pattern. Must be R15's first task."）
+
+- [x] R15-I1: HelpPanel 退场动画接线
+  - 目标：为 HelpPanel 添加关闭时的 `panel-slide-exit` 退场动画。当前 HelpPanel 使用硬编码 `panel-slide-enter` 且条件渲染绑定原始 `showHelp` 布尔值——关闭时 DOM 立即卸载，无动画。将 `useExitAnimation` hook 导入 HelpPanel（该 hook 已在 MemoryDetail、MemoryForm、Settings、Wander、Validate、Archive 共 6 个表面经过验证），gate 渲染于 `visible`/`closing` 状态，关闭时应用 `panel-slide-exit` CSS 类。这是 R13 第二轮报告缺口且 R14 再次报告——最后一个无动画 UI 表面。
+  - 验收：关闭 HelpPanel 时可见 250ms slide-out 退场动画（非立即 DOM 消失）；遮罩背景同步退场（如适用）；动画时长与所有其他面板一致（250ms ease）；Escape 键触发的关闭同样播放退场动画；退场动画播放期间不可与正在关闭的 HelpPanel 交互；入场动画行为不变；TypeScript 构建零错误
+  - 来源：体验官 Critical #1（"Last unanimated UI surface. Every other panel and modal has smooth exit. The code pattern exists. This is a fifth-round-straggler fix."）
+
+- [x] R15-I2: 修复残留 11px straggler（4 处）
+  - 目标：将最后 4 处 11px DOM 文本元素提升至 12px：(1) HelpPanel 键帽标签（line 337）；(2) HelpPanel 快捷键描述文本（line 405）；(3) MemoryDetail 空状态文本（line 630）；(4) App.tsx 视图快捷键提示（"1"/"2"/"3"，lines 678/699/720）。R14-I2 消除了所有 9px 和 10px 文本，但将 4 处元素留在 11px。其中 HelpPanel 是用户用来学习产品快捷键的参考表——11px 在参考上下文中仍然偏小。视图快捷键提示为装饰性文字但一致性要求 12px。
+  - 验收：HelpPanel 中无元素 `fontSize < 12px`（键帽和快捷键描述均为 12px）；MemoryDetail 空状态文本 >= 12px；视图快捷键提示 >= 12px；HelpPanel 快捷键参考表在正常观看距离下完全可读（12px + 行间距合理）；深色模式下适用；表格布局不因字号提升而破损（列宽自适应）；TypeScript 构建零错误
+  - 来源：体验官 Critical #2（"HelpPanel keycaps and shortcut descriptions... at 11px in a reference table the user is expected to read to learn the product still feels under-spec."）
+
+### 第二梯队：研究驱动 — 高价值、低投入、后端核心
+
+- [x] R15-C1: 自适应 stability 更新（访问时 SInc）
+  - 目标：在 `resolve.py` 的访问追踪代码块中，于 `access_count` 递增之后添加 stability 更新步骤。实现简化版 SInc（Stability Increase）函数，灵感来自 FSRS v6：乘数在最优复习窗口（R ~ 0.7-0.85）处达到峰值，太早（R > 0.95，集中练习）时最小，太晚（R < 0.3，接近遗忘）时中等。乘数范围约 1.05-1.80。应用收益递减因子：`diminish = sqrt(14.0 / max(current_stability, 14.0))`，确保高 stability 时增长放缓。完全向后兼容——所有记忆从 stability=14.0 起步，通过使用自适应向上。不改变 `create` 或 `update` 路径；不影响未访问过的记忆。
+  - 验收：首次 resolve 访问记忆时 stability 值增加（从 14.0 增长）；同一记忆多次 resolve（短时间内）产生的 stability 增长小于间隔较长的 resolve（集中练习 vs 间隔效应）；stability 增长在高值处收益递减（stability=365 的记忆增长远小于稳定性=14 的记忆）；`access_count=0` 或 `days_since=None`（从未访问）的记忆 stability 不改变；向后兼容——无 stability 字段的旧记忆在首次加载时自动获取 14.0；57+24 测试通过；仅 resolve 触发 stability 更新——overview、wander、validate 不触发
+  - 来源：研究员 Critical #1（"This is the single most important architectural improvement identified by adjacent research. Both FSRS and SuperMemo have proven that adaptive stability outperforms static stability by 20-30% in real-world usage."）
+
+- [x] R15-C2: 长期保留底线（混合衰减公式）
+  - 目标：将纯指数衰减公式 `0.5^(days/stability)` 替换为混合公式，在保留短期排名行为的同时防止长期静默知识丢失。混合公式：`R_hybrid = max(0.5^(days/stability), 0.1 / (1 + days / (10 * stability)))`。在 R < 0.1 之前（~46 天默认），行为与纯指数衰减相同（精确到 0.1%）。之后，power-law 渐近线为所有记忆保留 ~3-6% 的检索底线，匹配 Bahrick"永久存储"发现——良好学习的语义知识保留基线可访问性。在三个消费点应用：overview heat（`handlers.py:263`）、wander cool 权重（`handlers.py:349`）、validate 衰减警告（`validate.py:103`）。
+  - 验收：在 stability=14.0、days=90 处：当前 `0.5^(90/14) = 1.2%` → 混合后 `max(1.2%, 0.1/(1+90/140)) = max(1.2%, 6.1%) = 6.1%`（~5x 提升）；在 stability=14.0、days=14 处：`max(50%, 0.1/(1+14/140)) = 50%`（短期行为不变）；在 stability=14.0、days=46 处：`max(10.3%, 0.1/(1+46/140)) = max(10.3%, 9.9%) = 10.3%`（阈值处近乎不变）；衰减警告（R < 0.1 触发）行为不变——混合公式在该阈值处与纯指数相交；所有记忆的检索概率渐近线 > 0（无记忆有效达到零）；57+24 测试无回归
+  - 来源：研究员 Critical #2（"The current model contradicts the cognitive reality that well-learned semantic knowledge persists for years... A knowledge management system should not silently lose reference material because it wasn't accessed in 90 days."）
+
+- [x] R15-C3: 领域差异化默认 stability
+  - 目标：基于 `semantic_type` 和 `schema` 在创建时设置合理的 stability 默认值，替换当前所有记忆统一的 `stability=14.0`。实现为创建时（`handlers.py:handle_create` 或 `create.py`）使用的 `{semantic_type: default_stability}` 查找表。建议映射：`schemas`=365d（模板为永久参考）、`api`=365d（API 文档为永久）、`decision`=90d（决策有中等生命周期）、`research`=90d（研究笔记有中等生命周期）、`context`=30d（上下文摘要为中期）、`meeting`=7d（会议笔记一周内衰减）、`daily`=5d（日记最短暂）。默认后备值 14.0 保持不变——仅当前端或 CLI 创建时传入了 `semantic_type` 才读取映射。通过 schema 引用创建的记忆继承其 schema 的 stability 默认值。用户始终可以通过 MemoryForm 或 update 命令覆盖默认值。
+  - 验收：通过 `--semantic-type decision` 创建的记忆获得 `stability=90.0`（而非 14.0）；通过 `--semantic-type api` 创建的记忆获得 `stability=365.0`；无 `--semantic-type` 创建的记忆获得 `stability=14.0`（行为不变）；通过 `--schema schemas/my-template` 创建的记忆继承 schema 的 stability 默认值（365d）；通过 `--stability 30` 显式设置 stability 覆盖语义类型默认值（用户始终有最终决定权）；现有记忆 stability 值不因 reindex 而改变（仅影响新创建）；57+24 测试无回归
+  - 来源：研究员 Important #3（"The simplest possible improvement — a lookup table that brings default behavior closer to cognitive reality. Zero algorithmic complexity. Eliminates the most common 'wrong default' scenario: API docs decaying after 46 days."）
+
+### 第三梯队：容量允许时 — 小范围高价值改进
+
+- [x] R15-C4: 消除 search dict / MemoryEntry 双重表示
+  - 目标：将 `search()` 函数重构为从 `MemoryEntry.model_dump()` 构建其输出字典，而非手动逐字段复制。R14 C1 bug（overview 从 search dict 读取 `days_since_last_access`，但 search 从未输出该字段）的根本原因是同一记忆存在两种独立维护的数据表示。`model_dump()` 产生所有 MemoryEntry 字段的完整字典——任何添加到模型的未来字段自动出现在搜索结果中，无需手动传播。这是进化策略师标记为消除"未来字段缺失"整类 bug 所需的重构。
+  - 验收：`search()` 返回与当前相同的数据形状（相同键、相同值、相同类型），以保证零消费者破坏；`search()` 输出现在包含 `MemoryEntry` 模型的所有字段（未来字段自动包含）；向 `MemoryEntry` 添加新字段后无需修改 `search.py`；所有现有搜索消费者（overview、wander、CLI search、API /api/search）行为不变；57+24 测试无回归
+  - 来源：进化策略师 Critical #C3（"The C1 bug was caused by two data representations diverging. Refactor search() to build output from MemoryEntry.model_dump() instead of manual field copying."）
+
+- [x] R15-N1: MemoryDetail 中显示访问新鲜度
+  - 目标：在 MemoryDetail 面板头部区域（标题/标签附近）展示两条访问新鲜度信息：(1) "最后访问 X 天前"或"从未访问"；(2) 当前检索概率 R = XX%（基于当前 stability 和 days_since_last_access 的衰减公式输出）。数据已在 API 响应中（`days_since_last_access`、`stability` 字段，自 R14-C3 起），MemoryDetail 组件接收这些 props——仅需渲染。将访问新鲜度展示在摘要文本下方或成熟度/状态徽章旁，使用次要文本样式（12px、低突出度颜色），不主导详情视图。新创建或从未访问的记忆显示"从未访问 · R=N/A"。
+  - 验收：查看有 > 0 次访问的记忆时 MemoryDetail 显示"最后访问 X 天前"和"R:XX.X%"；从未访问的记忆显示"从未访问 · R=N/A"；新鲜度值在 resolve 后更新（resolve 重置 last_access 为 now）；数值来自 API 响应中已有的字段（无新端点）；展示使用次要文本样式，不喧宾夺主；亮色和深色模式适用；布局不破损；TypeScript 构建零错误
+  - 来源：体验官 Important #4（"The decay fields are in the API response. The MemoryDetail panel receives them as props. Rendering them is low-effort, high-visibility."）
+
+---
+
+### 本轮延期项目（下轮评估）
+
+- **全文正文搜索**（进化策略师 C1）—— #1 功能缺口。需搜索管道变更 + 前端双向接线 + 结果高亮。保留给 R16 最终轮。
+- **可写 MCP 工具**（进化策略师 I1）—— 闭合 agentic 循环。需安全边界设计（propose_* 暂存模式）。~150 LOC。保留给 R16 最终轮。
+- **Per-memory stability UI（前端滑块）**（体验官 Important #3 + 进化策略师 I2）—— 后端 stability 工作已在 R15 完成（自适应更新 + 长期底线 + 领域默认值）。前端 UI 在 R16 跟进。
+- **复习队列**（体验官 Important #6）—— 顺序修复流程，需新建前端组件。依赖 stability UI 到位。
+- **List 视图衰减列**（进化策略师 I3）—— 外观层面，R16 评估。
+- **完整 Cooling Memories Dashboard**（进化策略师 I5）—— 将 N1 扩展到完整可排序列表。R16 评估。
+- **Wander 主动复习模式（`--mode review`）**（研究员 Important #4）—— 依赖 C1 自适应 stability 先落地并稳定。
+- **Stability 陈旧下降**（研究员 Important #5）—— 对称于 C1。当 resolve 检测到 hash 不匹配时 stability 应下降。R16 末尾自然纳入。
+- **多级撤销栈**（进化策略师 I6）—— 跨组件状态管理重构。中等投入。
+- **MemoryForm 自动补全 imports 建议**（进化策略师 I4）—— `suggest_deps.py` 存在但仅 CLI。~80 LOC。
+- **全文正文搜索衰减感知排名**（研究员 R-YLW-2）—— 依赖全文搜索先落地。
+- **"自您上次访问以来"上下文注入**（进化策略师 N4）—— 需依赖链 diff 逻辑。
+- **记忆健康评分 Dashboard**（进化策略师 N5）—— 中等投入，依赖多项衰减特性稳定。
+- **图键盘导航**（进化策略师 N2）—— 需跨组件事件绑定。
+
+### 本轮拒绝项目（需架构变更、新依赖或超出本轮容量）
+
+- **全文正文搜索**—— 保留给 R16 最终轮，用作该轮中心功能
+- **可写 MCP 工具**—— 保留给 R16 最终轮，用作该轮第二中心功能
+- **跨数据集解析**（体验官 Strategy #11）—— 重大架构变更（3-4 天），需共享索引 + resolve 引擎变更。独立轮次范畴。
+- **语义/嵌入搜索**（进化策略师 N6）—— 新管道（ONNX/WASM），数月非数天。长期战略资产。
+- **交互式 onboarding / Demo Resolve 按钮**（进化策略师 N1）—— 低投入（~50 LOC + 3 个 .md 文件），但在最终轮应让位于全文搜索和可写 MCP 工具。
+- **CSS 设计 token 系统**（进化策略师 I4 长期）—— 架构级重构，覆盖 14 个组件。
+- **Markdown 预览**—— 需新建 UI 组件，体验官 Nice-to-have #14 连续三轮未采纳。
+- **图漫步模式**（体验官 Strategy #13）—— 3 天，大规模 D3/Cytoscape 动画工作。
+- **访问新鲜度时间线**（体验官 Strategy #12）—— 2-3 天，需 sparkline + activity feed。
+
+### 新增陷阱（本轮结束后追加至 pitfalls.md）
+
+- **[R15-C1] stability 值会因 resolve 访问而随时间增长。** 依赖于精确 stability 值（如 `== 14.0`）的测试将失败。验收应使用 `>=` 或检查 stability 的变化方向（新值 > 旧值）而非精确数值。`access_count` 不应用于推导 stability——stability 的增长率取决于上次访问时的检索概率 `R`，而非访问次数。
+
+- **[R15-C1] 在未先 reindex 的情况下多次 resolve 同一记忆会给出不同的 stability 增长量。** 首次 resolve：R ~ 1.0（刚访问过）→ SInc 最小（~1.05）。等待 7-14 天后再次 resolve：R ~ 0.5-0.7 → SInc 峰值（~1.3-1.5）。这是预期行为，不是 bug——间隔效应使然。验收必须将间隔因素纳入计算，或使用允许范围而非精确断言。
+
+- **[R15-C2] 混合衰减公式在 R < 0.1 时与纯指数产生不同结果。** 任何对纯指数衰减值的硬编码断言（如 `0.5^(90/14) = 0.0116`）在混合公式下将失败。长期（> 60 天）的 R 值预期将更高（保留底线 3-6%）。短期行为不变。验收应分别测试短期行为（days < 46，预期不变）和长期底线（days > 90，预期 > 0）。
+
+- **[R15-C2] validate 衰减警告的 R < 0.1 阈值行为不变。** 混合公式在 R = 0.1 附近与纯指数相交——警告触发条件不变。但是，一旦 `decay_risk` 数组在 `/api/stats` 中暴露，其条目数量将因 memory 在混合公式下以不同速率穿越阈值而变化（长期 baseline 更高 → 跨越 0.1 阈值的 memory 更少）。
+
+- **[R15-C3] 领域默认值仅影响新创建的记忆。** 运行 `reindex` 不会追溯更新现有记忆的 stability。验收应将创建时行为（新记忆获得映射后的 stability）与 reindex 时行为（现有 stability 值不变）分开测试。如果后续修改了查找表映射，已创建记忆的 stability 不受影响。
+
+- **[R15-P1] Playwright 需要浏览器二进制文件。** `npx playwright install chromium` 下载 ~150MB。首次运行前需要网络连接。CI 环境可能需要额外的系统依赖（lib 库）。验收脚本应在运行测试前检查 Playwright 浏览器是否已安装。
+
+- **[R15-C4] `model_dump()` 产生的字段多于旧的 hand-rolled dict。** 如果存在任何使用 `len(dict)` 或 `dict.keys()` 检查精确形状的消费者，将看到额外的键。对所有搜索消费者的现有断言使用 `.get()` 而不是精确 key 集合比较。
+
+- **[R15-I1] HelpPanel 使用与 Modal 组件不同的退场 CSS 类。** Modal 使用 `modal-fade-exit` / `backdrop-fade-exit`；面板（如 MemoryDetail）使用 `panel-slide-exit`。HelpPanel 是面板，应使用 `panel-slide-exit`。如果误用模态退场类，动画效果将不匹配（fade+scale 而非 slide）。
+
+### 长期 Backlog 新增（本轮审计中识别的新项目）
+
+- **FSRS-lite 完整 stability 更新**（研究员 F3）—— R15-C1 的部分实现。完整 FSRS-6 需要 21 个 per-user 参数、power-law 遗忘曲线（w20 个性化）、和基于难度（D）的 stability 更新。R15 的简化 SInc 是第一步。
+- **Per-memory 衰减曲线形状**（研究员 Strategy #9）—— 允许在 frontmatter 中设置 `decay_type`：`exponential`（当前）、`power_law`（R=S/(S+t)）、`exponential_power`（Weibull）、`permastore`（永久无衰减）。将"不同内容类型有不同遗忘曲线"的研究发现转化为产品功能。
+- **DAG stability 继承**（研究员 R-BOMB-3）—— 当记忆 A imports 记忆 B 时，A 部分继承 B 的 stability。按 import 强度加权。使 DAG 拓扑影响衰减动态——CodeMemory 独有能力。
+- **"衰减即功能"Dashboard**（研究员 R-BOMB-2）—— 在 Dashboard 中展示"你即将遗忘的内容"——R 值接近衰减警告阈值（0.1-0.2）的记忆。"救援队列"将衰减模型从后端机制升级为主动 UX 功能。无已知 PKM 工具将遗忘作为用户可见功能。
+- **Per-tag stability 默认值**（进化策略师 F2）—— 标签级 stability（"investment"=30d，"facts"=7d）。新记忆从标签继承。比 semantic_type 映射（R15-C3）更细粒度但维护成本更高。
+- **"代码式记忆"CI 流水线**（进化策略师 F5）—— GitHub Action + pre-commit hook 在 push 时运行 validate/reindex。拒绝含循环或断链的 PR。开发者采用楔子。

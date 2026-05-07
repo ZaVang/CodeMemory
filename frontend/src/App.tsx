@@ -675,7 +675,7 @@ export default function App() {
               gap: 6,
             }}
           >
-            Graph<span style={{ fontSize: 11, opacity: 0.55, letterSpacing: 0 }}>1</span>
+            Graph<span style={{ fontSize: 12, opacity: 0.55, letterSpacing: 0 }}>1</span>
           </button>
           <button
             onClick={() => setViewMode('list')}
@@ -696,7 +696,7 @@ export default function App() {
               gap: 6,
             }}
           >
-            List<span style={{ fontSize: 11, opacity: 0.55, letterSpacing: 0 }}>2</span>
+            List<span style={{ fontSize: 12, opacity: 0.55, letterSpacing: 0 }}>2</span>
           </button>
           <button
             onClick={() => setViewMode('dashboard')}
@@ -717,7 +717,7 @@ export default function App() {
               gap: 6,
             }}
           >
-            Dashboard<span style={{ fontSize: 11, opacity: 0.55, letterSpacing: 0 }}>3</span>
+            Dashboard<span style={{ fontSize: 12, opacity: 0.55, letterSpacing: 0 }}>3</span>
           </button>
         </div>
 
@@ -1261,7 +1261,7 @@ export default function App() {
       />
 
       {/* Help panel */}
-      {showHelp && <HelpPanel onClose={() => setShowHelp(false)} />}
+      <HelpPanel show={showHelp} onClose={() => setShowHelp(false)} />
 
       {/* Settings panel (R7-settings) */}
       {showSettings && (

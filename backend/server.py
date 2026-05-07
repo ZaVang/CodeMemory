@@ -404,9 +404,13 @@ def get_memory(memory_id: str):
 
     meta, body = _parse_frontmatter(filepath)
 
+    # R15-N1: include index-level fields (access freshness, stability) in response
     result = {
         "id": memory_id,
         "body": body,
+        "days_since_last_access": entry.days_since_last_access,
+        "stability": getattr(entry, "stability", 14.0),
+        "access_count": entry.access_count,
         **{k: v for k, v in meta.items()},
     }
 
@@ -657,8 +661,8 @@ def get_stats():
     # Sort tag_counts by frequency descending
     sorted_tags = sorted(tag_counts.items(), key=lambda x: x[1], reverse=True)
 
-    # C3: compute decay risk — memories where 0.5^(days/stability) < 0.1
-    import math as _math
+    # R15-C2: compute decay risk — memories where retrieval_prob < 0.1
+    from codememory.core import compute_retrieval_probability
     decay_risk: list[dict] = []
     for mem_id, entry in memories.items():
         if hasattr(entry, "model_dump"):
@@ -671,7 +675,7 @@ def get_stats():
         stability = d.get("stability", 14.0)
         access_count = d.get("access_count", 0)
         if access_count > 0 and days_since is not None and days_since > 0 and stability > 0:
-            decay = _math.pow(0.5, max(0, days_since) / stability)
+            decay = compute_retrieval_probability(max(0, days_since), stability)
             if decay < 0.1:
                 decay_risk.append({
                     "id": mem_id,
