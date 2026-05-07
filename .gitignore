@@ -28,3 +28,4 @@ Thumbs.db
 /package-lock.json
 
 examples/quant_operators/.claude/scripts/node_modules/
+test-results/
