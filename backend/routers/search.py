@@ -9,7 +9,7 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException
 
-from backend.shared import (
+from shared import (
     FUZZY_THRESHOLD,
     ResolveRequest,
     SearchRequest,

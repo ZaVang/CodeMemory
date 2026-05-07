@@ -10,7 +10,7 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException
 
-from backend.shared import (
+from shared import (
     DatasetSwitchRequest,
     compute_body_hash,
     current_dataset,

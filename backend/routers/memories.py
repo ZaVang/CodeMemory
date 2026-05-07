@@ -17,7 +17,7 @@ import yaml
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
-from backend.shared import (
+from shared import (
     CreateMemoryRequest,
     ImportRequest,
     UpdateMemoryRequest,
