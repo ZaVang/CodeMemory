@@ -1,23 +1,25 @@
-# Evaluator Report — Iteration 17
+# Evaluator Report — Iteration 18
 
 **Date**: 2026-05-07
 **Evaluator**: Independent QA (non-Generator)
-**Theme**: 整顿 (Consolidation) — 6/6 tasks, 86/86 tests, zero regressions
+**Theme**: 打磨 (Polish) — 8/8 tasks, 86/86 executable tests, zero regressions
 
 ---
 
 ## Checkbox 状态
 
-All 6 tasks verified as `[x]` in `docs/plans/SPRINT.md`:
+All 8 tasks verified as `[x]` in `docs/plans/SPRINT.md`:
 
 | Task | Description | Status | Verified |
 |------|-------------|--------|----------|
-| R17-CR1 | Fix dataset default self-reinforcement regression | [x] | PASS |
-| R17-UX1 | Graph node label font-size 11px -> 12px | [x] | PASS |
-| R17-UX2 | List view horizontal padding restore | [x] | PASS |
-| R17-G1 | Confirm SearchBar Resolve tooltip | [x] | PASS |
-| R17-G2 | Expose stability_source in API responses | [x] | PASS |
-| R17-T1 | FastAPI on_event -> lifespan migration | [x] | PASS |
+| R18-P1 | `user/investment` added to directory color palette | [x] | PASS |
+| R18-P2 | Onboarding aware of current dataset | [x] | PASS |
+| R18-P3 | Dashboard stale IDs clickable to navigate | [x] | PASS |
+| R18-P4 | Legend directory click-highlight on graph | [x] | PASS |
+| R18-P5 | Trim-node 12px font + opacity degradation | [x] | PASS |
+| R18-P6 | Graph node hover tooltip (R-probability + dependents) | [x] | PASS |
+| R18-P7 | Enrich companion dataset (5 cross-memory imports) | [x] | PASS |
+| R18-P8 | Copy as Context button (LLM system prompt export) | [x] | PASS |
 
 ---
 
@@ -33,7 +35,7 @@ cd frontend && npx tsc --noEmit
 ```
 cd frontend && npx vite build
 ```
-**PASS** — Built in 326ms. Output: index.html 0.48 kB, CSS 14.82 kB, JS 1,005.01 kB.
+**PASS** — Built in 334ms. Output: index.html 0.48 kB, CSS 14.87 kB, JS 1,008.76 kB.
 
 ### Python Unit Tests
 ```
@@ -51,80 +53,86 @@ PYTHONPATH=src python tests/integration_test.py
 ```
 PYTHONPATH=src python -m pytest tests/test_api.py -v --tb=short
 ```
-**PASS** — 5/5 passed (0.41s).
+**PASS** — 5/5 passed (0.43s).
 
 **Total executable tests: 86/86 (57 unit + 24 integration + 5 API)** — zero regressions.
 
 ---
 
-## Dataset 默认值验证 (Live Server)
+## 关键验证
 
-Backend started on port 8722, verified with curl:
+### R18-P1: `user/investment` Directory Color
 
-| Test Case | Expected | Actual | Result |
-|-----------|----------|--------|--------|
-| No header | `current: investment` | `current: investment` | PASS |
-| X-Codememory-Dataset: companion | `current: investment` | `current: investment` | PASS |
-| X-Codememory-Dataset: nonexistent | `current: investment` | `current: investment` | PASS |
+Verified in `frontend/src/colors.ts` at three locations:
+- Line 14: `DIRECTORY_COLORS` — `'user/investment': '#0F766E'` (deep teal)
+- Line 30: `DIRECTORY_TINTS` — `'user/investment': '#EBF5F4'`
+- Line 49: `DIRECTORY_TINTS_DARK` — `'user/investment': '#153D38'`
 
-All three cases return `"current": "investment"` — the server's true default, not influenced by any client header. The self-reinforcement regression is definitively fixed.
+Colour conveys "analysis/decision" semantics. No conflict with existing semantic colours (green=beliefs at `#10B981`, purple=people at `#7C3AED`, red=decisions at `#DC2626`).
 
-Root cause fixes verified in source:
-- `backend/routers/stats.py:140`: Uses `DEFAULT_DATASET` constant directly, not `current_dataset.get()`
-- `backend/server.py:81-85`: Middleware skips ContextVar write on exempt paths (`if not is_exempt:`)
-- `frontend/src/api.ts:11`: `_currentDataset` initializes to `''` (empty string), not `'companion'`
+### R18-P2: Onboarding Dataset Awareness
 
----
+- `frontend/src/components/Onboarding.tsx:4`: `KNOWN_DATASET_DESCRIPTIONS` map covers investment, companion, software-architecture, quant_operators
+- `Onboarding.tsx:96`: Component accepts `datasetName` and `datasetCount` props
+- `Onboarding.tsx:98-112`: Three branches: has-dataset with known description, has-dataset without description, and fallback (no dataset loaded)
+- `App.tsx:235`: Passes `currentDataset` and `memory_count` to Onboarding
 
-## Lifespan 迁移验证
+### R18-P3: Dashboard Stale IDs Clickable
 
-### Source Code Audit
-- `backend/server.py:17`: `from contextlib import asynccontextmanager` — imported
-- `backend/server.py:45-46`: `@asynccontextmanager` + `async def lifespan(app: FastAPI)` — defined
-- `backend/server.py:64`: `FastAPI(..., lifespan=lifespan)` — wired into app creation
-- `backend/server.py`: Zero occurrences of `@app.on_event("startup")` (only in comments on lines 8, 39)
+Verified in `frontend/src/components/Dashboard.tsx:408-457`:
+- Stale IDs rendered with `color: 'var(--cm-accent)'`, `textDecoration: 'underline'`, `textUnderlineOffset: '0.2em'`
+- `onMouseEnter`/`onMouseLeave` handlers change background for hover feedback
+- `onClick={() => onSelectMemory(memId)}` navigates to MemoryDetail panel
 
-### Runtime DeprecationWarning Check
-```
-PYTHONPATH=src CODEMEMORY_ROOT=examples/investment python -c "
-import warnings; warnings.simplefilter('error');
-import importlib; import backend.server;
-print('SUCCESS: No DeprecationWarning on import')
-"
-```
-**PASS** — No DeprecationWarning raised.
+### R18-P4: Legend Directory Click-Highlight
 
----
+Verified across three files:
+- `Legend.tsx:6-8`: `onHighlightDirectory` callback and `highlightedDirectory` prop
+- `Legend.tsx:70-85`: Directory entries toggle highlight on click (active gets accent border + bold, inactive gets opacity 0.4)
+- `GraphCanvas.tsx:244-252`: `.dir-dimmed` (opacity 0.2) and `.dir-bright` (border-width 3, border-color accent, opacity 1) CSS classes defined in cytoscape stylesheet
+- `GraphCanvas.tsx:448-472`: `useEffect` uses `cy.batch()` to batch-add/remove classes for performance
+- `App.tsx:238`: `useEffect(() => { setHighlightedDirectory(null) }, [viewMode])` clears highlight on view switch
 
-## Source-Level Verification of Remaining Tasks
+### R18-P5: Trim-Node 12px Font + Opacity Degradation
 
-### R17-UX1: Graph Node Font-Size
-- `frontend/src/components/GraphCanvas.tsx:158`: `'font-size': '12px'` — confirmed 12px
-- No remaining `'font-size': '11px'` in the file.
+Verified in `frontend/src/components/GraphCanvas.tsx:280-305`:
+- `.trim-summary`: `font-size: '12px'`, `opacity: 0.65`, `font-style: 'italic'`
+- `.trim-skipped`: `font-size: '12px'`, `opacity: 0.4`, `text-decoration: 'line-through'`
+- Hierarchy maintained via opacity differential (0.65 vs 0.4) and italic vs line-through
 
-### R17-UX2: List View Padding
-- `frontend/src/components/MemoryList.tsx`: 4 locations now use `32px` horizontal padding:
-  - Line 149: `padding: '16px 32px'` (filter bar)
-  - Line 195: `padding: '0 32px'` (table wrapper)
-  - Line 351: `padding: '12px 32px'` (pagination bar)
-  - Lines 469, 475: `padding: '16px 32px'` / `padding: '0 32px'` (skeleton variants)
-- No remaining `24px` horizontal padding in the file.
+### R18-P6: Graph Node Hover Tooltip (R-probability + Dependents)
 
-### R17-G1: SearchBar Resolve Tooltip
-- `frontend/src/components/SearchBar.tsx:381`: `title={`Resolve this memory's dependency graph into a structured context`}` — confirmed present
-- This is a native HTML `title` attribute on the button element, which browsers render as a tooltip regardless of CSS overlay/z-index context.
+Verified in `frontend/src/components/GraphCanvas.tsx`:
+- `GraphCanvas.tsx:69-75`: Tooltip state includes `rProb`, `rColor`, `dependents`
+- `GraphCanvas.tsx:342-353`: R-probability computed from `days_since_last_access` and `stability` using exponential decay formula, with three-colour signal (green/amber/red)
+- `GraphCanvas.tsx:678-696`: Tooltip render conditionally shows R-probability and dependents; gracefully hides when data absent
+- Backend `search.py:88-89,317-318,340-341`: Injects `days_since_last_access` and `stability` into graph/search API responses
+- `types.ts:63-66`: `GraphNode.data` extended with `dependents?`, `days_since_last_access?`, `stability?`
 
-### R17-G2: stability_source in API Responses
-- `backend/routers/memories.py`: 6 locations append `stability_source` field
-  - Line 78: `GET /api/memories` list
-  - Line 157: `GET /api/memories/{id}` detail
-  - Line 247: `POST /api/memories` create response
-  - Line 331: `PUT /api/memories/{id}` update response
-  - Line 373: `POST /api/memories/{id}/touch` response
-- `backend/routers/search.py`: 2 locations append `stability_source` field
-  - Line 317: search index path
-  - Line 340: search full-text path
-- Live verification: `GET /api/memories?limit=2` and `POST /api/search` both return `stability_source` field.
+### R18-P7: Companion Dataset 5 Cross-Memory Imports
+
+Verified via `git diff HEAD` against the four modified `.md` files:
+
+| # | Source Memory | Target Memory | Relation | File |
+|---|--------------|---------------|----------|------|
+| 1 | `user/moments/rainy-sunday` | `user/feelings/burnout-april` | recommended | rainy-sunday.md |
+| 2 | `user/beliefs/friendship-view` | `user/people/mom-weekly-call` | related | friendship-view.md |
+| 3 | `user/feelings/proud-moment` | `user/people/best-friend-li` | related | proud-moment.md |
+| 4 | `user/feelings/proud-moment` | `user/beliefs/friendship-view` | related | proud-moment.md |
+| 5 | `user/feelings/burnout-april` | `user/preferences/dislike-crowds` | related | burnout-april.md |
+
+All 5 imports confirmed as NEW additions (not pre-existing). Semantic associations are reasonable.
+
+Companion dataset validate: **0 errors, 1 warning** (DECAY-WARN for `user/test/f1-test2` — a pre-existing test artifact unrelated to the new imports). Generator reported "0 errors, 0 warnings" — minor reporting discrepancy, the warning is pre-existing and unrelated to R18-P7.
+
+Investment dataset validate: **0 errors, 0 warnings** — behaviour unaffected.
+
+### R18-P8: Copy as Context Button
+
+Verified in `frontend/src/components/MemoryDetail.tsx`:
+- `buildPromptContent()` (lines 9-68): Formats output with `<codememory_context>` root tag, `<meta>`, `<system>`, `<context>` with `<node>` entries, `<instructions>` block with maturity/status weighting guidance (7 rules including proven > verified > draft)
+- `handleCopyPrompt` (lines 98-108): Uses `navigator.clipboard.writeText()` with checkmark + "Copied" visual feedback (2-second timeout), fallback to "Copy failed" on error
+- Button rendering (lines 710-730): Accent-color border, conditional success-subtle background, uppercase label, transition animation
 
 ---
 
@@ -133,33 +141,37 @@ print('SUCCESS: No DeprecationWarning on import')
 | Metric | Generator Report | Independent Verification | Match? |
 |--------|-----------------|--------------------------|--------|
 | TypeScript errors | 0 | 0 | YES |
-| Vite build | success | success (326ms) | YES |
+| Vite build | success (352ms) | success (334ms) | YES |
 | Unit tests | 57/57 | 57/57 | YES |
 | Integration tests | 24/24 | 24/24 | YES |
 | API tests | 5/5 | 5/5 | YES |
-| Dataset no-header | investment | investment | YES |
-| Dataset companion header | investment (not polluted) | investment (not polluted) | YES |
-| Dataset nonexistent header | not tested | investment (not polluted) | YES (bonus) |
-| DeprecationWarning | none | none | YES |
-| stability_source in responses | present | present | YES |
-| on_event removed | yes | yes (only in comments) | YES |
-| GraphCanvas font-size | 12px | 12px | YES |
-| MemoryList padding | 32px | 32px (4 locations) | YES |
-| SearchBar tooltip title | present | present (line 381) | YES |
+| colors.ts user/investment | 3 locations | 3 locations (+ tint + dark) | YES |
+| Onboarding dataset-aware | Present | KNOWN_DATASET_DESCRIPTIONS + props | YES |
+| Dashboard stale clickable | underline + accent | underline + accent + hover bg + onClick | YES |
+| Legend highlight code | cy.batch + classes | dir-bright/dir-dimmed + cy.batch() | YES |
+| Trim-node font-size | 12px | 12px + opacity 0.65/0.4 | YES |
+| Tooltip R-prob + deps | Present | rProb/rColor/dependents in state | YES |
+| Companion 5 imports | 5 new imports | 5 confirmed via git diff | YES |
+| Companion validate | 0 err, 0 warn | 0 err, **1 warn** (pre-existing) | NO (minor) |
+| Investment validate | 0 err, 0 warn | 0 err, 0 warn | YES |
+| Copy as Context | codememory_context wrap | codememory_context + instructions | YES |
 
-**Verdict**: Generator report is fully accurate. No discrepancies found.
+**Verdict**: Generator report is substantially accurate. The single discrepancy is companion validate warning count: Generator reported 0, actual run shows 1 DECAY-WARN for `user/test/f1-test2`. This warning is a pre-existing test artifact (`access_count=0`, no references) and is entirely unrelated to the 5 new imports added in R18-P7. This does not affect task completion.
 
 ---
 
 ## 决策：COMPLETE
 
-All 6 Round 17 tasks are independently verified as complete:
-- 6/6 checkboxes verified
+All 8 Round 18 tasks are independently verified as complete:
+- 8/8 checkboxes verified
 - 86/86 executable tests pass with zero regressions
-- Dataset default value regression is confirmed fixed at all three levels (frontend init, middleware exempt guard, endpoint constant)
-- Lifespan migration is complete with no DeprecationWarning
-- stability_source is serialized across all 6 API response paths
-- UX fixes (font-size 12px, padding 32px) confirmed in source
-- SearchBar Resolve tooltip confirmed in source
+- R18-P1: `user/investment` colour in all three palette locations (colours, tints, dark)
+- R18-P2: Onboarding dynamically shows dataset name + description for all 4 known datasets
+- R18-P3: Dashboard stale IDs have underline + accent colour + hover feedback + click navigation
+- R18-P4: Legend click-highlight uses `cy.batch()` for performance, clears on view switch
+- R18-P5: Trim nodes at 12px with opacity/italic/line-through degradation (no sub-12px fonts)
+- R18-P6: Tooltip shows R-probability (three-colour signal) and dependents, gracefully hides when absent
+- R18-P7: 5 new semantically-meaningful cross-memory imports confirmed via git diff; 0 errors on validate
+- R18-P8: Copy as Context with `<codememory_context>` XML wrapper, maturity weighting instructions, checkmark feedback
 
-**No blocking issues. No regressions. Generator's self-report matches independent verification exactly.**
+**No blocking issues. No regressions. One minor reporting discrepancy (pre-existing companion decay warning) unrelated to deliverables.**

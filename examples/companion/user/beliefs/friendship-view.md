@@ -12,6 +12,9 @@ tags:
 - value
 intensity: 6
 maturity: draft
+imports:
+  related:
+    - user/people/mom-weekly-call
 summary_hash: 7d3738e
 ---
 # 对友情的看法

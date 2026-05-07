@@ -6,7 +6,7 @@ import type { MemoryDetail as MemoryDetailType, ResolveResponse } from '../types
 import { StatusBadge, MaturityBadge } from './Badges'
 import { useExitAnimation } from '../useExitAnimation'
 
-/** Build an LLM system prompt from resolved nodes and copy to clipboard. */
+/** Build an LLM system prompt from resolved nodes, wrapped in <codememory_context> tags. */
 function buildPromptContent(resolveData: ResolveResponse): string {
   const lines: string[] = []
   const nodes = [...resolveData.nodes].sort((a, b) => a.index - b.index)
@@ -15,12 +15,16 @@ function buildPromptContent(resolveData: ResolveResponse): string {
   const skippedNodes = nodes.filter((n) => n.trim === 'skipped')
   const totalTokens = nodes.reduce((sum, n) => sum + n.body.length, 0)
 
-  lines.push('You are an assistant with access to a structured memory system.')
-  lines.push('Below is a context assembled from linked memory nodes in topological (dependency) order.\n')
+  lines.push('<codememory_context>')
+  lines.push(`<meta target="${resolveData.target}" depth="${resolveData.depth}" budget="${resolveData.budget}" tokens="${totalTokens}" />`)
+  lines.push(`<summary full="${fullNodes.length}" summary="${summaryNodes.length}" skipped="${skippedNodes.length}" />\n`)
 
-  lines.push(`## Resolved Context — ${resolveData.target}`)
-  lines.push(`Depth: ${resolveData.depth}  |  Budget: ${resolveData.budget}  |  Estimated tokens: ~${totalTokens}`)
-  lines.push(`Nodes: ${fullNodes.length} full-text, ${summaryNodes.length} summary, ${skippedNodes.length} skipped\n`)
+  lines.push('<system>')
+  lines.push('You are an assistant with access to a structured memory system.')
+  lines.push('Below is a context assembled from linked memory nodes in topological (dependency) order.')
+  lines.push('</system>\n')
+
+  lines.push(`<context target="${resolveData.target}">`)
 
   for (const node of nodes) {
     const trimLabel = node.trim === 'full' ? 'FULL' : node.trim === 'summary' ? 'SUMMARY' : 'SKIPPED'
@@ -38,25 +42,28 @@ function buildPromptContent(resolveData: ResolveResponse): string {
     }
     const metaStr = metaParts.join(', ')
 
-    lines.push(`### [${node.index}/${node.total}] ${node.id}  (${metaStr})`)
+    lines.push(`<node id="${node.id}" index="${node.index}" total="${node.total}" trim="${node.trim}" meta="${metaStr}">`)
     if (node.body) {
-      lines.push('')
       lines.push(node.body)
-      lines.push('')
     }
+    lines.push('</node>')
+    lines.push('')
   }
 
-  // Trailing instruction block — updated with maturity/status weighting guidance
-  lines.push('---')
-  lines.push('## Instructions')
-  lines.push('')
-  lines.push('1. Nodes marked FULL contain the complete memory content — prioritise these.')
-  lines.push('2. Nodes marked SUMMARY contain only a summary — treat as background context.')
-  lines.push('3. Nodes marked SKIPPED are listed for awareness but their content is omitted.')
+  lines.push('</context>')
+
+  // Trailing instruction block — maturity/status weighting guidance
+  lines.push('<instructions>')
+  lines.push('1. Nodes with trim="full" contain the complete memory content — prioritise these.')
+  lines.push('2. Nodes with trim="summary" contain only a summary — treat as background context.')
+  lines.push('3. Nodes with trim="skipped" are listed for awareness but their content is omitted.')
   lines.push('4. **Weight by maturity**: proven > verified > draft. A proven memory has been validated through repeated use; a draft memory may be speculative.')
   lines.push('5. **Note status**: active memories are current; archived memories may be outdated. Prefer active over archived.')
   lines.push('6. Use the context above to ground your responses. When citing, reference the memory ID.')
   lines.push('7. If the context is insufficient, state what additional information you need.')
+  lines.push('</instructions>')
+
+  lines.push('</codememory_context>')
 
   return lines.join('\n')
 }
@@ -85,7 +92,7 @@ export default function MemoryDetail({ memoryId, onClose, onResolve, onClearReso
   const [stabilityUpdating, setStabilityUpdating] = useState(false)
   // R16-S1: touch confirmation state
   const [touchAnimating, setTouchAnimating] = useState(false)
-  const [copyLabel, setCopyLabel] = useState('Generate Prompt')
+  const [copyLabel, setCopyLabel] = useState('Copy as Context')
   const IMPORT_PREVIEW_LIMIT = 10
 
   const handleCopyPrompt = useCallback(() => {
@@ -93,8 +100,8 @@ export default function MemoryDetail({ memoryId, onClose, onResolve, onClearReso
     const text = buildPromptContent(resolveData)
     navigator.clipboard.writeText(text).then(
       () => {
-        setCopyLabel('Copied!')
-        setTimeout(() => setCopyLabel('Generate Prompt'), 2000)
+        setCopyLabel('\u2713 Copied')
+        setTimeout(() => setCopyLabel('Copy as Context'), 2000)
       },
       () => setCopyLabel('Copy failed'),
     )
@@ -703,18 +710,20 @@ export default function MemoryDetail({ memoryId, onClose, onResolve, onClearReso
                 <div style={{ display: 'flex', gap: 6 }}>
                   <button
                     onClick={handleCopyPrompt}
+                    title="Copy formatted context for LLM system prompt injection"
                     style={{
-                      border: '1px solid var(--cm-success)',
-                      background: copyLabel === 'Copied!' ? 'var(--cm-bg-success-subtle)' : 'transparent',
+                      border: '1px solid var(--cm-accent)',
+                      background: copyLabel.startsWith('\u2713') ? 'var(--cm-bg-success-subtle)' : 'transparent',
                       cursor: 'pointer',
                       fontSize: 12,
                       fontWeight: 600,
                       fontFamily: 'Raleway, sans-serif',
-                      color: copyLabel === 'Copied!' ? 'var(--cm-success)' : 'var(--cm-success)',
+                      color: copyLabel.startsWith('\u2713') ? 'var(--cm-success)' : 'var(--cm-accent)',
                       padding: '2px 8px',
                       borderRadius: 2,
                       textTransform: 'uppercase',
                       letterSpacing: '0.06em',
+                      transition: 'all 150ms ease',
                     }}
                   >
                     {copyLabel}

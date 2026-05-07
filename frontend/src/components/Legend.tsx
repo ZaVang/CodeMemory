@@ -3,6 +3,8 @@ import { DIRECTORY_COLORS, DEFAULT_COLOR, getColorForDirectory } from '../colors
 
 interface Props {
   graphData: GraphData | null
+  onHighlightDirectory?: (dir: string | null) => void
+  highlightedDirectory?: string | null
 }
 
 const EDGE_STYLES = [
@@ -11,7 +13,7 @@ const EDGE_STYLES = [
   { strength: 'related', label: 'Related', style: 'dotted 1px var(--cm-border-cool)' },
 ]
 
-export default function Legend({ graphData }: Props) {
+export default function Legend({ graphData, onHighlightDirectory, highlightedDirectory }: Props) {
   // Derive directory-color entries from actual graph data
   const directories = new Set<string>()
   if (graphData) {
@@ -64,23 +66,48 @@ export default function Legend({ graphData }: Props) {
           <span style={{ color: 'var(--cm-text-tertiary)', fontSize: 12 }}>No directories</span>
         )}
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 10px' }}>
-          {allDirs.map(({ dir, color, isFallback }) => (
-            <div key={dir} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-              <span
-                style={{
-                  display: 'inline-block',
-                  width: 9,
-                  height: 9,
-                  borderRadius: 2,
-                  backgroundColor: color,
-                  flexShrink: 0,
+          {allDirs.map(({ dir, color, isFallback }) => {
+            const isHighlighted = highlightedDirectory === dir
+            return (
+              <div
+                key={dir}
+                onClick={() => {
+                  if (onHighlightDirectory) {
+                    onHighlightDirectory(isHighlighted ? null : dir)
+                  }
                 }}
-              />
-              <span style={{ color: 'var(--cm-text-secondary)', fontSize: 12, whiteSpace: 'nowrap' }}>
-                {dir}{isFallback ? ' (auto)' : ''}
-              </span>
-            </div>
-          ))}
+                title={onHighlightDirectory ? (isHighlighted ? 'Click to clear highlight' : 'Click to highlight this directory') : undefined}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 5,
+                  cursor: onHighlightDirectory ? 'pointer' : 'default',
+                  opacity: highlightedDirectory && !isHighlighted ? 0.4 : 1,
+                  transition: 'opacity 150ms ease',
+                }}
+              >
+                <span
+                  style={{
+                    display: 'inline-block',
+                    width: 9,
+                    height: 9,
+                    borderRadius: 2,
+                    backgroundColor: color,
+                    flexShrink: 0,
+                    border: isHighlighted ? '1.5px solid var(--cm-accent)' : undefined,
+                  }}
+                />
+                <span style={{
+                  color: isHighlighted ? 'var(--cm-accent)' : 'var(--cm-text-secondary)',
+                  fontSize: 12,
+                  whiteSpace: 'nowrap',
+                  fontWeight: isHighlighted ? 600 : 400,
+                }}>
+                  {dir}{isFallback ? ' (auto)' : ''}
+                </span>
+              </div>
+            )
+          })}
         </div>
       </div>
 

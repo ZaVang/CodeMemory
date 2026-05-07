@@ -419,13 +419,21 @@ export default function Dashboard({ onSelectMemory, onNavigateToFilter, refreshT
                       backgroundColor: 'var(--cm-bg-error-subtle)',
                       borderLeft: '3px solid var(--cm-error)',
                     }}
+                    onMouseEnter={(e) => {
+                      (e.currentTarget as HTMLDivElement).style.backgroundColor = 'var(--cm-bg-error-subtle-hover)'
+                    }}
+                    onMouseLeave={(e) => {
+                      (e.currentTarget as HTMLDivElement).style.backgroundColor = 'var(--cm-bg-error-subtle)'
+                    }}
                   >
                     <div
                       style={{
                         fontSize: 13,
                         fontFamily: 'Raleway, sans-serif',
                         fontWeight: 600,
-                        color: 'var(--cm-text-primary)',
+                        color: 'var(--cm-accent)',
+                        textDecoration: 'underline',
+                        textUnderlineOffset: '0.2em',
                       }}
                     >
                       {memId}

@@ -60,6 +60,10 @@ export interface GraphNode {
     directory: string
     tags: string[]
     status: string
+    summary?: string
+    dependents?: number
+    days_since_last_access?: number | null
+    stability?: number
   }
 }
 

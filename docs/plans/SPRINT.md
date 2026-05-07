@@ -1361,3 +1361,93 @@ PYTHONPATH=src python tests/integration_test.py
 
 - **[R17-T1] lifespan 迁移后 startup 执行时机。** `@app.on_event("startup")` 和 lifespan 的 `yield` 之前逻辑执行时机相同——均在 app 启动后、首次请求前。但需确认：`@app.middleware` 装饰器注册的中间件是否在 lifespan 启动后正确挂载。FastAPI 的 middleware 注册通常在 app 创建时完成（`app.add_middleware(...)`），不受 startup 事件影响。如果 `server.py` 中中间件注册在 `on_event("startup")` 内执行（非常规做法），则 lifespan 迁移需将其移到 app 创建阶段。
 
+## 第 18 轮追加任务
+
+> **日期**：2026-05-07
+> **上轮评估**：Round 17 — 6/6 PASS，86/86 测试通过，零回归。体验官审计 8.5/10（首次零 Critical 缺陷）。进化策略师审计 7.5/10（引擎 9.5/10，产品体验 6/10）。
+> **主题**：打磨 —— 体验官首次给出零 Critical 缺陷。剩余问题全部为 Nice-to-have 打磨项。本轮是倒数第二轮（产品循环 2/3），聚焦小范围高价值打磨，为最终轮收尾做准备。
+> **筛选原则**：仅做小范围高价值打磨。不启动大型功能（Import UI、AI 辅助创建留待最终轮）。不碰架构迁移。所有任务均可在数分钟至一小时内完成（P8 除外，约 1 天，作为产品核心差异化能力的"最后一公里"例外纳入）。
+
+### 第一梯队：目录颜色 + 引导感知（必达，< 1 小时合计）
+
+- [x] R18-P1: 将 `user/investment` 添加到预定义目录颜色调色板
+  - 目标：默认数据集 investment 的 primary directory `user/investment` 当前在 Legend 中标记为 "(auto)" 并使用 fallback 循环颜色——作为产品门面，这削弱了 curated 感。在 `colors.ts` 的 `DIRECTORY_COLORS`、`DIRECTORY_TINTS`、`DIRECTORY_TINTS_DARK` 三处同步添加 `user/investment` 条目。颜色选择 deep teal（#0F766E 附近），传达"分析/决策"语义，不与已有色冲突（避免绿色=beliefs、紫色=people、红色=decisions）。
+  - 验收：`user/investment` 目录在图 canvas 上使用预定义颜色（非 fallback 循环色）；Legend 中 `user/investment` 不再标记为 "(auto)"；亮色和暗色模式下颜色均可区分；其他数据集颜色不受影响；TypeScript 构建零错误
+  - 来源：体验官 I1（Important）——"adding user/investment to the predefined directory palette would be a low-effort polish improvement"
+
+- [x] R18-P2: 使 Onboarding 感知当前数据集
+  - 目标：Onboarding overlay 当前文案泛化（"Your memory is a dependency graph, not a search index"），未告知用户正在浏览的数据集。在 overlay 中动态注入当前数据集名称和简短描述。例如 investment 数据集显示 "You are viewing the **investment** dataset — 10 interconnected memories about financial decisions, market analysis, and risk assessment." 需处理三种状态：正常数据集（注入名称+描述）、空数据集（显示通用引导文案）、加载中（显示占位文案）。仅首次访问时展示数据集上下文，数据集切换后不重新弹出 onboarding。
+  - 验收：Onboarding overlay 文案包含当前数据集名称和描述；investment 默认首次访问显示 investment 相关描述；切换到其他数据集后若手动触发 onboarding（Help 按钮），文案反映当前数据集；空状态优雅降级；亮色/暗色模式下文案可读
+  - 来源：体验官 I2（Important）——"Onboarding should mention which dataset is being demonstrated"
+
+- [x] R18-P3: Dashboard stale IDs 可点击导航
+  - 目标：Dashboard 的 stale 记忆列表当前显示纯文本 ID。将其变为可点击链接，点击后导航到 MemoryDetail 滑出面板。这是约 15 分钟的非破坏性前端改动，自 R15 起多次被评审者建议但持续延期。
+  - 验收：Dashboard stale 记忆列表中的 ID 可点击；点击后导航到对应 MemoryDetail 面板；亮色/暗色模式下链接样式与产品其余部分一致（underline + accent color）；TypeScript 构建零错误
+  - 来源：体验官 N2（Nice-to-have）、进化策略师 I6（Important）——多次延期，本轮执行
+
+### 第二梯队：交互打磨（应达，< 1.5 小时合计）
+
+- [x] R18-P4: Legend 目录点击高亮
+  - 目标：点击 Legend 中的目录名在图 canvas 上高亮该目录的所有节点（提高透明度 + 边框加亮），其余节点 dim。再次点击同一目录恢复全部节点正常状态。点击另一个目录时切换高亮（不叠加）。利用 cytoscape 已有 API（`cy.batch()` 批量样式更新避免多次重绘），在 62 节点 quant_operators 上需验证操作响应时间 < 100ms。高亮状态在视图切换（Graph→List→Dashboard→Graph 往返）后清除。
+  - 验收：点击 Legend 目录名高亮该目录所有节点（其余 dim）；再次点击恢复；切换目录时正确切换高亮；在 62 节点数据集上响应无延迟；视图切换后高亮状态清除；TypeScript 构建零错误
+  - 来源：体验官 N1（Nice-to-have）、进化策略师 I7（Important）——跨 R16-R17 多次建议的交互增强
+
+- [x] R18-P5: 替换 trim-node 子 12px 字体为 opacity 降级
+  - 目标：trim-summary（当前 9px）和 trim-skipped（当前 8px）节点标签低于产品的 12px 可访问性下限。虽然这是有意的视觉退化信号（在 Resolve 模式下传递 budget 裁剪语义），但字体缩小到不可读程度违背了产品自设的标准。替代方案：保持 12px 字体，使用 opacity 降级（trim-summary: opacity 0.65 + font-style italic, trim-skipped: opacity 0.4 + text-decoration line-through）来传达层级语义，同时保持可读性。Resolve 模式以外的节点不受影响。
+  - 验收：trim-summary 节点标签 >= 12px，使用 opacity 降低视觉权重；trim-skipped 节点标签 >= 12px，使用更低 opacity；Resolve 模式以外节点不受影响；视觉上 trim-summary 和 trim-skipped 的层级关系保持；TypeScript 构建零错误
+  - 来源：体验官 I4（Important）——"Trim-node font sizes (9px/8px) violate the 12px floor. Use opacity reduction plus a minimum 12px font size."
+
+- [x] R18-P6: 图节点 hover tooltip 丰富（追加 R-probability 和 dependent count）
+  - 目标：当前图节点 hover tooltip 仅显示 summary。在 tooltip 中追加 R-probability（检索概率，绿/amber/红三色信号）和 dependent count（出度——被多少其他记忆依赖）。需先确认 cytoscape node data 中是否已注入这些字段——若 GraphCanvas 构建 cytoscape elements 时未注入，需先扩展数据传递路径。无数据时优雅隐藏（不显示 "undefined"）。
+  - 验收：图节点 hover tooltip 显示 R-probability（含三色信号）；tooltip 显示 dependent count（被依赖数）；无 R-probability 数据时优雅隐藏相关行；tooltip 在亮色/暗色模式下可读；TypeScript 构建零错误
+  - 来源：体验官 N3（Nice-to-have）——"Add R-probability and dependent count to the hover tooltip"
+
+### 第三梯队：数据质量 + 差异化资产（视时间完成，< 1.5 天合计）
+
+- [x] R18-P7: 丰富 companion 数据集 —— 添加 4-5 条跨记忆 imports
+  - 目标：companion 数据集（11 条个人记忆）有 82% stale 率和极少依赖边（约 3 条），无法在任何场景下展示 DAG 能力。在不完全替换数据集的前提下（替换属于大型内容工作），为现有记忆添加 4-5 条显式 `imports` 跨引用，使图边数从 ~3 增加到至少 7 条。imports 须有合理语义关联（如 `friendship-philosophy` 引用 `burnout-reflection` 作为 recommended），非随机连接。添加后运行 `validate` 确认无循环依赖。这是纯数据工作（编辑 .md 文件的 YAML frontmatter），不涉及代码修改。
+  - 验收：companion 数据集图边数 >= 7；新 imports 具有合理语义关联；`codememory validate` 通过（无循环依赖、无断链）；investment 默认数据集行为不变
+  - 来源：体验官 I3（Important）——"Enrich companion dataset with explicit cross-memory imports"
+
+- [x] R18-P8: Export-as-Context 按钮 —— 一键 LLM system prompt 注入
+  - 目标：Resolve 功能已产出 token-budgeted、拓扑排序的 markdown 输出，但用户无法方便地将此输出注入 LLM system prompt。在 Resolve 结果区域添加 "Copy as Context" 按钮：格式化输出为 `<codememory_context>` 标签包裹，包含 maturity weighting 指导、status awareness、节点索引排序，复制到系统剪贴板。核心逻辑（`buildPromptContent()`）已在 Resolve 中完成——剩余工作是格式化包装 + 剪贴板 API 集成 + UI 按钮 + 复制成功视觉反馈（checkmark 动画或 toast）。需确认 Playwright 测试环境中剪贴板 API 可用，备选方案为 textarea 选择复制。
+  - 验收：Resolve 结果区域出现 "Copy as Context" 按钮；点击后格式化输出复制到剪贴板；复制后提供视觉反馈（checkmark 动画或 toast）；输出格式包含 `<codememory_context>` 标签和 maturity weighting 指导；按钮在亮色/暗色模式下可见；TypeScript 构建零错误
+  - 来源：体验官 Proposal 5、进化策略师 DF5/I8——所有提案中 effort-to-differentiation 比率最高
+
+---
+
+### 本轮排除项目（不接受、不实现、不讨论）
+
+- **大型功能**（Import UI ~3 天、AI 辅助创建 ~2 天、Imports 自动补全 ~1 天、Review Queue ~1.5 天）—— 属于竞争缺口和核心功能缺口，必须在最终轮（Round 19）集中交付
+- **架构迁移**（App.tsx 状态管理、CSS 现代化、SQLite 索引后端）—— 属于技术健康项，非用户可见改进
+- **"Proposed" 审核队列** —— MCP 工具链 UI 配套，约 1 天，留待最终轮
+- **Markdown 预览**（MemoryForm body 实时渲染）—— 表单深度改进，留待最终轮
+- **暗色模式图节点填充可见性** —— 体验官 N4，涉及跨模式颜色调优，不宜分散在包含 P1 颜色修改的轮次
+- **响应式工具栏** —— 体验官 N5，约 1-2 天，大型前端适配
+- **无障碍全大写覆写设置** —— 体验官 N6，设计决策非缺陷
+- **图-搜索联动** —— 交互增强，留待最终轮
+- **companion 数据集完全替换** —— 体验官 I3 激进方案，大型内容工作；本轮采用保守方案（P7 丰富 imports）
+
+### 最终轮（Round 19）前瞻
+
+如果本轮 8 个任务全部交付，最终轮的桌面将只有大型功能：
+- **必达**：Import UI（3 天）+ AI-Assisted Creation（2 天）+ Imports 自动补全（1 天）
+- **二级目标**：Review Queue（1.5 天）+ "Proposed" 审核队列（1 天）+ Markdown 预览（0.5 天）
+- **如有余力**：图-搜索联动（0.5 天）、暗色模式填充（15 min）、响应式工具栏（1-2 天）
+
+### 新增陷阱（本轮结束后追加至 pitfalls.md）
+
+- **[R18-P1] 颜色语义一致性。** `user/investment` 作为金融/决策类目录，颜色应区别于已有语义色。避免使用纯绿色（已被 `user/beliefs` 占用）或纯紫色（已被 `user/people` 占用）。建议 deep teal（#0F766E）传达"分析/理性"语义。同时须在 `DIRECTORY_TINTS_DARK` 中定义暗色 tint，确保在暗色模式下不过暗（参考现有 #15-#4A 亮度范围）。注意 `getColorForDirectory()` 的 prefix-matching 逻辑——添加 `user/investment` 精确匹配后，确认同一 `user/` 前缀下的其他目录不受影响。
+
+- **[R18-P2] Onboarding 数据来源时序。** Onboarding 组件渲染时 `/api/datasets` 可能尚未完成。需处理三种状态：加载中（显示占位文案）、空数据集（显示通用引导文案 "Create your first memory..."）、正常数据集（注入名称+描述）。`fetchDatasets()` 返回的 `datasets` 列表中需确认是否包含 `description` 字段——若 `/api/datasets` 响应中不包含数据集描述，需在 Onboarding 组件中维护一个小型数据集描述映射表（如 `{ investment: "...", companion: "...", "software-architecture": "...", quant_operators: "..." }`）。
+
+- **[R18-P4] Cytoscape 批量样式更新的性能陷阱。** 高亮/取消高亮涉及遍历所有节点修改样式。必须使用 `cy.batch()` 包裹样式更新，否则每个节点单独触发重绘会在 62 节点数据集上造成约 500ms+ 的卡顿。高亮实现建议：不是真的修改每个节点的 style，而是使用 cytoscape 的 `cy.elements().addClass()` / `removeClass()` 机制——预定义 CSS 类 `.highlighted` 和 `.dimmed`，批量添加/移除类名而非内联样式修改。
+
+- **[R18-P5] Trim 样式变更影响 cytoscape 样式定义。** GraphCanvas 中 trim 节点的字体大小和样式通过 cytoscape 样式表定义（`{ selector: '.trim-summary', style: { 'font-size': '9px', ... } }`）。修改为 12px + opacity 降级需同步更新 cytoscape 样式表选择器。确认 `.trim-summary` 和 `.trim-skipped` 两个 CSS 类的定义位置（GraphCanvas.tsx 中的 cytoscape stylesheet 初始化代码），以及它们是否在任何其他组件中被引用。
+
+- **[R18-P6] Cytoscape node data 字段缺失风险。** R-probability 和 dependent count 需从 cytoscape node data 中读取。当前 GraphCanvas 构建 cytoscape elements 时可能未注入这些字段——需检查 `elements` 数组中每个 node 的 `data` 对象包含哪些字段。若缺失，需在 `elements` 构建阶段从 API 响应（graph 端点或 memories 列表）扩展数据传递。`dependent_count`（入度）可从图数据的 edges 计算得出（统计 target 等于该 node ID 的边数量）。
+
+- **[R18-P7] Import 添加需手动验证无循环依赖。** 在 companion 记忆中手动添加 imports 后，必须运行 `codememory validate`（或 POST /api/validate）确认无循环依赖。companion 记忆的目录结构分散（7 个目录 for 11 条记忆），跨目录 imports 需验证 ID 拼写完全匹配（含完整路径如 `user/companion/friendship-philosophy`）。添加 imports 后 reindex 再 validate 是推荐的安全流程。
+
+- **[R18-P8] 剪贴板 API 兼容性。** `navigator.clipboard.writeText()` 在 localhost 以外的 HTTP 上下文中需要安全上下文（HTTPS）。开发环境（localhost）天然支持，但需确认 Playwright 测试环境中剪贴板 API 可用（Playwright 默认授予 clipboard-read/write 权限）。备选方案：fallback 到传统 `document.execCommand('copy')` 方案（创建临时 textarea → 选择 → execCommand → 移除），确保在所有环境下工作。复制后的视觉反馈建议使用 toast 通知（2 秒自动消失），而非仅依赖按钮状态变化（checkmark 可能被用户忽略）。
+

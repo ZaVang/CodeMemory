@@ -1,3 +1,201 @@
+# Generator Status — Round 18 (Final)
+
+**日期：** 2026-05-07
+**模型：** deepseek-v4-pro
+**主题：** 打磨 — 8/8 任务完成，全部 86 测试零回归
+
+---
+
+## 完成的任务 (8/8)
+
+### 第一梯队：目录颜色 + 引导感知 + Dashboard 交互
+
+- [x] **R18-P1: 添加 `user/investment` 目录颜色到调色板**
+
+  在 `DIRECTORY_COLORS` 添加 `#0F766E` (deep teal)、`DIRECTORY_TINTS` 添加 `#EBF5F4`、`DIRECTORY_TINTS_DARK` 添加 `#153D38`。三处同步添加，颜色传达"分析/决策"语义，不与已有色冲突。
+
+  文件: `frontend/src/colors.ts`
+
+- [x] **R18-P2: Onboarding 感知当前数据集**
+
+  Onboarding 组件新增 `datasetName` 和 `datasetCount` props。Welcome step 根据当前数据集动态生成文案：
+  - 有已知描述的数据集: 显示名称 + 描述 ("This dataset contains N interconnected memories about...")
+  - 仅有名称的数据集: 显示名称 + 计数
+  - 空/未加载: fallback 到原泛化文案
+
+  KNOWN_DATASET_DESCRIPTIONS 映射支持 investment、companion、software-architecture、quant_operators。
+  App.tsx 传递 `currentDataset` 和数据集 `memory_count` 到 Onboarding 组件。
+
+  文件: `frontend/src/components/Onboarding.tsx`, `frontend/src/App.tsx`
+
+- [x] **R18-P3: Dashboard stale IDs 可点击导航**
+
+  Stale 记忆条目的 ID 文本增加了链接样式（underline + accent color），并添加 hover 背景变化。点击行为已有 `onSelectMemory(memId)`，本次增强视觉信号使链接性质明确。
+
+  文件: `frontend/src/components/Dashboard.tsx`
+
+### 第二梯队：交互打磨
+
+- [x] **R18-P4: Legend 目录点击高亮**
+
+  新增 `highlightedDirectory` 状态在 App.tsx，通过 useEffect 在视图切换时自动清除。Legend 组件新增 `onHighlightDirectory` 回调，目录条目可点击切换高亮（active 目录加 accent 边框 + 加粗，inactive 目录 opacity 0.4）。
+
+  GraphCanvas 新增 `highlightedDirectory` prop，使用 `useEffect` + `cy.batch()` 批量：
+  - 匹配节点: 加 `dir-bright` 类（border-width: 3, border-color: accent, opacity: 1）
+  - 其余节点: 加 `dir-dimmed` 类（opacity: 0.2）
+  - 清除时移除所有类恢复原始状态
+
+  文件: `frontend/src/App.tsx`, `frontend/src/components/Legend.tsx`, `frontend/src/components/GraphCanvas.tsx`
+
+- [x] **R18-P5: Trim-node 12px 字体 + opacity 降级**
+
+  trim-summary: font-size 9px → 12px, opacity 0.4 → 0.65, 添加 font-style: italic
+  trim-skipped: font-size 8px → 12px, opacity 0.2 → 0.4, 添加 text-decoration: line-through
+
+  层级关系通过 opacity 差值 (0.65 vs 0.4) 和 italic vs line-through 保持，Resolve 模式外不受影响。
+
+  文件: `frontend/src/components/GraphCanvas.tsx`
+
+- [x] **R18-P6: 图节点 tooltip 丰富（R-probability + dependents）**
+
+  GraphCanvas tooltip 重构为结构化对象 `{ summary, rProb, rColor, dependents, x, y }`。
+  - R-probability: 从节点数据 `days_since_last_access` 和 `stability` 计算，三色信号 (green/amber/red)
+  - Dependents: 从节点数据 `dependents` 字段读取
+  - 无数据时优雅隐藏 (不显示 "undefined")
+
+  后端 graph API 扩展: 节点 data 新增 `days_since_last_access` 和 `stability` 字段。
+  TypeScript GraphNode 类型扩展: 新增 `summary?`, `dependents?`, `days_since_last_access?`, `stability?`。
+
+  文件: `frontend/src/components/GraphCanvas.tsx`, `frontend/src/types.ts`, `backend/routers/search.py`
+
+### 第三梯队：数据质量 + 差异化资产
+
+- [x] **R18-P7: 丰富 companion 数据集（5 条跨记忆 imports）**
+
+  为 5 条记忆添加了语义合理的 imports：
+  1. `rainy-sunday` → `burnout-april` (recommended) — "The rainy Sunday was respite during the burnout month"
+  2. `friendship-view` → `mom-weekly-call` (related) — "Friendship philosophy extends to the mom relationship pattern"
+  3. `proud-moment` → `best-friend-li` (related) — "Achievement worth sharing with Li"
+  4. `proud-moment` → `friendship-view` (related) — "External validation contrasts with friendship philosophy"
+  5. `burnout-april` → `dislike-crowds` (related) — "Overwhelmed feeling connects to crowd aversion"
+
+  Validate 通过（0 errors, 0 warnings），无循环依赖。图边数: 21 (原 16 + 新增 5)。
+
+  文件: `examples/companion/user/moments/rainy-sunday.md`, `examples/companion/user/beliefs/friendship-view.md`, `examples/companion/user/feelings/proud-moment.md`, `examples/companion/user/feelings/burnout-april.md`
+
+- [x] **R18-P8: Export-as-Context 按钮**
+
+  将现有的 "Generate Prompt" 改为 "Copy as Context"，输出格式重构为 XML 标签包裹：
+  - `<codememory_context>` 根标签
+  - `<meta>` / `<summary>` 元数据标签
+  - `<system>` 系统提示
+  - `<context>` 包裹所有记忆节点（`<node>` 标签，含 trim/maturity/status 元数据）
+  - `<instructions>` 尾随指令块（含 maturity weighting 指导）
+
+  按钮更新为 accent color，copy 成功后显示 checkmark + "Copied" 反馈。
+
+  文件: `frontend/src/components/MemoryDetail.tsx`
+
+---
+
+## 验收命令输出
+
+### TypeScript
+
+```
+cd frontend && npx tsc --noEmit
+→ 零错误
+```
+
+### Vite Build
+
+```
+cd frontend && npx vite build
+→ build in 352ms, 零错误
+```
+
+### Python 单元测试
+
+```
+PYTHONPATH=src python -m pytest tests/unit/ -v --tb=short
+→ 57/57 passed
+```
+
+### Python 集成测试
+
+```
+PYTHONPATH=src python tests/integration_test.py
+→ 24/24 passed
+```
+
+### API 测试
+
+```
+PYTHONPATH=src python -m pytest tests/test_api.py -v --tb=short
+→ 5/5 passed
+```
+
+### Companion 数据集 Validation
+
+```
+PYTHONPATH=src python -m codememory.cli --root examples/companion validate
+→ 0 errors, 0 warnings
+→ 11 memories, 21 edges
+```
+
+### Investment 数据集 Validation
+
+```
+PYTHONPATH=src python -m codememory.cli --root examples/investment validate
+→ 0 errors, 0 warnings
+→ 10 memories, 行为不受影响
+```
+
+---
+
+## 测试总计
+
+| 测试类型 | 通过 | 总计 |
+|----------|------|------|
+| Python 单元测试 | 57 | 57 |
+| Python 集成测试 | 24 | 24 |
+| API 测试 | 5 | 5 |
+| TypeScript 编译 | 0 errors | — |
+| Vite 构建 | success | — |
+| Companion validate | 0 errors | — |
+| Investment validate | 0 errors | — |
+| **合计（可执行）** | **86** | **86** |
+
+---
+
+## 变更文件清单
+
+| 文件 | 变更类型 | 相关任务 |
+|------|---------|---------|
+| `frontend/src/colors.ts` | 修改 | P1 |
+| `frontend/src/components/Onboarding.tsx` | 修改 | P2 |
+| `frontend/src/App.tsx` | 修改 | P2, P4 |
+| `frontend/src/components/Dashboard.tsx` | 修改 | P3 |
+| `frontend/src/components/Legend.tsx` | 修改 | P4 |
+| `frontend/src/components/GraphCanvas.tsx` | 修改 | P4, P5, P6 |
+| `frontend/src/types.ts` | 修改 | P6 |
+| `backend/routers/search.py` | 修改 | P6 |
+| `frontend/src/components/MemoryDetail.tsx` | 修改 | P8 |
+| `examples/companion/user/moments/rainy-sunday.md` | 修改 | P7 |
+| `examples/companion/user/beliefs/friendship-view.md` | 修改 | P7 |
+| `examples/companion/user/feelings/proud-moment.md` | 修改 | P7 |
+| `examples/companion/user/feelings/burnout-april.md` | 修改 | P7 |
+| `docs/plans/SPRINT.md` | 修改 | 标签更新 |
+| `docs/orch/gen_status.md` | 修改 | 本报告 |
+
+---
+
+## 状态
+
+**PASSED** — 8/8 任务完成，86/86 可执行测试通过 (57 unit + 24 integration + 5 API)，TypeScript 零错误，Vite 构建成功，companion 数据集 validate 零错误零警告（21 edges），investment 数据集行为不受影响。
+
+---
+
 # Generator Status — Round 17 (Final)
 
 **日期：** 2026-05-07

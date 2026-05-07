@@ -85,6 +85,8 @@ def get_graph(focus: str | None = None):
                 "dependents": deps_count,
                 "maturity": d.get("maturity", "draft"),
                 "tags": d.get("tags", []),
+                "days_since_last_access": d.get("days_since_last_access"),
+                "stability": d.get("stability", 14.0),
             },
         })
 

@@ -17,6 +17,7 @@ interface Props {
   onGraphDataLoaded?: (data: GraphData) => void
   activeTheme?: 'light' | 'dark'
   onCreateMemory?: () => void
+  highlightedDirectory?: string | null
 }
 
 export interface GraphCanvasHandle {
@@ -55,17 +56,24 @@ function intensityToRadius(intensity: number): number {
   return Math.max(18, Math.min(50, 14 + intensity * 4))
 }
 
-const GraphCanvas = forwardRef<GraphCanvasHandle, Props>(function GraphCanvas({ searchText, onNodeClick, onNodeContextMenu, resolveData, isResolving, refreshTrigger, zoomLevel = 0.5, onGraphDataLoaded, activeTheme = 'light', onCreateMemory }, ref) {
+const GraphCanvas = forwardRef<GraphCanvasHandle, Props>(function GraphCanvas({ searchText, onNodeClick, onNodeContextMenu, resolveData, isResolving, refreshTrigger, zoomLevel = 0.5, onGraphDataLoaded, activeTheme = 'light', onCreateMemory, highlightedDirectory }, ref) {
   const containerRef = useRef<HTMLDivElement>(null)
   const cyRef = useRef<Core | null>(null)
   const [graphData, setGraphData] = useState<GraphData | null>(null)
   const [loading, setLoading] = useState(true)
   // R9-graph-viewport: preserve zoom/pan across theme-switch instance rebuilds
   const savedViewportRef = useRef<{ zoom: number; pan: { x: number; y: number } } | null>(null)
-  // Tooltip state (R5-graph-node-tooltips)
+  // Tooltip state (R5-graph-node-tooltips + R18-P6 enrichment)
   const tooltipRef = useRef<HTMLDivElement | null>(null)
   const tooltipTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const [tooltip, setTooltip] = useState<{ text: string; x: number; y: number } | null>(null)
+  const [tooltip, setTooltip] = useState<{
+    summary: string
+    rProb?: string
+    rColor?: string
+    dependents?: number
+    x: number
+    y: number
+  } | null>(null)
 
   // Load graph data
   useEffect(() => {
@@ -231,6 +239,15 @@ const GraphCanvas = forwardRef<GraphCanvasHandle, Props>(function GraphCanvas({ 
           selector: 'node.highlighted',
           style: { 'border-width': 3, 'border-color': cssVar('--cm-accent'), 'opacity': 1 },
         },
+        // R18-P4: Legend directory click-highlight
+        {
+          selector: 'node.dir-dimmed',
+          style: { 'opacity': 0.2, 'color': cssVar('--cm-text-tertiary') },
+        },
+        {
+          selector: 'node.dir-bright',
+          style: { 'border-width': 3, 'border-color': cssVar('--cm-accent'), 'opacity': 1 },
+        },
         // Selected node
         {
           selector: 'node:selected',
@@ -260,29 +277,31 @@ const GraphCanvas = forwardRef<GraphCanvasHandle, Props>(function GraphCanvas({ 
             'z-index': 10,
           },
         },
-        // Trim: summary — semi-transparent, dashed border, shrunk
+        // Trim: summary — semi-transparent, dashed border, italic, 12px min
         {
           selector: 'node.trim-summary',
           style: {
-            'opacity': 0.4,
+            'opacity': 0.65,
             'border-style': 'dashed',
             'border-width': 1.5,
             'width': (el) => intensityToRadius(el.data('intensity') || 5) * 1.3,
             'height': (el) => intensityToRadius(el.data('intensity') || 5) * 1.3,
-            'font-size': '9px',
+            'font-size': '12px',
+            'font-style': 'italic',
           },
         },
-        // Trim: skipped — very dim, dashed, even smaller
+        // Trim: skipped — dimmer, dashed, line-through, 12px min
         {
           selector: 'node.trim-skipped',
           style: {
-            'opacity': 0.2,
+            'opacity': 0.4,
             'border-style': 'dashed',
             'border-width': 1,
             'width': (el) => intensityToRadius(el.data('intensity') || 5) * 1.1,
             'height': (el) => intensityToRadius(el.data('intensity') || 5) * 1.1,
-            'font-size': '8px',
+            'font-size': '12px',
             'color': cssVar('--cm-text-tertiary'),
+            'text-decoration': 'line-through',
           },
         },
       ],
@@ -312,17 +331,35 @@ const GraphCanvas = forwardRef<GraphCanvasHandle, Props>(function GraphCanvas({ 
       })
     }
 
-    // R5-graph-node-tooltips: show summary on hover with 300ms delay
+    // R5-graph-node-tooltips + R18-P6: enriched with R-probability and dependents
     cy.on('mouseover', 'node', (evt) => {
       const node = evt.target
       const id = node.id()
-      // Find the node data from graphData to get full summary
       const nd = graphData.nodes.find((n) => n.data.id === id)
       const summary = nd?.data?.summary || ''
+      const dependents = nd?.data?.dependents
+
+      // Compute R-probability if decay data is available
+      let rProb: string | undefined
+      let rColor: string | undefined
+      const daysSince = nd?.data?.days_since_last_access
+      const stability = nd?.data?.stability
+      if (daysSince != null && daysSince > 0 && stability != null && stability > 0) {
+        const exp = Math.pow(0.5, daysSince / stability)
+        const floor = 0.05 / (1 + daysSince / (10 * stability))
+        const R = Math.max(exp, floor)
+        const R_pct = R * 100
+        rProb = `${R_pct.toFixed(1)}%`
+        rColor = R_pct > 50 ? cssVar('--cm-success') : R_pct >= 10 ? cssVar('--cm-warning') : cssVar('--cm-error')
+      }
+
       if (tooltipTimerRef.current) clearTimeout(tooltipTimerRef.current)
       tooltipTimerRef.current = setTimeout(() => {
         setTooltip({
-          text: summary || id,
+          summary: summary || id,
+          rProb,
+          rColor,
+          dependents,
           x: evt.originalEvent.clientX,
           y: evt.originalEvent.clientY,
         })
@@ -403,6 +440,36 @@ const GraphCanvas = forwardRef<GraphCanvasHandle, Props>(function GraphCanvas({ 
       }
     })
   }, [searchText])
+
+  // R18-P4: Handle Legend directory click-highlight
+  useEffect(() => {
+    const cy = cyRef.current
+    if (!cy || !graphData) return
+
+    if (!highlightedDirectory) {
+      // Restore all nodes to normal
+      cy.batch(() => {
+        cy.nodes().removeClass('dir-dimmed dir-bright')
+      })
+      return
+    }
+
+    // Find nodes in the highlighted directory
+    const dirNodes = graphData.nodes.filter(
+      (n) => (n.data.directory || n.data.group || '') === highlightedDirectory
+    )
+    const dirIdSet = new Set(dirNodes.map((n) => n.data.id))
+
+    cy.batch(() => {
+      cy.nodes().forEach((node) => {
+        if (dirIdSet.has(node.id())) {
+          node.removeClass('dir-dimmed').addClass('dir-bright')
+        } else {
+          node.removeClass('dir-bright').addClass('dir-dimmed')
+        }
+      })
+    })
+  }, [highlightedDirectory, graphData])
 
   // Animation timer ref (for cleanup)
   const animTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -587,7 +654,7 @@ const GraphCanvas = forwardRef<GraphCanvasHandle, Props>(function GraphCanvas({ 
         </button>
       )}
 
-      {/* R5-graph-node-tooltips: summary tooltip on hover */}
+      {/* R5-graph-node-tooltips + R18-P6: enriched tip with R-probability and dependents */}
       {tooltip && (
         <div
           style={{
@@ -596,7 +663,7 @@ const GraphCanvas = forwardRef<GraphCanvasHandle, Props>(function GraphCanvas({ 
             top: tooltip.y + 12,
             backgroundColor: 'var(--cm-text-primary)',
             color: 'var(--cm-bg-primary)',
-            padding: '6px 12px',
+            padding: '8px 12px',
             borderRadius: 2,
             fontSize: 12,
             fontFamily: 'Raleway, sans-serif',
@@ -607,7 +674,28 @@ const GraphCanvas = forwardRef<GraphCanvasHandle, Props>(function GraphCanvas({ 
             boxShadow: '0 2px 8px rgba(28,25,23,0.15)',
           }}
         >
-          {tooltip.text}
+          <div style={{ fontWeight: 600, marginBottom: 4 }}>{tooltip.summary}</div>
+          {(tooltip.rProb || tooltip.dependents != null) && (
+            <div style={{
+              display: 'flex',
+              gap: 12,
+              marginTop: 4,
+              fontSize: 11,
+              opacity: 0.85,
+            }}>
+              {tooltip.rProb && (
+                <span>
+                  R:{' '}
+                  <span style={{ color: tooltip.rColor, fontWeight: 700 }}>
+                    {tooltip.rProb}
+                  </span>
+                </span>
+              )}
+              {tooltip.dependents != null && (
+                <span>Deps: {tooltip.dependents}</span>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>

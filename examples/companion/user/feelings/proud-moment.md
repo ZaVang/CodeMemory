@@ -15,6 +15,8 @@ maturity: draft
 imports:
   related:
     - user/feelings/burnout-april
+    - user/people/best-friend-li
+    - user/beliefs/friendship-view
 summary_hash: 3b1b5c3
 ---
 # 被表扬的项目

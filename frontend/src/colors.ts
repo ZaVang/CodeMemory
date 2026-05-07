@@ -11,6 +11,7 @@ export const DIRECTORY_COLORS: Record<string, string> = {
   'user/beliefs': '#166534',
   'user/moments': '#D97757',
   'user/snapshots': '#A8A29E',
+  'user/investment': '#0F766E',
   'api': '#1E40AF',
   'schemas': '#1C1917',
 }
@@ -26,6 +27,7 @@ export const DIRECTORY_TINTS: Record<string, string> = {
   'user/beliefs': '#EDF7F0',
   'user/moments': '#FDF3EE',
   'user/snapshots': '#F5F5F4',
+  'user/investment': '#EBF5F4',
   'api': '#EEF2FA',
   'schemas': '#FDFBF5',
 }
@@ -44,6 +46,7 @@ export const DIRECTORY_TINTS_DARK: Record<string, string> = {
   'user/beliefs': '#153520',
   'user/moments': '#4A2E20',
   'user/snapshots': '#1E1D1C',
+  'user/investment': '#153D38',
   'api': '#162A40',
   'schemas': '#1F1D1B',
 }

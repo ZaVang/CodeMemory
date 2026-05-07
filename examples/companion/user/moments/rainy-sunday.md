@@ -13,6 +13,8 @@ tags:
 intensity: 4
 maturity: draft
 imports:
+  recommended:
+    - user/feelings/burnout-april
   related:
     - user/preferences/dislike-crowds
 summary_hash: 43ada73

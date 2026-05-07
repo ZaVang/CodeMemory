@@ -1,7 +1,17 @@
 import { useState } from 'react'
 
+/** Static descriptions for known datasets. Falls back to name + memory count. */
+const KNOWN_DATASET_DESCRIPTIONS: Record<string, string> = {
+  investment: 'interconnected memories about financial decisions, market analysis, and risk assessment',
+  companion: 'personal journal entries capturing habits, feelings, beliefs, and important people in your life',
+  'software-architecture': 'concepts and decisions about software design patterns, architectural styles, and system composition',
+  quant_operators: 'trading strategies, quantitative operations, and algorithmic decision-making signals',
+}
+
 interface Props {
   onComplete: () => void
+  datasetName?: string
+  datasetCount?: number
 }
 
 // R12-P1: SVG geometric icons for each onboarding step
@@ -54,13 +64,9 @@ const StepIcon = ({ step }: { step: number }) => {
   }
 }
 
-const STEPS = [
-  {
-    title: 'Welcome to CodeMemory',
-    subtitle: 'Your memory is a dependency graph, not a search index.',
-    description:
-      'CodeMemory organizes knowledge as interconnected "atoms" — small, self-contained memories linked by explicit dependencies. Think of it as a personal knowledge graph where every piece of information knows what it depends on.',
-  },
+const BASE_STEPS = [
+  // Step 0 is dynamically built in the component
+  null as unknown as { title: string; subtitle: string; description: string },
   {
     title: 'Graph View',
     subtitle: 'Explore your memory network visually.',
@@ -87,7 +93,34 @@ const STEPS = [
   },
 ]
 
-export default function Onboarding({ onComplete }: Props) {
+export default function Onboarding({ onComplete, datasetName, datasetCount }: Props) {
+  // Build steps with dataset-aware welcome step
+  const hasDataset = !!datasetName && datasetCount != null && datasetCount > 0
+  const datasetDesc = datasetName ? (KNOWN_DATASET_DESCRIPTIONS[datasetName] || '') : ''
+
+  const welcomeStep = hasDataset && datasetDesc
+    ? {
+        title: 'Welcome to CodeMemory',
+        subtitle: `You are viewing the ${datasetName} dataset`,
+        description:
+          `This dataset contains ${datasetCount} ${datasetDesc}. CodeMemory organizes knowledge as interconnected "atoms" — small, self-contained memories linked by explicit dependencies. Think of it as a personal knowledge graph where every piece of information knows what it depends on.`,
+      }
+    : hasDataset
+    ? {
+        title: 'Welcome to CodeMemory',
+        subtitle: `You are viewing the ${datasetName} dataset (${datasetCount} memories)`,
+        description:
+          'CodeMemory organizes knowledge as interconnected "atoms" — small, self-contained memories linked by explicit dependencies. Think of it as a personal knowledge graph where every piece of information knows what it depends on.',
+      }
+    : {
+        title: 'Welcome to CodeMemory',
+        subtitle: 'Your memory is a dependency graph, not a search index.',
+        description:
+          'CodeMemory organizes knowledge as interconnected "atoms" — small, self-contained memories linked by explicit dependencies. Think of it as a personal knowledge graph where every piece of information knows what it depends on.',
+      }
+
+  const STEPS = [welcomeStep, ...BASE_STEPS.slice(1)]
+
   const [step, setStep] = useState(0)
   const current = STEPS[step]
   const isLast = step === STEPS.length - 1

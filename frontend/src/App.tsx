@@ -231,6 +231,12 @@ export default function App() {
   // Graph data (loaded once, shared with Legend)
   const [graphData, setGraphData] = useState<GraphData | null>(null)
 
+  // R18-P4: Legend directory click-highlight state
+  const [highlightedDirectory, setHighlightedDirectory] = useState<string | null>(null)
+
+  // Clear directory highlight on view mode change
+  useEffect(() => { setHighlightedDirectory(null) }, [viewMode])
+
   // GraphCanvas ref for PNG export
   const graphCanvasRef = useRef<GraphCanvasHandle>(null)
 
@@ -1133,8 +1139,13 @@ export default function App() {
             onGraphDataLoaded={setGraphData}
             activeTheme={activeTheme}
             onCreateMemory={handleOpenCreate}
+            highlightedDirectory={highlightedDirectory}
           />
-          <Legend graphData={graphData} />
+          <Legend
+            graphData={graphData}
+            highlightedDirectory={highlightedDirectory}
+            onHighlightDirectory={setHighlightedDirectory}
+          />
 
           {/* Resolve error toast */}
           {resolveError && (
@@ -1285,6 +1296,8 @@ export default function App() {
             localStorage.setItem(ONBOARDING_KEY, '1')
             setShowOnboarding(false)
           }}
+          datasetName={currentDataset || undefined}
+          datasetCount={datasets.find((d) => d.name === currentDataset)?.memory_count}
         />
       )}
 
