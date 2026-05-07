@@ -6,7 +6,7 @@ set -e
 
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 BACKEND_PORT="${BACKEND_PORT:-8000}"
-FRONTEND_PORT="${FRONTEND_PORT:-5299}"
+FRONTEND_PORT="${FRONTEND_PORT:-5300}"
 CODEMEMORY_ROOT="${CODEMEMORY_ROOT:-}"
 
 cleanup() {
