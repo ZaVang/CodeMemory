@@ -1,358 +1,198 @@
-# CodeMemory 用户指南：构建你的 AI 长期记忆库
+# CodeMemory 用户指南
 
-## 为什么需要这个？
+> 最后更新：2026-05-08
 
-### 问题：AI 总是"健忘"
+## 一、这是什么？
 
-你有没有经历过：
+CodeMemory 是一个 **AI 记忆管理系统**——帮你和 AI Agent 建立共用的结构化长期记忆。
 
-- 问 AI "上次我们讨论的方案是什么？"，它说不知道
-- AI 给出的建议和你之前的决策冲突
-- 每次新对话都要重新解释背景
-- AI 的回答前后不一致，没有连续性
+核心理念：**记忆加载是依赖解析问题，不是搜索问题。** 传统搜索可能找到相关片段但丢失因果链；CodeMemory 通过显式依赖图（DAG）保证上下文完整。
 
-**根本原因**：AI 没有长期记忆，每次对话都是"第一次见面"。
+### 两种使用方式
 
-### 解决方案：把记忆变成代码
-
-CodeMemory 把你的记忆变成一个 **Git 项目**：
-
-```
-your-memory/
-├── .codememory/
-│   ├── index.json    # 记忆索引
-│   └── log.md        # 变更日志
-├── preferences/      # 你的偏好
-│   └── coding-style.md
-├── decisions/        # 你的决策
-│   └── tech-stack.md
-├── projects/         # 项目记忆
-│   └── my-app.md
-└── knowledge/        # 知识积累
-    └── best-practices.md
-```
-
-**核心思想**：
-- 记忆是 **版本控制的**（可以回溯）
-- 记忆是 **结构化的**（不是随意文本）
-- 记忆是 **有因果链的**（决策依赖上下文）
+| 方式 | 适用场景 | 入口 |
+|------|---------|------|
+| **Web UI** | 浏览、创建、编辑、可视化 | `./bin/dev` → http://localhost:5300 |
+| **CLI** | 脚本、Agent 集成、批量操作 | `codememory <command>` |
+| **MCP Server** | AI Agent 直接调用 | 配置到 Claude Code / Cursor 等 |
 
 ---
 
-## 它能做什么？
+## 二、快速开始
 
-### 1. 记住你的偏好
-
-```yaml
----
-type: atom
-id: preferences/coding-style
-summary: 编码偏好：函数式优先，测试驱动
-tags: [coding, preference]
-intensity: 8
----
-# 编码风格偏好
-
-- 函数式编程优先，避免可变状态
-- 测试先行，覆盖率 > 80%
-- 变量命名：snake_case，函数：camelCase
-```
-
-下次 AI 写代码时，自动参考这个偏好。
-
-### 2. 追溯决策因果
-
-```yaml
----
-type: instance
-id: decisions/tech-stack
-summary: 选择 React + TypeScript 作为前端技术栈
-tags: [decision, frontend]
-imports:
-  required:
-    - preferences/coding-style
-    - context/team-skill
----
-# 技术选型：React + TypeScript
-
-## 决策
-选择 React + TypeScript 作为前端技术栈。
-
-## 理由
-1. 团队熟悉 React（见 team-skill）
-2. TypeScript 符合类型安全偏好（见 coding-style）
-3. 生态成熟，问题容易解决
-
-## 结论
-2026-01-15 决定，暂不重新评估。
-```
-
-**关键**：`imports` 字段让 AI 知道"为什么这样决策"。
-
-### 3. 自动推断依赖
-
-```bash
-# 创建新记忆时，系统自动建议相关记忆
-codememory suggest-deps decisions/new-choice
-
-# 输出：
-# Score  Class        ID
-# ─────  ───────────  ─────────────────────
-#     8  required     preferences/coding-style
-#     6  recommended  decisions/tech-stack
-#     4  related      context/team-skill
-```
-
-### 4. 智能检索
-
-```bash
-# 召回完整因果链
-codememory resolve decisions/tech-stack
-
-# 输出会自动包含：
-# 1. tech-stack 本身
-# 2. coding-style（被引用的偏好）
-# 3. team-skill（被引用的上下文）
-```
-
----
-
-## 快速开始
-
-### 第一步：安装
+### 1. 启动
 
 ```bash
 git clone https://github.com/ZaVang/CodeMemory.git
 cd CodeMemory
 pip install -e .
+
+# 一键启动
+./bin/dev
 ```
 
-### 第二步：创建你的记忆库
+浏览器打开 http://localhost:5300 ，首次访问会看到 Onboarding 引导。
 
-```bash
-# 创建记忆目录
-mkdir -p my-memory/preferences
-mkdir -p my-memory/decisions
-mkdir -p my-memory/projects
+### 2. 界面概览
 
-# 初始化
-codememory --root my-memory reindex
-```
+三个主视图，按 `1` `2` `3` 切换：
 
-### 第三步：写第一条记忆
+| 视图 | 快捷键 | 用途 |
+|------|--------|------|
+| **Graph** | `1` | DAG 可视化，节点颜色按目录区分，右键可 Edit/Resolve/Delete |
+| **List** | `2` | 表格式浏览，按列排序，Health 列显示衰减风险 |
+| **Dashboard** | `3` | 统计卡片、stale 检测、Wander 漫游、Validate 验证 |
 
-```bash
-# 创建偏好文件
-cat > my-memory/preferences/coding-style.md << 'YAML'
----
-type: atom
-id: preferences/coding-style
-summary: 我的编码偏好
-tags: [coding, preference]
-intensity: 8
----
-# 编码风格
+### 3. 核心操作
 
-- 使用 Python，偏好函数式风格
-- 测试驱动开发
-- 文档先行
-YAML
-
-# 重新索引
-codememory --root my-memory reindex
-```
-
-### 第四步：验证
-
-```bash
-# 查看记忆概览
-codememory --root my-memory overview
-
-# 验证结构
-codememory --root my-memory validate
-```
+| 操作 | 方式 |
+|------|------|
+| 创建记忆 | 点击 `+ Create Memory` 或 `Ctrl+N` |
+| 编辑记忆 | 右键节点 → Edit，或 List 中点击 |
+| 解析依赖 | 选中记忆 → Resolve，或右键 → Resolve |
+| 搜索 | `Ctrl+K` 聚焦搜索栏 |
+| 切换数据集 | 顶部下拉框选择 |
 
 ---
 
-## 核心概念
+## 三、记忆格式
 
-### 四种记忆类型
-
-| 类型 | 用途 | 示例 |
-|------|------|------|
-| **atom** | 原子事实 | 偏好、知识、约束 |
-| **instance** | 具体实例 | 决策、事件、经验 |
-| **composite** | 组合上下文 | 项目背景、问题域 |
-| **schema** | 模板定义 | 决策模板、分析框架 |
-
-### 字段说明
+每条记忆是一个 Markdown 文件，以 YAML frontmatter 开头：
 
 ```yaml
 ---
-type: atom              # 记忆类型
-id: preferences/style   # 唯一标识
-summary: 一句话摘要      # 用于检索和预览
-tags: [tag1, tag2]      # 标签，用于分类和推断
-intensity: 7            # 重要性 1-10，越高越不容易被裁剪
-status: active          # active / archived / superseded
-version: 1              # 版本号，update 时自动递增
-imports:                # 依赖的其他记忆
-  required: [id1]       # 必须加载
-  recommended: [id2]    # 预算充足时加载
-  related: [id3]        # 可选参考
+type: atom                          # atom 或 schema
+id: user/investment/my-thesis       # 全局唯一 ID，"/" 分隔层级
+summary: AI存储+AI制造双核心驱动     # 用于检索预览和 token 裁剪降级
+tags: [investment, thesis]          # 标签
+intensity: 7                        # 1-10，影响图节点大小和裁剪优先级
+status: active                      # active / archived / draft
+maturity: proven                    # draft / verified / proven / superseded
+stability: 90.0                     # 半衰期（天），默认 14.0，decision 类型默认 90
+imports:                            # 显式依赖声明
+  required: [user/investment/context]
+  recommended: [user/investment/risk-tolerance]
+  related: []
 ---
+# Memory body（Markdown 正文）
 ```
 
-### 关键命令
+### 核心字段
 
-| 命令 | 用途 |
-|------|------|
-| `create` | 创建新记忆 |
-| `update` | 更新记忆（自动版本化） |
-| `resolve` | 召回记忆 + 依赖链 |
-| `search` | 搜索记忆 |
-| `suggest-deps` | 推断依赖关系 |
-| `validate` | 检查循环依赖、断链 |
-| `overview` | 查看记忆库概况 |
+| 字段 | 必填 | 说明 |
+|------|------|------|
+| `type` | 是 | `atom`（通用记忆）或 `schema`（元模板） |
+| `id` | 是 | 全局唯一 ID，含 "/" 分隔符，如 `user/investment/context` |
+| `summary` | 是 | 一句话摘要，token 预算不足时替代 body |
+| `imports` | 否 | 依赖图的核心——显式声明"这条记忆依赖哪些其他记忆" |
 
 ---
 
-## 为什么这个方案好？
+## 四、依赖图（DAG）
 
-### 1. 记忆是版本控制的
+CodeMemory 区别于其他记忆系统的核心能力：
 
-每次更新都会生成新版本，你可以：
+```
+user/investment/semiconductor-thesis (atom)
+├── required → user/investment/context       ← 必须加载
+├── required → user/facts/semiconductor      ← 必须加载
+├── recommended → user/investment/risk-tolerance  ← 预算充足时加载
+└── related → user/observations/market-event      ← 可选参考
+```
+
+### import 强度
+
+| 强度 | Resolve 行为 |
+|------|-------------|
+| `required` | 始终加载 |
+| `recommended` | `--depth recommended` 时加载 |
+| `related` | `--depth full` 时加载 |
+
+---
+
+## 五、时间衰减
+
+系统自动追踪每条记忆的访问时间并计算检索概率：
+
+```
+R = max(0.5^(days/stability), long_term_floor)
+```
+
+- **stability**：每记忆可调，默认 14 天，可通过 UI 滑块或 API 修改
+- **自适应增长**：Resolve 访问时 stability 自动增加（间隔效应）
+- **长期保留底线**：90 天后的知识不会静默消失
+- **Touch**：轻量衰减刷新（不触发 DAG 加载）
+- **R-probability 着色**：MemoryDetail 和 List 视图中绿色(>50%) / 琥珀(10-50%) / 红色(<10%)
+
+---
+
+## 六、CLI 命令
 
 ```bash
-# 查看历史版本
-codememory --root my-memory focus preferences/style --versions
+# 一键启动
+./bin/dev
 
-# 回溯到特定版本
-codememory --root my-memory resolve preferences/style@v2
+# 扫视 — 启动时自动注入 top 5 相关记忆
+codememory overview --tags "investment"
+
+# 重构 — DAG 拓扑拼装 + token 裁剪
+codememory resolve user/investment/context --budget 2000
+
+# 注视 — 动态切换记忆分辨率
+codememory focus risk-tolerance --level full
+
+# 触景生情 — 随机激活冷记忆
+codememory wander
+
+# 创建 / 更新
+codememory create --id user/ideas/new-idea --summary "..."
+codememory update user/ideas/new-idea --body "..."
+
+# 索引 / 验证 / 搜索
+codememory reindex
+codememory validate
+codememory search --query "semiconductor"
 ```
-
-**好处**：决策可以追溯，不会丢失历史。
-
-### 2. 记忆是有因果链的
-
-传统笔记是孤立的，CodeMemory 的记忆有 `imports`：
-
-```
-决策（instance）
-├── 依赖 → 偏好（atom）
-├── 依赖 → 上下文（composite）
-└── 依赖 → 之前的决策（instance）
-```
-
-**好处**：AI 回答问题时能理解完整背景，而不是只看到孤立信息。
-
-### 3. 记忆是自动治理的
-
-系统会：
-
-- **自动推断依赖**：`suggest-deps` 告诉你该关联哪些记忆
-- **自动升级成熟度**：高频使用的记忆从 draft → verified → proven
-- **自动检测问题**：循环依赖、断链、孤立记忆
-
-**好处**：不需要手动维护，记忆库自己会"整理"。
-
-### 4. 记忆是可迁移的
-
-整个记忆库就是一个 Git 仓库：
-
-- 可以备份到 GitHub
-- 可以在不同机器间同步
-- 可以分享给团队
-
-**好处**：不依赖特定平台，你的记忆永远属于你。
 
 ---
 
-## 实际使用场景
+## 七、MCP Server
 
-### 场景 1：项目知识管理
+在 Claude Code 或其他 MCP 客户端中配置：
 
-```
-projects/my-app/
-├── context.md          # 项目背景
-├── architecture.md     # 架构决策
-├── api-design.md       # API 设计
-└── lessons-learned.md  # 经验教训
-```
-
-每次讨论项目时，AI 自动加载完整上下文。
-
-### 场景 2：个人知识库
-
-```
-knowledge/
-├── coding/
-│   ├── best-practices.md
-│   └── design-patterns.md
-├── productivity/
-│   ├── time-management.md
-│   └── note-taking.md
-└── learning/
-    └── language-learning.md
+```json
+{
+  "codememory": {
+    "command": "python",
+    "args": ["-m", "codememory.mcp_server"]
+  }
+}
 ```
 
-构建你自己的"第二大脑"。
-
-### 场景 3：团队协作
-
-团队共享一个记忆库：
-
-```
-team-memory/
-├── conventions/        # 团队规范
-├── decisions/          # 架构决策记录（ADR）
-└── onboarding/         # 新成员入职知识
-```
-
-新成员入职时，AI 自动加载团队上下文。
+7 个工具：`resolve_memory` / `overview` / `wander` / `focus` / `snapshot` / `propose_memory` / `propose_update`
 
 ---
 
-## 与其他方案对比
+## 八、与其他方案对比
 
-| 方案 | 优点 | 缺点 |
-|------|------|------|
-| **普通笔记** | 灵活 | 孤立、无结构、AI 难以理解 |
-| **知识图谱** | 关联强 | 维护成本高、学习曲线陡 |
-| **RAG 文档库** | AI 可检索 | 无因果链、无版本控制 |
-| **CodeMemory** | 结构化 + 因果链 + 版本控制 | 需要学习 YAML 格式 |
-
----
-
-## 下一步
-
-1. **创建你的第一个记忆库**
-2. **导入现有笔记**（使用 `import` 命令）
-3. **在日常对话中让 AI 参考**
-4. **定期 `validate` 和 `reindex`**
+| 方案 | 检索方式 | 因果完整性 | 版本控制 | 衰减管理 |
+|------|---------|-----------|---------|---------|
+| 普通笔记 | 全文搜索 | 无 | Git | 无 |
+| RAG | 语义相似度 | 无保证 | 无 | 无 |
+| 知识图谱 | 图遍历 | 有 | 无 | 无 |
+| **CodeMemory** | **DAG 拓扑** | **有** | **Git + version** | **stability + SInc** |
 
 ---
 
-## 常见问题
+## 九、提示与快捷键
 
-### Q: 我需要写很多 YAML 吗？
-
-A: 核心字段只有 `type`、`id`、`summary`，其他都是可选的。熟练后 1 分钟就能写一条记忆。
-
-### Q: 记忆库会不会太大？
-
-A: 系统会自动裁剪。`resolve --budget 1000` 只召回最重要的记忆，预算不足时自动降级。
-
-### Q: 如何让 AI 使用记忆库？
-
-A: 在对话开始时运行 `codememory resolve <id>`，把输出交给 AI 作为上下文。或者集成到你的 Agent 工具中。
-
-### Q: 记忆会冲突吗？
-
-A: 系统会检测循环依赖和断链。冲突的记忆会标记为 `stale`，提示你更新。
-
----
-
-**开始构建你的 AI 长期记忆库吧！** 🚀
-
-记住：好的记忆 = 好的 AI 助手。
+| 快捷键 | 功能 |
+|--------|------|
+| `Ctrl+K` | 搜索 |
+| `Ctrl+N` | 新建记忆 |
+| `Ctrl+Z` | 撤销 |
+| `Ctrl+Shift+D` | 切换亮色/暗色模式 |
+| `Ctrl+Shift+C` | Copy as Context（Resolve 后可用） |
+| `1` / `2` / `3` | 切换 Graph / List / Dashboard |
+| `?` | 快捷键参考 |
+| `Esc` | 关闭面板 / 模态
