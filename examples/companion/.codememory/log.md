@@ -169,3 +169,6 @@
 | 2026-05-07 21:07:50 | maturity     | user/beliefs/friendship-view: verified -> proven
 | 2026-05-07 21:07:50 | maturity     | user/preferences/dislike-crowds: verified -> proven
 | 2026-05-07 21:07:50 | maturity     | user/moments/rainy-sunday: verified -> proven
+| 2026-05-08 13:04:01 | maturity     | user/preferences/morning-coffee: verified -> proven
+| 2026-05-08 13:04:01 | maturity     | user/feelings/burnout-april: verified -> proven
+| 2026-05-08 13:14:07 | maturity     | user/preferences/morning-coffee: verified -> proven

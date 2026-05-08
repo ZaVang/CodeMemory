@@ -147,6 +147,12 @@ export async function touchMemory(id: string): Promise<Record<string, unknown>> 
   })
 }
 
+export async function rehashMemory(id: string): Promise<{ id: string; summary_hash: string; stale: boolean }> {
+  return fetcher(`${BASE}/memories/${encodePathId(id)}/rehash`, {
+    method: 'POST',
+  })
+}
+
 export interface DatasetInfo {
   name: string
   path: string

@@ -377,6 +377,28 @@ def post_touch(memory_id: str):
 
 
 # ---------------------------------------------------------------------------
+# Rehash — fix stale summary (recompute summary_hash from current body)
+# ---------------------------------------------------------------------------
+
+@router.post("/memories/{memory_id:path}/rehash")
+def post_rehash(memory_id: str):
+    memory_id = unquote(memory_id)
+    index = load_cm_index()
+    memories = index.memories
+    entry = memories.get(memory_id)
+    if not entry:
+        raise HTTPException(status_code=404, detail=f"Memory '{memory_id}' not found")
+
+    filepath = get_root() / entry.path
+    meta, body = parse_frontmatter(filepath)
+    new_hash = compute_body_hash(body.strip())
+    entry.summary_hash = new_hash
+    save_index(get_root(), index)
+
+    return serialize({"id": memory_id, "summary_hash": new_hash, "stale": False})
+
+
+# ---------------------------------------------------------------------------
 # Import
 # ---------------------------------------------------------------------------
 

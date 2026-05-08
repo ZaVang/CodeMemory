@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-05-08T13:06:35.816126",
+  "updated": "2026-05-08T13:14:07.210147",
   "memories": {
     "user/context": {
       "type": "atom",
@@ -342,8 +342,8 @@
       "intensity": 5,
       "version": 1,
       "path": "user/preferences/morning-coffee.md",
-      "access_count": 41,
-      "last_access": "2026-05-08T13:04:01.939712",
+      "access_count": 42,
+      "last_access": "2026-05-08T13:14:07.209967",
       "days_since_last_access": 0,
       "created": "2026-04-10",
       "updated": "",
@@ -356,8 +356,15 @@
       "change_note": null,
       "change_log": [],
       "source": null,
-      "maturity": "verified",
-      "evidence": null
+      "maturity": "proven",
+      "evidence": {
+        "verified_in": [
+          {
+            "version": 1,
+            "date": "2026-05-08"
+          }
+        ]
+      }
     },
     "user/test/f1-test2": {
       "type": "atom",

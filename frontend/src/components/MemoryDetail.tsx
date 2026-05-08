@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { fetchMemory, updateMemory, touchMemory } from '../api'
+import { fetchMemory, updateMemory, touchMemory, rehashMemory } from '../api'
 import type { MemoryDetail as MemoryDetailType, ResolveResponse } from '../types'
 import { StatusBadge, MaturityBadge } from './Badges'
 import { useExitAnimation } from '../useExitAnimation'
@@ -706,7 +706,7 @@ export default function MemoryDetail({ memoryId, onClose, onResolve, onClearReso
                 overflowY: 'auto',
               }}
             >
-              {/* Pinned version notices — shown prominently before node list */}
+              {/* Pinned version / stale notices — shown prominently before node list */}
               {resolveData.notices && resolveData.notices.length > 0 && (
                 <div style={{ marginBottom: 12 }}>
                   {resolveData.notices.map((notice, i) => (
@@ -722,9 +722,41 @@ export default function MemoryDetail({ memoryId, onClose, onResolve, onClearReso
                         color: 'var(--cm-warning)',
                         marginBottom: 4,
                         lineHeight: 1.5,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 8,
                       }}
                     >
-                      {notice}
+                      <span style={{ flex: 1 }}>{notice}</span>
+                      {notice.includes('hash mismatch') && memoryId && (
+                        <button
+                          onClick={async (e) => {
+                            e.stopPropagation()
+                            try {
+                              await rehashMemory(memoryId)
+                              onResolve(memoryId)
+                            } catch { /* notice remains if fix fails */ }
+                          }}
+                          style={{
+                            padding: '2px 8px',
+                            fontSize: 10,
+                            fontWeight: 600,
+                            fontFamily: 'Raleway, sans-serif',
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.05em',
+                            background: 'none',
+                            border: '1px solid var(--cm-warning)',
+                            borderRadius: 2,
+                            color: 'var(--cm-warning)',
+                            cursor: 'pointer',
+                            whiteSpace: 'nowrap',
+                            flexShrink: 0,
+                          }}
+                          title="Recompute the summary hash to match current body content"
+                        >
+                          Fix
+                        </button>
+                      )}
                     </div>
                   ))}
                 </div>
