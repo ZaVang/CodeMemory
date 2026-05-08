@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-05-07T21:07:50.658189",
+  "updated": "2026-05-08T11:19:55.398167",
   "memories": {
     "user/context": {
       "type": "atom",
@@ -78,19 +78,8 @@
       "change_note": null,
       "change_log": [],
       "source": null,
-      "maturity": "proven",
-      "evidence": {
-        "verified_in": [
-          {
-            "version": 1,
-            "date": "2026-05-07"
-          },
-          {
-            "version": 1,
-            "date": "2026-05-07"
-          }
-        ]
-      }
+      "maturity": "draft",
+      "evidence": null
     },
     "user/beliefs/life-pace": {
       "type": "atom",
@@ -163,15 +152,8 @@
       "change_note": null,
       "change_log": [],
       "source": null,
-      "maturity": "proven",
-      "evidence": {
-        "verified_in": [
-          {
-            "version": 1,
-            "date": "2026-05-07"
-          }
-        ]
-      }
+      "maturity": "verified",
+      "evidence": null
     },
     "user/feelings/proud-moment": {
       "type": "atom",
@@ -207,19 +189,8 @@
       "change_note": null,
       "change_log": [],
       "source": null,
-      "maturity": "proven",
-      "evidence": {
-        "verified_in": [
-          {
-            "version": 1,
-            "date": "2026-05-07"
-          },
-          {
-            "version": 1,
-            "date": "2026-05-07"
-          }
-        ]
-      }
+      "maturity": "draft",
+      "evidence": null
     },
     "user/moments/rainy-sunday": {
       "type": "atom",
@@ -256,19 +227,8 @@
       "change_note": null,
       "change_log": [],
       "source": null,
-      "maturity": "proven",
-      "evidence": {
-        "verified_in": [
-          {
-            "version": 1,
-            "date": "2026-05-07"
-          },
-          {
-            "version": 1,
-            "date": "2026-05-07"
-          }
-        ]
-      }
+      "maturity": "draft",
+      "evidence": null
     },
     "user/people/best-friend-li": {
       "type": "atom",
@@ -366,19 +326,8 @@
       "change_note": null,
       "change_log": [],
       "source": null,
-      "maturity": "proven",
-      "evidence": {
-        "verified_in": [
-          {
-            "version": 1,
-            "date": "2026-05-07"
-          },
-          {
-            "version": 1,
-            "date": "2026-05-07"
-          }
-        ]
-      }
+      "maturity": "draft",
+      "evidence": null
     },
     "user/preferences/morning-coffee": {
       "type": "atom",
@@ -407,15 +356,8 @@
       "change_note": null,
       "change_log": [],
       "source": null,
-      "maturity": "proven",
-      "evidence": {
-        "verified_in": [
-          {
-            "version": 1,
-            "date": "2026-05-07"
-          }
-        ]
-      }
+      "maturity": "verified",
+      "evidence": null
     },
     "user/test/f1-test2": {
       "type": "atom",

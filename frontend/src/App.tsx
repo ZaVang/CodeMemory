@@ -274,8 +274,15 @@ export default function App() {
     (name: string) => {
       if (name === currentDataset) return
       setSwitchingDataset(true)
+      // Update the API layer's dataset IMMEDIATELY so any requests that fire
+      // during the async switch window use the new dataset, not the old one.
+      setApiDataset(name)
       switchDataset(name)
         .then(() => {
+          // Sync React state to the API layer's already-updated value.
+          // R17-CR1: setApiDataset again ensures the effect-pipeline always
+          // sees the correct dataset even if React batches renders oddly.
+          setApiDataset(name)
           setCurrentDataset(name)
           setRefreshTrigger((prev) => prev + 1)
           setSelectedNode(null)
@@ -283,7 +290,12 @@ export default function App() {
           setResolveError(null)
           setAllNodesFit(false)
         })
-        .catch((err) => showOperationError(err instanceof Error ? err.message : 'Failed to switch dataset'))
+        .catch((err) => {
+          // Revert the API-layer dataset on failure so the UI doesn't
+          // get stuck sending headers for a dataset the backend rejected.
+          setApiDataset(currentDataset)
+          showOperationError(err instanceof Error ? err.message : 'Failed to switch dataset')
+        })
         .finally(() => setSwitchingDataset(false))
     },
     [currentDataset, showOperationError],

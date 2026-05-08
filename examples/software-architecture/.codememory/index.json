@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-05-07T20:25:09.566637",
+  "updated": "2026-05-08T11:19:55.478348",
   "memories": {
     "user/beliefs/correctness-over-speed": {
       "type": "atom",
@@ -46,7 +46,7 @@
       "path": "user/decisions/adopt-microservices.md",
       "access_count": 7,
       "last_access": "2026-05-06T13:41:11.787115",
-      "days_since_last_access": 0,
+      "days_since_last_access": 1,
       "created": "2025-06-15",
       "updated": "",
       "imports": {
@@ -249,7 +249,7 @@
       "path": "user/facts/microservices-overhead.md",
       "access_count": 3,
       "last_access": "2026-05-06T13:41:11.787115",
-      "days_since_last_access": 0,
+      "days_since_last_access": 1,
       "created": "2025-06-10",
       "updated": "",
       "imports": {
@@ -283,7 +283,7 @@
       "path": "user/observations/team-distributed.md",
       "access_count": 3,
       "last_access": "2026-05-06T13:41:11.787115",
-      "days_since_last_access": 0,
+      "days_since_last_access": 1,
       "created": "2025-05-15",
       "updated": "",
       "imports": {},
