@@ -662,6 +662,7 @@ export default function App() {
           alignItems: 'center',
           gap: 16,
           flexShrink: 0,
+          overflowX: 'auto',
         }}
       >
         <h1
@@ -808,20 +809,23 @@ export default function App() {
             Switching...
           </span>
         )}
-{/* Dataset disclaimer moved to tooltip on the select element (R11-P1) */}
-        {/* R8-quant-disclaimer: informational message for quant_operators dataset */}
+{/* R8-quant-disclaimer: condensed to an info icon tooltip so it
+            doesn't compete for header space with SearchBar and right-side controls.
+            The full text is only visible on hover/focus. */}
         {currentDataset === 'quant_operators' && !switchingDataset && (
-          <span style={{
-            fontSize: 12,
-            color: 'var(--cm-text-secondary)',
-            fontFamily: 'Raleway, sans-serif',
-            fontStyle: 'italic',
-            backgroundColor: 'var(--cm-bg-info-subtle)',
-            padding: '2px 10px',
-            borderRadius: 2,
-            whiteSpace: 'nowrap',
-          }}>
-            Auto-generated API documentation. Dependency graph reflects algorithmic inference, not human-authored links.
+          <span
+            title="Auto-generated API documentation. Dependency graph reflects algorithmic inference, not human-authored links."
+            aria-label="Dataset info"
+            style={{
+              fontSize: 14,
+              lineHeight: 1,
+              color: 'var(--cm-text-tertiary)',
+              cursor: 'help',
+              flexShrink: 0,
+              userSelect: 'none',
+            }}
+          >
+            ⓘ
           </span>
         )}
 
@@ -1165,7 +1169,7 @@ export default function App() {
       )}
 
       {/* Main content */}
-      <div style={{ flex: 1, display: 'flex', overflow: 'hidden', position: 'relative' }}>
+      <div style={{ flex: 1, display: 'flex', overflow: 'auto', position: 'relative' }}>
         {/* Graph view — always mounted (display toggled) to preserve cytoscape */}
         <div
           style={{
