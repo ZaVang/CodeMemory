@@ -113,18 +113,29 @@ const GraphCanvas = forwardRef<GraphCanvasHandle, Props>(function GraphCanvas({ 
     })
   }, [])
 
+  // Track whether we're rebuilding for a theme change (same data) vs data change.
+  // Saved viewport should only be restored for theme switches.
+  const prevGraphDataRef = useRef<GraphData | null>(null)
+
   // Initialize cytoscape
   useEffect(() => {
     if (!graphData || !containerRef.current) return
 
-    // Save viewport before destroying the old instance (R9-graph-viewport)
+    const isThemeSwitch = graphData === prevGraphDataRef.current
+    prevGraphDataRef.current = graphData
+
+    // Save viewport before destroying the old instance, but only when
+    // rebuilding for a theme change (R9-graph-viewport).  On data changes
+    // (dataset switch, reindex, etc.) the old viewport position is meaningless.
     if (cyRef.current) {
-      try {
-        savedViewportRef.current = {
-          zoom: cyRef.current.zoom(),
-          pan: { ...cyRef.current.pan() },
-        }
-      } catch { /* ignore errors from a potentially broken instance */ }
+      if (isThemeSwitch) {
+        try {
+          savedViewportRef.current = {
+            zoom: cyRef.current.zoom(),
+            pan: { ...cyRef.current.pan() },
+          }
+        } catch { /* ignore errors from a potentially broken instance */ }
+      }
       cyRef.current.destroy()
     }
 
