@@ -388,28 +388,34 @@ const GraphCanvas = forwardRef<GraphCanvasHandle, Props>(function GraphCanvas({ 
     // Clear tooltip on graph pan/zoom
     cy.on('pan zoom', () => setTooltip(null))
 
-    // Apply initial zoom/pan after layout renders.  If a saved viewport exists
-    // (from a theme-switch rebuild), restore it instead of using defaults.
+    // Always fit and center after layout so the graph is never blank.
+    // On theme switches, restore the saved viewport AFTER the fit so the user
+    // sees the same region they were looking at before.
     const saved = savedViewportRef.current
     setTimeout(() => {
+      cy.fit(undefined, 32) // 32px padding so nodes don't touch viewport edges
+      cy.center()
+      cy.zoom(zoomLevel)
       if (saved && saved.zoom > 0) {
         cy.zoom(saved.zoom)
         cy.pan(saved.pan)
         savedViewportRef.current = null
-      } else {
-        cy.zoom(zoomLevel)
-        cy.center()
       }
     }, 250)
 
     return () => {
-      // Save viewport on unmount too (in case parent stops rendering GraphCanvas)
-      try {
-        savedViewportRef.current = {
-          zoom: cy.zoom(),
-          pan: { ...cy.pan() },
-        }
-      } catch { /* ignore */ }
+      // Only save viewport for theme switches — stale viewport positions
+      // from a different dataset's graph produce blank screens.
+      if (isThemeSwitch) {
+        try {
+          savedViewportRef.current = {
+            zoom: cy.zoom(),
+            pan: { ...cy.pan() },
+          }
+        } catch { /* ignore */ }
+      } else {
+        savedViewportRef.current = null
+      }
       cy.destroy()
       cyRef.current = null
     }
