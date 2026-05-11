@@ -15,6 +15,7 @@ from .handlers import (
     handle_reindex,
     handle_resolve,
     handle_search,
+    handle_skeletonize,
     handle_snapshot,
     handle_suggest_deps,
     handle_update,
@@ -154,6 +155,16 @@ def main(argv: list[str] | None = None):
     p.add_argument("--retroactive-only", dest="retroactive_only", action="store_true",
                    help="Show only retroactive candidates (they should import the target)")
 
+    # skeletonize
+    p = subparsers.add_parser("skeletonize", help="Import structured memories from Markdown files")
+    _add_logging_flags(p)
+    p.add_argument("source", help=".md file or directory of .md files")
+    p.add_argument("--min-intensity", type=int, default=5,
+                   help="Sections below this intensity are truncated (default: 5)")
+    p.add_argument("--dry-run", action="store_true",
+                   help="Preview without writing files")
+    p.add_argument("--tags", help="Comma-separated tags for generated memories")
+
     args = parser.parse_args(argv)
 
     configure_logging(verbose=args.verbose, quiet=args.quiet)
@@ -223,6 +234,16 @@ def main(argv: list[str] | None = None):
             min_score=args.min_score,
             forward_only=args.forward_only,
             retroactive_only=args.retroactive_only,
+        ))
+    elif cmd == "skeletonize":
+        tags_list = None
+        if args.tags:
+            tags_list = [t.strip() for t in args.tags.split(",") if t.strip()]
+        print(handle_skeletonize(
+            root, args.source,
+            min_intensity=args.min_intensity,
+            dry_run=args.dry_run,
+            tags=tags_list,
         ))
 
 

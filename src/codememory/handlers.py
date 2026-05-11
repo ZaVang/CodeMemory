@@ -25,6 +25,7 @@ from .orphans import find_orphans
 from .resolve import resolve
 from .search import search
 from .snapshot import snapshot_dag
+from .skeletonize.markdown import skeletonize_markdown
 from .suggest_deps import suggest_deps
 from .update import update
 from .validate import validate
@@ -509,6 +510,126 @@ def handle_import(
     if not paths:
         return "(no memories imported)"
     return "\n".join(str(p) for p in paths)
+
+
+def handle_skeletonize(
+    root: Path,
+    source: str,
+    min_intensity: int = 5,
+    dry_run: bool = False,
+    tags: list[str] | None = None,
+) -> str:
+    """Skeletonize Markdown files into CodeMemory memories.
+
+    Reads .md files from *source* (file or directory), splits each into
+    sections, applies intensity-based truncation, and writes each section
+    as a memory atom in *root*.
+    """
+    import re as _re
+    import yaml as _yaml
+
+    from .skeletonize.common import slugify as _slug
+    from .skeletonize.common import extract_first_sentence as _first_sent
+
+    source_path = Path(source).resolve()
+    if not source_path.exists():
+        return f"Error: source not found: {source}"
+
+    # Collect .md files
+    md_files: list[Path] = []
+    if source_path.is_file():
+        if source_path.suffix == '.md':
+            md_files = [source_path]
+        else:
+            return f"Error: not a .md file: {source}"
+    else:
+        md_files = sorted(source_path.rglob('*.md'))
+
+    if not md_files:
+        return f"No .md files found in: {source}"
+
+    tags = tags or []
+    total_sections = 0
+    created: list[str] = []
+
+    for md_file in md_files:
+        try:
+            text = md_file.read_text(encoding='utf-8')
+        except Exception as e:
+            _logger.warning("Skipping %s: %s", md_file, e)
+            continue
+
+        sections = skeletonize_markdown(text, min_intensity=min_intensity)
+
+        # Build ID prefix from relative path
+        try:
+            rel = md_file.relative_to(source_path) if source_path.is_dir() else Path(md_file.name)
+        except ValueError:
+            rel = Path(md_file.name)
+        # /-separated path parts with sanitized names
+        parts = list(rel.parts[:-1]) + [rel.stem]
+        clean_parts = [_re.sub(r'[^\w-]', '-', p.lower()).strip('-')[:30] for p in parts]
+        prefix = '/'.join(p for p in clean_parts if p)
+
+        for i, section in enumerate(sections):
+            heading_slug = _slug(section.heading) if section.heading else f'section-{i}'
+            memory_id = f'user/imports/{prefix}/{heading_slug}'
+
+            summary = _first_sent(section.body, max_chars=100) if section.body else (section.heading or 'Untitled')
+
+            body_text = f'# {section.heading}\n\n{section.body}' if section.heading else section.body
+
+            frontmatter = {
+                'type': 'atom',
+                'id': memory_id,
+                'summary': summary,
+                'status': 'active',
+                'created': datetime.now(timezone.utc).strftime('%Y-%m-%d'),
+                'updated': datetime.now(timezone.utc).strftime('%Y-%m-%d'),
+                'version': 1,
+                'tags': tags + ['skeletonized'],
+                'intensity': section.intensity,
+                'maturity': 'draft',
+                'source': {
+                    'platform': 'skeletonize',
+                    'created_by': 'codememory skeletonize',
+                    'original_file': str(rel),
+                },
+            }
+
+            frontmatter['summary_hash'] = _cbh(body_text)
+
+            yaml_str = _yaml.dump(frontmatter, allow_unicode=True, sort_keys=False)
+            content = f'---\n{yaml_str}---\n{body_text}\n'
+
+            if dry_run:
+                print(f'[{memory_id}] (intensity={section.intensity})')
+                preview = body_text[:200] + ('...' if len(body_text) > 200 else '')
+                print(preview)
+                print()
+                created.append(f'[dry-run] {memory_id}')
+            else:
+                file_path = get_memory_path(root, memory_id)
+                file_path.parent.mkdir(parents=True, exist_ok=True)
+                file_path.write_text(content, encoding='utf-8')
+                print(f'Skeletonized: {file_path} (intensity={section.intensity})')
+                created.append(str(file_path))
+
+            total_sections += 1
+
+    if not dry_run and created:
+        from .index import reindex as _reindex
+        _reindex(root)
+        try:
+            from .log import append_log as _append_log
+            _append_log(root, 'skeletonize', f'{len(created)} memories from {len(md_files)} file(s)')
+        except ImportError:
+            pass
+
+    return (
+        f'Skeletonized {total_sections} section(s) from {len(md_files)} file(s)\n'
+        + '\n'.join(created)
+    )
 
 
 def handle_suggest_deps(
