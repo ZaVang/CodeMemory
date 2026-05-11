@@ -7,8 +7,11 @@
 ## 快速开始
 
 ```bash
-# 安装
+# 安装（Markdown 导入可用）
 pip install -e .
+
+# 安装代码骨架化支持（Python/JS/TS 文件导入需要）
+pip install -e ".[code]"
 
 # 重建索引
 codememory --root examples/investment reindex
@@ -101,6 +104,10 @@ CodeMemory/
 │   │   ├── log.py                # 全局追加审计日志
 │   │   ├── import_cmd.py         # 冷启动文本导入
 │   │   ├── suggest_deps.py       # 自动依赖推断（三层过滤）
+│   │   ├── skeletonize/          # 结构化批量导入
+│   │   │   ├── common.py         # intensity 解析 + 文本工具
+│   │   │   ├── markdown.py       # Markdown 节拆分 + 骨架化
+│   │   │   └── code.py           # 代码骨架化（Python/JS/TS，Tree-sitter）
 │   │   ├── integrations.py      # CodememoryToolkit（OpenAI/Anthropic/Gemini）
 │   │   ├── cli.py               # argparse CLI 壳
 │   │   └── tools.py             # Sandbox tool 注册
@@ -118,7 +125,8 @@ CodeMemory/
 │   ├── investment/              # 示例：投资决策记忆库（12 条记忆）
 │   └── example_agent.py         # 最小 Agent 示例（mock LLM）
 ├── tests/
-│   └── integration_test.py      # 5 场景闭环集成测试
+│   ├── unit/                     # 108 个单元测试
+│   └── integration_test.py      # 24 个集成测试
 ├── docs/
 ├── pyproject.toml
 └── INTEGRATION.md               # 集成指南（10 分钟上手）
@@ -158,6 +166,7 @@ codememory log [--limit N]
 # 导入
 codememory import --file notes.txt --extract preferences,decisions
 codememory import --stdin --extract facts
+codememory skeletonize <file_or_dir> [--min-intensity N] [--dry-run] [--tags "a,b"]
 
 # 依赖推断
 codememory suggest-deps <id> [--min-score N] [--forward-only] [--retroactive-only]
@@ -181,6 +190,8 @@ from codememory import (
     TransientDAG, TransientNode,
     # Index
     load_index, save_index,
+    # Skeletonize
+    skeletonize_markdown, Section,
     # Core utilities
     parse_frontmatter, compute_body_hash, get_root_dir,
     # Integration
