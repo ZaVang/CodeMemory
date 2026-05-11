@@ -31,7 +31,7 @@ CodeMemory/
 │       │   ├── __init__.py
 │       │   ├── common.py         # intensity 解析 + 文本工具
 │       │   ├── markdown.py       # 节拆分 + 骨架化
-│       │   └── code.py           # Phase 3 代码骨架化（stub）
+│       │   └── code.py           # 代码骨架化（Python/JS/TS，Tree-sitter）
 │       ├── integrations.py      # CodememoryToolkit（OpenAI/Anthropic/Gemini）
 │       ├── cli.py               # 薄 argparse 壳（< 200 行）
 │       └── tools.py             # harnesslib Sandbox 工具注册
@@ -124,7 +124,7 @@ data = entry.model_dump(mode="json")
 ## 代码规范
 
 ### 技术栈
-- Python 3.13+，核心依赖：`pyyaml`、`pydantic>=2.0`
+- Python 3.13+，核心依赖：`pyyaml`、`pydantic>=2.0`；可选依赖 `tree-sitter`（代码骨架化需要 `pip install codememory[code]`）
 - codememory 自身不依赖 harnesslib 或 llm_gateway（只在 tools.py 和 integrations.py 中适配接口）
 - token 估算用 `len(text)` 近似
 
@@ -179,7 +179,7 @@ codememory snapshot <id> [--target <id> | --from-dag <json_file>]
 
 ## 测试规范
 
-- 单元测试：`PYTHONPATH=src python -m pytest tests/unit/ -v` — 93 个测试覆盖 resolve/validate/create/update/skeletonize/边界
+- 单元测试：`PYTHONPATH=src python -m pytest tests/unit/ -v` — 108 个测试覆盖 resolve/validate/create/update/skeletonize/边界
 - 集成测试：`PYTHONPATH=src python tests/integration_test.py` — 24 个断言覆盖全部场景
 - 手工验证：`validate` → `resolve` → `check output`
 - 边界测试：循环依赖、断链、空记忆、超大/零预算

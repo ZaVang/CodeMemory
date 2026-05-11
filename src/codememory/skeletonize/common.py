@@ -2,11 +2,17 @@
 
 import re
 
-_INTENSITY_RE = re.compile(r'<!--\s*@intensity:\s*(\d+)\s*-->')
+# Matches: <!-- @intensity:N --> | # @intensity:N | // @intensity:N
+_INTENSITY_RE = re.compile(r'(?:<!--|#|//)\s*@intensity:\s*(\d+)\s*(?:-->)?')
 
 
 def parse_intensity(text: str) -> int | None:
-    """Extract @intensity value from a <!-- @intensity:N --> marker.
+    """Extract @intensity value from annotation markers.
+
+    Supported formats:
+      <!-- @intensity:N -->  (Markdown / HTML)
+      # @intensity:N         (Python, YAML, shell)
+      // @intensity:N        (JS, TS, Go, Rust, Java)
 
     Returns None if no marker found. Values clamped to 1-10.
     """
@@ -42,7 +48,7 @@ def extract_first_sentence(text: str, max_chars: int = 200) -> str:
 
 
 def strip_intensity_markers(text: str) -> str:
-    """Remove all <!-- @intensity:N --> markers from text."""
+    """Remove all @intensity annotation markers from text."""
     return _INTENSITY_RE.sub('', text)
 
 

@@ -16,6 +16,14 @@ dependencies = [
     "python-dotenv>=1.0",
 ]
 
+[project.optional-dependencies]
+code = [
+    "tree-sitter>=0.22",
+    "tree-sitter-python>=0.22",
+    "tree-sitter-javascript>=0.22",
+    "tree-sitter-typescript>=0.22",
+]
+
 [project.scripts]
 codememory = "codememory.cli:main"
 codememory-mcp = "codememory.mcp_server:main"

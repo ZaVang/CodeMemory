@@ -189,3 +189,94 @@ class TestSkeletonizeMarkdown:
         text = "## Note\n<!-- @intensity:1 -->\nShort."
         sections = skeletonize_markdown(text, min_intensity=5)
         assert 'truncated' not in sections[0].body
+
+
+# ── Code skeletonization tests ─────────────────────────────────────────
+
+from codememory.skeletonize.code import skeletonize_code, supports_extension
+
+
+class TestSupportsExtension:
+    def test_python_supported(self):
+        assert supports_extension('.py') is True
+
+    def test_javascript_supported(self):
+        assert supports_extension('.js') is True
+
+    def test_typescript_supported(self):
+        assert supports_extension('.ts') is True
+
+    def test_unsupported(self):
+        assert supports_extension('.go') is False
+
+    def test_case_insensitive(self):
+        assert supports_extension('.PY') is True
+
+
+class TestSkeletonizePython:
+    def test_low_intensity_replaced(self):
+        code = "# @intensity:3\ndef foo():\n    return 1\n"
+        result = skeletonize_code(code, '.py', min_intensity=5)
+        assert 'pass' in result
+        assert '@intensity:3' in result
+        assert 'truncated' in result
+
+    def test_high_intensity_preserved(self):
+        code = "# @intensity:8\ndef foo():\n    return 1\n"
+        result = skeletonize_code(code, '.py', min_intensity=5)
+        assert 'return 1' in result
+        assert 'pass' not in result
+
+    def test_no_annotation_default_kept(self):
+        code = "def foo():\n    return 1\n"
+        result = skeletonize_code(code, '.py', min_intensity=5)
+        assert 'return 1' in result
+
+    def test_mixed_intensities(self):
+        code = (
+            "# @intensity:2\n"
+            "def helper():\n"
+            "    return 1\n"
+            "\n"
+            "# @intensity:9\n"
+            "def core():\n"
+            "    return 99\n"
+        )
+        result = skeletonize_code(code, '.py', min_intensity=5)
+        assert 'pass' in result  # helper skeletonized
+        assert 'return 99' in result  # core preserved
+
+    def test_class_definition_skeletonized(self):
+        code = "# @intensity:3\nclass Helper:\n    def method(self):\n        return 1\n"
+        result = skeletonize_code(code, '.py', min_intensity=5)
+        assert 'pass' in result
+
+
+class TestSkeletonizeJavaScript:
+    def test_low_intensity_replaced(self):
+        code = "// @intensity:2\nfunction foo() {\n  return 1;\n}\n"
+        result = skeletonize_code(code, '.js', min_intensity=5)
+        assert 'truncated' in result
+        assert '{' in result
+        assert '}' in result
+
+    def test_high_intensity_preserved(self):
+        code = "// @intensity:8\nfunction foo() {\n  return 1;\n}\n"
+        result = skeletonize_code(code, '.js', min_intensity=5)
+        assert 'return 1' in result
+
+    def test_parse_error_returns_original(self):
+        result = skeletonize_code("not valid javascript {{{", '.js')
+        assert 'not valid' in result
+
+
+class TestSkeletonizeTypeScript:
+    def test_low_intensity_replaced(self):
+        code = "// @intensity:2\nfunction foo(x: number): number {\n  return x;\n}\n"
+        result = skeletonize_code(code, '.ts', min_intensity=5)
+        assert 'truncated' in result
+
+    def test_high_intensity_preserved(self):
+        code = "// @intensity:7\nfunction foo(x: number): number {\n  return x;\n}\n"
+        result = skeletonize_code(code, '.ts', min_intensity=5)
+        assert 'return x' in result

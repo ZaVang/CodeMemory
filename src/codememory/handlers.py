@@ -26,6 +26,7 @@ from .resolve import resolve
 from .search import search
 from .snapshot import snapshot_dag
 from .skeletonize.markdown import skeletonize_markdown
+from .skeletonize.code import skeletonize_code, supports_extension
 from .suggest_deps import suggest_deps
 from .update import update
 from .validate import validate
@@ -512,6 +513,56 @@ def handle_import(
     return "\n".join(str(p) for p in paths)
 
 
+def _write_skeleton_memory(
+    root: Path,
+    memory_id: str,
+    summary: str,
+    body_text: str,
+    intensity: int,
+    tags: list[str],
+    rel: Path,
+    dry_run: bool,
+    created: list[str],
+) -> None:
+    """Write a single skeletonized memory to disk (or print preview in dry-run)."""
+    frontmatter = {
+        'type': 'atom',
+        'id': memory_id,
+        'summary': summary,
+        'status': 'active',
+        'created': datetime.now(timezone.utc).strftime('%Y-%m-%d'),
+        'updated': datetime.now(timezone.utc).strftime('%Y-%m-%d'),
+        'version': 1,
+        'tags': tags + ['skeletonized'],
+        'intensity': intensity,
+        'maturity': 'draft',
+        'source': {
+            'platform': 'skeletonize',
+            'created_by': 'codememory skeletonize',
+            'original_file': str(rel),
+        },
+    }
+
+    frontmatter['summary_hash'] = _cbh(body_text)
+
+    import yaml
+    yaml_str = yaml.dump(frontmatter, allow_unicode=True, sort_keys=False)
+    content = f'---\n{yaml_str}---\n{body_text}\n'
+
+    if dry_run:
+        print(f'[{memory_id}] (intensity={intensity})')
+        preview = body_text[:200] + ('...' if len(body_text) > 200 else '')
+        print(preview)
+        print()
+        created.append(f'[dry-run] {memory_id}')
+    else:
+        file_path = get_memory_path(root, memory_id)
+        file_path.parent.mkdir(parents=True, exist_ok=True)
+        file_path.write_text(content, encoding='utf-8')
+        print(f'Skeletonized: {file_path} (intensity={intensity})')
+        created.append(str(file_path))
+
+
 def handle_skeletonize(
     root: Path,
     source: str,
@@ -526,7 +577,6 @@ def handle_skeletonize(
     as a memory atom in *root*.
     """
     import re
-    import yaml
 
     from .skeletonize.common import slugify as _slug
     from .skeletonize.common import extract_first_sentence as _first_sent
@@ -536,85 +586,70 @@ def handle_skeletonize(
         return f"Error: source not found: {source}"
 
     # Collect .md files
-    md_files: list[Path] = []
-    if source_path.is_file():
-        if source_path.suffix == '.md':
-            md_files = [source_path]
-        else:
-            return f"Error: not a .md file: {source}"
-    else:
-        md_files = sorted(source_path.rglob('*.md'))
+    CODE_EXTS = {'.py', '.js', '.ts', '.jsx', '.tsx', '.mjs', '.cjs'}
 
-    if not md_files:
-        return f"No .md files found in: {source}"
+    # Collect input files
+    input_files: list[Path] = []
+    if source_path.is_file():
+        ext = source_path.suffix.lower()
+        if ext == '.md' or ext in CODE_EXTS:
+            input_files = [source_path]
+        else:
+            return f"Error: unsupported file type: {source_path.suffix}"
+    else:
+        input_files = sorted(source_path.rglob('*.md'))
+        for ext in CODE_EXTS:
+            input_files.extend(sorted(source_path.rglob(f'*{ext}')))
+
+    if not input_files:
+        return f"No supported files found in: {source}"
 
     tags = tags or []
     total_sections = 0
     created: list[str] = []
 
-    for md_file in md_files:
+    for source_file in input_files:
         try:
-            text = md_file.read_text(encoding='utf-8')
+            text = source_file.read_text(encoding='utf-8')
         except Exception as e:
-            _logger.warning("Skipping %s: %s", md_file, e)
+            _logger.warning("Skipping %s: %s", source_file, e)
             continue
 
-        sections = skeletonize_markdown(text, min_intensity=min_intensity)
+        ext = source_file.suffix.lower()
 
         # Build ID prefix from relative path
         try:
-            rel = md_file.relative_to(source_path) if source_path.is_dir() else Path(md_file.name)
+            rel = source_file.relative_to(source_path) if source_path.is_dir() else Path(source_file.name)
         except ValueError:
-            rel = Path(md_file.name)
-        # /-separated path parts with sanitized names
+            rel = Path(source_file.name)
         parts = list(rel.parts[:-1]) + [rel.stem]
         clean_parts = [re.sub(r'[^\w-]', '-', p.lower()).strip('-')[:30] for p in parts]
         prefix = '/'.join(p for p in clean_parts if p)
 
-        for i, section in enumerate(sections):
-            heading_slug = _slug(section.heading) if section.heading else f'section-{i}'
+        if ext == '.md':
+            # Markdown: split into sections, one memory per section
+            sections = skeletonize_markdown(text, min_intensity=min_intensity)
+            for i, section in enumerate(sections):
+                heading_slug = _slug(section.heading) if section.heading else f'section-{i}'
+                memory_id = f'user/imports/{prefix}/{heading_slug}'
+                summary = _first_sent(section.body, max_chars=100) if section.body else (section.heading or 'Untitled')
+                body_text = f'# {section.heading}\n\n{section.body}' if section.heading else section.body
+                _write_skeleton_memory(
+                    root, memory_id, summary, body_text, section.intensity,
+                    tags, rel, dry_run, created,
+                )
+                total_sections += 1
+        else:
+            # Code file: skeletonize whole file, one memory per file
+            skeletonized = skeletonize_code(text, ext, min_intensity=min_intensity)
+            heading_slug = _slug(source_file.stem)
             memory_id = f'user/imports/{prefix}/{heading_slug}'
-
-            summary = _first_sent(section.body, max_chars=100) if section.body else (section.heading or 'Untitled')
-
-            body_text = f'# {section.heading}\n\n{section.body}' if section.heading else section.body
-
-            frontmatter = {
-                'type': 'atom',
-                'id': memory_id,
-                'summary': summary,
-                'status': 'active',
-                'created': datetime.now(timezone.utc).strftime('%Y-%m-%d'),
-                'updated': datetime.now(timezone.utc).strftime('%Y-%m-%d'),
-                'version': 1,
-                'tags': tags + ['skeletonized'],
-                'intensity': section.intensity,
-                'maturity': 'draft',
-                'source': {
-                    'platform': 'skeletonize',
-                    'created_by': 'codememory skeletonize',
-                    'original_file': str(rel),
-                },
-            }
-
-            frontmatter['summary_hash'] = _cbh(body_text)
-
-            yaml_str = yaml.dump(frontmatter, allow_unicode=True, sort_keys=False)
-            content = f'---\n{yaml_str}---\n{body_text}\n'
-
-            if dry_run:
-                print(f'[{memory_id}] (intensity={section.intensity})')
-                preview = body_text[:200] + ('...' if len(body_text) > 200 else '')
-                print(preview)
-                print()
-                created.append(f'[dry-run] {memory_id}')
-            else:
-                file_path = get_memory_path(root, memory_id)
-                file_path.parent.mkdir(parents=True, exist_ok=True)
-                file_path.write_text(content, encoding='utf-8')
-                print(f'Skeletonized: {file_path} (intensity={section.intensity})')
-                created.append(str(file_path))
-
+            summary = _first_sent(text, max_chars=100) or source_file.stem
+            body_text = f'# {source_file.stem}\n\n```{ext[1:]}\n{skeletonized}\n```\n'
+            _write_skeleton_memory(
+                root, memory_id, summary, body_text, 5,
+                tags + ['code'], rel, dry_run, created,
+            )
             total_sections += 1
 
     if not dry_run and created:
@@ -622,12 +657,12 @@ def handle_skeletonize(
         _reindex(root)
         try:
             from .log import append_log as _append_log
-            _append_log(root, 'skeletonize', f'{len(created)} memories from {len(md_files)} file(s)')
+            _append_log(root, 'skeletonize', f'{len(created)} memories from {len(input_files)} file(s)')
         except ImportError:
             pass
 
     return (
-        f'Skeletonized {total_sections} section(s) from {len(md_files)} file(s)\n'
+        f'Skeletonized {total_sections} section(s) from {len(input_files)} file(s)\n'
         + '\n'.join(created)
     )
 
