@@ -152,6 +152,13 @@ codememory update user/ideas/new-idea --body "..."
 codememory reindex
 codememory validate
 codememory search --query "semiconductor"
+
+# 导入
+codememory import --file notes.txt --extract preferences
+codememory skeletonize ./my-notes/ --min-intensity 5   # 从 Markdown 文件批量导入
+
+# 依赖推断
+codememory suggest-deps user/investment/context
 ```
 
 ---

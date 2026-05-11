@@ -80,6 +80,10 @@ CodeMemory/
 │   ├── changelog.py / log.py     # 变更历史 / 审计日志
 │   ├── transient.py / snapshot.py # 会话级 TransientDAG / 持久化
 │   ├── import_cmd.py             # 冷启动文本导入
+│   ├── skeletonize/              # 结构化批量导入
+│   │   ├── common.py             # intensity 解析 + 文本工具
+│   │   ├── markdown.py           # Markdown 节拆分 + 骨架化
+│   │   └── code.py               # Phase 3 代码骨架化（stub）
 │   ├── cli.py                    # argparse 薄壳（< 250 行）
 │   ├── tools.py                  # harnesslib Sandbox 工具注册
 │   ├── integrations.py           # OpenAI/Anthropic/Gemini toolkit
@@ -109,7 +113,7 @@ CodeMemory/
 │   ├── software-architecture/    # 架构决策（11 条）
 │   └── quant_operators/          # API 文档（62 条）
 ├── tests/
-│   ├── unit/                     # 57 个单元测试
+│   ├── unit/                     # 93 个单元测试（含 36 个 skeletonize 测试）
 │   ├── integration_test.py       # 24 个集成测试
 │   └── test_api.py               # 5 个 API 冒烟测试
 └── pyproject.toml
