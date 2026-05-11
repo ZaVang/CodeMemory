@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-05-08T13:09:05.319491",
+  "updated": "2026-05-11T14:06:01.014312",
   "memories": {
     "user/test/r6-test": {
       "type": "atom",
@@ -15,7 +15,7 @@
       "path": "user/test/r6-test.md",
       "access_count": 1,
       "last_access": "2026-05-06T12:15:34.521265",
-      "days_since_last_access": 1,
+      "days_since_last_access": 4,
       "created": "2026-05-06",
       "updated": "2026-05-06",
       "imports": {},
@@ -566,7 +566,7 @@
       "path": "api/quantdf/select.md",
       "access_count": 2,
       "last_access": "2026-04-30T10:18:20.899250",
-      "days_since_last_access": 7,
+      "days_since_last_access": 10,
       "created": "",
       "updated": "",
       "imports": {
@@ -609,7 +609,7 @@
       "path": "api/quantdf/time_series.md",
       "access_count": 2,
       "last_access": "2026-04-30T10:17:25.857469",
-      "days_since_last_access": 7,
+      "days_since_last_access": 10,
       "created": "",
       "updated": "",
       "imports": {
@@ -775,7 +775,7 @@
       "path": "api/quantdf/weekly_drawdown.md",
       "access_count": 1,
       "last_access": "2026-04-30T10:04:35.877930",
-      "days_since_last_access": 7,
+      "days_since_last_access": 10,
       "created": "",
       "updated": "",
       "imports": {
@@ -858,7 +858,7 @@
       "path": "api/quantdf/_index.md",
       "access_count": 6,
       "last_access": "2026-05-08T11:29:50.123696",
-      "days_since_last_access": 0,
+      "days_since_last_access": 2,
       "created": "",
       "updated": "",
       "imports": {
@@ -2602,7 +2602,7 @@
       "path": "api/quantexpr/_index.md",
       "access_count": 1,
       "last_access": "2026-04-30T09:54:24.681859",
-      "days_since_last_access": 7,
+      "days_since_last_access": 10,
       "created": "",
       "updated": "",
       "imports": {

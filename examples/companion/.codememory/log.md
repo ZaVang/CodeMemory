@@ -172,3 +172,4 @@
 | 2026-05-08 13:04:01 | maturity     | user/preferences/morning-coffee: verified -> proven
 | 2026-05-08 13:04:01 | maturity     | user/feelings/burnout-april: verified -> proven
 | 2026-05-08 13:14:07 | maturity     | user/preferences/morning-coffee: verified -> proven
+| 2026-05-11 14:06:23 | maturity     | user/beliefs/friendship-view: draft -> verified

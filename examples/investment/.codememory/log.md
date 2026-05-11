@@ -1103,3 +1103,11 @@
 | 2026-05-07 21:07:46 | update       | user/test/sprint5-c-stale v3: Change body without updating summary
 | 2026-05-07 21:07:46 | update       | user/test/sprint5-c-stale v4: Fix summary to match new body
 | 2026-05-07 21:07:46 | snapshot     | sprint5-e-210746 (2 nodes)
+| 2026-05-08 13:19:51 | maturity     | user/facts/soxl-composition: draft -> verified
+| 2026-05-08 13:19:51 | maturity     | user/facts/nvidia-earnings: verified -> proven
+| 2026-05-08 13:19:51 | maturity     | user/investment/risk-tolerance: draft -> verified
+| 2026-05-08 13:19:51 | maturity     | user/investment/semiconductor-thesis: draft -> verified
+| 2026-05-08 13:19:51 | maturity     | user/observations/soxl-drop-march: draft -> verified
+| 2026-05-08 13:19:51 | maturity     | user/investment/current-holdings: draft -> verified
+| 2026-05-08 13:19:51 | maturity     | user/investment/february-buy: draft -> verified
+| 2026-05-08 13:19:51 | maturity     | user/investment/context: draft -> verified
