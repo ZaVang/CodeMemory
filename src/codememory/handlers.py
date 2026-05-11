@@ -525,8 +525,8 @@ def handle_skeletonize(
     sections, applies intensity-based truncation, and writes each section
     as a memory atom in *root*.
     """
-    import re as _re
-    import yaml as _yaml
+    import re
+    import yaml
 
     from .skeletonize.common import slugify as _slug
     from .skeletonize.common import extract_first_sentence as _first_sent
@@ -568,7 +568,7 @@ def handle_skeletonize(
             rel = Path(md_file.name)
         # /-separated path parts with sanitized names
         parts = list(rel.parts[:-1]) + [rel.stem]
-        clean_parts = [_re.sub(r'[^\w-]', '-', p.lower()).strip('-')[:30] for p in parts]
+        clean_parts = [re.sub(r'[^\w-]', '-', p.lower()).strip('-')[:30] for p in parts]
         prefix = '/'.join(p for p in clean_parts if p)
 
         for i, section in enumerate(sections):
@@ -599,7 +599,7 @@ def handle_skeletonize(
 
             frontmatter['summary_hash'] = _cbh(body_text)
 
-            yaml_str = _yaml.dump(frontmatter, allow_unicode=True, sort_keys=False)
+            yaml_str = yaml.dump(frontmatter, allow_unicode=True, sort_keys=False)
             content = f'---\n{yaml_str}---\n{body_text}\n'
 
             if dry_run:

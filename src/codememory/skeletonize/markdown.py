@@ -41,8 +41,9 @@ def _find_section_intensity(heading_start: int, text: str, body: str) -> int:
         if val is not None:
             return val
 
-    # Check body prefix
-    val = parse_intensity(body[:200])
+    # Check body prefix, but strip trailing markers that belong to next section
+    body_clean = re.sub(r'\n?\s*<!--\s*@intensity:\s*\d+\s*-->\s*$', '', body)
+    val = parse_intensity(body_clean[:200])
     if val is not None:
         return val
 
