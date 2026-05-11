@@ -27,6 +27,11 @@ CodeMemory/
 │       ├── log.py                # 全局追加审计日志
 │       ├── import_cmd.py         # 冷启动文本导入
 │       ├── suggest_deps.py       # 自动依赖推断（三层过滤 + 双向）
+│       ├── skeletonize/          # 结构化批量导入（Markdown 骨架化）
+│       │   ├── __init__.py
+│       │   ├── common.py         # intensity 解析 + 文本工具
+│       │   ├── markdown.py       # 节拆分 + 骨架化
+│       │   └── code.py           # Phase 3 代码骨架化（stub）
 │       ├── integrations.py      # CodememoryToolkit（OpenAI/Anthropic/Gemini）
 │       ├── cli.py               # 薄 argparse 壳（< 200 行）
 │       └── tools.py             # harnesslib Sandbox 工具注册
@@ -159,6 +164,7 @@ codememory log [--limit N]
 # 导入
 codememory import --file notes.txt --extract preferences
 codememory import --stdin --extract decisions
+codememory skeletonize <file_or_dir> [--min-intensity N] [--dry-run] [--tags "a,b"]
 
 # 依赖推断
 codememory suggest-deps <id> [--min-score N] [--forward-only] [--retroactive-only]
@@ -173,7 +179,7 @@ codememory snapshot <id> [--target <id> | --from-dag <json_file>]
 
 ## 测试规范
 
-- 单元测试：`PYTHONPATH=src python -m pytest tests/unit/ -v` — 57 个测试覆盖 resolve/validate/create/update/边界
+- 单元测试：`PYTHONPATH=src python -m pytest tests/unit/ -v` — 93 个测试覆盖 resolve/validate/create/update/skeletonize/边界
 - 集成测试：`PYTHONPATH=src python tests/integration_test.py` — 24 个断言覆盖全部场景
 - 手工验证：`validate` → `resolve` → `check output`
 - 边界测试：循环依赖、断链、空记忆、超大/零预算
@@ -182,6 +188,9 @@ codememory snapshot <id> [--target <id> | --from-dag <json_file>]
   codememory reindex && codememory validate
   codememory resolve user/investment/context
   codememory resolve user/investment/context --budget 500
+  # skeletonize 验证
+  codememory skeletonize examples/ --dry-run
+  codememory skeletonize <dir> --min-intensity 5 --tags "imported"
   ```
 
 ## 禁止事项
