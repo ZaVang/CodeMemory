@@ -17,6 +17,7 @@ from .handlers import (
     handle_search,
     handle_skeletonize,
     handle_snapshot,
+    handle_diff,
     handle_suggest_deps,
     handle_update,
     handle_validate,
@@ -48,6 +49,8 @@ def main(argv: list[str] | None = None):
                    help="Initial maturity (default: draft)")
     p.add_argument("--cache-stable", action="store_true", dest="cache_stable",
                    help="Mark as suitable for LLM cache prefix")
+    p.add_argument("--lifecycle", choices=["permanent", "stable", "ephemeral"], default="permanent",
+                   help="Lifecycle: permanent (never auto-archive), stable (auto-upgrade), ephemeral (auto-archive when unused)")
 
     # update
     p = subparsers.add_parser("update", help="Update an existing memory")
@@ -157,6 +160,11 @@ def main(argv: list[str] | None = None):
     p.add_argument("--retroactive-only", dest="retroactive_only", action="store_true",
                    help="Show only retroactive candidates (they should import the target)")
 
+    # diff
+    p = subparsers.add_parser("diff", help="Show what changed since last index snapshot")
+    _add_logging_flags(p)
+    p.add_argument("--snapshot", help="Path to a previous index snapshot (default: .codememory/index_snapshot.json)")
+
     # skeletonize
     p = subparsers.add_parser("skeletonize", help="Import structured memories from Markdown/code files")
     _add_logging_flags(p)
@@ -187,7 +195,8 @@ def main(argv: list[str] | None = None):
             tags_list = [t.strip() for t in args.tags.split(",") if t.strip()]
         print(handle_create(root, args.type, args.id, schema=args.schema,
                             intensity=args.intensity, tags=tags_list, dry_run=args.dry_run,
-                            maturity=args.maturity, cache_stable=args.cache_stable))
+                            maturity=args.maturity, cache_stable=args.cache_stable,
+                            lifecycle=args.lifecycle))
     elif cmd == "update":
         print(handle_update(root, args.id, body=args.body, summary=args.summary,
                             change_note=args.change_note, status=args.status,
@@ -244,6 +253,8 @@ def main(argv: list[str] | None = None):
             forward_only=args.forward_only,
             retroactive_only=args.retroactive_only,
         ))
+    elif cmd == "diff":
+        print(handle_diff(root, snapshot=args.snapshot))
     elif cmd == "skeletonize":
         tags_list = None
         if args.tags:

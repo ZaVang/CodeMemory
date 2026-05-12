@@ -65,6 +65,7 @@ def create(
     maturity: str = "draft",
     stability: float | None = None,
     cache_stable: bool = False,
+    lifecycle: str = "permanent",
 ) -> Path | None:
     """Create a new memory file with frontmatter template.
 
@@ -79,6 +80,7 @@ def create(
         maturity: Initial maturity (default "draft").
         stability: Explicit stability override. If None, use domain default.
         cache_stable: Mark as suitable for LLM cache prefix.
+        lifecycle: permanent | stable | ephemeral.
 
     Returns:
         Path to the created file, or None if dry_run.
@@ -113,6 +115,7 @@ def create(
         "maturity": maturity,
         "stability": stability,
         "cache_stable": cache_stable,
+        "lifecycle": lifecycle,
         "evidence": {
             "contributors": ["user"],
             "sessions": [],

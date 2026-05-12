@@ -83,6 +83,7 @@ def handle_create(
     maturity: str = "draft",
     stability: float | None = None,
     cache_stable: bool = False,
+    lifecycle: str = "permanent",
 ) -> str:
     """Create a new memory.  Returns path string or dry-run preview."""
     file_path = create(
@@ -96,6 +97,7 @@ def handle_create(
         maturity=maturity,
         stability=stability,
         cache_stable=cache_stable,
+        lifecycle=lifecycle,
     )
     if file_path is None:
         return "dry-run: no file created"
@@ -767,3 +769,12 @@ def handle_suggest_deps(
         forward_only=forward_only,
         retroactive_only=retroactive_only,
     )
+
+
+def handle_diff(
+    root: Path,
+    snapshot: str | None = None,
+) -> str:
+    """Show what changed since the last index snapshot."""
+    from .diff import diff as _diff
+    return _diff(root, snapshot)

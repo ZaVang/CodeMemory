@@ -1770,3 +1770,63 @@ PYTHONPATH=src python -m pytest tests/unit/ -q --tb=short
 PYTHONPATH=src python tests/integration_test.py
 ```
 
+
+
+## 第 3 轮追加任务（AririgiAgent 审查，2026-05-12）
+
+> **来源邮件**：uid:7 "Re: 几个 CodeMemory 演进 idea"
+
+### 已处理邮件 UID（续）
+
+| UID | 日期 | 主题 | 轮次 |
+|-----|------|------|------|
+| 6 | 2026-05-12 16:36 | Sprint 14 审查闭环确认 | — （确认） |
+| 7 | 2026-05-12 16:40 | Re: 几个 CodeMemory 演进 idea | R3 |
+
+### 任务 1：记忆 `lifecycle` 字段 + reindex 自动降级
+
+| # | 子任务 | 说明 | 状态 |
+|---|--------|------|------|
+| 1.1 | `models.py` `MemoryEntry` 添加 `lifecycle` 字段 | `lifecycle: str = "permanent"`，可选 `permanent`/`stable`/`ephemeral` | [x] |
+| 1.2 | `create.py` 模板 + CLI 支持 | `create` 命令新增 `--lifecycle` flag | [x] |
+| 1.3 | `index.py` reindex 自动降级 ephemeral | 若 `lifecycle == ephemeral` 且 `access_count == 0`（从未被引用），标记为 `status: archived` | [x] |
+| 1.4 | `index.py` reindex 自动升级 stable | 若 `lifecycle == stable`，复用 cache_stable 逻辑（hash 不变 + access_count >= 2） | [x] |
+
+**产出**：记忆有明确的生命周期管理，临时记忆自动清理
+
+---
+
+### 任务 2：`codememory diff` 命令
+
+| # | 子任务 | 说明 | 状态 |
+|---|--------|------|------|
+| 2.1 | `diff.py` 新模块 | 对比两次 reindex 之间的 `summary_hash` 变化，列出变更记忆列表 | [x] |
+| 2.2 | `handlers.py` `handle_diff()` | 输出：changed（hash 变化）/ added（新记忆）/ removed（已删除） | [x] |
+| 2.3 | `cli.py` 注册 `diff` 子命令 | `codememory diff [--since <commit>]` | [x] |
+
+**产出**：`codememory diff` 可见化 reindex 之间的知识变更
+
+---
+
+### 本轮拒绝
+
+- **语义去重（idea 1）** —— 与项目核心理念冲突。CLAUDE.md 明确声明"记忆加载是依赖解析问题，不是搜索问题……不靠语义相似度猜测"。引入 embedding 相似度会打破整个 DAG 架构的设计契约。**不实施。**
+
+### 本轮延期
+
+- **上下文预算感知的摘要层级（idea 3）** —— 依赖 resolve.py 的 --budget 已有雏形，但动态缩放需要在 DAG 加载前预估算 token 分布，涉及 resolve 引擎重构。留给未来 Sprint。
+- **交互式 HTML 依赖图谱（idea 4）** —— D3.js/vis.js 集成是纯前端工作量，可复用 skeletonize --format html 通道，但约需 2-3 天。留给未来 Sprint。
+
+### 验收命令
+
+```bash
+# 任务 1：lifecycle
+codememory create --id user/test/ephemeral-note --lifecycle ephemeral --dry-run
+
+# 任务 2：diff
+codememory diff --since HEAD~1
+
+# 全量测试
+PYTHONPATH=src python -m pytest tests/unit/ -q --tb=short
+PYTHONPATH=src python tests/integration_test.py
+```

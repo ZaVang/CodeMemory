@@ -86,6 +86,9 @@ class MemoryEntry(BaseModel):
     # Prompt caching hint (Sprint 14)
     cache_stable: bool = Field(default=False, description="Suitable for LLM cache prefix")
 
+    # Lifecycle management (R3)
+    lifecycle: str = Field(default="permanent", description="permanent | stable | ephemeral")
+
     # Change tracking (from update)
     change_note: str | None = None
     change_log: list[dict[str, Any]] = Field(default_factory=list)

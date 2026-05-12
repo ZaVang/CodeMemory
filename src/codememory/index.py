@@ -121,6 +121,16 @@ def reindex(root_dir: Path) -> int:
                     # Auto-infer: stable if body hash unchanged across reindex
                     if old_entry.summary_hash == new_hash:
                         entry.cache_stable = True
+                if "lifecycle" in meta:
+                    entry.lifecycle = str(meta["lifecycle"])
+
+                # R3: lifecycle auto-transitions
+                # ephemeral + never accessed → auto-archive
+                if entry.lifecycle == "ephemeral" and entry.access_count == 0:
+                    entry.status = "archived"
+                # stable + cache_stable auto-inferred → upgrade lifecycle tracking
+                # (cache_stable logic above already handles the inference)
+
                 if "source" in meta:
                     entry.source = meta["source"]
                 if "maturity" in meta:
