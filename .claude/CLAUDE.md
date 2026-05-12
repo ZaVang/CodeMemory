@@ -79,6 +79,7 @@ Agent 与记忆系统之间的接口层，实现五个认知基础操作（稳�
 - 框架（`src/codememory/`）与数据（`examples/`）物理分离
 - `cache_stable` 自动推断：reindex 时，若 `summary_hash` 未变化且 `access_count >= 2`，自动标记为 `true`。手动 frontmatter 声明 `cache_stable: true/false` 优先级高于自动推断。
 - `lifecycle` 自动升级：`stable` 记忆可被 reindex 自动推断 `cache_stable=True`，但 `lifecycle` 字段本身不会自动升为 `permanent`——用户需手动 `update` 确认升级。`ephemeral` + `access_count==0` 会被自动归档（`status: archived`）。
+- **设计哲学**：每个新功能用同一个标准筛选——"它是加强还是稀释 '记忆 = DAG 依赖解析' 这个核心定位？"加强（让 DAG 更可见、更可感知、更易维护）优先。稀释（引入与核心理念无关的范式，如语义搜索、分支管理）拒绝或延期。这个标准是内部决策工具，也是外部贡献者选址的边界锚点。
 
 ---
 
