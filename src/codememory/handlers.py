@@ -26,7 +26,7 @@ from .resolve import resolve
 from .search import search
 from .snapshot import snapshot_dag
 from .skeletonize.markdown import skeletonize_markdown
-from .skeletonize.code import skeletonize_code, supports_extension
+from .skeletonize.code import skeletonize_code, skeletonize_module, supports_extension
 from .suggest_deps import suggest_deps
 from .update import update
 from .validate import validate
@@ -82,6 +82,7 @@ def handle_create(
     dry_run: bool = False,
     maturity: str = "draft",
     stability: float | None = None,
+    cache_stable: bool = False,
 ) -> str:
     """Create a new memory.  Returns path string or dry-run preview."""
     file_path = create(
@@ -94,6 +95,7 @@ def handle_create(
         dry_run=dry_run,
         maturity=maturity,
         stability=stability,
+        cache_stable=cache_stable,
     )
     if file_path is None:
         return "dry-run: no file created"
@@ -569,24 +571,42 @@ def handle_skeletonize(
     min_intensity: int = 5,
     dry_run: bool = False,
     tags: list[str] | None = None,
+    output_format: str = "memory",
+    output_dir: str | None = None,
+    mode: str = "file",
+    config: str | None = None,
 ) -> str:
-    """Skeletonize Markdown files into CodeMemory memories.
+    """Skeletonize Markdown/code files into CodeMemory memories or HTML.
 
-    Reads .md files from *source* (file or directory), splits each into
-    sections, applies intensity-based truncation, and writes each section
-    as a memory atom in *root*.
+    Reads .md/.py/.js/.ts/... files from *source* (file or directory),
+    splits each into sections, applies intensity-based truncation, and
+    either writes each section as a memory atom in *root* (--format memory)
+    or generates self-contained HTML files (--format html).
+
+    *mode* controls code skeletonization depth:
+      ``"file"`` — function/class-level, respects @intensity annotations
+      ``"module"`` — all bodies replaced, preserves imports + signatures only
     """
     import re
 
     from .skeletonize.common import slugify as _slug
     from .skeletonize.common import extract_first_sentence as _first_sent
+    from .skeletonize.common import render_to_html as _render_html
 
     source_path = Path(source).resolve()
     if not source_path.exists():
         return f"Error: source not found: {source}"
 
+    if output_format == "html" and not output_dir and not dry_run:
+        return "Error: --output-dir is required for --format html"
+
+    output_path = Path(output_dir).resolve() if output_dir else None
+    if output_path and output_format == "html" and not dry_run:
+        output_path.mkdir(parents=True, exist_ok=True)
+
     # Collect .md files
-    CODE_EXTS = {'.py', '.js', '.ts', '.jsx', '.tsx', '.mjs', '.cjs'}
+    CODE_EXTS = {'.py', '.js', '.ts', '.jsx', '.tsx', '.mjs', '.cjs',
+                 '.go', '.rs', '.java'}
 
     # Collect input files
     input_files: list[Path] = []
@@ -605,6 +625,23 @@ def handle_skeletonize(
         return f"No supported files found in: {source}"
 
     tags = tags or []
+
+    # Load skeletonize config for glob-matched intensity defaults
+    from .skeletonize.config import resolve_intensity as _resolve_cfg_intensity
+    config_root: Path | None = None
+    if config:
+        config_root = Path(config).resolve()
+    else:
+        # Auto-detect: look for .codememory/skeletonize.yaml from cwd upward
+        probe = Path.cwd()
+        for _ in range(8):
+            if (probe / '.codememory' / 'skeletonize.yaml').is_file():
+                config_root = probe
+                break
+            if probe.parent == probe:
+                break
+            probe = probe.parent
+
     total_sections = 0
     created: list[str] = []
 
@@ -627,32 +664,74 @@ def handle_skeletonize(
         prefix = '/'.join(p for p in clean_parts if p)
 
         if ext == '.md':
-            # Markdown: split into sections, one memory per section
+            # Markdown: split into sections
             sections = skeletonize_markdown(text, min_intensity=min_intensity)
-            for i, section in enumerate(sections):
-                heading_slug = _slug(section.heading) if section.heading else f'section-{i}'
-                memory_id = f'user/imports/{prefix}/{heading_slug}'
-                summary = _first_sent(section.body, max_chars=100) if section.body else (section.heading or 'Untitled')
-                body_text = f'# {section.heading}\n\n{section.body}' if section.heading else section.body
-                _write_skeleton_memory(
-                    root, memory_id, summary, body_text, section.intensity,
-                    tags, rel, dry_run, created,
+            total_sections += len(sections)
+
+            if output_format == 'html':
+                html = _render_html(
+                    sections, str(source_file),
+                    metadata={'tags': tags, 'intensity': min_intensity,
+                              'min_intensity': min_intensity},
                 )
-                total_sections += 1
+                if dry_run:
+                    created.append(f'[DRY-RUN] HTML: {source_file} ({len(sections)} sections)')
+                else:
+                    stem = source_file.stem or 'index'
+                    out_file = output_path / f'{stem}.html'
+                    out_file.write_text(html, encoding='utf-8')
+                    created.append(str(out_file))
+            else:
+                for i, section in enumerate(sections):
+                    heading_slug = _slug(section.heading) if section.heading else f'section-{i}'
+                    memory_id = f'user/imports/{prefix}/{heading_slug}'
+                    summary = _first_sent(section.body, max_chars=100) if section.body else (section.heading or 'Untitled')
+                    body_text = f'# {section.heading}\n\n{section.body}' if section.heading else section.body
+                    _write_skeleton_memory(
+                        root, memory_id, summary, body_text, section.intensity,
+                        tags, rel, dry_run, created,
+                    )
         else:
             # Code file: skeletonize whole file, one memory per file
-            skeletonized = skeletonize_code(text, ext, min_intensity=min_intensity)
+            skel_func = skeletonize_module if mode == 'module' else skeletonize_code
+            skel_kwargs: dict = {'text': text, 'file_ext': ext}
+            if mode == 'file':
+                skel_kwargs['min_intensity'] = min_intensity
+            # Resolve per-file config intensity
+            if config_root is not None:
+                cfg_intensity = _resolve_cfg_intensity(str(source_file), config_root)
+                if cfg_intensity is not None:
+                    skel_kwargs['config_intensity'] = cfg_intensity
+            skeletonized = skel_func(**skel_kwargs)
             heading_slug = _slug(source_file.stem)
             memory_id = f'user/imports/{prefix}/{heading_slug}'
             summary = _first_sent(text, max_chars=100) or source_file.stem
             body_text = f'# {source_file.stem}\n\n```{ext[1:]}\n{skeletonized}\n```\n'
-            _write_skeleton_memory(
-                root, memory_id, summary, body_text, 5,
-                tags + ['code'], rel, dry_run, created,
-            )
+
+            if output_format == 'html':
+                from .skeletonize.markdown import Section
+                sec = Section(level=1, heading=source_file.stem, body=skeletonized,
+                             intensity=5, raw=text)
+                html = _render_html(
+                    [sec], str(source_file),
+                    metadata={'tags': tags + ['code'], 'intensity': 5,
+                              'min_intensity': min_intensity},
+                )
+                if dry_run:
+                    created.append(f'[DRY-RUN] HTML: {source_file}')
+                else:
+                    stem = source_file.stem or 'index'
+                    out_file = output_path / f'{stem}.html'
+                    out_file.write_text(html, encoding='utf-8')
+                    created.append(str(out_file))
+            else:
+                _write_skeleton_memory(
+                    root, memory_id, summary, body_text, 5,
+                    tags + ['code'], rel, dry_run, created,
+                )
             total_sections += 1
 
-    if not dry_run and created:
+    if not dry_run and output_format == 'memory' and created:
         from .index import reindex as _reindex
         _reindex(root)
         try:
@@ -660,6 +739,12 @@ def handle_skeletonize(
             _append_log(root, 'skeletonize', f'{len(created)} memories from {len(input_files)} file(s)')
         except ImportError:
             pass
+
+    if output_format == 'html':
+        return (
+            f'Skeletonized {total_sections} section(s) to HTML from {len(input_files)} file(s)\n'
+            + ('\n'.join(created))
+        )
 
     return (
         f'Skeletonized {total_sections} section(s) from {len(input_files)} file(s)\n'

@@ -246,29 +246,30 @@ def resolve(
                                 )
 
         # Build display labels
+        cache_tag = ' [cache-stable]' if getattr(entry, 'cache_stable', False) else ''
         if focus:
             if focus in entry.tags:
                 full_text = (
-                    f"## [{i + 1}/{len(ordered)}] {mid} ({entry.type} - FOCUS)\n\n{body}\n\n"
+                    f"## [{i + 1}/{len(ordered)}] {mid} ({entry.type} - FOCUS{cache_tag})\n\n{body}\n\n"
                 )
                 summary_text = (
-                    f"## [{i + 1}/{len(ordered)}] {mid} ({entry.type} - FOCUS - SUMMARY (budget))\n\n"
+                    f"## [{i + 1}/{len(ordered)}] {mid} ({entry.type} - FOCUS - SUMMARY (budget){cache_tag})\n\n"
                     f"> {entry.summary}\n\n"
                 )
             else:
                 full_text = (
-                    f"## [{i + 1}/{len(ordered)}] {mid} ({entry.type})\n\n{body}\n\n"
+                    f"## [{i + 1}/{len(ordered)}] {mid} ({entry.type}{cache_tag})\n\n{body}\n\n"
                 )
                 summary_text = (
-                    f"## [{i + 1}/{len(ordered)}] {mid} ({entry.type} - SUMMARY (focus filter))\n\n"
+                    f"## [{i + 1}/{len(ordered)}] {mid} ({entry.type} - SUMMARY (focus filter){cache_tag})\n\n"
                     f"> {entry.summary}\n\n"
                 )
         else:
             full_text = (
-                f"## [{i + 1}/{len(ordered)}] {mid} ({entry.type})\n\n{body}\n\n"
+                f"## [{i + 1}/{len(ordered)}] {mid} ({entry.type}{cache_tag})\n\n{body}\n\n"
             )
             summary_text = (
-                f"## [{i + 1}/{len(ordered)}] {mid} ({entry.type} - SUMMARY - budget)\n\n"
+                f"## [{i + 1}/{len(ordered)}] {mid} ({entry.type} - SUMMARY - budget{cache_tag})\n\n"
                 f"> {entry.summary}\n\n"
             )
 

@@ -207,7 +207,17 @@ class TestSupportsExtension:
         assert supports_extension('.ts') is True
 
     def test_unsupported(self):
-        assert supports_extension('.go') is False
+        assert supports_extension('.rb') is False
+        assert supports_extension('.php') is False
+
+    def test_go_supported(self):
+        assert supports_extension('.go') is True
+
+    def test_rust_supported(self):
+        assert supports_extension('.rs') is True
+
+    def test_java_supported(self):
+        assert supports_extension('.java') is True
 
     def test_case_insensitive(self):
         assert supports_extension('.PY') is True
@@ -280,3 +290,87 @@ class TestSkeletonizeTypeScript:
         code = "// @intensity:7\nfunction foo(x: number): number {\n  return x;\n}\n"
         result = skeletonize_code(code, '.ts', min_intensity=5)
         assert 'return x' in result
+
+
+class TestSkeletonizeModule:
+    """Module mode: all bodies replaced regardless of @intensity."""
+
+    def test_all_bodies_replaced_python(self):
+        from codememory.skeletonize.code import skeletonize_module
+        code = """import os
+
+VALUE = 1
+
+# @intensity:9
+def important():
+    return VALUE
+
+class Helper:
+    def method(self):
+        pass
+"""
+        result = skeletonize_module(code, '.py')
+        assert 'import os' in result
+        assert 'VALUE = 1' in result
+        assert 'def important():' in result
+        assert 'return VALUE' not in result  # body replaced
+        assert 'class Helper:' in result
+        assert 'pass  # @intensity:' in result  # intensity shown in stub marker
+
+    def test_all_bodies_replaced_js(self):
+        from codememory.skeletonize.code import skeletonize_module
+        code = """import { foo } from 'bar';
+
+const X = 1;
+
+// @intensity:8
+function calc(n) {
+  return n * 2;
+}
+"""
+        result = skeletonize_module(code, '.js')
+        assert "import { foo } from 'bar';" in result
+        assert 'const X = 1;' in result
+        assert 'function calc(n)' in result
+        assert 'return n * 2;' not in result
+
+    def test_unsupported_extension_raises(self):
+        from codememory.skeletonize.code import skeletonize_module
+        with pytest.raises(ValueError, match='Unsupported'):
+            skeletonize_module('code', '.rb')
+
+
+class TestSkeletonizeGo:
+    def test_low_intensity_replaced(self):
+        code = "package main\n\n// @intensity:2\nfunc main() {\n  x := 1\n  _ = x\n}\n"
+        result = skeletonize_code(code, '.go', min_intensity=5)
+        assert 'truncated' in result
+
+    def test_high_intensity_preserved(self):
+        code = "package main\n\n// @intensity:8\nfunc add(a, b int) int {\n  return a + b\n}\n"
+        result = skeletonize_code(code, '.go', min_intensity=5)
+        assert 'return a + b' in result
+
+
+class TestSkeletonizeRust:
+    def test_low_intensity_replaced(self):
+        code = "// @intensity:2\nfn main() {\n    println!(\"hello\");\n}\n"
+        result = skeletonize_code(code, '.rs', min_intensity=5)
+        assert 'truncated' in result
+
+    def test_high_intensity_preserved(self):
+        code = "// @intensity:8\nfn calc() -> i32 {\n    42\n}\n"
+        result = skeletonize_code(code, '.rs', min_intensity=5)
+        assert '42' in result
+
+
+class TestSkeletonizeJava:
+    def test_low_intensity_replaced(self):
+        code = "// @intensity:2\nclass Main {\n    void foo() { return; }\n}\n"
+        result = skeletonize_code(code, '.java', min_intensity=5)
+        assert 'truncated' in result
+
+    def test_high_intensity_preserved(self):
+        code = "// @intensity:8\nclass Calc {\n    int add(int a, int b) { return a + b; }\n}\n"
+        result = skeletonize_code(code, '.java', min_intensity=5)
+        assert 'return a + b' in result

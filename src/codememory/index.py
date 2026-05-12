@@ -112,6 +112,8 @@ def reindex(root_dir: Path) -> int:
                 entry.summary_hash = compute_body_hash(_body.strip())
                 if meta.get("protected") is True:
                     entry.protected = True
+                if meta.get("cache_stable") is True:
+                    entry.cache_stable = True
                 if "source" in meta:
                     entry.source = meta["source"]
                 if "maturity" in meta:

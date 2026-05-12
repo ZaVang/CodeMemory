@@ -1531,3 +1531,146 @@ PYTHONPATH=src python tests/integration_test.py
 
 - **[R19-C5] execCommand('copy') 仅在用户手势上下文中可用。** 如果在异步回调中调用（例如 await 之后），execCommand 将失败——浏览器要求复制操作在用户交互事件的同步调用栈中。如果 "Copy as Context" 按钮的点击处理中有任何异步操作（如 fetch），必须在异步操作前先通过 execCommand 复制已准备好的内容，或者将 execCommand 放在 click 事件的同步部分中执行。由于当前 `buildPromptContent()` 是同步函数且不依赖 fetch，这个风险较低——但需在实现时确认。
 
+
+# Sprint 14 — Skeletonize 进化
+
+> **起始日期**：2026-05-12
+> **前置条件**：Sprint 13 完成（R19 收尾）
+> **来源**：AririgiAgent 代码审查（邮件 uid:2, 2026-05-12）
+> **目标**：为 skeletonize 添加 HTML 输出、模块级骨架、多语言支持、缓存标记、外部配置
+
+---
+
+## 一、任务
+
+### 任务 1：`--format html` 输出选项
+
+| # | 子任务 | 说明 | 状态 |
+|---|--------|------|------|
+| 1.1 | `common.py` 新增 `render_to_html()` | 将骨架化结果渲染为单文件 HTML：折叠 section、Tab 导航、frontmatter 以 JSON-LD 嵌入 `<script type="application/ld+json">` | [x] |
+| 1.2 | `handle_skeletonize()` 增加 `format` 参数 | 支持 `--format memory`（默认，写入记忆目录）和 `--format html`（输出 .html 到 `--output-dir` 或 stdout） | [x] |
+| 1.3 | CLI `skeletonize` 子命令新增参数 | `--format memory|html` + `--output-dir <path>`（html 模式必需） | [x] |
+
+**产出**：`codememory skeletonize docs/ --format html --output-dir out/` 生成可浏览器浏览的骨架化 HTML
+
+---
+
+### 任务 2：`--mode module` 零配置模块骨架
+
+| # | 子任务 | 说明 | 状态 |
+|---|--------|------|------|
+| 2.1 | `code.py` 新增 `skeletonize_module()` | 不依赖 `@intensity` 标注，保留 import、class/函数签名、模块级变量，所有 body 替换为 stub（`pass` / `{}`） | [x] |
+| 2.2 | `handle_skeletonize()` 增加 `mode` 参数 | `--mode file`（当前行为，函数级 intensity 替换）/ `--mode module`（零配置，仅保留签名） | [x] |
+| 2.3 | CLI 参数 + 测试 | `skeletonize --mode module` 路由到新函数，添加单元测试覆盖 module 模式 | [x] |
+
+**产出**：`codememory skeletonize src/ --mode module` 快速生成项目签名摘要，无需修改源码
+
+---
+
+### 任务 3：Go/Rust/Java 语言支持
+
+| # | 子任务 | 说明 | 状态 |
+|---|--------|------|------|
+| 3.1 | `code.py` `_register()` 添加 Go | `tree-sitter-go`，节点类型：`function_declaration`、`method_declaration`、`type_declaration` | [x] |
+| 3.2 | `_register()` 添加 Rust | `tree-sitter-rust`，节点类型：`function_item`、`struct_item`、`impl_item` | [x] |
+| 3.3 | `_register()` 添加 Java | `tree-sitter-java`，节点类型：`method_declaration`、`class_declaration`、`interface_declaration` | [x] |
+| 3.4 | `pyproject.toml` 更新 optional-dependencies | 在 `skeletonize` extras 中添加 `tree-sitter-go`、`tree-sitter-rust`、`tree-sitter-java` | [x] |
+| 3.5 | 单元测试 | 每种语言添加骨架化测试（至少 1 个 happy path） | [x] |
+
+**产出**：`skeletonize_code()` 支持 `.go`、`.rs`、`.java` 文件
+
+---
+
+### 任务 4：`cache_stable: true` frontmatter 字段
+
+| # | 子任务 | 说明 | 状态 |
+|---|--------|------|------|
+| 4.1 | `models.py` `MemoryEntry` 添加 `cache_stable` | `cache_stable: bool = Field(default=False, description="适合放入 LLM 缓存前缀")` | [x] |
+| 4.2 | `create.py` 模板 + CLI 支持 | `create` 命令新增 `--cache-stable` flag，记忆模板中写入该字段 | [x] |
+| 4.3 | `index.py` reindex 保留该字段 | 确保 reindex 不丢弃已有的 `cache_stable` | [x] |
+| 4.4 | `resolve.py` 输出中标记 stable 节点 | 在 resolve 输出的 memory context block 中显示 `[cache-stable]` 标记 | [x] |
+
+**产出**：外部消费者（Claude Code 等）可通过 `cache_stable` 决定将哪些记忆放入缓存前缀
+
+---
+
+### 任务 5：外部配置文件 `.codememory/skeletonize.yaml`
+
+| # | 子任务 | 说明 | 状态 |
+|---|--------|------|------|
+| 5.1 | 新增 `skeletonize/config.py` | 加载 `.codememory/skeletonize.yaml`，按 glob 匹配返回默认 intensity | [x] |
+| 5.2 | YAML schema 定义 | `defaults: {glob: intensity}` 映射，注释即文档 | [x] |
+| 5.3 | `skeletonize_code()` 集成 | 当源码无 `@intensity` 注释时 fallback 到配置文件匹配的 intensity | [x] |
+| 5.4 | `handle_skeletonize()` 增加 `--config` flag | 显式指定配置文件路径（默认自动搜索 `.codememory/skeletonize.yaml`） | [x] |
+
+**产出**：团队可在项目根 `.codememory/skeletonize.yaml` 中统一管理 intensity 规则，零代码侵入
+
+---
+
+## 二、技术约束
+
+- 所有新语言支持仅通过 `_register()` lazy import 添加，不影响核心启动性能
+- `--format html` 不引入外部模板引擎——纯 Python string 构建
+- `cache_stable` 字段默认 `false`，向后兼容所有现有记忆数据
+- `.codememory/skeletonize.yaml` 为可选文件——不存在时行为与当前完全一致
+- 不修改 `src/harnesslib/` 或 `src/llm_gateway/`
+
+---
+
+## 三、验收命令汇总
+
+```bash
+# 任务 1：HTML 输出
+codememory skeletonize examples/ --format html --output-dir /tmp/skel/
+# 用浏览器打开 /tmp/skel/*.html，确认折叠、导航、JSON-LD 正确
+
+# 任务 2：模块级骨架
+codememory skeletonize src/ --mode module --dry-run
+
+# 任务 3a：代码文件直接骨架化
+echo 'package main
+
+import "fmt"
+
+func main() {
+    fmt.Println("hello")
+}' > /tmp/test.go
+codememory skeletonize /tmp/test.go
+
+# 任务 3b：Rust
+echo 'fn main() {
+    println!("hello");
+}' > /tmp/test.rs
+codememory skeletonize /tmp/test.rs
+
+# 任务 4：cache_stable 标记
+codememory create --id user/test/stable-concept --cache-stable --tags "architecture"
+codememory resolve user/test/stable-concept --budget 500 | grep -i "cache-stable"
+
+# 任务 5：配置文件
+cat > .codememory/skeletonize.yaml << 'EOF'
+defaults:
+  "**/test_*.py": 3
+  "**/migrations/**": 2
+  "src/core/**": 8
+EOF
+codememory skeletonize src/ --dry-run
+
+# 全量测试
+PYTHONPATH=src python -m pytest tests/unit/ -v --tb=short
+PYTHONPATH=src python tests/integration_test.py
+codememory reindex && codememory validate
+```
+
+---
+
+## 四、新增陷阱
+
+- **[S14-C1] `--format html` 与 `--format memory` 的 handler 分歧。** 两模式下 ID 前缀生成逻辑可能重复。建议在 `handle_skeletonize()` 中尽早计算公共部分（ID prefix、tags），模式差异仅影响最终输出步骤。
+
+- **[S14-C2] tree-sitter-go/rust/java 包的导入名称不一致。** `pip install tree-sitter-go` 后 import 名可能为 `tree_sitter_go`（下划线），需要在 `_register()` 中逐个确认——与 Python/JS/TS 的 pattern 可能不同。
+
+- **[S14-C3] `cache_stable` 默认 false 的序列化行为。** Pydantic 的 `model_dump(mode="json")` 可能省略值为 `false` 的字段。需确认现有 `MemoryEntry` 中 `exclude_none` / `exclude_defaults` 配置不意外丢弃此字段。
+
+- **[S14-C4] `.codememory/skeletonize.yaml` 与 `@intensity` 注释的优先级。** 当前 `@intensity` 注释优先（显式标注 > 配置文件 glob 匹配）。此优先级需文档化，避免用户困惑"为什么我改了配置文件但没生效"。
+

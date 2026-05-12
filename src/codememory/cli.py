@@ -46,6 +46,8 @@ def main(argv: list[str] | None = None):
     p.add_argument("--tags", help="Comma-separated tags")
     p.add_argument("--maturity", choices=["draft", "verified", "proven"], default="draft",
                    help="Initial maturity (default: draft)")
+    p.add_argument("--cache-stable", action="store_true", dest="cache_stable",
+                   help="Mark as suitable for LLM cache prefix")
 
     # update
     p = subparsers.add_parser("update", help="Update an existing memory")
@@ -156,14 +158,21 @@ def main(argv: list[str] | None = None):
                    help="Show only retroactive candidates (they should import the target)")
 
     # skeletonize
-    p = subparsers.add_parser("skeletonize", help="Import structured memories from Markdown files")
+    p = subparsers.add_parser("skeletonize", help="Import structured memories from Markdown/code files")
     _add_logging_flags(p)
-    p.add_argument("source", help=".md file or directory of .md files")
+    p.add_argument("source", help=".md/.py/.js/.ts file or directory")
     p.add_argument("--min-intensity", type=int, default=5,
                    help="Sections below this intensity are truncated (default: 5)")
     p.add_argument("--dry-run", action="store_true",
                    help="Preview without writing files")
     p.add_argument("--tags", help="Comma-separated tags for generated memories")
+    p.add_argument("--format", dest="output_format", choices=["memory", "html"],
+                   default="memory",
+                   help="Output format: memory (default, write to DAG) or html (self-contained HTML)")
+    p.add_argument("--output-dir", help="Output directory for HTML files (required with --format html)")
+    p.add_argument("--mode", choices=["file", "module"], default="file",
+                   help="Code skeletonization mode: file (intensity-based) or module (zero-config, signatures only)")
+    p.add_argument("--config", help="Path to .codememory/skeletonize.yaml (auto-detected from cwd by default)")
 
     args = parser.parse_args(argv)
 
@@ -178,7 +187,7 @@ def main(argv: list[str] | None = None):
             tags_list = [t.strip() for t in args.tags.split(",") if t.strip()]
         print(handle_create(root, args.type, args.id, schema=args.schema,
                             intensity=args.intensity, tags=tags_list, dry_run=args.dry_run,
-                            maturity=args.maturity))
+                            maturity=args.maturity, cache_stable=args.cache_stable))
     elif cmd == "update":
         print(handle_update(root, args.id, body=args.body, summary=args.summary,
                             change_note=args.change_note, status=args.status,
@@ -244,6 +253,10 @@ def main(argv: list[str] | None = None):
             min_intensity=args.min_intensity,
             dry_run=args.dry_run,
             tags=tags_list,
+            output_format=args.output_format,
+            output_dir=args.output_dir,
+            mode=args.mode,
+            config=args.config,
         ))
 
 

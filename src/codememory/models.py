@@ -83,6 +83,9 @@ class MemoryEntry(BaseModel):
     # Protection flag (intensity >= 8)
     protected: bool | None = None
 
+    # Prompt caching hint (Sprint 14)
+    cache_stable: bool = Field(default=False, description="Suitable for LLM cache prefix")
+
     # Change tracking (from update)
     change_note: str | None = None
     change_log: list[dict[str, Any]] = Field(default_factory=list)
