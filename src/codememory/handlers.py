@@ -773,8 +773,8 @@ def handle_suggest_deps(
 
 def handle_diff(
     root: Path,
-    snapshot: str | None = None,
+    since: str | None = None,
 ) -> str:
-    """Show what changed since the last index snapshot."""
+    """Show what changed since a previous index snapshot."""
     from .diff import diff as _diff
-    return _diff(root, snapshot)
+    return _diff(root, since)

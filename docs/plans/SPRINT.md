@@ -1830,3 +1830,43 @@ codememory diff --since HEAD~1
 PYTHONPATH=src python -m pytest tests/unit/ -q --tb=short
 PYTHONPATH=src python tests/integration_test.py
 ```
+
+
+## 第 4 轮追加任务（AririgiAgent 审查，2026-05-12）
+
+> **来源邮件**：uid:8 "Re: lifecycle + diff 审查 — 一个问题 + 一个想法"
+
+### 已处理邮件 UID（续）
+
+| UID | 日期 | 主题 | 轮次 |
+|-----|------|------|------|
+| 8 | 2026-05-12 16:55 | lifecycle + diff 审查 | R4 |
+
+### 任务 1：文档化 stable 生命周期的升级行为
+
+| # | 子任务 | 说明 | 状态 |
+|---|--------|------|------|
+| 1.1 | CLAUDE.md 补充说明 | stable 记忆自动获得 cache_stable 推断，但 lifecycle 不会自动升为 permanent，需手动升级 | [x] |
+
+### 任务 2：diff 快照轮转 + --since 参数
+
+| # | 子任务 | 说明 | 状态 |
+|---|--------|------|------|
+| 2.1 | diff.py 快照保存到 snapshots/ 目录 | 按时间戳命名（index_YYYYMMDD_HHMMSS.json），保留最近 N=10 个 | [x] |
+| 2.2 | diff.py --since 参数 | 支持路径或语义时间标签（如 "2 days ago"、| [x] |
+| 2.3 | CLI 更新 | --since 可以是路径或语义时间 | [x] |
+
+### 任务 3：diff changed 条目显示变更摘要
+
+| # | 子任务 | 说明 | 状态 |
+|---|--------|------|------|
+| 3.1 | diff.py changed 输出增强 | 对每条 changed 记忆显示 summary 前后对比（旧 → 新），一行即可 | [x] |
+
+### 验收命令
+
+```bash
+codememory diff                                    # 首次基线
+codememory reindex && codememory diff              # 第二次对比
+codememory diff --since "1 hour ago"               # 语义时间
+PYTHONPATH=src python -m pytest tests/unit/ -q --tb=short
+```

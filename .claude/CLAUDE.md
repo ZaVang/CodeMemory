@@ -78,6 +78,7 @@ Agent 与记忆系统之间的接口层，实现五个认知基础操作（稳�
 - 遗忘是路径不可达问题，不是删除问题。系统只建议，不自动删除。
 - 框架（`src/codememory/`）与数据（`examples/`）物理分离
 - `cache_stable` 自动推断：reindex 时，若 `summary_hash` 未变化且 `access_count >= 2`，自动标记为 `true`。手动 frontmatter 声明 `cache_stable: true/false` 优先级高于自动推断。
+- `lifecycle` 自动升级：`stable` 记忆可被 reindex 自动推断 `cache_stable=True`，但 `lifecycle` 字段本身不会自动升为 `permanent`——用户需手动 `update` 确认升级。`ephemeral` + `access_count==0` 会被自动归档（`status: archived`）。
 
 ---
 

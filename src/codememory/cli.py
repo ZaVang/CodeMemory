@@ -163,7 +163,7 @@ def main(argv: list[str] | None = None):
     # diff
     p = subparsers.add_parser("diff", help="Show what changed since last index snapshot")
     _add_logging_flags(p)
-    p.add_argument("--snapshot", help="Path to a previous index snapshot (default: .codememory/index_snapshot.json)")
+    p.add_argument("--since", help="Path to snapshot or semantic time (e.g. '2 days ago', '1 hour ago')")
 
     # skeletonize
     p = subparsers.add_parser("skeletonize", help="Import structured memories from Markdown/code files")
@@ -254,7 +254,7 @@ def main(argv: list[str] | None = None):
             retroactive_only=args.retroactive_only,
         ))
     elif cmd == "diff":
-        print(handle_diff(root, snapshot=args.snapshot))
+        print(handle_diff(root, since=args.since))
     elif cmd == "skeletonize":
         tags_list = None
         if args.tags:
