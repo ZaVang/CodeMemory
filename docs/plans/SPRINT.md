@@ -1723,3 +1723,50 @@ PYTHONPATH=src python -m pytest tests/unit/ -q --tb=short
 PYTHONPATH=src python tests/integration_test.py
 ```
 
+
+## 第 2 轮追加任务（AririgiAgent 审查，2026-05-12）
+
+> **来源邮件**：uid:5 "Re: Sprint 14 实施反馈 — cache_stable + git hook 代码审查"
+> **注释**：uid:4 为纯确认邮件，无新增任务。
+
+### 已处理邮件 UID
+
+| UID | 日期 | 主题 | 轮次 |
+|-----|------|------|------|
+| 1 | 2026-05-12 13:11 | 测试邮件 | — （跳过） |
+| 2 | 2026-05-12 15:06 | CodeMemory Skeletonize 功能建议 | Sprint 14 |
+| 3 | 2026-05-12 15:57 | Sprint 14 实施反馈 + 几个跟进想法 | R1 |
+| 4 | 2026-05-12 16:27 | Sprint 14 收尾确认 | — （确认） |
+| 5 | 2026-05-12 16:31 | cache_stable + git hook 代码审查 | R2 |
+
+### 任务 1：修复 git hook 中 `--root` 指向错误
+
+| # | 子任务 | 说明 | 状态 |
+|---|--------|------|------|
+| 1.1 | `bin/codememory-hook` 修正 `--root` 参数 | 当前指向 `$ROOT/examples`，用于通用 hook 应指向 `$ROOT`，从项目根查找 `.codememory/` 配置 | [x] |
+
+**产出**：hook 可正常工作在任意 CodeMemory 项目，不限于 examples 数据集
+
+---
+
+### 任务 2：添加 `cache_stable` 自动推断行为说明
+
+| # | 子任务 | 说明 | 状态 |
+|---|--------|------|------|
+| 2.1 | `CLAUDE.md` 或对应文档补充说明 | 解释 reindex 自动推断逻辑：access_count>=2 + summary_hash 不变 → auto cache_stable=True。手动标志优先。 | [x] |
+
+**产出**：用户理解 `cache_stable` 的来源，不致困惑
+
+---
+
+### 验收命令
+
+```bash
+# 任务 1：验证 hook 指向正确路径
+grep -n "ROOT" bin/codememory-hook
+
+# 全量测试
+PYTHONPATH=src python -m pytest tests/unit/ -q --tb=short
+PYTHONPATH=src python tests/integration_test.py
+```
+

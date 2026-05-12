@@ -26,7 +26,7 @@ echo "[codememory-hook] Skeletonizing $(echo "$FILES" | wc -l | tr -d ' ') chang
 
 while IFS= read -r file; do
     if [ -f "$ROOT/$file" ]; then
-        PYTHONPATH="$ROOT/src" python -m codememory.cli --root "$ROOT/examples" skeletonize "$ROOT/$file" --quiet 2>/dev/null || true
+        PYTHONPATH="$ROOT/src" python -m codememory.cli --root "$ROOT" skeletonize "$ROOT/$file" --quiet 2>/dev/null || true
     fi
 done <<< "$FILES"
 

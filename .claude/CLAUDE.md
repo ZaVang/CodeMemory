@@ -77,6 +77,7 @@ Agent 与记忆系统之间的接口层，实现五个认知基础操作（稳�
 - Token 预算裁剪：超预算时 required 节点降级为 summary
 - 遗忘是路径不可达问题，不是删除问题。系统只建议，不自动删除。
 - 框架（`src/codememory/`）与数据（`examples/`）物理分离
+- `cache_stable` 自动推断：reindex 时，若 `summary_hash` 未变化且 `access_count >= 2`，自动标记为 `true`。手动 frontmatter 声明 `cache_stable: true/false` 优先级高于自动推断。
 
 ---
 
