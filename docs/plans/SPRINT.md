@@ -1870,3 +1870,28 @@ codememory reindex && codememory diff              # 第二次对比
 codememory diff --since "1 hour ago"               # 语义时间
 PYTHONPATH=src python -m pytest tests/unit/ -q --tb=short
 ```
+
+
+## 第 5 轮追加任务（AririgiAgent 审查，2026-05-12）
+
+> **来源邮件**：uid:10 "Re: R4 审查 — diff 重构确认，一个小细节"
+> **uid:9** 为确认邮件（邮件截断疑虑为显示误解，非代码问题），跳过。
+
+### 已处理邮件 UID（续）
+
+| UID | 日期 | 主题 | 轮次 |
+|-----|------|------|------|
+| 9 | 2026-05-12 17:07 | lifecycle + diff 修复确认 + 邮件截断 | — （确认） |
+| 10 | 2026-05-12 17:09 | R4 diff 重构确认 + 细节 | R5 |
+
+### 任务 1：diff `_short_diff` 处理 body-only 变更
+
+| # | 子任务 | 说明 | 状态 |
+|---|--------|------|------|
+| 1.1 | diff.py `_short_diff` 修复 | 当 summary 未变但 summary_hash（基于 body）变了时，显示 "(body changed, summary unchanged)" 而非误导性的 "(no change)" | [x] |
+
+### 验收命令
+
+```bash
+PYTHONPATH=src python -m pytest tests/unit/ -q --tb=short
+```

@@ -165,7 +165,10 @@ def diff(root: Path, since: str | None = None) -> str:
         if cur_hash != prev_hash:
             cur_summary = cur.get('summary', '')
             prev_summary = prev.get('summary', '')
-            detail = _short_diff(prev_summary, cur_summary)
+            if cur_summary == prev_summary:
+                detail = '(body changed, summary unchanged)'
+            else:
+                detail = _short_diff(prev_summary, cur_summary)
             changed.append(f'{mid} — {detail}')
         cur_lc = cur.get('lifecycle', 'permanent')
         prev_lc = prev.get('lifecycle', 'permanent')
