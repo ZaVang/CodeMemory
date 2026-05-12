@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+# Post-commit hook: incrementally skeletonize changed files.
+# Called from .githooks/post-commit after each commit.
+set -euo pipefail
+
+# Get files changed in the latest commit
+CHANGED=$(git diff --name-only HEAD~1 HEAD 2>/dev/null || git diff --name-only --cached 2>/dev/null || true)
+
+if [ -z "$CHANGED" ]; then
+    exit 0
+fi
+
+# Filter for supported extensions
+SUPPORTED_EXTS="\.(md|py|js|ts|jsx|tsx|mjs|cjs|go|rs|java)$"
+FILES=$(echo "$CHANGED" | grep -E "$SUPPORTED_EXTS" || true)
+
+if [ -z "$FILES" ]; then
+    exit 0
+fi
+
+# Get project root (where .git is)
+ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
+
+# Skeletonize each changed file
+echo "[codememory-hook] Skeletonizing $(echo "$FILES" | wc -l | tr -d ' ') changed file(s)..."
+
+while IFS= read -r file; do
+    if [ -f "$ROOT/$file" ]; then
+        PYTHONPATH="$ROOT/src" python -m codememory.cli --root "$ROOT/examples" skeletonize "$ROOT/$file" --quiet 2>/dev/null || true
+    fi
+done <<< "$FILES"
+
+echo "[codememory-hook] Done."

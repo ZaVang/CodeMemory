@@ -109,11 +109,18 @@ def reindex(root_dir: Path) -> int:
                     entry.imports = meta["imports"]
                 # summary_hash is recomputed from actual body to prevent stale
                 # false positives caused by create-time normalization bugs.
-                entry.summary_hash = compute_body_hash(_body.strip())
+                # (computed below in the cache_stable block)
                 if meta.get("protected") is True:
                     entry.protected = True
-                if meta.get("cache_stable") is True:
-                    entry.cache_stable = True
+                # cache_stable: manual flag takes precedence, else auto-infer
+                new_hash = compute_body_hash(_body.strip())
+                entry.summary_hash = new_hash
+                if "cache_stable" in meta:
+                    entry.cache_stable = meta["cache_stable"] is True
+                elif old_entry is not None and old_entry.access_count >= 2:
+                    # Auto-infer: stable if body hash unchanged across reindex
+                    if old_entry.summary_hash == new_hash:
+                        entry.cache_stable = True
                 if "source" in meta:
                     entry.source = meta["source"]
                 if "maturity" in meta:

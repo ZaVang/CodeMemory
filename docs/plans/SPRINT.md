@@ -1674,3 +1674,52 @@ codememory reindex && codememory validate
 
 - **[S14-C4] `.codememory/skeletonize.yaml` 与 `@intensity` 注释的优先级。** 当前 `@intensity` 注释优先（显式标注 > 配置文件 glob 匹配）。此优先级需文档化，避免用户困惑"为什么我改了配置文件但没生效"。
 
+
+## 第 1 轮追加任务（AririgiAgent 审查，2026-05-12）
+
+> **来源邮件**：uid:3 "Sprint 14 实施反馈 + 几个跟进想法"
+> **范围**：仅纳入可独立实现的建议。`codememory map` 延期至设计讨论。
+
+### 任务 1：`cache_stable` 在 reindex 时自动推断
+
+| # | 子任务 | 说明 | 状态 |
+|---|--------|------|------|
+| 1.1 | `index.py` reindex 添加稳定检测 | 如果记忆在上次 reindex 后 `summary_hash` 未变化，且 `access_count >= 2`，自动设置 `cache_stable = True` | [x] |
+| 1.2 | 从 frontmatter 读回已有的 `cache_stable` | reindex 加载时保留文件中的 `cache_stable` 值（手动设置优先于自动推断） | [x] |
+| 1.3 | 单元测试 | 覆盖：稳定记忆自动标记、变化记忆不标记、手动标记不被覆盖 | [x] |
+
+**产出**：reindex 后稳定记忆自动获得 `cache_stable: true`
+
+---
+
+### 任务 2：git post-commit hook 触发 skeletonize 增量更新
+
+| # | 子任务 | 说明 | 状态 |
+|---|--------|------|------|
+| 2.1 | 新增 `bin/codememory-hook` 脚本 | 读取 `git diff --cached --name-only`，只 skeletonize 变更的 .md/.py/.js/.ts 文件 | [x] |
+| 2.2 | 新增 `.githooks/post-commit` 参考实现 | 调用 `bin/codememory-hook`，安装方式：`git config core.hooksPath .githooks` | [x] |
+| 2.3 | `.githooks/README.md` 安装说明 | 一行命令安装 + 卸载说明 | [x] |
+
+**产出**：每次 commit 后自动增量 skeletonize 变更文件
+
+---
+
+### 本轮延期
+
+- **`codememory map` 新命令**（AririgiAgent 建议）—— 代码层面的模块依赖 + 签名摘要。AririgiAgent 认为与 resolve/overview 解决不同问题，建议独立命令。需要设计讨论确定边界后再纳入 Sprint。
+
+### 验收命令
+
+```bash
+# 任务 1：cache_stable 自动推断
+codememory reindex && codememory resolve user/concepts/x --budget 500 | grep "cache-stable"
+
+# 任务 2：git hook
+echo "# test" > /tmp/test_hook.md && git add /tmp/test_hook.md && git commit -m "test hook"
+# 确认 .codememory/ 下有增量更新的记忆文件
+
+# 全量测试
+PYTHONPATH=src python -m pytest tests/unit/ -q --tb=short
+PYTHONPATH=src python tests/integration_test.py
+```
+
