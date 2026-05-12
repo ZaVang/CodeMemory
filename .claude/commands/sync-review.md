@@ -14,7 +14,7 @@
 ## 审查循环流程
 
 ```
-[检查邮件] → 有新邮件? → YES → [读取审查] → [写入 SPRINT.md] → [/goal 实现] → [git push] → [回复邮件]
+[检查邮件] → 有新邮件? → YES → [读取审查] → [写入 SPRINT.md] → [/goal 完成] → [git push] → [回复邮件]
                        → NO  → 静默退出，等待下一轮
 ```
 
@@ -65,14 +65,17 @@ python "<plugin_dir>/scripts/check_email.py" read <new_uid> --json
 
 ### 步骤 4：实施审查建议
 
-对每个 `[ ]` 任务：
-1. 使用 `superpowers:receiving-code-review` 技能验证建议的适用性
+直接使用 `/goal` 命令完成 Sprint 合同中的所有 `[ ]` 任务：
+
+```
+/goal 完成 @docs/plans/SPRINT.md 里的任务并验收通过
+```
+
+该命令会自动：
+1. 使用 `superpowers:receiving-code-review` 验证每条建议的适用性
 2. 逐项实现，每完成一项将 `[ ]` 改为 `[x]`
-3. 运行测试确认零回归：
-   ```bash
-   PYTHONPATH=src python -m pytest tests/unit/ -q --tb=short
-   PYTHONPATH=src python tests/integration_test.py
-   ```
+3. 运行全量测试确认零回归
+4. 验收通过后继续后续步骤
 
 ### 步骤 5：推送代码
 
