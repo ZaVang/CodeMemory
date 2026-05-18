@@ -1,637 +1,317 @@
-# 记忆原子化协议 PRD
+# CodeMemory PRD
 
-> 一个完整的 AI 记忆子系统——定义记忆的格式、存储、检索、加载和生命周期管理。
-> 核心理念：**记忆加载是依赖解析问题，不是搜索问题。**
+> **Product thesis**  
+> CodeMemory v1 不再试图成为“更像人的记忆系统”；它首先要成为**单 owner、多 agent、多环境共享的可靠工作记忆底座**。  
+> “更像人”的体验，不属于底层 Core，而应由未来的 Layer Profile 在明确场景中实现。
 
-**创建日期**：2026-04-22  
-**最后更新**：2026-04-24  
-**状态**：设计收敛，待原型验证  
-**同步策略**：Git Repo
+**最后更新**：2026-05-18  
+**状态**：新版产品定义  
+**版本**：v1 / Work Layer first
 
 ---
 
-## 一、背景与动机
+## 1. 背景
 
-### 1.1 核心问题
+当一个人同时使用多个 agent、多个 harness、多个工作环境时，真正昂贵的不是“没有信息”，而是：
 
-多 AI 环境工作（Claude Code / Antigravity / Coze）时，项目记忆割裂，无法跨环境共享上下文。
+- agent 之间无法共享已经形成的判断；
+- 同一个项目在不同环境里反复丢失上下文；
+- 决策只留下结论，没有留下形成结论所依赖的前提；
+- 记忆虽然存在，却无法被可靠、可解释、可复用地重新装配。
 
-**当前记忆系统的局限**：
+传统 RAG 更擅长“尽可能找回相关内容”，却不天然保证：
 
-| 方案 | 问题 |
+1. **因果完整性**：拿到结论时，也拿到理解它所需的前提；
+2. **跨环境一致性**：不同 agent 读到同一份可复现上下文；
+3. **可审计性**：知道一条记忆从何而来、为何被更新、是否已经过期；
+4. **可集成性**：在 CLI、API、MCP、SDK、harness 中都用同一套语义。
+
+CodeMemory 的机会，不是去模拟人的全部记忆，而是把“工作中最需要可靠的那部分记忆”做成一个通用 substrate。
+
+---
+
+## 2. 核心判断
+
+### 2.1 可靠 memory substrate 与陪伴模式不是同一个产品
+
+| 维度 | Reliable Memory Substrate | Companion Mode |
+|------|---------------------------|----------------|
+| 首要目标 | 准确、可追溯、可复用 | 连续感、亲密感、自然感 |
+| 记忆门槛 | 高：值得长期保留才写入 | 低：细碎体验也可能重要 |
+| 召回原则 | 充分、稳定、可解释 | 适时、克制、像人 |
+| 遗忘观 | 工作上常常要“不要忘” | 陪伴中“会忘”本身是人格的一部分 |
+| 典型风险 | 漏掉关键依赖导致错误 | 过度精确反而显得机械 |
+
+这两者共享一部分底层能力，但产品目标相反。  
+因此，CodeMemory 采用：
+
+```
+Layer Profiles  =  场景策略
+CodeMemory Core =  底层记忆逻辑
+Adapters        =  接入方式
+```
+
+### 2.2 v1 的正式产品定义
+
+> **CodeMemory v1 = 单 owner、多 agent、多环境共享的可靠工作记忆底座。**
+
+它首先服务于一个人：
+
+- 在多个 agent 之间切换；
+- 在多个项目、仓库、工作台之间切换；
+- 希望长期保留判断、约束、流程、决策、上下文；
+- 希望不同系统调用同一份工作记忆，而不是各自形成孤岛。
+
+### 2.3 为什么先做 Work Layer
+
+原始灵感来自“更拟人的记忆”，但最先值得落地、也最能形成长期价值的，是 **Work Layer**：
+
+- 它能立刻改善真实工作流；
+- 它对正确性、复用性、集成性要求最高，能倒逼 Core 设计变稳；
+- 它的成功标准清楚，可被测试；
+- 它未来仍然能托住 Companion Layer，而不是与之竞争。
+
+---
+
+## 3. 产品模型
+
+### 3.1 CodeMemory Core
+
+Core 是不带人格和场景偏好的底层协议，负责：
+
+- 记忆文件格式；
+- `atom` / `schema` 数据模型；
+- ID、版本、生命周期、来源、哈希；
+- `imports` 依赖图与 resolve；
+- 索引、校验、更新、审计；
+- 面向 adapter 的稳定操作接口。
+
+Core 的目标不是“像人”，而是**正确、可复现、可移植**。
+
+### 3.2 Layer Profiles
+
+Layer 不是新的数据库，而是一组**声明式策略**，用于解释同一个 Core：
+
+- 该记什么；
+- 目录如何分层；
+- 默认 schema 是什么；
+- `required / recommended / related` 在该场景下分别意味着什么；
+- 写入门槛、召回策略、生命周期、遗忘/保留策略如何定义；
+- 哪些校验在该场景下是强约束。
+
+v1 首个官方 profile：
+
+#### Work Layer
+
+面向一个人的长期工作记忆：
+
+- 项目事实；
+- 设计决策；
+- 约束条件；
+- 流程与操作手册；
+- 领域知识；
+- 当前上下文入口；
+- 跨 agent 共享的长期判断。
+
+未来 profile：
+
+#### Companion Layer
+
+面向陪伴体验：
+
+- 更低写入门槛；
+- 更强的情境联想；
+- 对“何时想起”比“想起多少”更敏感；
+- 允许遗忘、模糊、情感权重和隐私边界成为一等规则。
+
+Companion Layer 是 **未来场景层**，不是 v1 Core 的成功条件。
+
+### 3.3 Adapters
+
+Adapters 负责把同一套 Core / Layer 能力接到不同入口：
+
+- CLI
+- Python SDK
+- MCP Server
+- Harness / Sandbox tools
+- REST API
+- Web UI
+
+Adapter 不应偷偷引入新的记忆语义；它们只负责暴露能力，不负责定义产品哲学。
+
+---
+
+## 4. 目标用户
+
+### 4.1 Primary User
+
+一个 owner：
+
+- 长期使用多个 AI agent；
+- 在多个项目和工具链之间来回切换；
+- 需要把“工作中已经想清楚的东西”变成可复用资产；
+- 不希望每个 agent 都重新认识自己和自己的项目。
+
+### 4.2 暂不优先的用户
+
+- 多人协作团队知识库；
+- 面向大众消费者的陪伴型聊天产品；
+- 需要重型文档搜索平台的大型企业知识管理场景。
+
+这些都可能是后续扩展，但不应在 v1 中扭曲 Core。
+
+---
+
+## 5. v1 目标
+
+### 5.1 产品目标
+
+1. **让一个人的工作记忆跨 agent 连续存在。**
+2. **让记忆召回具备因果完整性，而不是只靠语义相似度。**
+3. **让写入、更新、引用、失效都可追踪。**
+4. **让任意主流 agent 框架可以低摩擦接入。**
+5. **让未来 Companion Layer 可以建立在 Core 之上，而不污染 Core。**
+
+### 5.2 用户可感知结果
+
+用户应能感受到：
+
+- agent 不再反复问已经回答过的问题；
+- 不同环境里的 agent 能接上同一段工作上下文；
+- 重要决策能带着“为什么”一起被重新拿起；
+- 自己过去形成的知识不再散落成一堆无法重用的聊天残片。
+
+---
+
+## 6. 非目标
+
+v1 明确**不**做：
+
+1. 模拟完整的人类记忆；
+2. 以陪伴感作为第一成功指标；
+3. 把所有原始材料都塞进系统并寄望自动提炼真理；
+4. 替代全文搜索、向量库、知识库系统；
+5. 解决多人协作、权限治理、组织级知识管理；
+6. 让 Core 内建某一种具体“人格化策略”。
+
+---
+
+## 7. Work Layer 的产品要求
+
+### 7.1 记忆对象
+
+Work Layer 至少需要稳定支持：
+
+| 类别 | 例子 |
 |------|------|
-| 文档级记忆 | 粒度太粗，无法精细引用 |
-| RAG | 基于语义相似度检索，无法保证因果完整性 |
-| 知识图谱 | 结构好但 LLM 难以原生操作 |
+| Facts | 项目事实、系统约束、外部接口说明 |
+| Decisions | 架构决策、取舍、结论与理由 |
+| Constraints | 不可违反的偏好、边界、原则 |
+| Processes | 运行手册、排障流程、发布步骤 |
+| Contexts | 某个项目/主题的入口包 |
+| Learnings | 复盘、踩坑、规律 |
 
-### 1.2 核心洞察
+### 7.2 质量要求
 
-传统 RAG 检索到的 chunks 之间没有依赖关系——可能捞到"2月买了半导体"但捞不到"为什么买"的前置判断。
+Work Layer 中的记忆应尽量满足：
 
-**本协议的核心差异**：给记忆赋予代码的依赖图语义。每段记忆声明自己的前置依赖，加载时按拓扑排序组装，确保 LLM 收到的上下文是因果完整的。
+- 可独立理解；
+- 可被引用；
+- 可被验证；
+- 可被更新；
+- 有明确生命周期；
+- 有可解释的依赖关系。
 
-### 1.3 设计哲学
+### 7.3 召回要求
 
-1. **关系视角 > 数据视角**：不是"知识放这，项目放那"，而是"你的东西放 `user/`，我的东西放 `self/`"
-2. **依赖解析 > 语义搜索**：记忆加载像 `webpack bundle`，不像 `vector search`
-3. **Markdown 为母语**：LLM 原生读写，跨平台零配置
-4. **抽象字段 > 具体字段**：base fields 不出现"地点""人物"等具体字段，领域字段由 schema 定义
+Work Layer 的召回不追求“像回忆一样自然”，而追求：
 
----
-
-## 二、系统架构：三层设计
-
-```
-┌──────────────────────────────────────────┐
-│  Layer 3: Harness Integration            │
-│  Agent 如何使用记忆系统（bash CLI）         │
-├──────────────────────────────────────────┤
-│  Layer 2: Operations & Retrieval         │
-│  resolve / search / deps / create        │
-│  index.json / 依赖解析 / 生命周期管理      │
-├──────────────────────────────────────────┤
-│  Layer 1: Memory Format Spec             │
-│  Markdown + YAML Frontmatter             │
-│  Base Fields / 四种原语 / 三级依赖         │
-└──────────────────────────────────────────┘
-```
-
-- **Layer 1** 单独可用（手动管理记忆文件）
-- **Layer 1+2** 配合 bash 脚本 = 功能完整的系统
-- **Layer 1+2+3** = Agent 全自动集成
+- **正确优先**；
+- **依赖前置**；
+- **预算可控**；
+- **结果可解释**；
+- **跨 adapter 一致**。
 
 ---
 
-## 三、Layer 1：记忆格式规范
+## 8. 成功标准
 
-### 3.1 文件格式：Markdown + YAML Frontmatter
+### 8.1 Product Success
 
-| 要求 | 满足情况 |
-|------|----------|
-| LLM 可直接读写 | ✅ Markdown 是 LLM 的母语 |
-| 结构化元数据 | ✅ Frontmatter 是标准 YAML，支持完整层级嵌套 |
-| 可编程解析 | ✅ 任何语言都有 YAML 解析库 |
-| 跨平台零配置 | ✅ 纯文本，任何 AI 平台直接读 |
-| 版本控制友好 | ✅ Git diff 完美支持 |
-| 人类可读可编辑 | ✅ 任何编辑器打开就能看懂 |
+在单 owner 场景下，CodeMemory v1 成功意味着：
 
-### 3.2 Base Fields（通用字段）
+1. 同一份 memory root 可被多个 agent / harness 重复使用；
+2. 一个新 agent 能通过 resolve 重建关键工作上下文；
+3. 重要结论不会脱离其必要前提被孤立召回；
+4. 用户能审计“某个结论是怎么来的、什么时候被改过”；
+5. 用户能把 CodeMemory 当成默认工作记忆层，而不是一次性实验。
 
-设计原则：**足够抽象，适用于任何形式的记忆。**
+### 8.2 Engineering Success
 
-```yaml
+1. Core 语义稳定，不依赖某个 adapter；
+2. Work Layer 通过 profile 定义，而非硬编码进 Core；
+3. CLI / API / MCP / SDK 输出同一套概念；
+4. 未来新增 Layer 不需要重写底层；
+5. 当前实现中的 companion-like 策略可被逐步收敛到 layer，而不是继续扩散。
+
 ---
-# ══════ Identity ══════
-type: atom | composite | schema | instance
-id: user/investment/semiconductor-thesis     # 路径式唯一 ID
 
-# ══════ Core ══════
-summary: "AI存储+AI制造双核心驱动，2026最确定产业趋势"
+## 9. 产品原则
 
-# ══════ Lifecycle ══════
-status: active           # active | archived | superseded | deprecated
-created: 2026-04-22
-updated: 2026-04-22
-version: 1
+1. **Core neutral, layers opinionated.**  
+   底层中立，场景层有态度。
 
-# ══════ Classification ══════
-tags: [investment, thesis]
+2. **Recall is reconstruction, not just retrieval.**  
+   召回是重构，不只是检索。
 
-# ══════ Provenance ══════
-source:
-  platform: antigravity
-  created_by: user
+3. **Causal completeness beats semantic similarity.**  
+   对工作记忆而言，因果完整性优先于“看起来相关”。
 
-# ══════ Integrity ══════
-summary_hash: a3f2e1d    # 正文内容的短 hash，检测 summary 过期
+4. **One owner first.**  
+   先把一个人的长期记忆做好，再谈团队协作。
+
+5. **Human-like is a layer concern.**  
+   拟人不是 Core 的方向盘，而是未来 profile 的一种风格。
+
+6. **Adapters should be thin.**  
+   入口越多，底层语义越要收敛。
+
 ---
-```
 
-#### 字段规范
+## 10. 术语
 
-| 字段 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| `type` | enum | ✅ | atom / composite / schema / instance |
-| `id` | string | ✅ | 路径式 ID，与文件路径对应 |
-| `summary` | string | ✅ | LLM 生成的一句话摘要——记忆的 docstring |
-| `status` | enum | ✅ | active / archived / superseded / deprecated |
-| `created` | date | ✅ | 创建时间 |
-| `updated` | date | ✅ | 最后更新时间 |
-| `version` | int | ✅ | 版本号，更新时递增 |
-| `tags` | string[] | ✅ | 分类标签 |
-| `source.platform` | enum | ❌ | 来源平台 |
-| `source.created_by` | enum | ❌ | user / ai |
-| `summary_hash` | string | ❌ | `hash(body markdown, 不含 frontmatter)`。body 改了 hash 就变，frontmatter 修正不触发 stale |
-
-#### 可选扩展字段
-
-| 字段 | 适用类型 | 说明 |
-|------|----------|------|
-| `imports` | composite, instance | 三级依赖声明 |
-| `schema` | instance | 指向所用模板 |
-| `purpose` | composite | 使用场景描述 |
-| `change_note` | 所有（更新时） | 本次更新的原因 |
-| `supersedes` | 所有（替代时） | 被替代记忆的 ID |
-| `fields` | schema | 领域字段定义列表 |
-
-#### `summary` 字段的核心作用
-
-`summary` 是整个系统最重要的 base field：
-
-| 角色 | 说明 |
+| 术语 | 定义 |
 |------|------|
-| 记忆的 docstring | 一句话概括这段记忆 |
-| 索引搜索内容 | index.json 中的可搜索字段 |
-| Token 紧张时的替代品 | 预算不够时加载 summary 代替全文 |
-| 快速预览 | 浏览记忆列表时显示 |
-
-**Summary 生成规则**：
-- 由 LLM 在创建/更新记忆时自动生成
-- 用户可手动修改确认
-- 当正文 hash 与 `summary_hash` 不匹配时，系统提示重新生成
-
-### 3.3 四种记忆原语
-
-| 原语 | 代码类比 | 含义 | 有依赖 |
-|------|----------|------|--------|
-| **Atom** | `const` | 不可再分的原子事实 | ❌ |
-| **Composite** | `function` | 组合多个记忆的打包清单 | ✅ |
-| **Schema** | `class/type` | 某类记忆的结构模板 | ❌ |
-| **Instance** | `new Obj()` | 遵循 Schema 的具体记忆 | ✅ |
-
-#### Atom（原子事实）
-
-最小单元，不依赖其他记忆。判断标准：能被独立引用且引用时仍有独立意义。
-
-```markdown
----
-type: atom
-id: user/investment/semiconductor-thesis
-summary: "AI存储+AI制造双核心驱动，2026最确定产业趋势"
-status: active
-created: 2026-04-22
-updated: 2026-04-22
-version: 1
-tags: [investment, thesis]
-source:
-  platform: claude-code
-  created_by: user
-summary_hash: a3f2e1d
----
-
-# 半导体投资主线
-
-AI 存储需求爆发 + AI 制造国产替代，形成双核心驱动。
-这是 2026 年最确定的产业趋势之一。
-```
-
-#### Schema（记忆模板）
-
-定义某类记忆的领域字段。字段类型限于基础类型（string / float / date / bool / enum）。
-
-```markdown
----
-type: schema
-id: schemas/decision
-summary: "决策类记忆的结构模板，包含 what/why/when/confidence/outcome"
-status: active
-created: 2026-04-22
-updated: 2026-04-22
-version: 1
-tags: [meta, template]
-fields:
-  - name: what
-    type: string
-    required: true
-  - name: why
-    type: string
-    required: true
-  - name: when
-    type: date
-    required: true
-  - name: confidence
-    type: float
-    required: true
-  - name: outcome
-    type: string
-    required: false
----
-
-# Decision Schema
-
-所有"决策类"记忆应遵循此结构。
-```
-
-#### Instance（记忆实例）
-
-遵循 Schema，包含 base fields + 领域字段 + 依赖。
-
-```markdown
----
-type: instance
-schema: schemas/decision
-id: user/investment/february-buy
-summary: "2月重仓半导体ETF，基于AI存储爆发+国产替代判断，置信度0.8"
-status: active
-created: 2026-02-15
-updated: 2026-04-22
-version: 2
-tags: [investment, decision]
-source:
-  platform: antigravity
-  created_by: user
-summary_hash: b7c9d4e
-
-what: "重仓半导体ETF（512480）"
-why: "AI存储爆发 + 国产替代加速"
-when: 2026-02-15
-confidence: 0.8
-outcome: "截至4月涨15%"
-
-imports:
-  required:
-    - id: user/investment/semiconductor-thesis
-    - id: user/investment/risk-tolerance
-      pin: v1
-      reason: "决策基于当时的风险偏好"
-  recommended:
-    - user/investment/market-env-2026Q1
-  related:
-    - user/investment/historical-cycles
----
-
-# 2月重仓半导体决策
-
-基于半导体主线判断，结合个人风险偏好，决定将仓位的 40% 配置到半导体 ETF。
-
-## 决策过程
-...
-
-## 后续追踪
-- 2026-03-01: 涨了5%
-- 2026-04-15: 涨了15%
-```
-
-#### Composite（组合视图）
-
-打包清单，声明"理解 X 话题需要加载哪些记忆"。支持嵌套。
-
-```markdown
----
-type: composite
-id: user/investment/context
-summary: "投资决策的完整上下文包"
-status: active
-created: 2026-04-22
-updated: 2026-04-22
-version: 1
-tags: [investment, context]
-purpose: "讨论投资话题时加载的完整上下文"
-
-imports:
-  required:
-    - user/investment/semiconductor-thesis
-    - user/investment/risk-tolerance
-    - user/investment/february-buy
-    - user/investment/current-holdings
-  recommended:
-    - user/investment/market-env-2026Q1
-  related:
-    - user/investment/historical-cycles
----
-
-# 投资决策上下文
-
-本组合提供完整的投资决策背景。
-```
-
-### 3.4 三级依赖
-
-```yaml
-imports:
-  required: []      # 缺了会误解本记忆，始终加载
-  recommended: []   # 锦上添花，token 够就加载
-  related: []       # 扩展阅读，主动探索时加载
-```
-
-版本锁定（仅 required 可用）：
-
-```yaml
-imports:
-  required:
-    - id: user/investment/risk-tolerance
-      pin: v1
-      reason: "决策基于当时的风险偏好"
-```
+| Core | 不含场景偏好的底层记忆协议与引擎 |
+| Layer Profile | 基于场景声明的一组目录、schema、策略、校验规则 |
+| Work Layer | v1 官方 profile，服务单 owner 的长期工作记忆 |
+| Companion Layer | 未来 profile，服务拟人陪伴体验 |
+| Adapter | CLI / API / MCP / SDK / UI 等接入面 |
+| Atom | 通用记忆单元 |
+| Schema | 结构模板 |
+| Imports | 显式依赖关系 |
 
 ---
 
-## 四、设计约束
+## 11. 关键决策记录
 
-协议级硬性规则：
-
-| # | 规则 | 原因 |
-|---|------|------|
-| R1 | **禁止循环引用** | Import 是有方向的因果关系。循环说明建模粒度需调整——应合并为一个 atom 或放在同一个 composite 中作为 sibling |
-| R2 | **`pin` 只允许用于 required** | recommended/related 默认跟随最新版本，pin 旧版本会造成认知不一致 |
-| R3 | **每个文件只包含一个记忆** | 一个 .md 文件 = 一个记忆单元，ID 与文件路径一一对应 |
-| R4 | **summary 必填** | 它是索引、预览、降级加载的基础 |
-| R5 | **`self/` 仅 AI 可写** | 初期靠规范约束，不做强制实现 |
-| R6 | **Schema 字段类型限于基础类型** | string / float / date / bool / enum。引用关系统一走 imports |
-| R7 | **被 pin 的记忆不可物理删除** | 只能标记 archived/deprecated，保护 downstream 依赖 |
-
-**R1 的执行层区分**：
-
-| 场景 | 行为 | 说明 |
-|------|------|------|
-| `codememory validate` | 警告 + 列出循环 ID + 修复建议 | Lint 层面：不应该存在 |
-| `codememory resolve` | 跳过循环节点 + 警告 + 继续加载其余 | Runtime 层面：容错，不因一条循环记忆导致整个 resolve 失败 |
-
----
-
-## 五、Layer 2：操作与检索
-
-### 5.1 代码式操作映射
-
-| 代码操作 | 记忆等价 | 命令 |
-|----------|----------|------|
-| `import x from y` | 按路径加载 | `codememory resolve <id>` |
-| `grep -r "keyword"` | 文本搜索 | `codememory search --query "半导体"` |
-| IDE autocomplete | 结构化浏览 | `codememory search --tags invest --type atom` |
-| `git log --since` | 时间查询 | `codememory search --since 2026-03` |
-| Find References | 反向依赖 | `codememory rdeps <id>` |
-| Go to Definition | 正向依赖 | `codememory deps <id>` |
-
-### 5.2 index.json
-
-只存元数据，不存全文。**每次 create/update 操作自动更新**，`reindex` 保留作为修复工具。
-
-```json
-{
-  "version": 1,
-  "updated": "2026-04-24T10:00:00+08:00",
-  "memories": {
-    "user/investment/semiconductor-thesis": {
-      "type": "atom",
-      "summary": "AI存储+AI制造双核心驱动",
-      "status": "active",
-      "tags": ["investment", "thesis"],
-      "created": "2026-04-22",
-      "updated": "2026-04-22",
-      "version": 1,
-      "path": "user/investment/semiconductor-thesis.md",
-      "imports": { "required": [], "recommended": [], "related": [] }
-    },
-    "user/investment/february-buy": {
-      "type": "instance",
-      "schema": "schemas/decision",
-      "summary": "重仓半导体ETF，基于AI存储爆发判断",
-      "status": "active",
-      "tags": ["investment", "decision"],
-      "created": "2026-02-15",
-      "updated": "2026-04-22",
-      "version": 2,
-      "path": "user/investment/february-buy.md",
-      "imports": {
-        "required": [
-          "user/investment/semiconductor-thesis",
-          "user/investment/risk-tolerance"
-        ],
-        "recommended": ["user/investment/market-env-2026Q1"],
-        "related": ["user/investment/historical-cycles"]
-      }
-    }
-  }
-}
-```
-
-**搜索策略**：基于 summary + tags，覆盖 80% 场景。全文搜索暂不实现，预留钩子。
-
-### 5.3 CLI（Bash）
-
-```bash
-# ═══ 检索 ═══
-codememory resolve <id> [--depth required|recommended|full] [--budget <tokens>]
-codememory search --query <text> [--tags <t>] [--type <t>] [--since <date>] [--status active]
-codememory deps <id>             # 正向依赖
-codememory rdeps <id>            # 反向依赖
-codememory list [--type <t>] [--tags <t>] [--status active]
-
-# ═══ 写入 ═══
-codememory create --type <type> --id <id> [--schema <schema-id>]
-codememory update <id> [--change-note "reason"]
-
-# ═══ 维护 ═══
-codememory reindex               # 重建 index.json（修复工具）
-codememory validate              # 循环依赖 + schema 合规 + 断链检查
-codememory graph <id>            # 可视化依赖树
-codememory stale                 # 列出 summary_hash 不匹配的记忆
-```
-
-**演进路线**：初期 bash + `yq`/`jq`，核心逻辑复杂后封装为 Python/Go 二进制。
-
-### 5.4 Resolve 算法
-
-```python
-def resolve(memory_id, budget_tokens, depth="required"):
-    # 1. 从 index.json 构建依赖 DAG
-    graph = build_dag(memory_id, depth)
-    
-    # 2. 循环引用检测（Runtime 容错：跳过循环节点，继续加载其余）
-    if has_cycle(graph):
-        cycle_ids = find_cycle_participants(graph)
-        warn(f"Circular dependency detected, skipping: {cycle_ids}")
-        graph = remove_nodes(graph, cycle_ids)  # 移除循环节点，不中断
-    
-    # 3. 拓扑排序（前置知识在前）
-    ordered = topological_sort(graph)
-    
-    # 4. 版本解析（pin 只出现在 required 中）
-    resolved = resolve_versions(ordered)
-    
-    # 5. Token 预算裁剪
-    result, used = [], 0
-    for mid in resolved:
-        m = load_file(mid)
-        t = count_tokens(m)
-        if used + t <= budget_tokens:
-            result.append(m)
-            used += t
-        elif is_required(mid, graph):
-            result.append(load_summary_only(mid))  # 降级加载 summary
-            used += count_tokens(summary)
-    
-    return result, used
-```
-
----
-
-## 六、记忆生命周期
-
-### 6.1 状态流转
-
-```
-                  更新内容
-         ┌──────────────────┐
-         v                  │
-  ──► [active] ────────► [active v2] ────► [active v3]
-         │                                     │
-         │ 新版本替代                            │ 不再需要
-         v                                     v
-    [superseded]                          [deprecated]
-         │                                     │
-         v                                     v
-    [archived]                            [archived]
-```
-
-### 6.2 更新机制（三层）
-
-| 层级 | 机制 | 场景 |
-|------|------|------|
-| 原地编辑 | 修改文件，version++，加 change_note | 事实修正、补充信息 |
-| Git 历史 | 自动追溯 | 任何时候回看"当时写了什么" |
-| 依赖锁定 | `pin: v1`（仅 required） | 确保引用方不受更新影响 |
-
-### 6.3 Summary 过期检测
-
-当正文被编辑但 summary 未更新时，`summary_hash` 不匹配：
-
-```bash
-codememory stale
-# STALE  user/investment/risk-tolerance  (body changed, summary_hash mismatch)
-```
-
----
-
-## 七、目录结构
-
-```
-CodeMemory/                              # Git Repo
-├── user/                                # 用户的记忆（用户+AI 可读写）
-│   ├── projects/
-│   ├── investment/
-│   │   ├── semiconductor-thesis.md      # atom
-│   │   ├── risk-tolerance.md            # atom
-│   │   ├── february-buy.md              # instance
-│   │   ├── current-holdings.md          # composite
-│   │   └── context.md                   # composite（顶层包）
-│   ├── ideas/
-│   └── reminders/
-├── self/                                # AI 的记忆（仅 AI 可写，用户可读）
-│   ├── thoughts/
-│   ├── opinions/
-│   └── emotions/
-├── schemas/                             # 记忆模板
-│   ├── decision.md
-│   ├── project.md
-│   └── idea.md
-├── .codememory/
-│   ├── config.yaml                      # 全局配置
-│   └── index.json                       # 记忆索引缓存
-├── bin/
-│   └── codememory                       # bash CLI 入口
-└── README.md
-```
-
-**权限模型**：
-- `user/`：用户和 AI 均可读写
-- `self/`：**仅 AI 可写**，用户可读
-- `schemas/`：用户和 AI 均可读写
-
----
-
-## 八、Layer 3：Harness 集成
-
-### 8.1 混合 Runtime
-
-| 环境 | Resolve 方式 |
-|------|-------------|
-| 有 Harness（Antigravity, Claude Code） | Harness 解析 frontmatter，递归 resolve，注入上下文 |
-| 无 Harness（手动） | 用 `codememory resolve` 脚本生成合并文本，粘贴给任何 AI |
-
-### 8.2 Resolve 输出
-
-```bash
-$ codememory resolve user/investment/context --depth recommended --budget 2000
-
-# === 已解析的上下文 (1250 tokens) ===
-
-## [1/6] semiconductor-thesis (atom)
-AI 存储需求爆发 + AI 制造国产替代...
-
-## [2/6] risk-tolerance (atom, v2)
-中风险偏好，可承受 15% 回撤...
-
-## [3/6] february-buy (instance, decision)
-重仓半导体ETF，基于AI存储爆发+国产替代...
-...
-```
-
-输出可直接粘贴给任何 AI，不需要对方理解记忆协议。
-
----
-
-## 九、已决策事项
-
-| 问题 | 决策 | 理由 |
-|------|------|------|
-| 系统定位 | 完整 memory 子系统（三层） | 格式+操作+集成缺一不可 |
-| 文件格式 | Markdown + YAML Frontmatter | LLM 母语，跨平台，可编程 |
-| ID 格式 | 路径式 `user/investment/xxx` | 像 import 路径 |
-| 字段设计 | 抽象 base fields + schema 领域字段 | summary 是核心 |
-| 记忆状态 | `status: active/archived/superseded/deprecated` | 多版本生命周期管理 |
-| Summary 生成 | LLM 自动生成 + 用户可手动确认 | 配合 summary_hash 过期检测 |
-| 索引机制 | index.json，每次写入自动更新 | reindex 保留作修复工具 |
-| 全文搜索 | 暂不实现，留钩子 | summary + tags 先覆盖 80% |
-| 实现语言 | Bash CLI（初期） | 所有 harness 可调用 |
-| 依赖层级 | required / recommended / related | 三级 |
-| Pin 约束 | 仅 required 可 pin | 避免认知不一致 |
-| 循环引用 | 禁止，validate 友好提示 | 循环说明建模粒度需调整 |
-| 继承 | 暂不实现，保留 | 避免过度工程化 |
-| Schema 引用类型 | 暂不支持 `reference` 类型 | 引用统一走 imports |
-| 被 pin 记忆 | 不可物理删除，只可 archive | 保护 downstream 依赖 |
-| 同步策略 | Git Repo | 天然版本控制 |
-| self/ 权限 | 仅 AI 可写，初期靠规范 | 不做强制实现 |
-
----
-
-## 十、未来扩展
-
-| 问题 | 优先级 | 备注 |
-|------|--------|------|
-| 跨库引用 `@namespace` | 低 | 预留 `@public/xxx` 语法 |
-| Schema `reference` 字段类型 | 中 | 让字段值指向其他记忆 ID |
-| 记忆销毁/遗忘 | 中 | 隐私场景需彻底删除 |
-| Schema 迁移 | 中 | Schema 增加 required 字段后的合规检查 |
-| 多语言记忆 | 低 | 可选 `lang` 字段 |
-| 并发写入冲突 | 低 | 多 agent 协写需锁或合并 |
-| CLI 演进 | 中 | bash → Python/Go 二进制 |
-| 继承 / 链式关系 | 低 | 发现具体场景后再实现 |
-
----
-
-## 十一、下一步
-
-### Phase 1：原型验证（核心闭环）
-
-必须跑通的端到端流程：**create → resolve → 人工验证上下文质量**
-
-| 步骤 | 交付物 | 说明 |
-|------|--------|------|
-| 1. 创建目录结构 | `user/` `self/` `schemas/` `.codememory/` `bin/` | 按第七节目录规范 |
-| 2. 创建样例记忆 | 3-5 个 atom + 1 schema + 1 instance + 1 composite | 用真实投资场景，不用占位符 |
-| 3. 实现 `codememory create` | 生成模板文件 + 自动更新 index.json | 避免手写 frontmatter 出错 |
-| 4. 实现 `codememory resolve` | frontmatter 解析 → DAG → 拓扑排序 → token 裁剪 | 核心算法 |
-| 5. 实现 `codememory reindex` | 扫描所有 .md 重建 index.json | 修复工具 |
-| 6. 实现 `codememory validate` | 循环检测 + 断链检查 | 基础完整性保障 |
-| 7. 验证 | 用 resolve 输出注入 Antigravity 对话 | 测试跨会话记忆加载效果 |
-
-### Phase 2：完善与跨平台
-
-| 步骤 | 说明 |
+| 问题 | 决策 |
 |------|------|
-| `codememory search` | summary + tags 搜索 |
-| `codememory deps` / `rdeps` | 正向/反向依赖查询 |
-| `codememory stale` / `graph` | summary 过期检测 / 依赖可视化 |
-| 跨平台验证 | 把 resolve 输出粘贴给不同 AI，验证一致性 |
-| `codememory update` | version++ / change_note / summary_hash 更新 |
+| v1 首要产品是什么 | Reliable work memory substrate |
+| 是否把陪伴模式做进 Core | 否，放到未来 Layer Profile |
+| v1 面向谁 | 单 owner |
+| v1 官方场景层 | Work Layer |
+| Layer 如何表达 | 声明式 profile |
+| Core 是否定义人格化行为 | 否 |
+| 记忆主模型 | `atom` + `schema` |
+| 是否继续把“拟人化”当作总体口号 | 作为未来体验目标保留，但不再定义 v1 |
+
+---
+
+## 12. 后续文档策略
+
+- `architecture.md`：定义 Core / Layer / Adapter 的正式边界；
+- `agent-memory-guide.md`：后续应收敛为 Work Layer 的使用指南；
+- `companion-mode.md`：保留为 Companion Layer 的探索文档，但不再代表 v1 默认行为；
+- 旧的“四种原语”叙事与早期 Phase 1 文档，应逐步降级为历史材料或归档。
+

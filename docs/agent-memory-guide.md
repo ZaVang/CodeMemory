@@ -1,5 +1,9 @@
 # Agent Memory Guide — 记忆操作决策树
 
+> **Status note**  
+> 本文目前更接近 Work Layer 的早期使用指南，而不是 Core 规范本身。  
+> 自 2026-05-18 起，Core / Layer 的正式边界见 `docs/architecture.md`；本文后续应收敛为 Work Layer Guide。
+
 在对话中自主创建和维护记忆时，按以下决策树选择正确的参数和依赖强度。
 
 ---

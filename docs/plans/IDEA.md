@@ -1,5 +1,9 @@
 # CodeMemory 洞察与奇思妙想
 
+> **Idea log, not canonical spec**  
+> 本文保留项目最初的哲学洞察与灵感来源，不再直接定义 v1 产品边界。  
+> 当前正式产品定义见 `docs/prd.md`，正式架构见 `docs/architecture.md`。
+
 > 记录项目设计过程中产生的哲学隐喻、跨领域联想与核心洞察。
 > 这些想法不直接定义实现，但决定了系统的设计方向。
 

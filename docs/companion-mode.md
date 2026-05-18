@@ -1,5 +1,9 @@
 # 陪伴模式指南 — 对话中自然维护记忆
 
+> **Future layer exploration**  
+> 本文描述的是未来 Companion Layer 的产品策略探索，不代表 CodeMemory v1 Core 的默认行为。  
+> 当前正式产品定义见 `docs/prd.md`，正式架构见 `docs/architecture.md`。
+
 > 与 `agent-memory-guide.md` 互补。后者面向结构化决策（投资、项目管理），本文面向拟人化日常陪伴。
 
 ---

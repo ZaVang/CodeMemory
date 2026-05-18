@@ -1,5 +1,9 @@
 # CodeMemory Product Spec
 
+> **Historical document**  
+> 这是早期 Phase 1 实现说明，保留用于追溯原型阶段决策。  
+> 自 2026-05-18 起，产品定义以 `docs/prd.md` 为准，架构定义以 `docs/architecture.md` 为准。
+
 ## Goal
 Implement Phase 1 of the Memory Atomization Protocol — a dependency-aware memory system for AI agents.
 
