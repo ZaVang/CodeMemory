@@ -1,29 +1,32 @@
 # CodeMemory Architecture
 
-> **Architecture thesis**  
-> CodeMemory 的正式架构不再是“一个带若干拟人特性的记忆工具”，而是：  
-> **中立的 Core + 声明式 Layer Profiles + 多种 Adapters**。
+> **Architecture thesis**
+> CodeMemory 的正式架构不再是“一个带若干拟人特性的记忆工具”，而是：
+> **中立的 Core + 声明式 Layer Profiles + Memory Compiler + 多种 Adapters**。
 
-**最后更新**：2026-05-18  
+**最后更新**：2026-05-18
 **适用版本**：v1 / Work Layer first
 
 ---
 
 ## 1. 设计原则
 
-1. **Core neutral, layers opinionated**  
+1. **Core neutral, layers opinionated**
    Core 只定义稳定机制；Layer 负责场景判断。
 
-2. **Dependency resolution before semantic retrieval**  
+2. **Dependency resolution before semantic retrieval**
    对工作记忆而言，先保证依赖完整，再谈搜索丰富。
 
-3. **One memory model, many products**  
+3. **One memory model, many products**
    同一底层可以支撑 Work Layer，也可以支撑未来 Companion Layer。
 
-4. **Thin adapters**  
+4. **Thin adapters**
    CLI、API、MCP、SDK、UI 都只暴露能力，不私自扩展语义。
 
-5. **Portability by construction**  
+5. **Migration by compilation**
+   迁移不是搬运旧文件，而是把既有资料编译成可审阅、可追溯的 draft memory graph。
+
+6. **Portability by construction**
    纯文本、可审计、可移植、可版本控制，是架构默认值。
 
 ---
@@ -39,6 +42,9 @@
 │                         CodeMemory Core                        │
 │ format / ids / atom+schema / imports DAG / resolve / lifecycle │
 │ versioning / validation / index / audit / access primitives    │
+├──────────────────────────────────────────────────────────────┤
+│                       Memory Compiler                         │
+│ ingest / segment / propose / dedupe / review / materialize     │
 ├──────────────────────────────────────────────────────────────┤
 │                            Adapters                           │
 │      CLI       Python SDK       MCP       REST API       UI    │
@@ -71,10 +77,39 @@ Layer Profile 是对 Core 的声明式解释层。它定义：
 - 校验增强规则；
 - UI 呈现偏好。
 
-**重点**：Layer 不是新的存储引擎，而是策略表。  
+**重点**：Layer 不是新的存储引擎，而是策略表。
 不同 layer 可以共享 Core，却表现为不同产品。
 
-### 2.3 Adapters
+### 2.3 Memory Compiler
+
+Memory Compiler 是把**既有资料**转成 CodeMemory graph 的生成链路。
+它横跨 Layer 与 Core，但不改变两者边界：
+
+- Layer 决定什么样的记忆值得被提议；
+- LLM 负责理解原始材料并生成 proposal；
+- Core 负责校验、版本化、落盘和保真。
+
+默认迁移流：
+
+```text
+source corpus
+  ↓
+ingest
+  ↓
+segment
+  ↓
+llm propose atoms / schemas / imports
+  ↓
+dedupe + conflict detection
+  ↓
+review set
+  ↓
+materialize canonical memories
+```
+
+v1 首个正式支持的 source corpus 是 Markdown。
+
+### 2.4 Adapters
 
 Adapters 负责让外部系统调用同一套语义：
 
@@ -99,12 +134,12 @@ Adapter 必须遵守：
 
 #### `atom`
 
-通用记忆单元。  
+通用记忆单元。
 事实、决策、流程、上下文包、复盘，默认都用 `atom` 表示。
 
 #### `schema`
 
-结构模板。  
+结构模板。
 定义某类 atom 所需字段，但自身不是业务记忆。
 
 > 早期文档中的 `instance` 与 `composite`，在当前正式模型中都应视为 **atom 的角色差异**，而不是独立类型：
@@ -262,6 +297,34 @@ Work Layer 的典型召回路径：
 4. 按预算进行全文 / summary 降级；
 5. 输出可解释、顺序稳定的上下文。
 
+### 5.3 迁移流
+
+```text
+markdown corpus
+  ↓
+source preservation
+  ↓
+compiler segmentation
+  ↓
+llm proposals
+  ↓
+layer policy review
+  ↓
+core validation
+  ↓
+review UI / CLI
+  ↓
+canonical graph
+```
+
+迁移流的硬约束：
+
+1. 原始文档默认保留，不被静默重写；
+2. 自动生成结果默认是 draft / proposal；
+3. 每条正式记忆都能追溯到 source；
+4. dedupe、conflict、断链、循环必须在 materialize 前暴露；
+5. “编译成功”不等于“已经成为 canonical truth”。
+
 ---
 
 ## 6. Core 与 Layer 的边界
@@ -280,8 +343,9 @@ Work Layer 的典型召回路径：
 | 什么算高优先级召回 | | ✅ |
 | 遗忘 / wander / salience 的语义 | | ✅ |
 | 某种产品体验是否“像人” | | ✅ |
+| 原始资料的保留、provenance、proposal 协议 | ✅ | ✅ |
 
-一个重要推论是：  
+一个重要推论是：
 **Core 可以提供观测信号，但不应替任何产品决定这些信号意味着什么。**
 
 例如：
@@ -298,6 +362,8 @@ Work Layer 的典型召回路径：
 src/codememory/   →  当前主要承载 Core，也混入了少量尚未分离的策略
 backend/          →  REST Adapter
 frontend/src/     →  Operator UI Adapter
+import_cmd.py / skeletonize / suggest_deps
+                  →  当前已经出现的 compiler 零件，但还不是完整 Memory Compiler
 docs/agent-memory-guide.md
                   →  目前最接近 Work Layer 使用指南的文档
 docs/companion-mode.md
@@ -312,6 +378,7 @@ docs/companion-mode.md
 2. 某些文档仍混用旧的四原语叙事；
 3. 部分 adapter 重新实现了 core 逻辑，增加了契约漂移风险；
 4. 当前 Work / Companion 的目录和语义还没有被正式 profile 化。
+5. 现有 `import`、`skeletonize`、`suggest-deps` 仍是分散工具，尚未形成统一的 proposal / review / materialize 流程。
 
 这些不是推翻现有实现的理由，而是下一阶段重构时最值得优先收敛的边界。
 
@@ -321,7 +388,7 @@ docs/companion-mode.md
 
 ### 8.1 目标
 
-CodeMemory 应可以无缝接入主流 agent 框架和 harness 系统。  
+CodeMemory 应可以无缝接入主流 agent 框架和 harness 系统。
 决定可接入性的，不是“有没有很多胶水代码”，而是是否具备：
 
 - 稳定的操作语义；
@@ -354,6 +421,8 @@ CodeMemory 应可以无缝接入主流 agent 框架和 harness 系统。
 
 - 把 Work Layer 的目录、schema、召回、写入规则 profile 化；
 - 把 companion-like 策略从 Core 中剥离到未来 profile；
+- 把现有导入相关能力收敛成正式 Memory Compiler；
+- 先完成 Markdown corpus → draft graph → review → materialize 闭环；
 - 统一 backend / frontend / MCP / SDK 的契约；
 - 让文档、代码、测试围绕同一套正式模型收敛。
 
@@ -377,6 +446,5 @@ CodeMemory 应可以无缝接入主流 agent 框架和 harness 系统。
 
 如果未来某个功能拿不准该放哪里，可用这句判断：
 
-> **如果它改变的是“记忆本身怎么被可靠表示和处理”，它属于 Core；  
+> **如果它改变的是“记忆本身怎么被可靠表示和处理”，它属于 Core；
 > 如果它改变的是“在某个场景里什么值得记、如何被想起”，它属于 Layer。**
-

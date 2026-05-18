@@ -1,11 +1,11 @@
 # CodeMemory PRD
 
-> **Product thesis**  
-> CodeMemory v1 不再试图成为“更像人的记忆系统”；它首先要成为**单 owner、多 agent、多环境共享的可靠工作记忆底座**。  
+> **Product thesis**
+> CodeMemory v1 不再试图成为“更像人的记忆系统”；它首先要成为**单 owner、多 agent、多环境共享的可靠工作记忆底座**。
 > “更像人”的体验，不属于底层 Core，而应由未来的 Layer Profile 在明确场景中实现。
 
-**最后更新**：2026-05-18  
-**状态**：新版产品定义  
+**最后更新**：2026-05-18
+**状态**：新版产品定义
 **版本**：v1 / Work Layer first
 
 ---
@@ -42,7 +42,7 @@ CodeMemory 的机会，不是去模拟人的全部记忆，而是把“工作中
 | 遗忘观 | 工作上常常要“不要忘” | 陪伴中“会忘”本身是人格的一部分 |
 | 典型风险 | 漏掉关键依赖导致错误 | 过度精确反而显得机械 |
 
-这两者共享一部分底层能力，但产品目标相反。  
+这两者共享一部分底层能力，但产品目标相反。
 因此，CodeMemory 采用：
 
 ```
@@ -126,7 +126,47 @@ v1 首个官方 profile：
 
 Companion Layer 是 **未来场景层**，不是 v1 Core 的成功条件。
 
-### 3.3 Adapters
+### 3.3 Memory Compiler
+
+Memory Compiler 是 CodeMemory 的**生成入口**，负责把现实世界里已经存在的知识资产转成可审阅的 memory graph。
+
+它不是新的 Layer，也不是新的存储引擎，而是一条横向能力：
+
+```text
+Source Corpus
+  ↓
+LLM-assisted compilation
+  ↓
+Draft memory graph
+  ↓
+Review
+  ↓
+Canonical memory graph
+```
+
+v1 首要支持的输入源是 **Markdown corpus**：
+
+- 现有项目文档；
+- ADR；
+- 设计说明；
+- 运行手册；
+- 长期笔记；
+- 其他 `.md` 知识库。
+
+Memory Compiler 的职责：
+
+- 保留原始来源与 provenance；
+- 从文档中提议 atoms、schemas、summaries、candidate imports；
+- 发现重复、冲突、潜在上下文包；
+- 先生成 `draft` / proposal，而不是直接改写 canonical memory；
+- 让用户像审 PR 一样 approve / reject / merge / edit；
+- 通过校验后再 materialize 为正式记忆。
+
+**关键原则**：
+LLM 负责理解和提案；Core 负责约束和保真。
+CodeMemory 不要求用户抛弃旧知识库，而是帮助用户把旧知识库编译成 agent 可持续使用的工作记忆。
+
+### 3.4 Adapters
 
 Adapters 负责把同一套 Core / Layer 能力接到不同入口：
 
@@ -169,8 +209,9 @@ Adapter 不应偷偷引入新的记忆语义；它们只负责暴露能力，不
 1. **让一个人的工作记忆跨 agent 连续存在。**
 2. **让记忆召回具备因果完整性，而不是只靠语义相似度。**
 3. **让写入、更新、引用、失效都可追踪。**
-4. **让任意主流 agent 框架可以低摩擦接入。**
-5. **让未来 Companion Layer 可以建立在 Core 之上，而不污染 Core。**
+4. **让用户能把既有 Markdown 知识库低风险迁移进来。**
+5. **让任意主流 agent 框架可以低摩擦接入。**
+6. **让未来 Companion Layer 可以建立在 Core 之上，而不污染 Core。**
 
 ### 5.2 用户可感知结果
 
@@ -179,6 +220,7 @@ Adapter 不应偷偷引入新的记忆语义；它们只负责暴露能力，不
 - agent 不再反复问已经回答过的问题；
 - 不同环境里的 agent 能接上同一段工作上下文；
 - 重要决策能带着“为什么”一起被重新拿起；
+- 自己不需要从零开始重写旧知识库，就能开始使用 CodeMemory；
 - 自己过去形成的知识不再散落成一堆无法重用的聊天残片。
 
 ---
@@ -196,9 +238,41 @@ v1 明确**不**做：
 
 ---
 
-## 7. Work Layer 的产品要求
+## 7. 首次迁移体验
 
-### 7.1 记忆对象
+对新用户而言，Work Layer 的第一增长楔子不是“从今天开始按新协议写记忆”，而是：
+
+> **把你现有散落的 Markdown 文档，编译成 agent 真能继续使用的工作记忆图。**
+
+### 7.1 默认迁移流
+
+```text
+选择 Markdown corpus
+  ↓
+保留原文与 provenance
+  ↓
+Compiler 生成 draft atoms / schemas / candidate imports
+  ↓
+展示 review set
+  ↓
+用户 approve / reject / merge / edit
+  ↓
+materialize 为 canonical Work Layer memory
+```
+
+### 7.2 产品承诺
+
+1. **Preserve originals**：原始文档不被静默改写；
+2. **Promote drafts**：自动结果先是 proposal，不是事实本体；
+3. **Review before canon**：正式记忆进入 Core 前，必须经过审阅或明确的晋升规则；
+4. **Trace every memory**：每条迁移记忆都能回到源文档；
+5. **Start useful, become cleaner**：第一次迁移就能产生价值，后续再逐步清洁图谱。
+
+---
+
+## 8. Work Layer 的产品要求
+
+### 8.1 记忆对象
 
 Work Layer 至少需要稳定支持：
 
@@ -211,7 +285,7 @@ Work Layer 至少需要稳定支持：
 | Contexts | 某个项目/主题的入口包 |
 | Learnings | 复盘、踩坑、规律 |
 
-### 7.2 质量要求
+### 8.2 质量要求
 
 Work Layer 中的记忆应尽量满足：
 
@@ -222,7 +296,7 @@ Work Layer 中的记忆应尽量满足：
 - 有明确生命周期；
 - 有可解释的依赖关系。
 
-### 7.3 召回要求
+### 8.3 召回要求
 
 Work Layer 的召回不追求“像回忆一样自然”，而追求：
 
@@ -234,9 +308,9 @@ Work Layer 的召回不追求“像回忆一样自然”，而追求：
 
 ---
 
-## 8. 成功标准
+## 9. 成功标准
 
-### 8.1 Product Success
+### 9.1 Product Success
 
 在单 owner 场景下，CodeMemory v1 成功意味着：
 
@@ -244,9 +318,10 @@ Work Layer 的召回不追求“像回忆一样自然”，而追求：
 2. 一个新 agent 能通过 resolve 重建关键工作上下文；
 3. 重要结论不会脱离其必要前提被孤立召回；
 4. 用户能审计“某个结论是怎么来的、什么时候被改过”；
-5. 用户能把 CodeMemory 当成默认工作记忆层，而不是一次性实验。
+5. 用户能把已有 Markdown corpus 迁移成可审阅的 memory graph；
+6. 用户能把 CodeMemory 当成默认工作记忆层，而不是一次性实验。
 
-### 8.2 Engineering Success
+### 9.2 Engineering Success
 
 1. Core 语义稳定，不依赖某个 adapter；
 2. Work Layer 通过 profile 定义，而非硬编码进 Core；
@@ -256,29 +331,32 @@ Work Layer 的召回不追求“像回忆一样自然”，而追求：
 
 ---
 
-## 9. 产品原则
+## 10. 产品原则
 
-1. **Core neutral, layers opinionated.**  
+1. **Core neutral, layers opinionated.**
    底层中立，场景层有态度。
 
-2. **Recall is reconstruction, not just retrieval.**  
+2. **Recall is reconstruction, not just retrieval.**
    召回是重构，不只是检索。
 
-3. **Causal completeness beats semantic similarity.**  
+3. **Causal completeness beats semantic similarity.**
    对工作记忆而言，因果完整性优先于“看起来相关”。
 
-4. **One owner first.**  
+4. **One owner first.**
    先把一个人的长期记忆做好，再谈团队协作。
 
-5. **Human-like is a layer concern.**  
+5. **Human-like is a layer concern.**
    拟人不是 Core 的方向盘，而是未来 profile 的一种风格。
 
-6. **Adapters should be thin.**  
+6. **Adapters should be thin.**
    入口越多，底层语义越要收敛。
+
+7. **Import is a compiler, not a dump pipe.**
+   迁移不是搬运，而是可审阅的结构化编译。
 
 ---
 
-## 10. 术语
+## 11. 术语
 
 | 术语 | 定义 |
 |------|------|
@@ -286,6 +364,7 @@ Work Layer 的召回不追求“像回忆一样自然”，而追求：
 | Layer Profile | 基于场景声明的一组目录、schema、策略、校验规则 |
 | Work Layer | v1 官方 profile，服务单 owner 的长期工作记忆 |
 | Companion Layer | 未来 profile，服务拟人陪伴体验 |
+| Memory Compiler | 将现有资料编译为 draft memory graph 的生成链路 |
 | Adapter | CLI / API / MCP / SDK / UI 等接入面 |
 | Atom | 通用记忆单元 |
 | Schema | 结构模板 |
@@ -293,7 +372,7 @@ Work Layer 的召回不追求“像回忆一样自然”，而追求：
 
 ---
 
-## 11. 关键决策记录
+## 12. 关键决策记录
 
 | 问题 | 决策 |
 |------|------|
@@ -304,14 +383,15 @@ Work Layer 的召回不追求“像回忆一样自然”，而追求：
 | Layer 如何表达 | 声明式 profile |
 | Core 是否定义人格化行为 | 否 |
 | 记忆主模型 | `atom` + `schema` |
+| v1 首个迁移源 | Markdown corpus |
+| 自动迁移是否直接写 canonical memory | 否，先生成 proposal / draft |
 | 是否继续把“拟人化”当作总体口号 | 作为未来体验目标保留，但不再定义 v1 |
 
 ---
 
-## 12. 后续文档策略
+## 13. 后续文档策略
 
 - `architecture.md`：定义 Core / Layer / Adapter 的正式边界；
 - `agent-memory-guide.md`：后续应收敛为 Work Layer 的使用指南；
 - `companion-mode.md`：保留为 Companion Layer 的探索文档，但不再代表 v1 默认行为；
 - 旧的“四种原语”叙事与早期 Phase 1 文档，应逐步降级为历史材料或归档。
-

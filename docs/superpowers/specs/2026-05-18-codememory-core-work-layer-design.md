@@ -1,14 +1,14 @@
 # CodeMemory Core / Work Layer Product Design
 
-**Date**: 2026-05-18  
-**Status**: Approved design direction  
+**Date**: 2026-05-18
+**Status**: Approved design direction
 **Owner**: CodeMemory
 
 ---
 
 ## 1. Problem
 
-CodeMemory 最早的吸引力来自“让 agent 的记忆更像人”。  
+CodeMemory 最早的吸引力来自“让 agent 的记忆更像人”。
 但在当前阶段，项目最有价值、也最常被使用的形态，不应首先是陪伴产品，而应是：
 
 > **一个人可以在多个 agent、多个环境中共享的可靠工作记忆底座。**
@@ -26,20 +26,24 @@ CodeMemory 最早的吸引力来自“让 agent 的记忆更像人”。
 
 采用三层产品模型：
 
-1. **CodeMemory Core**  
+1. **CodeMemory Core**
    负责稳定底层能力：格式、模型、依赖图、resolve、版本、生命周期、索引、校验、审计。
 
-2. **Layer Profiles**  
+2. **Layer Profiles**
    负责场景策略：目录、schema、写入门槛、召回策略、边语义、保留/遗忘规则。
 
-3. **Adapters**  
+3. **Adapters**
    负责接入：CLI、SDK、MCP、REST API、UI、harness。
+
+4. **Memory Compiler**
+   负责把既有资料编译为可审阅的 draft memory graph。
 
 v1 的官方产品层定义为：
 
 - **Work Layer first**
 - **single owner first**
 - **declarative profile first**
+- **markdown migration first**
 
 Companion Layer 被保留为未来正式 profile，而不是继续作为 Core 默认目标。
 
@@ -67,7 +71,7 @@ Companion Layer 被保留为未来正式 profile，而不是继续作为 Core �
 
 ### 3.3 为什么是 declarative profile
 
-用户选择了 B：让 layer 以声明式 profile 定义，而不是把 layer 做成一堆分叉逻辑。  
+用户选择了 B：让 layer 以声明式 profile 定义，而不是把 layer 做成一堆分叉逻辑。
 这样做有三个好处：
 
 1. 语义可读；
@@ -155,27 +159,73 @@ Layer 需要至少声明：
 
 CLI、API、MCP、SDK、UI 应共享同一套 core service，而不是复制逻辑。
 
+### 5.4 Memory construction boundary
+
+LLM 负责从非结构化源材料中提议：
+
+- atoms
+- schemas
+- summaries
+- candidate imports
+- duplicates / conflicts
+
+但这些提议默认只进入 draft / proposal 状态。
+Core 必须保留 provenance，并在 materialize 前执行校验。
+用户体验上，这应更像“审阅一组变更”，而不是“黑箱导入”。
+
 ---
 
-## 6. Documentation consequences
+## 6. Migration as first wedge
+
+Work Layer 的首个增长入口不是“要求用户从今天开始按新格式写”，而是：
+
+> **把用户现有的 Markdown 知识库迁移成 agent 可继续工作的 memory graph。**
+
+默认迁移流：
+
+```text
+markdown corpus
+  ↓
+preserve originals
+  ↓
+compiler proposes draft graph
+  ↓
+review like a PR
+  ↓
+approve / reject / merge / edit
+  ↓
+materialize canonical memories
+```
+
+核心原则：
+
+- preserve originals
+- promote drafts
+- review before canon
+- trace every memory to source
+- start useful, become cleaner
+
+---
+
+## 7. Documentation consequences
 
 本设计生效后，canonical docs 应调整为：
 
-1. `docs/prd.md`  
+1. `docs/prd.md`
    改写为新的产品定义；
 
-2. `docs/architecture.md`  
+2. `docs/architecture.md`
    改写为 Core / Layer / Adapter 正式边界；
 
-3. `docs/agent-memory-guide.md`  
+3. `docs/agent-memory-guide.md`
    后续收敛为 Work Layer 使用指南；
 
-4. `docs/companion-mode.md`  
+4. `docs/companion-mode.md`
    保留为未来 Companion Layer 的探索文档，不再代表 v1 默认行为。
 
 ---
 
-## 7. Non-goals
+## 8. Non-goals
 
 本轮设计不解决：
 
@@ -189,19 +239,19 @@ CLI、API、MCP、SDK、UI 应共享同一套 core service，而不是复制逻�
 
 ---
 
-## 8. Success criteria
+## 9. Success criteria
 
 本设计成立的标志：
 
 1. 团队可以用一句话说清 CodeMemory v1 是什么；
 2. Work Layer 与 Companion Layer 的边界被正式拆开；
 3. Core 不再被拟人化目标牵着走；
-4. 后续代码 review 能以新的架构边界为准绳；
-5. 新增未来 layer 时，不必推翻底层。
+4. 用户可以从现有 Markdown corpus 迁移进入系统，而不是被迫从零开始；
+5. 后续代码 review 能以新的架构边界为准绳；
+6. 新增未来 layer 时，不必推翻底层。
 
 ---
 
-## 9. Final product sentence
+## 10. Final product sentence
 
 > **CodeMemory v1 is a reliable work-memory substrate for one owner across many agents and environments; human-like memory behavior belongs to future layer profiles, not to the core substrate itself.**
-
