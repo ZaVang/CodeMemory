@@ -392,6 +392,7 @@ Work Layer 的召回不追求“像回忆一样自然”，而追求：
 ## 13. 后续文档策略
 
 - `architecture.md`：定义 Core / Layer / Adapter 的正式边界；
+- `project_structure.md`：定义仓库文件职责、代码落点和文档保留边界；
 - `agent-memory-guide.md`：后续应收敛为 Work Layer 的使用指南；
 - `companion-mode.md`：保留为 Companion Layer 的探索文档，但不再代表 v1 默认行为；
-- 旧的“四种原语”叙事与早期 Phase 1 文档，应逐步降级为历史材料或归档。
+- 旧的“四种原语”叙事、早期 Phase 计划、审阅报告和设计探索稿不再作为当前判断依据；需要追溯时使用 Git history。

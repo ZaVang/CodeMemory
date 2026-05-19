@@ -10,6 +10,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException
 
 from shared import (
+    ContextPackRequest,
     FUZZY_THRESHOLD,
     ResolveRequest,
     SearchRequest,
@@ -20,6 +21,7 @@ from shared import (
     parse_frontmatter,
     serialize,
 )
+from codememory.context_pack import build_context_pack, render_context_pack
 from codememory.handlers import handle_resolve
 from codememory.index import load_index
 from codememory.models import IndexData, MemoryEntry
@@ -217,6 +219,38 @@ def post_resolve(req: ResolveRequest):
         "full_text": text,
         "notices": notices,
     }
+
+
+# ---------------------------------------------------------------------------
+# Context Pack
+# ---------------------------------------------------------------------------
+
+@router.post("/context-pack")
+def post_context_pack(req: ContextPackRequest):
+    if not req.memory_id.strip():
+        raise HTTPException(status_code=422, detail="Memory id is required")
+    if req.format not in {"xml-markdown", "markdown", "plain-markdown", "json"}:
+        raise HTTPException(status_code=422, detail="Unsupported context pack format")
+
+    try:
+        pack = build_context_pack(
+            get_root(),
+            req.memory_id,
+            depth=req.depth,
+            budget=req.budget,
+            focus=req.focus,
+            task_goal=req.task_goal,
+        )
+        rendered = render_context_pack(pack, req.format)  # type: ignore[arg-type]
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+    return serialize({
+        "target": req.memory_id,
+        "format": req.format,
+        "pack": pack.model_dump(mode="json"),
+        "rendered": rendered,
+    })
 
 
 # ---------------------------------------------------------------------------

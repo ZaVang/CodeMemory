@@ -7,6 +7,7 @@ import { DIRECTORY_COLORS, DIRECTORY_TINTS, DIRECTORY_TINTS_DARK, DEFAULT_COLOR,
 import EmptyState from './EmptyState'
 
 interface Props {
+  enabled?: boolean
   searchText: string
   onNodeClick: (id: string) => void
   onNodeContextMenu?: (id: string, position: { x: number; y: number }) => void
@@ -56,7 +57,7 @@ function intensityToRadius(intensity: number): number {
   return Math.max(18, Math.min(50, 14 + intensity * 4))
 }
 
-const GraphCanvas = forwardRef<GraphCanvasHandle, Props>(function GraphCanvas({ searchText, onNodeClick, onNodeContextMenu, resolveData, isResolving, refreshTrigger, zoomLevel = 0.5, onGraphDataLoaded, activeTheme = 'light', onCreateMemory, highlightedDirectory }, ref) {
+const GraphCanvas = forwardRef<GraphCanvasHandle, Props>(function GraphCanvas({ enabled = true, searchText, onNodeClick, onNodeContextMenu, resolveData, isResolving, refreshTrigger, zoomLevel = 0.5, onGraphDataLoaded, activeTheme = 'light', onCreateMemory, highlightedDirectory }, ref) {
   const containerRef = useRef<HTMLDivElement>(null)
   const cyRef = useRef<Core | null>(null)
   const [graphData, setGraphData] = useState<GraphData | null>(null)
@@ -76,6 +77,9 @@ const GraphCanvas = forwardRef<GraphCanvasHandle, Props>(function GraphCanvas({ 
 
   // Load graph data
   useEffect(() => {
+    if (!enabled) {
+      return
+    }
     setLoading(true)
     fetchGraph().then((data) => {
       setGraphData(data)
@@ -83,7 +87,7 @@ const GraphCanvas = forwardRef<GraphCanvasHandle, Props>(function GraphCanvas({ 
     }).catch((err) => {
       console.error('Graph load failed:', err)
     }).finally(() => setLoading(false))
-  }, [refreshTrigger])
+  }, [refreshTrigger, enabled, onGraphDataLoaded])
 
   // Run dagre layout on node positions
   const runDagreLayout = useCallback((cy: Core) => {

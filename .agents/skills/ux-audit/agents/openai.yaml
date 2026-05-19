@@ -1,0 +1,4 @@
+interface:
+  display_name: "UX Audit"
+  short_description: "Audit the product as a first-time user"
+  default_prompt: "Use $ux-audit to perform a first-time-user UX audit."

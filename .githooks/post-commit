@@ -1,5 +1,0 @@
-#!/usr/bin/env bash
-# Post-commit hook: triggers skeletonize for changed files after each commit.
-# Install: git config core.hooksPath .githooks
-# Uninstall: git config --unset core.hooksPath
-exec "$(git rev-parse --show-toplevel)/bin/codememory-hook"

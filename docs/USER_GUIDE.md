@@ -12,7 +12,7 @@ CodeMemory 是一个 **AI 记忆管理系统**——帮你和 AI Agent 建立共
 
 | 方式 | 适用场景 | 入口 |
 |------|---------|------|
-| **Web UI** | 浏览、创建、编辑、可视化 | `./bin/dev` → http://localhost:5300 |
+| **Web UI** | 浏览、创建、编辑、可视化 | `.\start.ps1` 或 `python bin/codememory.py dev` → http://localhost:5300 |
 | **CLI** | 脚本、Agent 集成、批量操作 | `codememory <command>` |
 | **MCP Server** | AI Agent 直接调用 | 配置到 Claude Code / Cursor 等 |
 
@@ -28,7 +28,7 @@ cd CodeMemory
 pip install -e .
 
 # 一键启动
-./bin/dev
+.\start.ps1
 ```
 
 浏览器打开 http://localhost:5300 ，首次访问会看到 Onboarding 引导。
@@ -130,7 +130,7 @@ R = max(0.5^(days/stability), long_term_floor)
 
 ```bash
 # 一键启动
-./bin/dev
+.\start.ps1
 
 # 扫视 — 启动时自动注入 top 5 相关记忆
 codememory overview --tags "investment"

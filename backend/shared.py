@@ -302,6 +302,15 @@ class ResolveRequest(BaseModel):
     budget: int = Field(default=2000, ge=200, le=5000)
 
 
+class ContextPackRequest(BaseModel):
+    memory_id: str = Field(alias="id", description="Target memory ID to package")
+    depth: str = Field(default="recommended", description="required | recommended | full")
+    budget: int = Field(default=2000, ge=200, le=5000)
+    format: str = Field(default="xml-markdown", description="xml-markdown | markdown | plain-markdown | json")
+    focus: str | None = None
+    task_goal: str | None = None
+
+
 class ImportRequest(BaseModel):
     text: str
     extract: str = Field(default="general", description="preferences | decisions | facts | general")

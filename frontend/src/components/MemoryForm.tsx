@@ -4,6 +4,7 @@ import type { MemorySummary } from '../types'
 import { useExitAnimation } from '../useExitAnimation'
 
 interface Props {
+  datasetReady?: boolean
   /** Whether the form should be shown */
   show: boolean
   /** If set, edit mode; otherwise create mode */
@@ -15,7 +16,7 @@ interface Props {
   onUndoEntry?: (entry: { type: 'create' | 'update' | 'archive'; memoryId: string; previousState?: Record<string, unknown> }) => void
 }
 
-export default function MemoryForm({ show, memoryId, onClose, onChange, onUndoEntry }: Props) {
+export default function MemoryForm({ datasetReady = true, show, memoryId, onClose, onChange, onUndoEntry }: Props) {
   const isEdit = memoryId !== null
   const { visible, closing } = useExitAnimation(show)
 
@@ -72,6 +73,8 @@ export default function MemoryForm({ show, memoryId, onClose, onChange, onUndoEn
       }
       return
     }
+
+    if (!show || !datasetReady) return
 
     setLoading(true)
     setError(null)
@@ -132,22 +135,25 @@ export default function MemoryForm({ show, memoryId, onClose, onChange, onUndoEn
         setError('Failed to load memory data')
       })
       .finally(() => setLoading(false))
-  }, [memoryId])
+  }, [memoryId, show, datasetReady])
 
   // Load schemas for template selection (create mode only)
   useEffect(() => {
-    if (isEdit) return
+    if (!show || !datasetReady || isEdit) return
     fetchAllMemories()
       .then((mems) => setTemplates(mems.filter((m) => m.type === 'schema')))
       .catch(() => setTemplates([]))
-  }, [isEdit])
+  }, [isEdit, show, datasetReady])
 
   // R9-tag-autocomplete: load available tags from current dataset
   useEffect(() => {
+    if (!show || !datasetReady) {
+      return
+    }
     fetchStats()
       .then((stats) => setAllTags(stats.tags.map((t) => t.tag).sort()))
       .catch(() => setAllTags([]))
-  }, [])
+  }, [show, datasetReady])
 
   // When a template is selected, load its details and prefill form
   const handleTemplateSelect = useCallback((templateId: string) => {

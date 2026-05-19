@@ -35,7 +35,7 @@ export default function Dashboard({ onSelectMemory, onNavigateToFilter, refreshT
       .then(setStats)
       .catch((err) => onError?.(err instanceof Error ? err.message : 'Failed to load stats'))
       .finally(() => setLoading(false))
-  }, [])
+  }, [onError])
 
   useEffect(() => {
     loadData()
@@ -59,7 +59,7 @@ export default function Dashboard({ onSelectMemory, onNavigateToFilter, refreshT
         setWanderOpen(false)  // close modal on error since we have nothing to show
       })
       .finally(() => setWandering(false))
-  }, [])
+  }, [onError])
 
   const handleValidate = useCallback(() => {
     setValidating(true)
@@ -75,7 +75,7 @@ export default function Dashboard({ onSelectMemory, onNavigateToFilter, refreshT
         setValidateOpen(false)  // close modal on error
       })
       .finally(() => setValidating(false))
-  }, [])
+  }, [onError])
 
   const handleReindex = useCallback(() => {
     setReindexing(true)
@@ -108,6 +108,8 @@ export default function Dashboard({ onSelectMemory, onNavigateToFilter, refreshT
   }
 
   const maturityOrder = ['draft', 'verified', 'proven', 'superseded']
+  const validateErrors = validateResult?.errors ?? []
+  const validateWarnings = validateResult?.warnings ?? []
 
   return (
     <div
@@ -684,7 +686,7 @@ export default function Dashboard({ onSelectMemory, onNavigateToFilter, refreshT
                 wordBreak: 'break-all',
               }}
             >
-              {wanderResult.id}
+              {wanderResult.id || 'No memory id returned'}
             </div>
           </div>
           <div style={{ marginBottom: 16 }}>
@@ -697,7 +699,7 @@ export default function Dashboard({ onSelectMemory, onNavigateToFilter, refreshT
           </div>
           </>)}
           <div style={{ display: 'flex', gap: 8 }}>
-            {wanderResult && (
+            {wanderResult?.id && (
             <button
               onClick={() => onSelectMemory(wanderResult.id)}
               style={{
@@ -843,7 +845,7 @@ export default function Dashboard({ onSelectMemory, onNavigateToFilter, refreshT
             </div>
           </div>
 
-          {validateResult.errors.length === 0 && validateResult.warnings.length === 0 && (
+          {validateErrors.length === 0 && validateWarnings.length === 0 && (
             <div
               style={{
                 padding: '16px',
@@ -858,21 +860,21 @@ export default function Dashboard({ onSelectMemory, onNavigateToFilter, refreshT
             </div>
           )}
 
-          {validateResult.errors.length > 0 && (
+          {validateErrors.length > 0 && (
             <div style={{ marginBottom: 16 }}>
               <h3 style={{ fontSize: 14, fontFamily: 'Raleway, sans-serif', fontWeight: 600, color: 'var(--cm-error)', marginBottom: 8 }}>
-                Errors ({validateResult.errors.length})
+                Errors ({validateErrors.length})
               </h3>
-              {renderGroupedIssues(validateResult.errors, 'error', onSelectMemory)}
+              {renderGroupedIssues(validateErrors, 'error', onSelectMemory)}
             </div>
           )}
 
-          {validateResult.warnings.length > 0 && (
+          {validateWarnings.length > 0 && (
             <div style={{ marginBottom: 16 }}>
               <h3 style={{ fontSize: 14, fontFamily: 'Raleway, sans-serif', fontWeight: 600, color: 'var(--cm-warning)', marginBottom: 8 }}>
-                Warnings ({validateResult.warnings.length})
+                Warnings ({validateWarnings.length})
               </h3>
-              {renderGroupedIssues(validateResult.warnings, 'warning', onSelectMemory)}
+              {renderGroupedIssues(validateWarnings, 'warning', onSelectMemory)}
             </div>
           )}
           </>)}
@@ -1038,7 +1040,8 @@ function getIssueTypeLabel(type: string): string {
     case 'broken_link': return 'Broken Link'
     case 'schema_compliance': return 'Schema Compliance'
     case 'error': return 'Error'
-    case 'warning': return 'Circular Dependency'
+    case 'circular_dependency': return 'Circular Dependency'
+    case 'warning': return 'Warning'
     case 'maturity': return 'Maturity Stale'
     case 'decay': return 'Decay Risk'
     default: return type

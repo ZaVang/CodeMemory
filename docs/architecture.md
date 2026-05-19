@@ -362,8 +362,10 @@ canonical graph
 src/codememory/   →  当前主要承载 Core，也混入了少量尚未分离的策略
 backend/          →  REST Adapter
 frontend/src/     →  Operator UI Adapter
+src/codememory/compiler/
+                  →  Markdown Memory Compiler：ingest / segment / propose / review / materialize
 import_cmd.py / skeletonize / suggest_deps
-                  →  当前已经出现的 compiler 零件，但还不是完整 Memory Compiler
+                  →  旧版导入与依赖辅助工具；不再承担正式迁移审阅流程
 docs/agent-memory-guide.md
                   →  目前最接近 Work Layer 使用指南的文档
 docs/companion-mode.md
@@ -378,7 +380,7 @@ docs/companion-mode.md
 2. 某些文档仍混用旧的四原语叙事；
 3. 部分 adapter 重新实现了 core 逻辑，增加了契约漂移风险；
 4. 当前 Work / Companion 的目录和语义还没有被正式 profile 化。
-5. 现有 `import`、`skeletonize`、`suggest-deps` 仍是分散工具，尚未形成统一的 proposal / review / materialize 流程。
+5. `import`、`skeletonize`、`suggest-deps` 仍是分散旧工具；正式 Markdown 迁移已经收敛到 `compiler`，但 layer profile 与 compiler proposal schema 仍可继续增强。
 
 这些不是推翻现有实现的理由，而是下一阶段重构时最值得优先收敛的边界。
 

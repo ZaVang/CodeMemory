@@ -1,0 +1,4 @@
+interface:
+  display_name: "Sprint"
+  short_description: "Run this repository sprint workflow"
+  default_prompt: "Use $sprint to execute the current sprint workflow."

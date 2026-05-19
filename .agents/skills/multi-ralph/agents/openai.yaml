@@ -1,0 +1,4 @@
+interface:
+  display_name: "Multi Ralph"
+  short_description: "Run the planner-generator-evaluator loop"
+  default_prompt: "Use $multi-ralph to run the repository multi-agent Ralph loop."

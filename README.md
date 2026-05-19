@@ -37,14 +37,36 @@ codememory reindex && codememory validate
 
 CodeMemory 提供 Web 管理面板（Graph 视图 + Dashboard + CRUD 表单）。
 
+```bash
+cd frontend && npm install && cd ..
+python bin/codememory.py dev
+```
+
+Windows / PowerShell 也可以直接使用根目录启动脚本：
+
+```powershell
+.\start.ps1
+```
+
+默认地址：
+
+| 界面 | 地址 |
+|------|------|
+| 前端 UI（Graph + Dashboard） | http://127.0.0.1:5300 |
+| Backend API | http://127.0.0.1:8000 |
+| Swagger 文档 | http://127.0.0.1:8000/docs |
+
 ### Backend
 
 ```bash
-# 直接启动（默认 root = examples/investment）
+# 直接启动（默认 dataset = investment）
 python backend/server.py
 
-# 指定记忆数据集
-CODEMEMORY_ROOT=examples/all python backend/server.py
+# 指定默认数据集
+CODEMEMORY_DEFAULT_DATASET=software-architecture python backend/server.py
+
+# 指定端口
+BACKEND_PORT=8010 python backend/server.py
 
 # 或通过 uvicorn
 python -m uvicorn backend.server:app --host 0.0.0.0 --port 8000
@@ -61,14 +83,6 @@ npm run dev
 ```
 
 Vite 默认监听 5173 端口；端口被占用时自动选择下一个可用端口（关注终端输出中的实际 URL）。
-
-### 访问地址
-
-| 界面 | 地址 |
-|------|------|
-| 前端 UI（Graph + Dashboard） | http://localhost:5173 |
-| Backend API | http://localhost:8000 |
-| Swagger 文档 | http://localhost:8000/docs |
 
 ## 核心概念
 
@@ -104,6 +118,7 @@ CodeMemory/
 │   │   ├── log.py                # 全局追加审计日志
 │   │   ├── import_cmd.py         # 冷启动文本导入
 │   │   ├── suggest_deps.py       # 自动依赖推断（三层过滤）
+│   │   ├── compiler/             # Markdown corpus -> proposal review -> materialize
 │   │   ├── skeletonize/          # 结构化批量导入
 │   │   │   ├── common.py         # intensity 解析 + 文本工具
 │   │   │   ├── markdown.py       # Markdown 节拆分 + 骨架化
@@ -129,7 +144,7 @@ CodeMemory/
 │   └── integration_test.py      # 24 个集成测试
 ├── docs/
 ├── pyproject.toml
-└── INTEGRATION.md               # 集成指南（10 分钟上手）
+└── README.md
 ```
 
 ### 四层架构
@@ -167,6 +182,8 @@ codememory log [--limit N]
 codememory import --file notes.txt --extract preferences,decisions
 codememory import --stdin --extract facts
 codememory skeletonize <file_or_dir> [--min-intensity N] [--dry-run] [--tags "a,b"]
+codememory compile-md <corpus_dir> --target-root <memory_root> [--review-dir <dir>]
+codememory materialize-review <review_id> --target-root <memory_root> [--review-dir <dir>]
 
 # 依赖推断
 codememory suggest-deps <id> [--min-score N] [--forward-only] [--retroactive-only]
@@ -206,12 +223,13 @@ tools = toolkit.get_tools_for_openai()  # -> OpenAI format tool list
 
 ## 文档
 
+- [产品需求](docs/prd.md) -- v1 产品模式、目标用户、范围和非目标
+- [架构设计](docs/architecture.md) -- Core / Layer / Compiler / Adapter 边界
+- [项目结构](docs/project_structure.md) -- 每个主要文件的职责与代码落点规则
 - [集成指南](docs/INTEGRATION.md) -- 10 分钟上手集成
-- [Layer 0 认知接口原理](docs/layer0-cognitive-interface.md) -- 五个认知操作为什么这样设计
-- [Agent 记忆指南](docs/agent-memory-guide.md) -- 对话中自主维护记忆的决策树
-- [架构设计](docs/architecture.md)
-- [与团队知识库方案互操作](docs/interop-with-team-knowledge.md) -- 五层目录、语义分类、成熟度对照
-- [已知陷阱](docs/plans/pitfalls.md)
+- [用户指南](docs/USER_GUIDE.md) -- 日常使用、维护和迁移
+- [Agent 记忆指南](docs/agent-memory-guide.md) -- Work Layer agent 操作规则草案
+- [Companion Mode](docs/companion-mode.md) -- future companion layer 探索
 
 ## 许可证
 

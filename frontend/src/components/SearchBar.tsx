@@ -30,13 +30,14 @@ function highlightMatches(text: string, query: string): React.ReactNode {
 }
 
 interface Props {
+  enabled?: boolean
   value: string
   onChange: (value: string) => void
   onNavigate?: (id: string) => void
   onResolve?: (id: string) => void
 }
 
-export default function SearchBar({ value, onChange, onNavigate, onResolve }: Props) {
+export default function SearchBar({ enabled = true, value, onChange, onNavigate, onResolve }: Props) {
   const [results, setResults] = useState<SearchResultItem[]>([])
   const [showResults, setShowResults] = useState(false)
   const [searching, setSearching] = useState(false)
@@ -48,10 +49,13 @@ export default function SearchBar({ value, onChange, onNavigate, onResolve }: Pr
   const [allTags, setAllTags] = useState<string[]>([])
 
   useEffect(() => {
+    if (!enabled) {
+      return
+    }
     fetchStats()
       .then((stats) => setAllTags(stats.tags.map((t) => t.tag).sort()))
       .catch(() => setAllTags([]))
-  }, [])
+  }, [enabled])
 
   // Compute matching tag suggestions from current input
   const tagMatches = (() => {
@@ -86,6 +90,12 @@ export default function SearchBar({ value, onChange, onNavigate, onResolve }: Pr
 
   const doSearch = useCallback((query: string) => {
     if (debounceRef.current) clearTimeout(debounceRef.current)
+    if (!enabled) {
+      setResults([])
+      setShowResults(false)
+      setHasSearched(false)
+      return
+    }
     if (!query.trim()) {
       setResults([])
       setShowResults(false)
@@ -108,7 +118,7 @@ export default function SearchBar({ value, onChange, onNavigate, onResolve }: Pr
         setSearching(false)
       }
     }, 300)
-  }, [])
+  }, [enabled])
 
   // Clean up debounce on unmount
   useEffect(() => {
@@ -157,6 +167,7 @@ export default function SearchBar({ value, onChange, onNavigate, onResolve }: Pr
           id="global-search-input"
           type="text"
           value={value}
+          disabled={!enabled}
           onChange={(e) => handleInputChange(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === 'Enter') doSearch(value)
