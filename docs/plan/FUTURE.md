@@ -27,18 +27,22 @@
 
 ---
 
-## P1 Backlog
+## Completed Roadmap Items
 
-### P1.1 Source Artifact Registry
+### 2026-05-19 — Source Artifact Registry foundation
 
-**Goal:** Add the core storage substrate for original documents and external materials.
+**Completed in:** `b93add5 Add source artifact registry docs and checks`
 
-**Acceptance signals:**
+**Acceptance signals met:**
 
 - Source artifact metadata persists under `.codememory/sources/index.json`.
 - Artifacts have stable `id`, `kind`, `uri`, `sha256`, `summary`, and `status`.
 - Core can add, list, get, and save artifacts without frontend involvement.
-- Missing and stale artifacts can be detected by tests.
+- Missing and stale artifacts are detected by tests and `validate`.
+
+---
+
+## P1 Backlog
 
 ### P1.2 `source_refs`
 

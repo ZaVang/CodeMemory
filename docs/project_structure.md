@@ -86,7 +86,8 @@
 | `src/codememory/update.py` | 已有 memory 的正文、summary、tags、imports、maturity 等更新。 |
 | `src/codememory/resolve.py` | 依赖 DAG 解析、拓扑排序、budget 裁剪、上下文拼装。 |
 | `src/codememory/context_pack.py` | 结构化 agent handoff 上下文包；Core JSON/Pydantic contract + markdown / xml-markdown / json renderers。 |
-| `src/codememory/validate.py` | 完整性检查：断链、循环、schema 合规、hash stale、decay warning。 |
+| `src/codememory/sources.py` | Source Artifact Registry：`.codememory/sources/index.json` 的模型、load/save、add/list/get、stale/missing 检查。 |
+| `src/codememory/validate.py` | 完整性检查：断链、循环、schema 合规、hash stale、source stale/missing、decay warning。 |
 | `src/codememory/search.py` | CLI / library 搜索逻辑。 |
 | `src/codememory/orphans.py` | 孤立 memory 检测。 |
 | `src/codememory/suggest_deps.py` | 依赖建议：基于时间、目录、tags、文本信号推断 imports。 |
@@ -96,8 +97,8 @@
 | `src/codememory/transient.py` | 会话内临时推理 DAG，不直接持久化为 canonical memory。 |
 | `src/codememory/snapshot.py` | 将 transient context 固化为 `.md` memory。 |
 | `src/codememory/import_cmd.py` | 旧版冷启动文本导入入口；更复杂迁移应走 compiler。 |
-| `src/codememory/handlers.py` | CLI、Sandbox tools、backend 共享的命令处理 facade；防止 adapter 重复实现 core。 |
-| `src/codememory/cli.py` | `codememory` argparse CLI 壳，参数解析后委托 handlers / compiler。 |
+| `src/codememory/handlers.py` | CLI、Sandbox tools、backend 共享的命令处理 facade；包含 source add/list/get/check handlers，防止 adapter 重复实现 core。 |
+| `src/codememory/cli.py` | `codememory` argparse CLI 壳，参数解析后委托 handlers / compiler；包含 `source add/list/get/check`。 |
 | `src/codememory/tools.py` | Sandbox tool 注册，把 core 能力暴露给 agent harness。 |
 | `src/codememory/integrations.py` | `CodememoryToolkit`，生成 OpenAI / Anthropic / Gemini 风格 tool definition。 |
 | `src/codememory/mcp_server.py` | MCP server entry point，让外部 MCP client 访问 CodeMemory 工具。 |
