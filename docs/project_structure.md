@@ -1,6 +1,6 @@
 # CodeMemory Project Structure
 
-> 本文是仓库地图：记录每个主要文件负责什么、应该改哪里、不要把逻辑塞到哪里。  
+> 本文是仓库地图：记录每个主要文件负责什么、应该改哪里、不要把逻辑塞到哪里。
 > 产品判断读 `docs/prd.md`；架构边界读 `docs/architecture.md`；接入方法读 `docs/INTEGRATION.md`。
 
 不记录生成物和本地缓存：`__pycache__/`、`.pytest_cache/`、`frontend/node_modules/`、`frontend/dist/`、Playwright 报告、临时 review 目录等。
@@ -15,7 +15,8 @@
 4. `docs/INTEGRATION.md` — CLI、Python、MCP、主流 agent harness 的接入方式。
 5. `docs/USER_GUIDE.md` — 面向使用者的日常操作手册。
 6. `docs/agent-memory-guide.md` — Work Layer 的 agent 使用规则草案。
-7. `docs/reference/` — idea 来源、历史审计和非 v1 默认方向，仅作追溯。
+7. `docs/plan/` — 当前 sprint 和长期 backlog。
+8. `docs/reference/` — idea 来源、历史审计和非 v1 默认方向，仅作追溯。
 
 ---
 
@@ -31,7 +32,7 @@
 | Backend 是 adapter | `backend/` 可以做 API 编排和序列化，但不应重新实现 core 语义。 |
 | Frontend 是 operator UI | `frontend/src/` 展示、编辑、resolve、graph，不应定义 canonical memory contract。 |
 | Harness / LLM Gateway 是可选接入层 | `src/harnesslib/` 和 `src/llm_gateway/` 支撑 agent 编排，但 CodeMemory core 不能依赖某个 provider。 |
-| Docs 只保留 canonical 与使用文档 | 审阅报告、阶段计划、设计草稿不再留在 `docs/` 主干。 |
+| Docs 只保留 canonical、使用文档与主动计划 | 审阅报告、设计草稿、agent 执行日志不留在 `docs/` 主干；当前路线图和 sprint 只放 `docs/plan/`。 |
 
 ---
 
@@ -47,6 +48,7 @@
 | 改可视化 UI | `frontend/src/pages/`, `frontend/src/components/`, `frontend/src/App.tsx` | `frontend/tests/smoke.spec.ts`, `npm run build` |
 | 改 agent harness 接入 | `src/harnesslib/`, `src/llm_gateway/`, `src/codememory/integrations.py` | 新增对应 unit/integration tests |
 | 改文档定位 | `docs/prd.md`, `docs/architecture.md`, `docs/project_structure.md` | `rg` 检查断链 |
+| 改长期 backlog / 当前 sprint | `docs/plan/FUTURE.md`, `docs/plan/SPRINT.md` | `rg` 检查断链 |
 
 ---
 
@@ -328,12 +330,14 @@ cd frontend && npm run build
 | `docs/INTEGRATION.md` | 外部接入指南：CLI、Python API、MCP、agent framework/harness。 |
 | `docs/USER_GUIDE.md` | 使用者指南：安装、创建、检索、维护、迁移。 |
 | `docs/agent-memory-guide.md` | Work Layer agent 操作指南草案。 |
+| `docs/plan/FUTURE.md` | 长期 roadmap 和 backlog；不存放一次性执行日志。 |
+| `docs/plan/SPRINT.md` | 当前 active sprint；验收通过后移除已完成任务。 |
 | `docs/reference/` | 历史探索、审计报告、非 v1 默认方向。用于追溯 idea 来源，不作为当前实现依据。 |
 
 已删除的文档类型：
 
 - 历史审阅报告：`gemini-audit-review.md`, `docs/orch/*`
-- 阶段计划和执行记录：`docs/plans/*`, `docs/superpowers/*`
+- 旧的多目录阶段计划、一次性计划和 agent 执行记录
 - 早期产品草稿：`product_spec.md`, `chronicle.md`, `interop-with-team-knowledge.md`
 - 早期单点概念文档：`layer0-cognitive-interface.md`
 - UI 设计探索稿：`docs/design/*`
@@ -367,7 +371,8 @@ cd frontend && npm run build
 ## 15. 清理规则
 
 1. `docs/` 根目录新增文档前，先判断是否能合并进 `prd.md`、`architecture.md`、`project_structure.md`、`INTEGRATION.md`、`USER_GUIDE.md` 或 `agent-memory-guide.md`。
-2. 审阅报告、一次性计划、agent 执行日志默认不入 docs 主干；确实要保留 idea 来源时放 `docs/reference/`。
-3. `backend/shared.py` 每次新增 helper 都要问：是否其实应该进 `src/codememory/handlers.py` 或 core。
-4. `frontend/src/App.tsx` 每次超过一个新交互簇，应优先抽组件或 hook。
-5. compiler 任何写文件路径都必须通过路径安全校验，避免 proposal 写出 memory root。
+2. 长期 backlog 和当前 active sprint 只放 `docs/plan/FUTURE.md` 与 `docs/plan/SPRINT.md`。
+3. 审阅报告、一次性计划、agent 执行日志默认不入 docs 主干；确实要保留 idea 来源时放 `docs/reference/`。
+4. `backend/shared.py` 每次新增 helper 都要问：是否其实应该进 `src/codememory/handlers.py` 或 core。
+5. `frontend/src/App.tsx` 每次超过一个新交互簇，应优先抽组件或 hook。
+6. compiler 任何写文件路径都必须通过路径安全校验，避免 proposal 写出 memory root。

@@ -229,6 +229,7 @@ tools = toolkit.get_tools_for_openai()  # -> OpenAI format tool list
 - [集成指南](docs/INTEGRATION.md) -- 10 分钟上手集成
 - [用户指南](docs/USER_GUIDE.md) -- 日常使用、维护和迁移
 - [Agent 记忆指南](docs/agent-memory-guide.md) -- Work Layer agent 操作规则草案
+- [Roadmap / Sprint](docs/plan/FUTURE.md) -- 长期 backlog；当前任务见 [SPRINT](docs/plan/SPRINT.md)
 - [Reference: Companion Mode](docs/reference/companion-mode.md) -- future companion layer 历史探索，不代表 v1 默认方向
 
 ## 许可证
