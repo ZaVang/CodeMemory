@@ -2,14 +2,17 @@
 
 import argparse
 import sys
+from pathlib import Path
 
 from .core import configure_logging, get_root_dir
 from .handlers import (
     handle_changelog,
+    handle_compile_md,
     handle_create,
     handle_focus,
     handle_import,
     handle_log,
+    handle_materialize_review,
     handle_orphans,
     handle_overview,
     handle_reindex,
@@ -182,6 +185,20 @@ def main(argv: list[str] | None = None):
                    help="Code skeletonization mode: file (intensity-based) or module (zero-config, signatures only)")
     p.add_argument("--config", help="Path to .codememory/skeletonize.yaml (auto-detected from cwd by default)")
 
+    # compile-md
+    p = subparsers.add_parser("compile-md", help="Compile Markdown corpus into a review set")
+    _add_logging_flags(p)
+    p.add_argument("source", help="Markdown file or directory to compile")
+    p.add_argument("--review-id", help="Stable review ID; defaults to timestamp")
+    p.add_argument("--tags", help="Comma-separated tags for generated proposals")
+    p.add_argument("--namespace", default="user/imports", help="Memory ID namespace for proposals")
+
+    # materialize-review
+    p = subparsers.add_parser("materialize-review", help="Materialize accepted compiler proposals")
+    _add_logging_flags(p)
+    p.add_argument("review_id", help="Review ID from compile-md")
+    p.add_argument("--accept-all", action="store_true", help="Accept all pending proposals before materializing")
+
     args = parser.parse_args(argv)
 
     configure_logging(verbose=args.verbose, quiet=args.quiet)
@@ -268,6 +285,23 @@ def main(argv: list[str] | None = None):
             output_dir=args.output_dir,
             mode=args.mode,
             config=args.config,
+        ))
+    elif cmd == "compile-md":
+        tags_list = None
+        if args.tags:
+            tags_list = [t.strip() for t in args.tags.split(",") if t.strip()]
+        print(handle_compile_md(
+            root,
+            args.source,
+            review_id=args.review_id,
+            tags=tags_list,
+            namespace=args.namespace,
+        ))
+    elif cmd == "materialize-review":
+        print(handle_materialize_review(
+            root,
+            args.review_id,
+            accept_all=args.accept_all,
         ))
 
 

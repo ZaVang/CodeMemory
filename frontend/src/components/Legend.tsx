@@ -1,5 +1,5 @@
 import type { GraphData } from '../types'
-import { DIRECTORY_COLORS, DEFAULT_COLOR, getColorForDirectory } from '../colors'
+import { DIRECTORY_COLORS, getColorForDirectory } from '../colors'
 
 interface Props {
   graphData: GraphData | null

@@ -7,7 +7,7 @@ from pathlib import Path
 
 import yaml
 
-from .core import compute_body_hash, get_memory_path, parse_frontmatter
+from .core import compute_body_hash, get_memory_path
 from .index import reindex
 
 _logger = logging.getLogger("codememory")

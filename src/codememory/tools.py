@@ -8,14 +8,12 @@ from .core import get_root_dir
 from .handlers import (
     handle_changelog,
     handle_create,
-    handle_focus,
     handle_import,
     handle_log,
     handle_orphans,
     handle_overview,
     handle_resolve,
     handle_search,
-    handle_snapshot,
     handle_update,
     handle_validate,
 )

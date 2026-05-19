@@ -34,7 +34,7 @@ _SRC = Path(__file__).resolve().parent.parent
 if str(_SRC) not in sys.path:
     sys.path.insert(0, str(_SRC))
 
-from codememory.handlers import (
+from codememory.handlers import (  # noqa: E402 - sys.path is adjusted above for module execution
     handle_create,
     handle_focus,
     handle_overview,

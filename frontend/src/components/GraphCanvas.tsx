@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useCallback, useImperativeHandle, forwardRef } from 'react'
-import cytoscape, { type Core } from 'cytoscape'
+import cytoscape, { type Core, type NodeSingular } from 'cytoscape'
 import dagre from 'dagre'
-import type { GraphData, GraphNode, GraphEdge, ResolveResponse } from '../types'
+import type { GraphData, GraphNode, ResolveResponse } from '../types'
 import { fetchGraph } from '../api'
 import { DIRECTORY_COLORS, DIRECTORY_TINTS, DIRECTORY_TINTS_DARK, DEFAULT_COLOR, DEFAULT_TINT, DEFAULT_TINT_DARK } from '../colors'
 import EmptyState from './EmptyState'
@@ -64,7 +64,6 @@ const GraphCanvas = forwardRef<GraphCanvasHandle, Props>(function GraphCanvas({ 
   // R9-graph-viewport: preserve zoom/pan across theme-switch instance rebuilds
   const savedViewportRef = useRef<{ zoom: number; pan: { x: number; y: number } } | null>(null)
   // Tooltip state (R5-graph-node-tooltips + R18-P6 enrichment)
-  const tooltipRef = useRef<HTMLDivElement | null>(null)
   const tooltipTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [tooltip, setTooltip] = useState<{
     summary: string
@@ -158,25 +157,25 @@ const GraphCanvas = forwardRef<GraphCanvasHandle, Props>(function GraphCanvas({ 
         {
           selector: 'node',
           style: {
-            'background-color': (el) => {
+            'background-color': (el: NodeSingular) => {
               const n = graphData.nodes.find((no) => no.data.id === el.id())
               const isDark = activeTheme === 'dark'
               return n ? getNodeTint(n, isDark) : (isDark ? DEFAULT_TINT_DARK : DEFAULT_TINT)
             },
-            'width': (el) => {
+            'width': (el: NodeSingular) => {
               const n = graphData.nodes.find((no) => no.data.id === el.id())
               return intensityToRadius(n?.data.intensity || 5) * 2
             },
-            'height': (el) => {
+            'height': (el: NodeSingular) => {
               const n = graphData.nodes.find((no) => no.data.id === el.id())
               return intensityToRadius(n?.data.intensity || 5) * 2
             },
-            'label': (el) => shortId(el.id()),
+            'label': (el: NodeSingular) => shortId(el.id()),
             'text-wrap': 'ellipsis',
             'text-max-width': '80px',
             'font-size': '12px',
             'font-family': 'Raleway, sans-serif',
-            'font-weight': '500',
+            'font-weight': 500,
             'color': cssVar('--cm-text-primary'),
             'text-valign': 'center',
             'text-halign': 'center',
@@ -201,7 +200,7 @@ const GraphCanvas = forwardRef<GraphCanvasHandle, Props>(function GraphCanvas({ 
         {
           selector: 'node[?intensity]',
           style: {
-            'border-width': (el) => el.data('intensity') === 10 ? 3 : 2,
+            'border-width': (el: NodeSingular) => el.data('intensity') === 10 ? 3 : 2,
           },
         },
         // Edge styles by strength
@@ -295,24 +294,23 @@ const GraphCanvas = forwardRef<GraphCanvasHandle, Props>(function GraphCanvas({ 
             'opacity': 0.65,
             'border-style': 'dashed',
             'border-width': 1.5,
-            'width': (el) => intensityToRadius(el.data('intensity') || 5) * 1.3,
-            'height': (el) => intensityToRadius(el.data('intensity') || 5) * 1.3,
+            'width': (el: NodeSingular) => intensityToRadius(el.data('intensity') || 5) * 1.3,
+            'height': (el: NodeSingular) => intensityToRadius(el.data('intensity') || 5) * 1.3,
             'font-size': '12px',
             'font-style': 'italic',
           },
         },
-        // Trim: skipped — dimmer, dashed, line-through, 12px min
+        // Trim: skipped — dimmer, dashed, 12px min
         {
           selector: 'node.trim-skipped',
           style: {
             'opacity': 0.4,
             'border-style': 'dashed',
             'border-width': 1,
-            'width': (el) => intensityToRadius(el.data('intensity') || 5) * 1.1,
-            'height': (el) => intensityToRadius(el.data('intensity') || 5) * 1.1,
+            'width': (el: NodeSingular) => intensityToRadius(el.data('intensity') || 5) * 1.1,
+            'height': (el: NodeSingular) => intensityToRadius(el.data('intensity') || 5) * 1.1,
             'font-size': '12px',
             'color': cssVar('--cm-text-tertiary'),
-            'text-decoration': 'line-through',
           },
         },
       ],

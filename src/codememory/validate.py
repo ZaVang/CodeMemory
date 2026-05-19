@@ -1,7 +1,6 @@
 """Memory validation: broken links, schema compliance, cycle detection, decay suggestions."""
 
 import logging
-import sys
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -31,7 +30,6 @@ def check_schema_compliance(metadata: dict, schemas: dict) -> list[str]:
 
 def _compute_in_degree(memory_id: str, index: IndexData) -> int:
     """Count how many other memories reference this one via imports."""
-    count = 0
     for mid, entry in index.memories.items():
         if mid == memory_id:
             continue

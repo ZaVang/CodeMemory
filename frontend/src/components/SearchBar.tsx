@@ -128,12 +128,6 @@ export default function SearchBar({ value, onChange, onNavigate, onResolve }: Pr
     if (onNavigate) onNavigate(id)
   }
 
-  const trimStyle: Record<string, string> = {
-    required: 'var(--cm-text-primary)',
-    recommended: 'var(--cm-text-secondary)',
-    related: 'var(--cm-text-tertiary)',
-  }
-
   return (
     <div ref={containerRef} style={{ position: 'relative', width: '100%' }}>
       <div

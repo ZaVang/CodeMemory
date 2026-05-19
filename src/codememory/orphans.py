@@ -3,7 +3,6 @@
 from pathlib import Path
 
 from .index import load_index
-from .models import IndexData
 
 
 def find_orphans(

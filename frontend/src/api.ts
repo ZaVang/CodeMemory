@@ -193,6 +193,7 @@ export interface SearchResultItem {
   match_quality?: 'exact' | 'fuzzy' | 'filter'
   match_score?: number
   match_fields?: string[]
+  access_count?: number
   days_since_last_access?: number | null
   stability?: number
 }

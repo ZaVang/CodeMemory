@@ -13,7 +13,7 @@ import type { OnboardingResolveDemo } from './components/Onboarding'
 import Settings from './components/Settings'
 import { loadSettings, saveSettings } from './components/Settings'
 import type { UserSettings } from './components/Settings'
-import { fetchResolve, updateMemory, createMemory, fetchGraph, fetchDatasets, switchDataset, fetchMemory, downloadExport, setCurrentDataset as setApiDataset } from './api'
+import { fetchResolve, updateMemory, fetchGraph, fetchDatasets, switchDataset, downloadExport, setCurrentDataset as setApiDataset } from './api'
 import type { ResolveResponse, GraphData } from './types'
 import type { DatasetInfo } from './api'
 
@@ -450,7 +450,7 @@ export default function App() {
   }, [])
 
   // Navigate from Dashboard clickable elements to filtered list view
-  const handleNavigateToFilter = useCallback((filter: string, type: 'tag' | 'maturity') => {
+  const handleNavigateToFilter = useCallback((filter: string) => {
     setViewMode('list')
     setListFilter(filter)
   }, [])
@@ -601,7 +601,7 @@ export default function App() {
       // Ctrl+Shift+D — toggle dark mode
       if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'D') {
         e.preventDefault()
-        const next = activeTheme === 'dark' ? 'light' : 'dark'
+        const next: UserSettings['theme'] = activeTheme === 'dark' ? 'light' : 'dark'
         setThemeMode(next)
         setSettings((prev) => { const u = { ...prev, theme: next }; saveSettings(u); return u })
         return

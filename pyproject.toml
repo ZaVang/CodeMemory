@@ -33,7 +33,10 @@ codememory-mcp = "codememory.mcp_server:main"
 
 [tool.setuptools]
 package-dir = { "" = "src" }
-packages = ["codememory", "harnesslib", "llm_gateway"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["codememory*", "harnesslib*", "llm_gateway*"]
 
 [tool.setuptools.package-data]
 codememory = ["py.typed"]
