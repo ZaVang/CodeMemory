@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 from .models import Decision, ReviewSet
+
+_SAFE_REVIEW_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 
 
 def review_dir(root: Path) -> Path:
@@ -15,6 +18,12 @@ def review_dir(root: Path) -> Path:
 
 def review_path(root: Path, review_id: str) -> Path:
     """Return the JSON path for one review set."""
+    if (
+        not _SAFE_REVIEW_ID.fullmatch(review_id)
+        or review_id in {".", ".."}
+        or ".." in review_id
+    ):
+        raise ValueError(f"unsafe review_id: {review_id}")
     return review_dir(root) / f"{review_id}.json"
 
 

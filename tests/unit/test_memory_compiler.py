@@ -214,6 +214,40 @@ def test_materialize_review_set_writes_only_accepted_proposals_and_reindexes(tmp
     assert "user/imports/design/decision" in idx.memories
 
 
+def test_materialize_review_set_rejects_unsafe_memory_ids(tmp_path: Path):
+    from codememory.compiler.materialize import materialize_review_set
+    from codememory.compiler.models import MemoryProposal, ReviewSet
+
+    unsafe_ids = [
+        "/tmp/evil",
+        r"\tmp\evil",
+        "C:/Temp/evil",
+        "user/../../evil",
+        r"user\..\evil",
+    ]
+    review = ReviewSet(
+        review_id="unsafe",
+        source_root=str(tmp_path / "docs"),
+        proposals=[
+            MemoryProposal(
+                proposal_id=f"p{i}",
+                memory_id=memory_id,
+                summary="Unsafe",
+                body="# Unsafe\n\nDo not write.",
+                decision="accepted",
+            )
+            for i, memory_id in enumerate(unsafe_ids)
+        ],
+    )
+
+    result = materialize_review_set(tmp_path, review)
+
+    assert result.written == []
+    assert len(result.errors) == len(unsafe_ids)
+    assert not (tmp_path / "evil.md").exists()
+    assert not (tmp_path.parent / "evil.md").exists()
+
+
 def test_handle_compile_md_saves_review_set(tmp_path: Path):
     from codememory.compiler.review import load_review_set
     from codememory.handlers import handle_compile_md
@@ -227,6 +261,34 @@ def test_handle_compile_md_saves_review_set(tmp_path: Path):
 
     assert "Review set saved" in output
     assert len(review.proposals) == 1
+
+
+def test_save_review_set_rejects_unsafe_review_id(tmp_path: Path):
+    import pytest
+    from codememory.compiler.models import ReviewSet
+    from codememory.compiler.review import save_review_set
+
+    review = ReviewSet(review_id="../outside", source_root=str(tmp_path / "docs"))
+
+    with pytest.raises(ValueError, match="unsafe review_id"):
+        save_review_set(tmp_path, review)
+
+
+def test_compile_markdown_corpus_uses_unique_source_and_proposal_ids_for_identical_files(tmp_path: Path):
+    from codememory.compiler.propose import compile_markdown_corpus
+
+    source = tmp_path / "docs"
+    source.mkdir()
+    content = "# Same\n\nIdentical content."
+    (source / "a.md").write_text(content, encoding="utf-8")
+    (source / "b.md").write_text(content, encoding="utf-8")
+
+    review = compile_markdown_corpus(source_root=source, review_id="identical")
+    source_ids = [doc.source_id for doc in review.sources]
+    proposal_ids = [proposal.proposal_id for proposal in review.proposals]
+
+    assert len(source_ids) == len(set(source_ids))
+    assert len(proposal_ids) == len(set(proposal_ids))
 
 
 def test_handle_materialize_review_accept_all(tmp_path: Path):

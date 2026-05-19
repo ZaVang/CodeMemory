@@ -3,14 +3,32 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 import yaml
 
-from codememory.core import compute_body_hash, get_memory_path
+from codememory.core import compute_body_hash
 from codememory.index import reindex
 
 from .models import MaterializeResult, MemoryProposal, ReviewSet
+
+
+def _safe_memory_path(root: Path, memory_id: str) -> Path:
+    """Resolve a memory id under root, rejecting absolute/traversal paths."""
+    if not memory_id or "\\" in memory_id or ":" in memory_id:
+        raise ValueError(f"unsafe memory_id: {memory_id}")
+
+    pure = PurePosixPath(memory_id)
+    if pure.is_absolute() or any(part in {"", ".", ".."} for part in pure.parts):
+        raise ValueError(f"unsafe memory_id: {memory_id}")
+
+    root_resolved = root.resolve()
+    target = (root_resolved / f"{memory_id}.md").resolve()
+    try:
+        target.relative_to(root_resolved)
+    except ValueError as exc:
+        raise ValueError(f"unsafe memory_id: {memory_id}") from exc
+    return target
 
 
 def _frontmatter_for_proposal(proposal: MemoryProposal) -> dict:
@@ -52,7 +70,12 @@ def materialize_review_set(
             result.skipped.append(proposal.proposal_id)
             continue
 
-        file_path = get_memory_path(root, proposal.memory_id)
+        try:
+            file_path = _safe_memory_path(root, proposal.memory_id)
+        except ValueError as exc:
+            result.errors.append(str(exc))
+            continue
+
         if file_path.exists():
             result.errors.append(f"exists: {proposal.memory_id}")
             continue
