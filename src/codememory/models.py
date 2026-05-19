@@ -36,6 +36,20 @@ class ImportRef(BaseModel):
     reason: str | None = None
 
 
+class SourceRef(BaseModel):
+    """A reference from an atom to a Source Artifact.
+
+    ``source_refs`` are provenance links. They do not participate in the
+    imports DAG and should not be used as dependency edges.
+    """
+
+    artifact_id: str
+    section_id: str | None = None
+    range: str | None = None
+    summary: str = ""
+    disclosure_hint: str = "anchor"
+
+
 class ChangeLogEntry(BaseModel):
     """A single changelog record."""
 
@@ -95,6 +109,7 @@ class MemoryEntry(BaseModel):
 
     # Source metadata
     source: dict[str, Any] | None = None
+    source_refs: list[SourceRef] = Field(default_factory=list)
 
     # Knowledge governance
     maturity: str = Field(default="draft", description="draft | verified | proven | superseded")

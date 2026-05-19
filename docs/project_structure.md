@@ -80,14 +80,14 @@
 |---|---|
 | `src/codememory/__init__.py` | Python public API 聚合入口。新增公共函数时在这里显式导出。 |
 | `src/codememory/core.py` | frontmatter 解析、body hash、root 发现、检索概率/衰减基础函数。 |
-| `src/codememory/models.py` | Pydantic v2 数据模型：memory entry、index、imports 等 contract。 |
+| `src/codememory/models.py` | Pydantic v2 数据模型：memory entry、index、imports、source_refs 等 contract。 |
 | `src/codememory/index.py` | `.codememory/index.json` 的加载、保存、重建。 |
 | `src/codememory/create.py` | 新 memory 文件模板生成和初始 metadata 写入。 |
 | `src/codememory/update.py` | 已有 memory 的正文、summary、tags、imports、maturity 等更新。 |
 | `src/codememory/resolve.py` | 依赖 DAG 解析、拓扑排序、budget 裁剪、上下文拼装。 |
-| `src/codememory/context_pack.py` | 结构化 agent handoff 上下文包；Core JSON/Pydantic contract + markdown / xml-markdown / json renderers。 |
+| `src/codememory/context_pack.py` | 结构化 agent handoff 上下文包；Core JSON/Pydantic contract + markdown / xml-markdown / json renderers；渲染 source_refs 但不展开 source body。 |
 | `src/codememory/sources.py` | Source Artifact Registry：`.codememory/sources/index.json` 的模型、load/save、add/list/get、stale/missing 检查。 |
-| `src/codememory/validate.py` | 完整性检查：断链、循环、schema 合规、hash stale、source stale/missing、decay warning。 |
+| `src/codememory/validate.py` | 完整性检查：断链、循环、schema 合规、hash stale、source stale/missing、source_refs、decay warning。 |
 | `src/codememory/search.py` | CLI / library 搜索逻辑。 |
 | `src/codememory/orphans.py` | 孤立 memory 检测。 |
 | `src/codememory/suggest_deps.py` | 依赖建议：基于时间、目录、tags、文本信号推断 imports。 |
@@ -306,6 +306,7 @@ Frontend 是本地操作台：查看 graph、resolve context、编辑 memory、�
 | `tests/unit/test_memory_compiler.py` | Markdown compiler ingest/propose/review/materialize 测试。 |
 | `tests/unit/test_resolve.py` | DAG resolve、预算裁剪、拓扑顺序测试。 |
 | `tests/unit/test_context_pack.py` | 结构化 ContextPack 和 renderer 测试。 |
+| `tests/unit/test_source_refs.py` | source_refs metadata、reindex、validate、ContextPack 关联测试。 |
 | `tests/unit/test_skeletonize.py` | skeletonize markdown/code 导入测试。 |
 | `tests/unit/test_validate.py` | validate 断链、循环、schema、decay warning 测试。 |
 

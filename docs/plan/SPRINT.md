@@ -6,7 +6,7 @@
 
 ## Sprint State
 
-The previous sprint, **Source Artifact Registry foundation**, was accepted and archived on 2026-05-19.
+The previous sprint, **P1.2 `source_refs`**, was accepted and archived on 2026-05-19.
 
 See `docs/plan/HISTORY.md` for the acceptance record.
 
@@ -18,6 +18,6 @@ Choose the next active sprint from `docs/plan/FUTURE.md`.
 
 Recommended next candidate:
 
-- P1.2 `source_refs`
-- ContextPack rendering of source refs
-- validation distinction between broken imports and broken source refs
+- P1.3 `expand_source`
+- explicit source excerpt/full-content retrieval
+- structured missing/stale source expansion behavior
