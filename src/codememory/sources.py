@@ -12,6 +12,8 @@ import json
 from datetime import datetime
 from pathlib import Path
 from typing import Literal
+from urllib.parse import unquote, urlparse
+from urllib.request import url2pathname
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -19,6 +21,7 @@ from pydantic import BaseModel, Field, field_validator
 SourceKind = Literal["markdown", "code", "text", "pdf", "url", "external"]
 SourceStatus = Literal["active", "archived", "missing", "stale"]
 SourceCheckState = Literal["fresh", "missing", "stale", "external"]
+SourceExpansionStatus = Literal["fresh", "stale", "missing", "unsupported"]
 
 
 class SourceArtifact(BaseModel):
@@ -56,6 +59,23 @@ class SourceArtifactCheck(BaseModel):
     uri: str
     expected_sha256: str = ""
     current_sha256: str | None = None
+    message: str = ""
+
+
+class SourceExpansion(BaseModel):
+    """Explicit source expansion result for progressive disclosure workflows."""
+
+    artifact_id: str
+    status: SourceExpansionStatus
+    kind: SourceKind | None = None
+    uri: str = ""
+    path: str | None = None
+    sha256: str = ""
+    current_sha256: str | None = None
+    content: str = ""
+    range_start: int | None = None
+    range_end: int | None = None
+    truncated: bool = False
     message: str = ""
 
 
@@ -107,13 +127,47 @@ def resolve_source_uri(root_dir: Path, uri: str) -> Path | None:
     local file hashing.
     """
 
-    lowered = uri.lower()
-    if "://" in lowered:
+    direct_path = Path(uri)
+    if direct_path.is_absolute():
+        return direct_path
+
+    parsed = urlparse(uri)
+    scheme = parsed.scheme.lower()
+    if scheme and scheme != "file":
         return None
+    if scheme == "file":
+        raw_path = unquote(parsed.path)
+        if parsed.netloc:
+            raw_path = f"//{parsed.netloc}{raw_path}"
+        path = Path(url2pathname(raw_path))
+        if path.is_absolute():
+            return path
+        return root_dir / path
     path = Path(uri)
     if path.is_absolute():
         return path
     return root_dir / path
+
+
+def _resolve_source_uri_for_expansion(root_dir: Path, uri: str) -> Path | None:
+    """Resolve a local source URI for expansion without allowing root escape.
+
+    Absolute paths are allowed because a registry may intentionally preserve
+    sources outside the memory dataset. Relative paths are resolved under the
+    memory root and must remain inside it.
+    """
+
+    path = resolve_source_uri(root_dir, uri)
+    if path is None:
+        return None
+    parsed = urlparse(uri)
+    original = Path(url2pathname(unquote(parsed.path))) if parsed.scheme.lower() == "file" else Path(uri)
+    if not original.is_absolute():
+        try:
+            path.resolve().relative_to(root_dir.resolve())
+        except ValueError:
+            return None
+    return path
 
 
 def infer_source_kind(uri: str) -> SourceKind:
@@ -224,3 +278,122 @@ def check_source_registry(root_dir: Path) -> list[SourceArtifactCheck]:
     """Check every Source Artifact in the registry."""
 
     return [check_source_artifact(root_dir, artifact) for artifact in list_source_artifacts(root_dir)]
+
+
+def _display_source_path(root_dir: Path, path: Path) -> str:
+    try:
+        return str(path.resolve().relative_to(root_dir.resolve())).replace("\\", "/")
+    except ValueError:
+        return str(path)
+
+
+def _apply_text_window(
+    text: str,
+    start: int | None = None,
+    end: int | None = None,
+    max_chars: int | None = None,
+) -> tuple[str, int, int, bool]:
+    full_len = len(text)
+    range_start = max(start or 0, 0)
+    range_start = min(range_start, full_len)
+    range_end = full_len if end is None else max(end, range_start)
+    range_end = min(range_end, full_len)
+    if max_chars is not None:
+        max_chars = max(max_chars, 0)
+        range_end = min(range_end, range_start + max_chars)
+    content = text[range_start:range_end]
+    truncated = range_start != 0 or range_end != full_len
+    return content, range_start, range_end, truncated
+
+
+def expand_source_artifact(
+    root_dir: Path,
+    source_id: str,
+    start: int | None = None,
+    end: int | None = None,
+    max_chars: int | None = None,
+) -> SourceExpansion:
+    """Return source text or a structured notice for a Source Artifact.
+
+    This is the explicit expansion step for progressive disclosure. ContextPack
+    can expose ``source_refs`` without source bodies; callers use this function
+    when they intentionally need the backing source text.
+    """
+
+    artifact = get_source_artifact(root_dir, source_id)
+    if artifact is None:
+        return SourceExpansion(
+            artifact_id=source_id,
+            status="missing",
+            message=f"Source Artifact '{source_id}' not found.",
+        )
+
+    base = {
+        "artifact_id": artifact.id,
+        "kind": artifact.kind,
+        "uri": artifact.uri,
+        "sha256": artifact.sha256,
+    }
+
+    if artifact.kind not in {"markdown", "code", "text"}:
+        return SourceExpansion(
+            **base,
+            status="unsupported",
+            message=f"Source Artifact kind '{artifact.kind}' cannot be expanded as local text.",
+        )
+
+    local_path = _resolve_source_uri_for_expansion(root_dir, artifact.uri)
+    if local_path is None:
+        return SourceExpansion(
+            **base,
+            status="unsupported",
+            message="Source Artifact URI is not a safe local file path.",
+        )
+
+    path_display = _display_source_path(root_dir, local_path)
+    if not local_path.exists():
+        return SourceExpansion(
+            **base,
+            path=path_display,
+            status="missing",
+            message=f"source file not found: {artifact.uri}",
+        )
+
+    current_sha256 = compute_file_sha256(local_path)
+    status: SourceExpansionStatus = (
+        "stale" if artifact.sha256 and current_sha256 != artifact.sha256 else "fresh"
+    )
+    message = "source file hash differs from registry" if status == "stale" else ""
+
+    try:
+        text = local_path.read_text(encoding="utf-8")
+    except UnicodeDecodeError:
+        return SourceExpansion(
+            **base,
+            path=path_display,
+            status="unsupported",
+            current_sha256=current_sha256,
+            message="source file is not valid UTF-8 text",
+        )
+    except OSError as exc:
+        return SourceExpansion(
+            **base,
+            path=path_display,
+            status="missing",
+            current_sha256=current_sha256,
+            message=f"source file could not be read: {exc}",
+        )
+
+    content, range_start, range_end, truncated = _apply_text_window(text, start=start, end=end, max_chars=max_chars)
+
+    return SourceExpansion(
+        **base,
+        path=path_display,
+        status=status,
+        current_sha256=current_sha256,
+        content=content,
+        range_start=range_start,
+        range_end=range_end,
+        truncated=truncated,
+        message=message,
+    )

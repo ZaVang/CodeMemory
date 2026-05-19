@@ -471,6 +471,24 @@ codememory suggest-deps user/investment/new-decision --retroactive-only
 | `log` | 全局审计日志（时间线） |
 | `import` | 从文本提取初始记忆（draft） |
 | `suggest-deps` | 自动推断候选依赖（正向+反向） |
+| `source add/list/get/check` | 管理 Source Artifact Registry |
+| `source expand` | 显式展开 Source Artifact，返回结构化 JSON |
+
+### Source expansion
+
+`source_refs` 默认只作为 provenance 出现在 ContextPack 中；需要原文时，调用 explicit expansion：
+
+```powershell
+codememory source expand src/design-md --max-chars 2000
+```
+
+REST adapter:
+
+```text
+GET /api/sources/expand?artifact_id=src/design-md&max_chars=2000
+```
+
+返回 `SourceExpansion` JSON，包含 artifact id、kind、uri/path、registry hash、current hash、status、content、range 和 message。missing/stale/unsupported 都是结构化状态。
 
 ## Sandbox Integration
 
