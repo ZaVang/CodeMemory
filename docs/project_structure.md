@@ -86,7 +86,7 @@
 | `src/codememory/update.py` | 已有 memory 的正文、summary、tags、imports、maturity 等更新。 |
 | `src/codememory/resolve.py` | 依赖 DAG 解析、拓扑排序、budget 裁剪、上下文拼装。 |
 | `src/codememory/context_pack.py` | 结构化 agent handoff 上下文包；Core JSON/Pydantic contract + markdown / xml-markdown / json renderers；渲染 source_refs 但不展开 source body。 |
-| `src/codememory/sources.py` | Source Artifact Registry：`.codememory/sources/index.json` 的模型、load/save、add/list/get、stale/missing 检查。 |
+| `src/codememory/sources.py` | Source Artifact Registry：`.codememory/sources/index.json` 的模型、load/save、add/list/get、stale/missing 检查、explicit source expansion。 |
 | `src/codememory/validate.py` | 完整性检查：断链、循环、schema 合规、hash stale、source stale/missing、source_refs、decay warning。 |
 | `src/codememory/search.py` | CLI / library 搜索逻辑。 |
 | `src/codememory/orphans.py` | 孤立 memory 检测。 |
@@ -97,8 +97,8 @@
 | `src/codememory/transient.py` | 会话内临时推理 DAG，不直接持久化为 canonical memory。 |
 | `src/codememory/snapshot.py` | 将 transient context 固化为 `.md` memory。 |
 | `src/codememory/import_cmd.py` | 旧版冷启动文本导入入口；更复杂迁移应走 compiler。 |
-| `src/codememory/handlers.py` | CLI、Sandbox tools、backend 共享的命令处理 facade；包含 source add/list/get/check handlers，防止 adapter 重复实现 core。 |
-| `src/codememory/cli.py` | `codememory` argparse CLI 壳，参数解析后委托 handlers / compiler；包含 `source add/list/get/check`。 |
+| `src/codememory/handlers.py` | CLI、Sandbox tools、backend 共享的命令处理 facade；包含 source add/list/get/check/expand handlers，防止 adapter 重复实现 core。 |
+| `src/codememory/cli.py` | `codememory` argparse CLI 壳，参数解析后委托 handlers / compiler；包含 `source add/list/get/check/expand`。 |
 | `src/codememory/tools.py` | Sandbox tool 注册，把 core 能力暴露给 agent harness。 |
 | `src/codememory/integrations.py` | `CodememoryToolkit`，生成 OpenAI / Anthropic / Gemini 风格 tool definition。 |
 | `src/codememory/mcp_server.py` | MCP server entry point，让外部 MCP client 访问 CodeMemory 工具。 |
@@ -190,6 +190,7 @@ Backend 的职责是把 core 能力变成 HTTP API，并处理 dataset header、
 | `backend/routers/__init__.py` | routers package marker。 |
 | `backend/routers/memories.py` | memory CRUD、touch、rehash、import、export、backlinks。 |
 | `backend/routers/search.py` | graph、resolve、context-pack、search API。 |
+| `backend/routers/sources.py` | Source Artifact REST adapter；当前提供 explicit source expansion，并委托 core `expand_source_artifact`。 |
 | `backend/routers/stats.py` | stats、wander、validate、reindex、datasets API。 |
 
 Backend contract：
@@ -307,8 +308,9 @@ Frontend 是本地操作台：查看 graph、resolve context、编辑 memory、�
 | `tests/unit/test_resolve.py` | DAG resolve、预算裁剪、拓扑顺序测试。 |
 | `tests/unit/test_context_pack.py` | 结构化 ContextPack 和 renderer 测试。 |
 | `tests/unit/test_source_refs.py` | source_refs metadata、reindex、validate、ContextPack 关联测试。 |
+| `tests/unit/test_source_expand.py` | explicit source expansion 的模型、全文/范围、missing/stale/unsupported、handler JSON 测试。 |
 | `tests/unit/test_skeletonize.py` | skeletonize markdown/code 导入测试。 |
-| `tests/unit/test_validate.py` | validate 断链、循环、schema、decay warning 测试。 |
+| `tests/unit/test_validate.py` | validate 断链、循环、schema、decay warning、source registry warning 测试。 |
 
 建议命令：
 

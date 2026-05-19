@@ -27,10 +27,12 @@ from .search import search
 from .sources import (
     SourceArtifact,
     SourceArtifactCheck,
+    SourceExpansion,
     SourceRegistry,
     add_source_artifact,
     check_source_artifact,
     check_source_registry,
+    expand_source_artifact,
     get_source_artifact,
     list_source_artifacts,
     load_source_registry,
@@ -61,6 +63,7 @@ __all__ = [
     "SourceSegment",
     "SourceArtifact",
     "SourceArtifactCheck",
+    "SourceExpansion",
     "SourceRegistry",
     # Index
     "load_index",
@@ -88,6 +91,7 @@ __all__ = [
     "add_source_artifact",
     "check_source_artifact",
     "check_source_registry",
+    "expand_source_artifact",
     "get_source_artifact",
     "list_source_artifacts",
     "load_source_registry",

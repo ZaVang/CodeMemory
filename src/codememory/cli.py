@@ -21,6 +21,7 @@ from .handlers import (
     handle_search,
     handle_source_add,
     handle_source_check,
+    handle_source_expand,
     handle_source_get,
     handle_source_list,
     handle_skeletonize,
@@ -130,6 +131,12 @@ def main(argv: list[str] | None = None):
 
     sp = source_subparsers.add_parser("check", help="Check Source Artifacts for missing/stale state")
     sp.add_argument("id", nargs="?", help="Optional Source Artifact ID")
+
+    sp = source_subparsers.add_parser("expand", help="Expand a Source Artifact as JSON")
+    sp.add_argument("id", help="Source Artifact ID")
+    sp.add_argument("--start", type=int, help="Optional character start offset")
+    sp.add_argument("--end", type=int, help="Optional character end offset")
+    sp.add_argument("--max-chars", dest="max_chars", type=int, help="Maximum characters to return")
 
     # focus
     p = subparsers.add_parser("focus", help="Focus on a memory")
@@ -294,6 +301,14 @@ def main(argv: list[str] | None = None):
             print(handle_source_get(root, args.id))
         elif args.source_command == "check":
             print(handle_source_check(root, args.id))
+        elif args.source_command == "expand":
+            print(handle_source_expand(
+                root,
+                args.id,
+                start=args.start,
+                end=args.end,
+                max_chars=args.max_chars,
+            ))
     elif cmd == "focus":
         print(handle_focus(root, args.id, level=args.level, content=args.content,
                            summary_override=args.summary_override, resolve_flag=args.resolve))

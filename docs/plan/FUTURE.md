@@ -29,6 +29,19 @@
 
 ## Completed Roadmap Items
 
+### 2026-05-19 — P1.3 `expand_source`
+
+**Completed in:** `3ebfa50 feat: add explicit source expansion`
+
+**Acceptance signals met:**
+
+- Core can return a source excerpt or full source by artifact id.
+- Expansion output includes artifact id, uri/path, hash/status, content, range, truncation, and structured message fields.
+- Missing artifacts/files, stale files, and unsupported source kinds return structured status/message results.
+- CLI and REST API paths call shared core behavior.
+
+---
+
 ### 2026-05-19 — P1.2 `source_refs`
 
 **Completed in:** `9d671b5 feat: add source refs to memory and context packs`
@@ -56,16 +69,6 @@
 ---
 
 ## P1 Backlog
-
-### P1.3 `expand_source`
-
-**Goal:** Provide explicit source expansion for agent and human workflows.
-
-**Acceptance signals:**
-
-- Core can return a source excerpt or full source by artifact id.
-- Expansion output includes artifact id, uri, hash/status, and content.
-- Missing or stale source expansion returns a structured error or notice.
 
 ### P1.4 ContextPack / resolve v2
 

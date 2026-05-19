@@ -274,3 +274,17 @@ def test_post_context_pack_returns_structured_pack_and_xml_markdown():
     assert "rendered" in data
     assert "<codememory_context_pack" in data["rendered"]
     assert f'target_id="{mem_id}"' in data["rendered"]
+
+
+def test_get_source_expand_returns_structured_missing_notice():
+    """GET /api/sources/expand should expose the shared expand_source contract."""
+    resp = client.get(
+        "/api/sources/expand?artifact_id=src/not-registered",
+        headers=HEADERS,
+    )
+
+    assert resp.status_code == 200, f"Expected 200, got {resp.status_code}: {resp.text}"
+    data = resp.json()
+    assert data["artifact_id"] == "src/not-registered"
+    assert data["status"] == "missing"
+    assert data["content"] == ""

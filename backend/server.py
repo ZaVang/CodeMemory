@@ -108,10 +108,12 @@ app.add_middleware(_DatasetContextMiddleware)
 
 from routers.memories import router as memories_router
 from routers.search import router as search_router
+from routers.sources import router as sources_router
 from routers.stats import router as stats_router
 
 app.include_router(memories_router)
 app.include_router(search_router)
+app.include_router(sources_router)
 app.include_router(stats_router)
 
 # Ordering note: include_router places routes in registration order.

@@ -126,7 +126,7 @@ imports:
   required: []
   recommended: []
   related: []
-source_refs: []                 # planned canonical field
+source_refs: []                 # provenance links to Source Artifacts
 ```
 
 ### 3.2 Schema
@@ -172,8 +172,10 @@ Registry storage:
 - `.codememory/sources/index.json` 的 load / save；
 - add / list / get；
 - fresh / stale / missing / external 检查；
+- explicit source expansion for local markdown / text / code artifacts；
 - `validate` 对 stale / missing Source Artifact 输出 warning；
-- CLI：`codememory source add|list|get|check`。
+- CLI：`codememory source add|list|get|check|expand`；
+- REST：`GET /api/sources/expand?artifact_id=...`。
 
 `title`、`when_to_read`、sections、range selector 等 richer metadata 仍属于后续 Source Registry v2。
 
@@ -287,13 +289,20 @@ resolve(id) ≈ render_context_pack(build_context_pack(id), format="plain-markdo
 
 ### 5.3 Source Expansion
 
-Source expansion 应成为独立能力：
+Source expansion 是独立能力：
 
 ```text
-expand_source(artifact_id, section_id=None, range=None, mode="excerpt")
+expand_source(artifact_id, start=None, end=None, max_chars=None)
 ```
 
-它返回 excerpt / full artifact，并保留 hash、路径、selector 和 warning。
+当前已实现的最小 contract：
+
+- core function: `expand_source_artifact(root_dir, source_id, start=None, end=None, max_chars=None)`；
+- CLI: `codememory source expand src/design-md --max-chars 2000`；
+- REST: `GET /api/sources/expand?artifact_id=src/design-md&max_chars=2000`；
+- output 是 `SourceExpansion` JSON，包含 `artifact_id`、`kind`、`uri`、`path`、`sha256`、`current_sha256`、`status`、`content`、`range_start`、`range_end`、`truncated`、`message`；
+- 支持 `markdown` / `text` / `code` 的本地文件全文或字符范围展开；
+- 对 missing artifact、missing file、stale hash、unsupported external/pdf/binary 返回结构化 status/message，而不是抛给 adapter 自行解释。
 
 ContextPack 默认只引用 source；expand_source 按需补充 source body。
 
@@ -369,7 +378,7 @@ schemas/
 | `update_memory` | 更新 atom/schema |
 | `search_memory` | 搜索候选 |
 | `context_pack` | 生成 agent handoff context |
-| `expand_source` | 按需展开 Source Artifact；planned |
+| `expand_source` | 按需展开 Source Artifact；Core / CLI / REST implemented，MCP / harness deferred |
 | `validate` | 校验 graph、schema、source_refs |
 | `compile_markdown` | 生成 migration review set |
 | `materialize_review` | 晋升 accepted proposals |
@@ -422,7 +431,7 @@ src/codememory/sources/
 
 ### P2
 
-- expose `context_pack` and `expand_source` through MCP / toolkit / REST;
+- expose `context_pack` and `expand_source` through MCP / toolkit;
 - update UI for source_refs and migration review;
 - improve frontend UX only after backend contract is stable.
 

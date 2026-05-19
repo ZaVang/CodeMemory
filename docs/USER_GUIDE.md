@@ -16,7 +16,7 @@ CodeMemory 是一个给单 owner 和多个 agent 共享的工作记忆底座。
 - 用 ContextPack 把上下文稳定交给 agent；
 - 用 Source Artifact / source_refs 追溯长文档和原始资料。
 
-当前已实现的主线是 atom graph、resolve、ContextPack、compiler review flow，以及 Source Artifact Registry 基础能力。
+当前已实现的主线是 atom graph、resolve、ContextPack、compiler review flow，以及 Source Artifact Registry / source_refs / explicit source expansion 基础能力。
 
 ---
 
@@ -123,6 +123,7 @@ codememory source add docs/design.md --id src/design-md --kind markdown --summar
 codememory source list
 codememory source get src/design-md
 codememory source check src/design-md
+codememory source expand src/design-md --max-chars 2000
 codememory validate
 ```
 
@@ -138,6 +139,16 @@ codememory validate
 | `status` | `active` / `archived` / `missing` / `stale` |
 
 `source check` 和 `validate` 可以发现本地 source 文件 missing / stale。`validate` 也会检查 atom 的 `source_refs` 是否指向已登记的 Source Artifact。
+
+`source expand` 是显式展开 source body 的入口，默认返回 JSON。它支持本地 `markdown` / `text` / `code` source：
+
+```powershell
+codememory source expand src/design-md
+codememory source expand src/design-md --start 120 --end 360
+codememory source expand src/design-md --max-chars 1200
+```
+
+返回结果包含 artifact id、kind、uri/path、registry hash、current hash、status、content、range 和 message。missing / stale / unsupported 都会以结构化 status 返回，而不是让 adapter 猜错误类型。
 
 ---
 
@@ -160,7 +171,7 @@ codememory context-pack user/investment/context --format json
 - budget notices；
 - render format。
 
-ContextPack 会渲染 memory node 的 `source_refs`，但不会自动展开 source body。Progressive disclosure 的完整 source expansion 仍是后续能力：
+ContextPack 会渲染 memory node 的 `source_refs`，但不会自动展开 source body。需要原文时，使用 `source expand` 显式进入下一层 disclosure：
 
 ```text
 L0 index card
@@ -188,6 +199,7 @@ codememory context-pack user/project/context --format xml-markdown
 codememory source add docs/design.md --id src/design-md --kind markdown --summary "Design source"
 codememory source list
 codememory source check
+codememory source expand src/design-md --max-chars 2000
 
 # 搜索 / 验证 / 重建索引
 codememory search --query "architecture"

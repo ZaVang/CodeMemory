@@ -35,3 +35,11 @@ If those files change only because tests reindexed or logged operations, restore
 `validate` can emit decay/staleness warnings for low-intensity memories. When a test is asserting source-ref warning counts, make the fixture memory intentionally non-decaying, for example by using `intensity: 8` or `status: protected`.
 
 Otherwise a source-ref test can fail for an unrelated validation warning.
+
+---
+
+## Progressive disclosure boundary
+
+Do not make ContextPack automatically expand Source Artifact bodies while implementing source-related features.
+
+Default ContextPack output should carry `source_refs`; source body retrieval belongs behind explicit `expand_source` calls. This keeps long documents out of agent handoff prompts unless the caller intentionally asks for them.

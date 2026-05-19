@@ -36,6 +36,7 @@ from .sources import (
     add_source_artifact,
     check_source_artifact,
     check_source_registry,
+    expand_source_artifact,
     get_source_artifact,
     list_source_artifacts,
 )
@@ -248,6 +249,25 @@ def handle_source_check(root: Path, source_id: str | None = None) -> str:
         f"{result.artifact_id:32s} {result.state:8s} {result.uri}  {result.message}"
         for result in results
     )
+
+
+def handle_source_expand(
+    root: Path,
+    source_id: str,
+    start: int | None = None,
+    end: int | None = None,
+    max_chars: int | None = None,
+) -> str:
+    """Expand a Source Artifact as machine-readable JSON."""
+
+    expansion = expand_source_artifact(
+        root,
+        source_id,
+        start=start,
+        end=end,
+        max_chars=max_chars,
+    )
+    return json.dumps(expansion.model_dump(mode="json"), indent=2, ensure_ascii=False)
 
 
 def handle_search(
