@@ -7,14 +7,13 @@ vanish when the process exits.
 
 from __future__ import annotations
 
-from datetime import datetime, date
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 from pydantic import BaseModel, Field
 
-from .core import estimate_tokens, parse_frontmatter
-from .index import load_index
+from .core import estimate_tokens
 from .resolve import topological_sort
 
 

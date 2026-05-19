@@ -41,7 +41,6 @@ def snapshot_dag(root_dir: Path, dag, snapshot_id: str) -> Path:
     Returns:
         Path to the created snapshot .md file.
     """
-    from .transient import TransientDAG
 
     nodes = list(dag._nodes.values())
 

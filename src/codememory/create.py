@@ -8,7 +8,7 @@ from pathlib import Path
 import yaml
 
 from .core import compute_body_hash, get_memory_path
-from .index import load_index, reindex
+from .index import reindex
 
 _logger = logging.getLogger("codememory")
 

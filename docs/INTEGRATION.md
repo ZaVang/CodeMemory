@@ -19,6 +19,46 @@ codememory --root examples/investment resolve user/investment/context
 # Expected: assembled context with dependencies in topological order
 ```
 
+## Markdown Migration: Memory Compiler
+
+CodeMemory can migrate an existing Markdown corpus without rewriting the source files. The compiler creates a PR-style review set first; only accepted proposals are materialized as canonical memory atoms.
+
+```bash
+# 1. Compile existing Markdown into a review set
+codememory --root examples/work compile-md ./docs --review-id docs-import --tags "work,migration"
+
+# 2. Inspect the review JSON
+cat examples/work/.codememory/reviews/docs-import.json
+
+# 3. Materialize every proposal for a first-pass migration
+codememory --root examples/work materialize-review docs-import --accept-all
+
+# 4. Validate the resulting memory graph
+codememory --root examples/work validate
+```
+
+Compiler guarantees:
+
+- Original Markdown files are not modified.
+- Generated memories start as `maturity: draft`.
+- Each generated memory stores `source.original_file`, `source.original_sha256`, and `source.segment_id`.
+- The review JSON can be edited before materialization.
+- Existing memory files are not overwritten.
+
+### Compiler Architecture
+
+The migration path is intentionally split into small modules so each stage can be tested independently:
+
+| Stage | Module | Responsibility |
+|---|---|---|
+| Source manifest | `codememory.compiler.ingest` | Discover Markdown files, skip `.codememory`, compute SHA-256, and never mutate source files. |
+| Segmentation | `codememory.compiler.segment` | Split Markdown by headings and attach source path + line provenance. |
+| Proposal graph | `codememory.compiler.propose` | Generate deterministic draft `MemoryProposal` objects with stable IDs and provenance. |
+| Review persistence | `codememory.compiler.review` | Store/load `.codememory/reviews/{review_id}.json` for human review. |
+| Materialization | `codememory.compiler.materialize` | Write only accepted proposals to canonical atom files, avoid overwrites, and reindex. |
+
+Operational rule of thumb: use `compile-md` as a read-only planning step, edit the review JSON until it looks right, then run `materialize-review` only when you are ready to write canonical atom files.
+
 ## Memory Library Configuration
 
 ### The `--root` parameter

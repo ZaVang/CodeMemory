@@ -4,6 +4,17 @@ Core public API for memory management: create, update, resolve, validate,
 reindex, search.  One-line Agent integration via ``CodememoryToolkit``.
 """
 
+from .compiler import (
+    MaterializeResult,
+    MemoryProposal,
+    ReviewSet,
+    SourceDoc,
+    SourceSegment,
+    compile_markdown_corpus,
+    load_review_set,
+    materialize_review_set,
+    save_review_set,
+)
 from .core import compute_body_hash, get_root_dir, parse_frontmatter
 from .create import create
 from .index import load_index, reindex, save_index
@@ -26,6 +37,11 @@ __all__ = [
     "IndexData",
     "ImportRef",
     "ChangeLogEntry",
+    "MaterializeResult",
+    "MemoryProposal",
+    "ReviewSet",
+    "SourceDoc",
+    "SourceSegment",
     # Index
     "load_index",
     "save_index",
@@ -48,6 +64,11 @@ __all__ = [
     "search",
     # Orphans
     "find_orphans",
+    # Compiler
+    "compile_markdown_corpus",
+    "load_review_set",
+    "materialize_review_set",
+    "save_review_set",
     # Integration
     "CodememoryToolkit",
 ]

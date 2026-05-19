@@ -89,9 +89,9 @@ def render_to_html(
     css = _HTML_CSS
 
     body_parts = [
-        f'<header>',
+        '<header>',
         f'<h1>{html.escape(title)}</h1>',
-        f'<div class="meta">',
+        '<div class="meta">',
         f'<span class="tag-list">Source: {html.escape(source_file)}</span>',
     ]
     if tags:
@@ -108,8 +108,6 @@ def render_to_html(
         heading = getattr(section, 'heading', '') or f'Section {i}'
         body_text = getattr(section, 'body', '') or ''
         sec_intensity = getattr(section, 'intensity', 5)
-        sec_id = slugify(heading) or f'section-{i}'
-
         truncated = 'truncated' if sec_intensity < (meta.get('min_intensity', 5)) else ''
 
         body_parts.append(

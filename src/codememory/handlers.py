@@ -14,9 +14,12 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+from .compiler.materialize import materialize_review_set
+from .compiler.propose import compile_markdown_corpus
+from .compiler.review import load_review_set, save_review_set, set_all_decisions
 from .core import compute_body_hash as _cbh
 from .core import compute_retrieval_probability as _retrieval_prob
-from .core import get_memory_path, get_root_dir, parse_frontmatter as _pfm
+from .core import get_memory_path, parse_frontmatter as _pfm
 from .create import create
 from .import_cmd import import_text
 from .index import load_index, reindex
@@ -26,7 +29,7 @@ from .resolve import resolve
 from .search import search
 from .snapshot import snapshot_dag
 from .skeletonize.markdown import skeletonize_markdown
-from .skeletonize.code import skeletonize_code, skeletonize_module, supports_extension
+from .skeletonize.code import skeletonize_code, skeletonize_module
 from .suggest_deps import suggest_deps
 from .update import update
 from .validate import validate
@@ -566,6 +569,55 @@ def _write_skeleton_memory(
         print(f'Skeletonized: {file_path} (intensity={intensity})')
         created.append(str(file_path))
 
+
+def handle_compile_md(
+    root: Path,
+    source: str,
+    review_id: str | None = None,
+    tags: list[str] | None = None,
+    namespace: str = "user/imports",
+) -> str:
+    """Compile Markdown corpus into a reviewable draft proposal graph."""
+    source_path = Path(source)
+    if review_id is None:
+        review_id = datetime.now(timezone.utc).strftime("compile-%Y%m%d-%H%M%S")
+
+    review = compile_markdown_corpus(
+        source_root=source_path,
+        review_id=review_id,
+        tags=tags,
+        namespace=namespace,
+    )
+    path = save_review_set(root, review)
+    return (
+        f"Review set saved: {path}\n"
+        f"sources: {len(review.sources)}\n"
+        f"segments: {len(review.segments)}\n"
+        f"proposals: {len(review.proposals)}"
+    )
+
+
+def handle_materialize_review(
+    root: Path,
+    review_id: str,
+    accept_all: bool = False,
+) -> str:
+    """Materialize accepted proposals from a compiler review set."""
+    review = load_review_set(root, review_id)
+    if accept_all:
+        review = set_all_decisions(review, "accepted")
+        save_review_set(root, review)
+
+    result = materialize_review_set(root, review, accept_all=False)
+    lines = [
+        f"written: {len(result.written)}",
+        f"skipped: {len(result.skipped)}",
+        f"errors: {len(result.errors)}",
+    ]
+    if result.errors:
+        lines.append("error details:")
+        lines.extend(f"- {err}" for err in result.errors)
+    return "\n".join(lines)
 
 def handle_skeletonize(
     root: Path,

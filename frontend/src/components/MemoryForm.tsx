@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { fetchMemory, createMemory, updateMemory, fetchAllMemories, fetchStats } from '../api'
-import type { MemoryDetail, MemorySummary } from '../types'
+import type { MemorySummary } from '../types'
 import { useExitAnimation } from '../useExitAnimation'
 
 interface Props {
