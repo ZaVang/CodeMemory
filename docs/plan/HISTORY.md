@@ -4,6 +4,39 @@ This file records accepted sprint outcomes. Current work belongs in `docs/plan/S
 
 ---
 
+## 2026-05-19 — P1.2 `source_refs`
+
+**Status:** Accepted and archived.
+
+**Commit:** `9d671b5 feat: add source refs to memory and context packs`
+
+**Delivered:**
+
+- Added `SourceRef` metadata and attached it to `MemoryEntry`.
+- Preserved `source_refs` during reindex from atom frontmatter into the index model.
+- Added validation for missing Source Artifact refs as source-ref warnings, separate from missing import errors.
+- Rendered source refs in ContextPack JSON, Markdown, and XML-tagged Markdown.
+- Kept source expansion out of ContextPack output; `expand_source` remains a later explicit retrieval contract.
+- Updated architecture, user guide, project structure, and sprint docs.
+- Added unit coverage for model parsing, index preservation, validation distinction, and ContextPack rendering.
+
+**Acceptance evidence:**
+
+- `python -m pytest -q tests/unit tests/test_api.py` → `154 passed`
+- Markdown local link check → `checked 13 markdown files; no missing local doc links`
+- old plan path check → `no stale old plan paths outside pitfalls`
+- `git diff --check` → passed
+
+**Deferred:**
+
+- `expand_source`
+- section/range source retrieval
+- ContextPack / resolve v2 disclosure options
+- Migration Compiler v2 source-aware proposals
+- frontend source-ref UI
+
+---
+
 ## 2026-05-19 — Source Artifact Registry foundation
 
 **Status:** Accepted and archived.

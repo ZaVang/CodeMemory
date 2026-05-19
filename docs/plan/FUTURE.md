@@ -29,6 +29,19 @@
 
 ## Completed Roadmap Items
 
+### 2026-05-19 — P1.2 `source_refs`
+
+**Completed in:** `9d671b5 feat: add source refs to memory and context packs`
+
+**Acceptance signals met:**
+
+- Atom metadata can carry `source_refs`.
+- Reindex preserves `source_refs` into the index model.
+- Validation distinguishes broken imports from broken source refs.
+- ContextPack renders source refs in JSON, Markdown, and XML-tagged Markdown without expanding full source content.
+
+---
+
 ### 2026-05-19 — Source Artifact Registry foundation
 
 **Completed in:** `b93add5 Add source artifact registry docs and checks`
@@ -43,16 +56,6 @@
 ---
 
 ## P1 Backlog
-
-### P1.2 `source_refs`
-
-**Goal:** Let atoms and ContextPacks point to Source Artifacts without mixing source provenance into imports.
-
-**Acceptance signals:**
-
-- Atom metadata can carry `source_refs`.
-- Validation distinguishes broken imports from broken source refs.
-- ContextPack can render source refs without expanding full source content.
 
 ### P1.3 `expand_source`
 
