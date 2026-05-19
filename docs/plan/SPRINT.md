@@ -38,46 +38,46 @@ Not in scope:
 
 ### Task 1 — Define Source Artifact model and storage contract
 
-- [ ] Add core model for Source Artifact metadata.
-- [ ] Define supported initial fields: `id`, `kind`, `uri`, `sha256`, `summary`, `status`.
-- [ ] Define storage location as `.codememory/sources/index.json`.
-- [ ] Add tests for model serialization and default values.
+- [x] Add core model for Source Artifact metadata.
+- [x] Define supported initial fields: `id`, `kind`, `uri`, `sha256`, `summary`, `status`.
+- [x] Define storage location as `.codememory/sources/index.json`.
+- [x] Add tests for model serialization and default values.
 
 **Acceptance:** A source artifact can be represented as stable JSON without touching frontend code.
 
 ### Task 2 — Add registry primitives
 
-- [ ] Add load/save helpers for `.codememory/sources/index.json`.
-- [ ] Add list/get/add primitives.
-- [ ] Ensure parent directories are created on save.
-- [ ] Ensure missing registry loads as an empty registry.
-- [ ] Add tests for add/list/get/save/reload.
+- [x] Add load/save helpers for `.codememory/sources/index.json`.
+- [x] Add list/get/add primitives.
+- [x] Ensure parent directories are created on save.
+- [x] Ensure missing registry loads as an empty registry.
+- [x] Add tests for add/list/get/save/reload.
 
 **Acceptance:** Artifacts persist and reload from `.codememory/sources/index.json`.
 
 ### Task 3 — Detect missing and stale source artifacts
 
-- [ ] Add hash computation for local file artifacts.
-- [ ] Mark missing local files as detectable.
-- [ ] Mark changed local files as stale when hash differs.
-- [ ] Add tests for fresh, missing, and stale artifacts.
+- [x] Add hash computation for local file artifacts.
+- [x] Mark missing local files as detectable.
+- [x] Mark changed local files as stale when hash differs.
+- [x] Add tests for fresh, missing, and stale artifacts.
 
 **Acceptance:** Tests prove stale/missing artifacts are detectable.
 
 ### Task 4 — Expose minimal core-facing interface
 
-- [ ] Add handler functions only after core primitives pass tests.
-- [ ] Add CLI commands only if the handler contract is stable.
-- [ ] Defer REST/API exposure unless CLI/core tests make the contract clear.
+- [x] Add handler functions only after core primitives pass tests.
+- [x] Add CLI commands only if the handler contract is stable.
+- [x] Defer REST/API exposure unless CLI/core tests make the contract clear.
 
 **Acceptance:** Any exposed interface calls shared core primitives and does not duplicate registry logic.
 
 ### Task 5 — Update docs after implementation
 
-- [ ] Update `docs/architecture.md` with implemented Source Artifact behavior.
-- [ ] Update `docs/USER_GUIDE.md` with current commands if CLI exposure is added.
-- [ ] Update `docs/project_structure.md` with new source registry files.
-- [ ] Move completed sprint items out of this file after acceptance.
+- [x] Update `docs/architecture.md` with implemented Source Artifact behavior.
+- [x] Update `docs/USER_GUIDE.md` with current commands if CLI exposure is added.
+- [x] Update `docs/project_structure.md` with new source registry files.
+- [ ] Move completed sprint items out of this file after user acceptance.
 
 **Acceptance:** Docs describe implemented behavior, not speculative behavior.
 

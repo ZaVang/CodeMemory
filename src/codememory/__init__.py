@@ -24,6 +24,18 @@ from .models import ChangeLogEntry, ImportRef, IndexData, MemoryEntry
 from .orphans import find_orphans
 from .resolve import build_dag, find_cycle_participants, resolve, topological_sort
 from .search import search
+from .sources import (
+    SourceArtifact,
+    SourceArtifactCheck,
+    SourceRegistry,
+    add_source_artifact,
+    check_source_artifact,
+    check_source_registry,
+    get_source_artifact,
+    list_source_artifacts,
+    load_source_registry,
+    save_source_registry,
+)
 from .transient import TransientDAG, TransientNode
 from .update import update
 from .validate import validate
@@ -46,6 +58,9 @@ __all__ = [
     "ReviewSet",
     "SourceDoc",
     "SourceSegment",
+    "SourceArtifact",
+    "SourceArtifactCheck",
+    "SourceRegistry",
     # Index
     "load_index",
     "save_index",
@@ -68,6 +83,14 @@ __all__ = [
     "TransientNode",
     # Search
     "search",
+    # Sources
+    "add_source_artifact",
+    "check_source_artifact",
+    "check_source_registry",
+    "get_source_artifact",
+    "list_source_artifacts",
+    "load_source_registry",
+    "save_source_registry",
     # Orphans
     "find_orphans",
     # Compiler

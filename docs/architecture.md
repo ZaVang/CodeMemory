@@ -145,27 +145,18 @@ fields:
 
 Source Artifact 是原文或外部材料的 registry entry，不是 atom。
 
-建议 contract：
+当前已实现的最小 contract：
 
 ```yaml
 id: src/project-architecture-md
 kind: markdown                  # markdown | code | text | pdf | url | external
 uri: docs/architecture.md
 sha256: "..."
-title: CodeMemory Architecture
 summary: Canonical architecture document
-when_to_read: Read before changing core contracts.
-sections:
-  - id: progressive-disclosure
-    title: Progressive Disclosure
-    selector: "## 4. Progressive Disclosure"
 status: active                  # active | archived | missing | stale
-created: 2026-05-19
-updated: 2026-05-19
-metadata: {}
 ```
 
-Storage recommendation:
+Registry storage:
 
 ```text
 .codememory/
@@ -175,7 +166,16 @@ Storage recommendation:
     index.json
 ```
 
-原始文件可以继续留在原路径；registry 只保存引用、hash、摘要和结构化 anchors。
+原始文件继续留在原路径；registry 保存引用、hash、摘要和状态。当前 Core 支持：
+
+- `src/codememory/sources.py` 中的 `SourceArtifact` / `SourceRegistry`；
+- `.codememory/sources/index.json` 的 load / save；
+- add / list / get；
+- fresh / stale / missing / external 检查；
+- `validate` 对 stale / missing Source Artifact 输出 warning；
+- CLI：`codememory source add|list|get|check`。
+
+`title`、`when_to_read`、sections、range selector 等 richer metadata 仍属于后续 Source Registry v2。
 
 ### 3.4 Source Ref
 

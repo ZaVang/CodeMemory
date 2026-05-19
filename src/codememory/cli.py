@@ -19,6 +19,10 @@ from .handlers import (
     handle_reindex,
     handle_resolve,
     handle_search,
+    handle_source_add,
+    handle_source_check,
+    handle_source_get,
+    handle_source_list,
     handle_skeletonize,
     handle_snapshot,
     handle_diff,
@@ -107,6 +111,25 @@ def main(argv: list[str] | None = None):
     p.add_argument("--semantic-type", dest="semantic_type", help="Filter by semantic type tag (e.g. decision, model, guideline)")
     p.add_argument("--has-imports", action="store_true", help="Filter to memories with non-empty imports")
     p.add_argument("--has-schema", action="store_true", help="Filter to memories with a schema reference")
+
+    # source
+    p = subparsers.add_parser("source", help="Manage Source Artifact registry")
+    _add_logging_flags(p)
+    source_subparsers = p.add_subparsers(dest="source_command", required=True)
+
+    sp = source_subparsers.add_parser("add", help="Register a Source Artifact")
+    sp.add_argument("uri", help="Local path or external URI")
+    sp.add_argument("--id", dest="source_id", help="Stable Source Artifact ID")
+    sp.add_argument("--kind", choices=["markdown", "code", "text", "pdf", "url", "external"])
+    sp.add_argument("--summary", default="")
+
+    sp = source_subparsers.add_parser("list", help="List Source Artifacts")
+
+    sp = source_subparsers.add_parser("get", help="Show one Source Artifact as JSON")
+    sp.add_argument("id", help="Source Artifact ID")
+
+    sp = source_subparsers.add_parser("check", help="Check Source Artifacts for missing/stale state")
+    sp.add_argument("id", nargs="?", help="Optional Source Artifact ID")
 
     # focus
     p = subparsers.add_parser("focus", help="Focus on a memory")
@@ -256,6 +279,21 @@ def main(argv: list[str] | None = None):
                             status=args.status, maturity=args.maturity,
                             semantic_type=args.semantic_type,
                             has_imports=args.has_imports, has_schema=args.has_schema))
+    elif cmd == "source":
+        if args.source_command == "add":
+            print(handle_source_add(
+                root,
+                uri=args.uri,
+                source_id=args.source_id,
+                kind=args.kind,
+                summary=args.summary,
+            ))
+        elif args.source_command == "list":
+            print(handle_source_list(root))
+        elif args.source_command == "get":
+            print(handle_source_get(root, args.id))
+        elif args.source_command == "check":
+            print(handle_source_check(root, args.id))
     elif cmd == "focus":
         print(handle_focus(root, args.id, level=args.level, content=args.content,
                            summary_override=args.summary_override, resolve_flag=args.resolve))

@@ -9,6 +9,7 @@ from .core import parse_frontmatter
 from .index import load_index
 from .models import IndexData, MemoryEntry
 from .resolve import _get_imports, build_dag, find_cycle_participants
+from .sources import check_source_registry
 
 _logger = logging.getLogger("codememory")
 
@@ -168,6 +169,12 @@ def validate(root_dir: Path) -> tuple[int, int]:
             for msg in _check_decay(mid, entry, index):
                 print(f"[DECAY-WARN] {msg}")
                 warnings += 1
+
+    # 6. Source Artifact registry checks
+    for result in check_source_registry(root_dir):
+        if result.state in {"missing", "stale"}:
+            print(f"[SOURCE-WARN] {result.artifact_id} is {result.state}: {result.message}")
+            warnings += 1
 
     print(f"\nValidation complete. {len(memories)} memories checked.")
     print(f"Errors: {errors}, Warnings: {warnings}")

@@ -31,6 +31,14 @@ from .search import search
 from .snapshot import snapshot_dag
 from .skeletonize.markdown import skeletonize_markdown
 from .skeletonize.code import skeletonize_code, skeletonize_module
+from .sources import (
+    SourceKind,
+    add_source_artifact,
+    check_source_artifact,
+    check_source_registry,
+    get_source_artifact,
+    list_source_artifacts,
+)
 from .suggest_deps import suggest_deps
 from .update import update
 from .validate import validate
@@ -176,6 +184,70 @@ def handle_validate(root: Path) -> int:
     """Run integrity checks. Prints report, returns error count for exit code."""
     errors, _warnings = validate(root)
     return errors
+
+
+def handle_source_add(
+    root: Path,
+    uri: str,
+    source_id: str | None = None,
+    kind: SourceKind | None = None,
+    summary: str = "",
+) -> str:
+    """Register a Source Artifact."""
+
+    artifact = add_source_artifact(
+        root,
+        uri=uri,
+        source_id=source_id,
+        kind=kind,
+        summary=summary,
+    )
+    return (
+        f"source added: {artifact.id}\n"
+        f"kind: {artifact.kind}\n"
+        f"uri: {artifact.uri}\n"
+        f"sha256: {artifact.sha256}\n"
+        f"status: {artifact.status}"
+    )
+
+
+def handle_source_list(root: Path) -> str:
+    """List registered Source Artifacts."""
+
+    artifacts = list_source_artifacts(root)
+    if not artifacts:
+        return "(no source artifacts)"
+    return "\n".join(
+        f"{artifact.id:32s} {artifact.kind:9s} {artifact.status:8s} {artifact.uri}  {artifact.summary}"
+        for artifact in artifacts
+    )
+
+
+def handle_source_get(root: Path, source_id: str) -> str:
+    """Return a Source Artifact as JSON."""
+
+    artifact = get_source_artifact(root, source_id)
+    if artifact is None:
+        return f"Error: Source Artifact '{source_id}' not found."
+    return json.dumps(artifact.model_dump(mode="json"), indent=2, ensure_ascii=False)
+
+
+def handle_source_check(root: Path, source_id: str | None = None) -> str:
+    """Check one or all Source Artifacts for missing/stale state."""
+
+    if source_id:
+        artifact = get_source_artifact(root, source_id)
+        if artifact is None:
+            return f"Error: Source Artifact '{source_id}' not found."
+        results = [check_source_artifact(root, artifact)]
+    else:
+        results = check_source_registry(root)
+    if not results:
+        return "(no source artifacts)"
+    return "\n".join(
+        f"{result.artifact_id:32s} {result.state:8s} {result.uri}  {result.message}"
+        for result in results
+    )
 
 
 def handle_search(

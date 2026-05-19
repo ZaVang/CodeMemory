@@ -16,7 +16,7 @@ CodeMemory 是一个给单 owner 和多个 agent 共享的工作记忆底座。
 - 用 ContextPack 把上下文稳定交给 agent；
 - 用 Source Artifact / source_refs 追溯长文档和原始资料。
 
-当前已实现的主线是 atom graph、resolve、ContextPack、compiler review flow。Source Artifact Registry 是下一阶段 P1。
+当前已实现的主线是 atom graph、resolve、ContextPack、compiler review flow，以及 Source Artifact Registry 基础能力。
 
 ---
 
@@ -97,7 +97,42 @@ imports:
 
 ---
 
-## 5. ContextPack
+## 5. Source Artifact Registry
+
+Source Artifact Registry 保存长文档、代码文件、PDF、URL 等原始材料的引用和 hash。它不把原文变成 atom。
+
+当前 registry 存储位置：
+
+```text
+.codememory/sources/index.json
+```
+
+基础命令：
+
+```powershell
+codememory source add docs/design.md --id src/design-md --kind markdown --summary "Design source"
+codememory source list
+codememory source get src/design-md
+codememory source check src/design-md
+codememory validate
+```
+
+字段：
+
+| 字段 | 说明 |
+|---|---|
+| `id` | 稳定 Source Artifact ID，例如 `src/design-md` |
+| `kind` | `markdown` / `code` / `text` / `pdf` / `url` / `external` |
+| `uri` | 本地相对路径、绝对路径或外部 URI |
+| `sha256` | 本地文件内容 hash |
+| `summary` | 简短说明 |
+| `status` | `active` / `archived` / `missing` / `stale` |
+
+`source check` 和 `validate` 可以发现本地 source 文件 missing / stale。下一阶段会把 atom 的 `source_refs` 接到这个 registry。
+
+---
+
+## 6. ContextPack
 
 ContextPack 是给 agent 的主要上下文交接格式。
 
@@ -129,7 +164,7 @@ L3 full source artifact
 
 ---
 
-## 6. 常用 CLI
+## 7. 常用 CLI
 
 ```powershell
 # 创建 / 更新
@@ -139,6 +174,11 @@ codememory update user/project/new-fact --body "..."
 # 解析上下文
 codememory resolve user/project/context --budget 2000
 codememory context-pack user/project/context --format xml-markdown
+
+# Source Artifact Registry
+codememory source add docs/design.md --id src/design-md --kind markdown --summary "Design source"
+codememory source list
+codememory source check
 
 # 搜索 / 验证 / 重建索引
 codememory search --query "architecture"
@@ -161,7 +201,7 @@ codememory --help
 
 ---
 
-## 7. Web UI
+## 8. Web UI
 
 Web UI 是 operator console，不定义 canonical memory contract。
 
@@ -182,7 +222,7 @@ Web UI 是 operator console，不定义 canonical memory contract。
 
 ---
 
-## 8. Markdown 迁移
+## 9. Markdown 迁移
 
 当前已有 compiler review flow：
 
@@ -217,7 +257,7 @@ canonical graph
 
 ---
 
-## 9. 判断一条信息怎么存
+## 10. 判断一条信息怎么存
 
 | 信息类型 | 存法 |
 |---|---|
@@ -234,7 +274,7 @@ canonical graph
 
 ---
 
-## 10. 相关文档
+## 11. 相关文档
 
 - `docs/prd.md` — 产品定义和优先级；
 - `docs/architecture.md` — 架构契约；

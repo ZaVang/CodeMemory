@@ -16,6 +16,7 @@ if str(_SRC) not in sys.path:
     sys.path.insert(0, str(_SRC))
 
 from codememory.models import IndexData, MemoryEntry
+from codememory.sources import add_source_artifact
 from codememory.validate import (
     check_schema_compliance,
     _check_decay,
@@ -258,6 +259,34 @@ def test_empty_memory_library_no_crash():
         errors, warnings = validate(Path("."))
     assert errors == 0
     assert warnings == 0
+
+
+def test_validate_warns_for_missing_and_stale_source_artifacts(tmp_path: Path):
+    """validate() reports source registry missing/stale artifacts as warnings."""
+    source_file = tmp_path / "docs" / "design.md"
+    source_file.parent.mkdir(parents=True)
+    source_file.write_text("version one", encoding="utf-8")
+
+    add_source_artifact(
+        tmp_path,
+        uri="docs/design.md",
+        source_id="src/stale-design",
+        kind="markdown",
+        summary="Stale design",
+    )
+    add_source_artifact(
+        tmp_path,
+        uri="docs/missing.md",
+        source_id="src/missing-design",
+        kind="markdown",
+        summary="Missing design",
+    )
+    source_file.write_text("version two", encoding="utf-8")
+
+    errors, warnings = validate(tmp_path)
+
+    assert errors == 0
+    assert warnings == 2
 
 
 # ==================================================================
