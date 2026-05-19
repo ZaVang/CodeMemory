@@ -23,7 +23,7 @@ from .core import (
     parse_frontmatter,
 )
 from .index import load_index, save_index
-from .models import IndexData, MemoryEntry
+from .models import IndexData, MemoryEntry, SourceRef
 from .resolve import build_dag, find_cycle_participants, topological_sort
 
 ContextPackFormat = Literal["xml-markdown", "markdown", "plain-markdown", "json"]
@@ -52,6 +52,7 @@ class ContextPackNode(BaseModel):
     maturity: str = "draft"
     status: str = "active"
     tags: list[str] = Field(default_factory=list)
+    source_refs: list[SourceRef] = Field(default_factory=list)
     content: str | None = None
     source_path: str | None = None
     token_estimate: int = 0
@@ -178,6 +179,7 @@ def build_context_pack(
             maturity=entry.maturity,
             status=entry.status,
             tags=entry.tags,
+            source_refs=entry.source_refs,
             content=content,
             source_path=entry.path,
             token_estimate=cost,
@@ -379,9 +381,10 @@ def _render_markdown(pack: ContextPack) -> str:
             f"- Maturity: `{node.maturity}`",
             f"- Status: `{node.status}`",
             f"- Tags: `{', '.join(node.tags)}`",
-            "",
-            f"> {node.summary}",
         ])
+        if node.source_refs:
+            lines.append(f"- Source refs: {', '.join(f'`{ref.artifact_id}`' for ref in node.source_refs)}")
+        lines.extend(["", f"> {node.summary}"])
         if node.content:
             lines.extend(["", node.content])
     if pack.notices:
@@ -427,6 +430,23 @@ def _render_xml_markdown(pack: ContextPack) -> str:
             for tag in node.tags:
                 lines.append(f"        <tag>{_text(tag)}</tag>")
             lines.append("      </tags>")
+        if node.source_refs:
+            lines.append("      <source_refs>")
+            for ref in node.source_refs:
+                ref_attrs = {
+                    "artifact_id": ref.artifact_id,
+                    "disclosure_hint": ref.disclosure_hint,
+                }
+                if ref.section_id:
+                    ref_attrs["section_id"] = ref.section_id
+                if ref.range:
+                    ref_attrs["range"] = ref.range
+                ref_attr_text = " ".join(f'{key}="{_attr(value)}"' for key, value in ref_attrs.items())
+                lines.append(f"        <source_ref {ref_attr_text}>")
+                if ref.summary:
+                    lines.append(f"          <summary>{_text(ref.summary)}</summary>")
+                lines.append("        </source_ref>")
+            lines.append("      </source_refs>")
         if node.content is not None:
             lines.append("      <content format=\"markdown\">")
             lines.append(_cdata(node.content))

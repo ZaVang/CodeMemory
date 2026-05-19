@@ -190,6 +190,14 @@ source_refs:
     disclosure_hint: excerpt     # anchor | excerpt | full
 ```
 
+当前已实现：
+
+- `SourceRef` model；
+- atom frontmatter 的 `source_refs` 在 reindex 后进入 `MemoryEntry.source_refs`；
+- `validate` 会把缺失的 Source Artifact reference 作为 `[SOURCE-REF-WARN]`，与 broken imports error 分开；
+- ContextPack node 会携带并渲染 `source_refs`；
+- JSON / Markdown / XML-tagged Markdown renderers 只展示 source refs，不展开 source body。
+
 关键边界：
 
 | 关系 | 含义 | 是否进入 imports DAG |
@@ -197,7 +205,7 @@ source_refs:
 | `imports.required` | 理解当前 atom 必须先理解的 atom | 是 |
 | `imports.recommended` | 有助于理解的 atom | 是 |
 | `imports.related` | 相关但非前提的 atom | 可选 |
-| `source_refs` | provenance 或可展开原文 | 默认否 |
+| `source_refs` | provenance 或可展开原文 | 否 |
 
 ---
 
@@ -361,7 +369,7 @@ schemas/
 | `update_memory` | 更新 atom/schema |
 | `search_memory` | 搜索候选 |
 | `context_pack` | 生成 agent handoff context |
-| `expand_source` | 按需展开 Source Artifact |
+| `expand_source` | 按需展开 Source Artifact；planned |
 | `validate` | 校验 graph、schema、source_refs |
 | `compile_markdown` | 生成 migration review set |
 | `materialize_review` | 晋升 accepted proposals |

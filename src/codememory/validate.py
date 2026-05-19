@@ -9,7 +9,7 @@ from .core import parse_frontmatter
 from .index import load_index
 from .models import IndexData, MemoryEntry
 from .resolve import _get_imports, build_dag, find_cycle_participants
-from .sources import check_source_registry
+from .sources import check_source_registry, load_source_registry
 
 _logger = logging.getLogger("codememory")
 
@@ -114,6 +114,18 @@ def _check_decay(memory_id: str, entry: MemoryEntry, index: IndexData) -> list[s
     return warnings
 
 
+def _check_source_refs(memory_id: str, entry: MemoryEntry, source_ids: set[str]) -> list[str]:
+    """Check that atom source_refs point to registered Source Artifacts."""
+
+    warnings: list[str] = []
+    for ref in entry.source_refs:
+        if ref.artifact_id not in source_ids:
+            warnings.append(
+                f"{memory_id} source_ref points to non-existent Source Artifact: {ref.artifact_id}"
+            )
+    return warnings
+
+
 def validate(root_dir: Path) -> tuple[int, int]:
     """Run integrity checks on all indexed memories.
 
@@ -132,6 +144,8 @@ def validate(root_dir: Path) -> tuple[int, int]:
             file_path = root_dir / entry.path
             meta, _ = parse_frontmatter(file_path)
             schemas[mid] = meta
+    source_registry = load_source_registry(root_dir)
+    source_ids = set(source_registry.sources.keys())
 
     print("Running CodeMemory Validation...\n")
 
@@ -164,13 +178,18 @@ def validate(root_dir: Path) -> tuple[int, int]:
             print(f"[MATURITY-WARN] {msg}")
             warnings += 1
 
-        # 5. Decay check
+        # 5. Source ref check
+        for msg in _check_source_refs(mid, entry, source_ids):
+            print(f"[SOURCE-REF-WARN] {msg}")
+            warnings += 1
+
+        # 6. Decay check
         if entry.type != "schema":
             for msg in _check_decay(mid, entry, index):
                 print(f"[DECAY-WARN] {msg}")
                 warnings += 1
 
-    # 6. Source Artifact registry checks
+    # 7. Source Artifact registry checks
     for result in check_source_registry(root_dir):
         if result.state in {"missing", "stale"}:
             print(f"[SOURCE-WARN] {result.artifact_id} is {result.state}: {result.message}")

@@ -20,7 +20,7 @@ from .context_pack import ContextPack, ContextPackNode, ContextPackNotice, build
 from .create import create
 from .index import load_index, reindex, save_index
 from .integrations import CodememoryToolkit
-from .models import ChangeLogEntry, ImportRef, IndexData, MemoryEntry
+from .models import ChangeLogEntry, ImportRef, IndexData, MemoryEntry, SourceRef
 from .orphans import find_orphans
 from .resolve import build_dag, find_cycle_participants, resolve, topological_sort
 from .search import search
@@ -49,6 +49,7 @@ __all__ = [
     "MemoryEntry",
     "IndexData",
     "ImportRef",
+    "SourceRef",
     "ChangeLogEntry",
     "ContextPack",
     "ContextPackNode",

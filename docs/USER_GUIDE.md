@@ -69,7 +69,7 @@ imports:
 | `atom` | 通用语义记忆：事实、决策、约束、流程、上下文入口 |
 | `schema` | 结构模板，不是业务记忆本体 |
 
-下一阶段会把 `source_refs` 明确加入 canonical contract，用于引用 Source Artifact。
+`source_refs` 已经可以作为 atom metadata，用于引用 Source Artifact。
 
 ---
 
@@ -94,6 +94,15 @@ imports:
 | `related` | 主题相关，用于探索或补充 |
 
 注意：`imports` 不是 source provenance。长文档来源应走 Source Artifact / source_refs，而不是塞进 imports。
+
+示例：
+
+```yaml
+source_refs:
+  - artifact_id: src/design-md
+    summary: Design source
+    disclosure_hint: anchor
+```
 
 ---
 
@@ -128,7 +137,7 @@ codememory validate
 | `summary` | 简短说明 |
 | `status` | `active` / `archived` / `missing` / `stale` |
 
-`source check` 和 `validate` 可以发现本地 source 文件 missing / stale。下一阶段会把 atom 的 `source_refs` 接到这个 registry。
+`source check` 和 `validate` 可以发现本地 source 文件 missing / stale。`validate` 也会检查 atom 的 `source_refs` 是否指向已登记的 Source Artifact。
 
 ---
 
@@ -151,7 +160,7 @@ codememory context-pack user/investment/context --format json
 - budget notices；
 - render format。
 
-下一阶段 ContextPack 会加入 source_refs 和 progressive disclosure：
+ContextPack 会渲染 memory node 的 `source_refs`，但不会自动展开 source body。Progressive disclosure 的完整 source expansion 仍是后续能力：
 
 ```text
 L0 index card

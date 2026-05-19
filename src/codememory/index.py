@@ -6,7 +6,7 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 
 from .core import compute_body_hash, parse_frontmatter
-from .models import IndexData, MemoryEntry
+from .models import IndexData, MemoryEntry, SourceRef
 
 _logger = logging.getLogger("codememory")
 
@@ -132,6 +132,12 @@ def reindex(root_dir: Path) -> int:
 
                 if "source" in meta:
                     entry.source = meta["source"]
+                if "source_refs" in meta:
+                    entry.source_refs = [
+                        SourceRef.model_validate(ref)
+                        for ref in meta.get("source_refs", [])
+                        if isinstance(ref, dict)
+                    ]
                 if "maturity" in meta:
                     entry.maturity = str(meta["maturity"])
                 if "evidence" in meta:
