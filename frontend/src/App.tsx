@@ -1,25 +1,23 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
-import GraphCanvas from './components/GraphCanvas'
 import type { GraphCanvasHandle } from './components/GraphCanvas'
-import MemoryDetail from './components/MemoryDetail'
 import MemoryForm from './components/MemoryForm'
-import Dashboard from './components/Dashboard'
-import MemoryList from './components/MemoryList'
 import HelpPanel from './components/HelpPanel'
-import SearchBar from './components/SearchBar'
-import Legend from './components/Legend'
 import Onboarding from './components/Onboarding'
 import type { OnboardingResolveDemo } from './components/Onboarding'
 import Settings from './components/Settings'
 import { loadSettings, saveSettings } from './components/Settings'
 import type { UserSettings } from './components/Settings'
-import { fetchResolve, updateMemory, fetchGraph, fetchDatasets, switchDataset, downloadExport, setCurrentDataset as setApiDataset } from './api'
+import AppHeader from './components/AppHeader'
+import type { ViewMode } from './components/AppHeader'
+import ErrorBoundary from './components/ErrorBoundary'
+import GraphPage from './pages/GraphPage'
+import ListPage from './pages/ListPage'
+import DashboardPage from './pages/DashboardPage'
+import { fetchResolve, updateMemory, fetchDatasets, switchDataset, downloadExport, setCurrentDataset as setApiDataset } from './api'
 import type { ResolveResponse, GraphData } from './types'
 import type { DatasetInfo } from './api'
 
 const ONBOARDING_KEY = 'codememory-onboarded'
-
-type ViewMode = 'graph' | 'list' | 'dashboard'
 
 const BUDGET_MIN = 200
 const BUDGET_MAX = 5000
@@ -239,7 +237,7 @@ export default function App() {
   useEffect(() => { setHighlightedDirectory(null) }, [viewMode])
 
   // GraphCanvas ref for PNG export
-  const graphCanvasRef = useRef<GraphCanvasHandle>(null)
+  const graphCanvasRef = useRef<GraphCanvasHandle | null>(null)
 
   // Graph refresh trigger (increment to reload)
   const [refreshTrigger, setRefreshTrigger] = useState(0)
@@ -249,6 +247,7 @@ export default function App() {
     fetchDatasets()
       .then((res) => {
         setDatasets(res.datasets)
+        setApiDataset(res.current_name)
         setCurrentDataset(res.current_name)
       })
       .catch((err) => showOperationError(err instanceof Error ? err.message : 'Failed to load datasets'))
@@ -261,13 +260,6 @@ export default function App() {
       setApiDataset(currentDataset)
     }
   }, [currentDataset])
-
-  // Load graph data — wait until dataset is known so the API layer
-  // can send the required X-Codememory-Dataset header.
-  useEffect(() => {
-    if (!currentDataset) return
-    fetchGraph().then(setGraphData).catch((err) => showOperationError(err instanceof Error ? err.message : 'Failed to load graph'))
-  }, [refreshTrigger, currentDataset])
 
   // Handle dataset switching (must be defined before R7-settings effects that reference it)
   const handleSwitchDataset = useCallback(
@@ -289,6 +281,7 @@ export default function App() {
           setResolveData(null)
           setResolveError(null)
           setAllNodesFit(false)
+          setGraphData(null)
         })
         .catch((err) => {
           // Revert the API-layer dataset on failure so the UI doesn't
@@ -652,405 +645,40 @@ export default function App() {
         fontFamily: 'Raleway, sans-serif',
       }}
     >
-      {/* Header */}
-      <header
-        style={{
-          padding: '16px 24px',
-          backgroundColor: 'var(--cm-bg-primary)',
-          borderBottom: '1px solid var(--cm-border)',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 16,
-          flexShrink: 0,
-          overflowX: 'auto',
+      <AppHeader
+        viewMode={viewMode}
+        onViewModeChange={setViewMode}
+        onCreateMemory={handleOpenCreate}
+        datasets={datasets}
+        currentDataset={currentDataset}
+        datasetReady={Boolean(currentDataset)}
+        switchingDataset={switchingDataset}
+        onSwitchDataset={handleSwitchDataset}
+        showQuantInfo={currentDataset === 'quant_operators' && !switchingDataset}
+        searchText={searchText}
+        onSearchChange={setSearchText}
+        onSearchNavigate={(id) => {
+          setSelectedNode(id)
+          setViewMode('graph')
         }}
-      >
-        <h1
-          style={{
-            fontSize: 24,
-            fontFamily: "'Cormorant Garamond', serif",
-            fontWeight: 500,
-            color: 'var(--cm-text-primary)',
-            margin: 0,
-            whiteSpace: 'nowrap',
-            letterSpacing: '0.01em',
-          }}
-        >
-          CodeMemory
-        </h1>
-
-        {/* New Memory button */}
-        <button
-          onClick={handleOpenCreate}
-          style={{
-            padding: '6px 18px',
-            backgroundColor: 'var(--cm-accent)',
-            color: 'var(--cm-text-inverse)',
-            border: 'none',
-            cursor: 'pointer',
-            fontSize: 12,
-            fontWeight: 600,
-            fontFamily: 'Raleway, sans-serif',
-            textTransform: 'uppercase',
-            letterSpacing: '0.08em',
-            borderRadius: 2,
-            whiteSpace: 'nowrap',
-            flexShrink: 0,
-          }}
-        >
-          Create Memory
-        </button>
-
-        {/* View switcher: Graph / Dashboard */}
-        <div
-          style={{
-            display: 'flex',
-            borderRadius: 2,
-            border: '1px solid var(--cm-border-cool)',
-            overflow: 'hidden',
-            flexShrink: 0,
-          }}
-        >
-          <button
-            onClick={() => setViewMode('graph')}
-            title="Graph view (keyboard: 1)"
-            style={{
-              padding: '6px 20px',
-              border: 'none',
-              cursor: 'pointer',
-              fontSize: 12,
-              fontFamily: 'Raleway, sans-serif',
-              fontWeight: 600,
-              textTransform: 'uppercase',
-              letterSpacing: '0.08em',
-              backgroundColor: viewMode === 'graph' ? 'var(--cm-text-primary)' : 'transparent',
-              color: viewMode === 'graph' ? 'var(--cm-text-inverse)' : 'var(--cm-text-secondary)',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6,
-            }}
-          >
-            Graph<span style={{ fontSize: 12, opacity: 0.55, letterSpacing: 0 }}>1</span>
-          </button>
-          <button
-            onClick={() => setViewMode('list')}
-            title="List view (keyboard: 2)"
-            style={{
-              padding: '6px 20px',
-              border: 'none',
-              cursor: 'pointer',
-              fontSize: 12,
-              fontFamily: 'Raleway, sans-serif',
-              fontWeight: 600,
-              textTransform: 'uppercase',
-              letterSpacing: '0.08em',
-              backgroundColor: viewMode === 'list' ? 'var(--cm-text-primary)' : 'transparent',
-              color: viewMode === 'list' ? 'var(--cm-text-inverse)' : 'var(--cm-text-secondary)',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6,
-            }}
-          >
-            List<span style={{ fontSize: 12, opacity: 0.55, letterSpacing: 0 }}>2</span>
-          </button>
-          <button
-            onClick={() => setViewMode('dashboard')}
-            title="Dashboard view (keyboard: 3)"
-            style={{
-              padding: '6px 20px',
-              border: 'none',
-              cursor: 'pointer',
-              fontSize: 12,
-              fontFamily: 'Raleway, sans-serif',
-              fontWeight: 600,
-              textTransform: 'uppercase',
-              letterSpacing: '0.08em',
-              backgroundColor: viewMode === 'dashboard' ? 'var(--cm-text-primary)' : 'transparent',
-              color: viewMode === 'dashboard' ? 'var(--cm-text-inverse)' : 'var(--cm-text-secondary)',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6,
-            }}
-          >
-            Dashboard<span style={{ fontSize: 12, opacity: 0.55, letterSpacing: 0 }}>3</span>
-          </button>
-        </div>
-
-        {/* Dataset switcher */}
-        {datasets.length > 1 && (
-          <select
-            value={currentDataset}
-            onChange={(e) => handleSwitchDataset(e.target.value)}
-            disabled={switchingDataset}
-            title="Stats, validation, and reindex apply to the selected dataset"
-            style={{
-              padding: '4px 8px',
-              border: '1px solid var(--cm-border-cool)',
-              borderRadius: 2,
-              fontSize: 12,
-              fontWeight: 600,
-              fontFamily: 'Raleway, sans-serif',
-              color: 'var(--cm-text-primary)',
-              backgroundColor: switchingDataset ? 'var(--cm-bg-subtle)' : 'var(--cm-bg-surface)',
-              cursor: 'pointer',
-              flexShrink: 0,
-              outline: 'none',
-            }}
-          >
-            {datasets.map((ds) => (
-              <option key={ds.name} value={ds.name}>
-                {ds.name} ({ds.memory_count})
-              </option>
-            ))}
-          </select>
-        )}
-        {switchingDataset && (
-          <span style={{ fontSize: 12, color: 'var(--cm-text-tertiary)', fontFamily: 'Raleway, sans-serif' }}>
-            Switching...
-          </span>
-        )}
-{/* R8-quant-disclaimer: condensed to an info icon tooltip so it
-            doesn't compete for header space with SearchBar and right-side controls.
-            The full text is only visible on hover/focus. */}
-        {currentDataset === 'quant_operators' && !switchingDataset && (
-          <span
-            title="Auto-generated API documentation. Dependency graph reflects algorithmic inference, not human-authored links."
-            aria-label="Dataset info"
-            style={{
-              fontSize: 14,
-              lineHeight: 1,
-              color: 'var(--cm-text-tertiary)',
-              cursor: 'help',
-              flexShrink: 0,
-              userSelect: 'none',
-            }}
-          >
-            ⓘ
-          </span>
-        )}
-
-        <div style={{ flex: 1 }}>
-          {(viewMode === 'graph' || viewMode === 'list') && (
-            <SearchBar
-              value={searchText}
-              onChange={setSearchText}
-              onNavigate={(id) => {
-                setSelectedNode(id)
-                setViewMode('graph')
-              }}
-              onResolve={(id) => {
-                setSelectedNode(id)
-                setViewMode('graph')
-                // R13-D1: wait for GraphCanvas to mount before triggering resolve
-                setTimeout(() => doResolve(id, budget), 100)
-              }}
-            />
-          )}
-        </div>
-
-        {/* Token Budget + Node Size + Layout toggle — only in graph view */}
-        {viewMode === 'graph' && (
-          <>
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 6,
-                flexShrink: 0,
-              }}
-            >
-              <label
-                style={{
-                  fontSize: 12,
-                  fontWeight: 600,
-                  fontFamily: 'Raleway, sans-serif',
-                  color: 'var(--cm-text-secondary)',
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.08em',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                Zoom
-              </label>
-              <input
-                type="range"
-                min={0.15}
-                max={2.0}
-                step={0.05}
-                value={zoomLevel}
-                onChange={(e) => setZoomLevel(Number(e.target.value))}
-                style={{
-                  width: 100,
-                  accentColor: 'var(--cm-accent)',
-                  cursor: 'pointer',
-                }}
-              />
-            </div>
-
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
-                flexShrink: 0,
-              }}
-            >
-              <label
-                style={{
-                  fontSize: 12,
-                  fontWeight: 600,
-                  fontFamily: 'Raleway, sans-serif',
-                  color: 'var(--cm-text-secondary)',
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.08em',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                Budget
-              </label>
-              <input
-                type="range"
-                min={BUDGET_MIN}
-                max={BUDGET_MAX}
-                step={100}
-                value={budget}
-                onChange={(e) => handleBudgetChange(Number(e.target.value))}
-                style={{
-                  width: 120,
-                  accentColor: 'var(--cm-accent)',
-                  cursor: 'pointer',
-                }}
-              />
-              <span
-                style={{
-                  fontSize: 12,
-                  fontFamily: 'JetBrains Mono, monospace',
-                  color: 'var(--cm-text-primary)',
-                  minWidth: 40,
-                  textAlign: 'right',
-                }}
-              >
-                {budget}
-              </span>
-            </div>
-
-          </>
-        )}
-
-        {/* Theme toggle button (R7-dark-mode) */}
-        <button
-          onClick={() => handleThemeChangeFromSettings(activeTheme === 'dark' ? 'light' : 'dark')}
-          title={`Current: ${activeTheme}. Click to toggle.`}
-          style={{
-            padding: '6px 10px',
-            backgroundColor: 'transparent',
-            color: 'var(--cm-text-secondary)',
-            border: '1px solid var(--cm-border-cool)',
-            cursor: 'pointer',
-            fontSize: 16,
-            fontFamily: 'Raleway, sans-serif',
-            borderRadius: 2,
-            whiteSpace: 'nowrap',
-            flexShrink: 0,
-            lineHeight: 1,
-            marginLeft: 'auto',
-          }}
-        >
-          {activeTheme === 'dark' ? '☀' : '☽'}
-        </button>
-
-        {/* Export PNG button (R8-png-export-ui) — only in graph view */}
-        {viewMode === 'graph' && (
-          <button
-            onClick={() => graphCanvasRef.current?.exportPng()}
-            title="Export graph as PNG image"
-            style={{
-              padding: '6px 14px',
-              backgroundColor: 'transparent',
-              color: 'var(--cm-text-secondary)',
-              border: '1px solid var(--cm-border-cool)',
-              cursor: 'pointer',
-              fontSize: 12,
-              fontWeight: 600,
-              fontFamily: 'Raleway, sans-serif',
-              textTransform: 'uppercase',
-              letterSpacing: '0.08em',
-              borderRadius: 2,
-              whiteSpace: 'nowrap',
-              flexShrink: 0,
-            }}
-          >
-            PNG
-          </button>
-        )}
-
-        {/* Export button (R7-export) */}
-        <button
-          onClick={downloadExport}
-          title="Export all memories as .zip"
-          style={{
-            padding: '6px 14px',
-            backgroundColor: 'transparent',
-            color: 'var(--cm-text-secondary)',
-            border: '1px solid var(--cm-border-cool)',
-            cursor: 'pointer',
-            fontSize: 12,
-            fontWeight: 600,
-            fontFamily: 'Raleway, sans-serif',
-            textTransform: 'uppercase',
-            letterSpacing: '0.08em',
-            borderRadius: 2,
-            whiteSpace: 'nowrap',
-            flexShrink: 0,
-          }}
-        >
-          Export
-        </button>
-
-        {/* Settings button (R7-settings) */}
-        <button
-          onClick={() => setShowSettings(true)}
-          title="Settings"
-          style={{
-            padding: '6px 12px',
-            backgroundColor: 'transparent',
-            color: 'var(--cm-text-secondary)',
-            border: '1px solid var(--cm-border-cool)',
-            cursor: 'pointer',
-            fontSize: 18,
-            fontFamily: 'Raleway, sans-serif',
-            borderRadius: 2,
-            whiteSpace: 'nowrap',
-            flexShrink: 0,
-            lineHeight: 1,
-          }}
-        >
-          &#9881;
-        </button>
-
-        {/* Help button */}
-        <button
-          onClick={() => setShowHelp(true)}
-          title="Help"
-          style={{
-            padding: '6px 18px',
-            backgroundColor: 'var(--cm-accent)',
-            color: 'var(--cm-text-inverse)',
-            border: 'none',
-            cursor: 'pointer',
-            fontSize: 12,
-            fontWeight: 600,
-            fontFamily: 'Raleway, sans-serif',
-            textTransform: 'uppercase',
-            letterSpacing: '0.08em',
-            borderRadius: 2,
-            whiteSpace: 'nowrap',
-            flexShrink: 0,
-          }}
-        >
-          Help
-        </button>
-      </header>
+        onSearchResolve={(id) => {
+          setSelectedNode(id)
+          setViewMode('graph')
+          setTimeout(() => doResolve(id, budget), 100)
+        }}
+        zoomLevel={zoomLevel}
+        onZoomChange={setZoomLevel}
+        budget={budget}
+        budgetMin={BUDGET_MIN}
+        budgetMax={BUDGET_MAX}
+        onBudgetChange={handleBudgetChange}
+        activeTheme={activeTheme}
+        onToggleTheme={() => handleThemeChangeFromSettings(activeTheme === 'dark' ? 'light' : 'dark')}
+        onExportPng={() => graphCanvasRef.current?.exportPng()}
+        onExportMemories={downloadExport}
+        onOpenSettings={() => setShowSettings(true)}
+        onOpenHelp={() => setShowHelp(true)}
+      />
 
       {/* Network error banner (R6-network-error-feedback) with Retry (R11-UX7) */}
       {networkError && (
@@ -1170,153 +798,75 @@ export default function App() {
 
       {/* Main content */}
       <div style={{ flex: 1, display: 'flex', overflow: 'auto', position: 'relative' }}>
-        {/* Graph view — always mounted (display toggled) to preserve cytoscape */}
         <div
           style={{
             flex: 1,
-            position: 'relative',
-            overflow: 'hidden',
             display: viewMode === 'graph' ? 'flex' : 'none',
+            overflow: 'hidden',
+            position: 'relative',
           }}
         >
-          <GraphCanvas
-            ref={graphCanvasRef}
-            searchText={searchText}
-            onNodeClick={setSelectedNode}
-            onNodeContextMenu={handleContextMenu}
-            resolveData={resolveData}
-            isResolving={isResolving}
-            refreshTrigger={refreshTrigger}
-            zoomLevel={zoomLevel}
-            onGraphDataLoaded={setGraphData}
-            activeTheme={activeTheme}
-            onCreateMemory={handleOpenCreate}
-            highlightedDirectory={highlightedDirectory}
-          />
-          <Legend
-            graphData={graphData}
-            highlightedDirectory={highlightedDirectory}
-            onHighlightDirectory={setHighlightedDirectory}
-          />
-
-          {/* Resolve error toast */}
-          {resolveError && (
-            <div
-              style={{
-                position: 'absolute',
-                top: 16,
-                right: 16,
-                backgroundColor: 'var(--cm-error)',
-                color: 'var(--cm-bg-surface)',
-                padding: '8px 16px',
-                borderRadius: 2,
-                fontSize: 12,
-                fontFamily: 'Raleway, sans-serif',
-                zIndex: 15,
-                boxShadow: '0 2px 8px rgba(28,25,23,0.06)',
+          <ErrorBoundary label="Graph panel failed to render">
+            <GraphPage
+              graphCanvasRef={graphCanvasRef}
+              datasetReady={Boolean(currentDataset)}
+              searchText={searchText}
+              selectedNode={selectedNode}
+              onNodeClick={setSelectedNode}
+              onNodeContextMenu={handleContextMenu}
+              resolveData={resolveData}
+              resolveError={resolveError}
+              isResolving={isResolving}
+              refreshTrigger={refreshTrigger}
+              zoomLevel={zoomLevel}
+              graphData={graphData}
+              onGraphDataLoaded={setGraphData}
+              activeTheme={activeTheme}
+              onCreateMemory={handleOpenCreate}
+              highlightedDirectory={highlightedDirectory}
+              onHighlightDirectory={setHighlightedDirectory}
+              allNodesFit={allNodesFit}
+              onCloseDetail={handleClosePanel}
+              onResolve={handleResolve}
+              onClearResolve={handleClearResolve}
+              onNavigateMemory={(targetId: string) => {
+                setSelectedNode(targetId)
+                setResolveData(null)
+                setResolveError(null)
+                setAllNodesFit(false)
               }}
-            >
-              {resolveError}
-            </div>
-          )}
-
-          {/* Resolving indicator */}
-          {isResolving && (
-            <div
-              style={{
-                position: 'absolute',
-                top: 16,
-                left: 16,
-                backgroundColor: 'var(--cm-text-primary)',
-                color: 'var(--cm-text-inverse)',
-                padding: '6px 14px',
-                borderRadius: 2,
-                fontSize: 12,
-                fontFamily: 'Raleway, sans-serif',
-                zIndex: 15,
-                boxShadow: '0 2px 8px rgba(28,25,23,0.06)',
-              }}
-            >
-              Resolving...
-            </div>
-          )}
-
-          {/* PL1-8: Budget no-op feedback */}
-          {allNodesFit && !isResolving && resolveData && (
-            <div
-              style={{
-                position: 'absolute',
-                top: 16,
-                left: 16,
-                backgroundColor: 'var(--cm-success)',
-                color: 'var(--cm-bg-surface)',
-                padding: '6px 14px',
-                borderRadius: 2,
-                fontSize: 12,
-                fontFamily: 'Raleway, sans-serif',
-                zIndex: 15,
-                boxShadow: '0 2px 8px rgba(28,25,23,0.06)',
-              }}
-            >
-              All {resolveData.nodes.length} nodes fit within budget
-            </div>
-          )}
+              copyTrigger={copyTrigger}
+            />
+          </ErrorBoundary>
         </div>
 
-        {/* List view — shown when viewMode === 'list' */}
         {viewMode === 'list' && (
-          <div style={{ flex: 1, overflow: 'hidden' }}>
-            <MemoryList onSelectMemory={handleDashSelect} refreshTrigger={refreshTrigger} initialFilter={listFilter} onCreateMemory={handleOpenCreate} />
-          </div>
+          <ErrorBoundary label="List panel failed to render">
+            <ListPage
+              onSelectMemory={handleDashSelect}
+              refreshTrigger={refreshTrigger}
+              initialFilter={listFilter}
+              onCreateMemory={handleOpenCreate}
+            />
+          </ErrorBoundary>
         )}
 
-        {/* Dashboard view — shown when viewMode === 'dashboard' */}
         {viewMode === 'dashboard' && (
-          <div style={{ flex: 1, overflow: 'hidden' }}>
-            <Dashboard onSelectMemory={handleDashSelect} onNavigateToFilter={handleNavigateToFilter} refreshTrigger={refreshTrigger} onCreateMemory={handleOpenCreate} onError={showOperationError} />
-          </div>
-        )}
-
-        {/* Slide-in overlay panel (only in graph view) */}
-        {viewMode === 'graph' && (
-          <MemoryDetail
-            memoryId={selectedNode}
-            onClose={handleClosePanel}
-            onResolve={handleResolve}
-            onClearResolve={handleClearResolve}
-            onNavigateMemory={(targetId: string) => {
-              setSelectedNode(targetId)
-              setResolveData(null)
-              setResolveError(null)
-              setAllNodesFit(false)
-            }}
-            resolveData={resolveData}
-            resolveError={resolveError}
-            isResolving={isResolving}
-            copyTrigger={copyTrigger}
-            backlinks={(() => {
-              if (!graphData || !selectedNode) return []
-              // Compute reverse references: which nodes import selectedNode?
-              const refs: { id: string; strength: string }[] = []
-              for (const edge of graphData.edges) {
-                if (edge.data.target === selectedNode) {
-                  refs.push({ id: edge.data.source, strength: edge.data.strength })
-                }
-              }
-              // Deduplicate by ID
-              const seen = new Set<string>()
-              return refs.filter((r) => {
-                if (seen.has(r.id)) return false
-                seen.add(r.id)
-                return true
-              })
-            })()}
-          />
+          <ErrorBoundary label="Dashboard panel failed to render">
+            <DashboardPage
+              onSelectMemory={handleDashSelect}
+              onNavigateToFilter={handleNavigateToFilter}
+              refreshTrigger={refreshTrigger}
+              onCreateMemory={handleOpenCreate}
+              onError={showOperationError}
+            />
+          </ErrorBoundary>
         )}
       </div>
 
       {/* Memory form (create/edit) — fixed overlay */}
       <MemoryForm
+        datasetReady={Boolean(currentDataset)}
         show={showCreateForm}
         memoryId={formMemoryId}
         onClose={handleCloseForm}

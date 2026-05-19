@@ -109,19 +109,53 @@ export async function fetchStats(): Promise<StatsResponse> {
 }
 
 export async function fetchWander(mode: 'cool' | 'random' = 'cool'): Promise<WanderResponse> {
-  return fetcher<WanderResponse>(`${BASE}/wander`, {
+  const raw = await fetcher<unknown>(`${BASE}/wander`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ mode }),
   })
+  if (raw && typeof raw === 'object' && 'result' in raw && typeof (raw as { result?: unknown }).result === 'string') {
+    return {
+      id: '',
+      type: 'atom',
+      summary: (raw as { result: string }).result,
+      tags: [],
+      intensity: 0,
+      access_count: 0,
+      last_access: null,
+      status: 'active',
+      maturity: 'draft',
+      days_since_last_access: null,
+      stability: undefined,
+    }
+  }
+  return raw as WanderResponse
 }
 
 export async function fetchValidate(): Promise<ValidateResponse> {
-  return fetcher<ValidateResponse>(`${BASE}/validate`, {
+  const raw = await fetcher<unknown>(`${BASE}/validate`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: '{}',
   })
+  if (Array.isArray(raw)) {
+    return {
+      validated_count: 0,
+      error_count: Number(raw[0] ?? 0),
+      warning_count: Number(raw[1] ?? 0),
+      errors: [],
+      warnings: [],
+    }
+  }
+
+  const body = (raw ?? {}) as Partial<ValidateResponse>
+  return {
+    validated_count: Number(body.validated_count ?? 0),
+    error_count: Number(body.error_count ?? 0),
+    warning_count: Number(body.warning_count ?? 0),
+    errors: Array.isArray(body.errors) ? body.errors : [],
+    warnings: Array.isArray(body.warnings) ? body.warnings : [],
+  }
 }
 
 export async function createMemory(req: CreateMemoryRequest): Promise<Record<string, unknown>> {

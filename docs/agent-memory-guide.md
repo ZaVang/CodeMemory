@@ -1,8 +1,8 @@
 # Agent Memory Guide — 记忆操作决策树
 
 > **Status note**  
-> 本文目前更接近 Work Layer 的早期使用指南，而不是 Core 规范本身。  
-> 自 2026-05-18 起，Core / Layer 的正式边界见 `docs/architecture.md`；本文后续应收敛为 Work Layer Guide。
+> 本文是 Work Layer 的 agent 操作指南草案，不是 Core 规范本身。
+> Core / Layer / Source Artifact / ContextPack 的正式边界见 `docs/architecture.md`。
 
 在对话中自主创建和维护记忆时，按以下决策树选择正确的参数和依赖强度。
 
@@ -16,13 +16,19 @@ CodeMemory 有两种记忆类型：
 
 **所有非模板记忆都是 atom。** 角色通过 `imports`、`schema`、`tags`、目录来表达，不靠 type 字段区分。
 
-**何时使用：** 任何需要记住的知识、偏好、决策、事件、事实、上下文包——全部用 atom。
+**何时使用：** 任何需要长期复用、可独立引用的知识、偏好、决策、事实、流程、约束、上下文入口——用 atom。
 
 - 用户的偏好或习惯："用户偏好长期持有"
 - 一个外部知识点："VIX 指数是恐慌指数"
 - 一个约束条件："不使用杠杆"
 - 一次具体的买入/卖出决策（有 schema 时带上 `--schema` 参数）
 - 将多个关联记忆打包的上下文入口（用 `imports` 引用被包含的记忆）
+
+**不要把长文档整体塞进 atom。** 长 Markdown、会议记录、设计文档、代码文件、PDF、URL 等原始材料应作为 Source Artifact 保存；atom 只保存语义索引、长期结论或可执行事实。典型结构是：
+
+```text
+Source Artifact → Anchor Atom → Derived Atoms
+```
 
 **有 schema 的 atom：** 当一个记忆需要依附某个结构模板（如 `schemas/decision`），使用 `--schema` 参数声明。这和旧版的 `instance` 概念对应，但现在类型统一为 atom。
 
@@ -53,10 +59,9 @@ codememory create --id user/investment/new-decision --schema schemas/decision --
 | `user/observations/` | 观察到的现象、事件（当时可能不知道原因） | `user/observations/soxl-drop-march` |
 | `user/preferences/` | 偏好、约束、习惯（关于用户的） | `user/preferences/no-leverage` |
 | `user/decisions/` | 具体的决策/行动（有 schema 时带上 `--schema`） | `user/decisions/february-buy` |
-| `user/feelings/` | 情绪状态、心理觉察（陪伴模式） | `user/feelings/burnout-april` |
-| `user/people/` | 用户生活中的重要人物（陪伴模式） | `user/people/best-friend-li` |
-| `user/beliefs/` | 价值观、人生观、投资主线判断 | `user/beliefs/semiconductor-thesis` |
-| `user/moments/` | 具体的生活事件、经历（陪伴模式） | `user/moments/rainy-sunday` |
+| `user/principles/` | 长期原则、判断框架、投资/工程主线 | `user/principles/semiconductor-thesis` |
+| `user/processes/` | 操作流程、检查清单、排障步骤 | `user/processes/release-checklist` |
+| `user/contexts/` | 给 agent 使用的上下文入口 | `user/contexts/investment-review` |
 | `user/snapshots/` | snapshot 命令固化的推理链 | `user/snapshots/2026-04-28-止盈分析` |
 | `api/` | API 文档等外部结构化知识 | `api/quantexpr/sharpe` |
 | `schemas/` | 模板定义（仅 schema 类型） | `schemas/decision` |
@@ -66,7 +71,7 @@ codememory create --id user/investment/new-decision --schema schemas/decision --
 2. **tags 区分"主题"** — 这跟什么有关（`["semiconductor"]`、`["investment"]`）
 3. **不要在目录里按主题再分子文件夹** — 一个 fact 可能同时涉及半导体和市场，放 `user/facts/semiconductor/` 还是 `user/facts/market/`？tags 天然支持交叉，目录不支持
 4. **不确定时默认 `user/facts/`** — 最通用的种类
-5. **陪伴模式用 `feelings/``people/``beliefs/``moments/`** — 见 `companion-mode.md`
+5. **陪伴型目录不属于 v1 默认 Work Layer** — 相关探索见 `docs/reference/companion-mode.md`。
 
 ---
 

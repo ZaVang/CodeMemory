@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import logging
 import random
+import io
+from contextlib import redirect_stdout
 from datetime import date, datetime
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Body, HTTPException
 
 from shared import (
     DEFAULT_DATASET,
@@ -23,7 +25,6 @@ from shared import (
     serialize,
     stale_check,
 )
-from codememory.handlers import handle_wander
 from codememory.validate import validate
 
 _logger = logging.getLogger("codememory.router.stats")
@@ -95,9 +96,49 @@ def get_stats():
 # ---------------------------------------------------------------------------
 
 @router.post("/wander")
-def post_wander():
-    result = handle_wander(root=get_root(), mode="cool")
-    return serialize({"result": result})
+def post_wander(payload: dict[str, Any] | None = Body(default=None)):
+    mode = (payload or {}).get("mode", "cool")
+    index = load_cm_index()
+    candidates = list(index.memories.items())
+    if not candidates:
+        raise HTTPException(status_code=404, detail="No memories found")
+
+    if mode == "cool":
+        cool_candidates = [
+            (mid, entry)
+            for mid, entry in candidates
+            if getattr(entry, "intensity", 5) < 8
+        ] or candidates
+
+        weights: list[float] = []
+        for _mid, entry in cool_candidates:
+            stability = max(getattr(entry, "stability", 14.0), 0.1)
+            days_since = getattr(entry, "days_since_last_access", None)
+            access_count = getattr(entry, "access_count", 0)
+            if access_count > 0 and days_since is not None:
+                # Same effective weighting used by codememory.handlers.handle_wander.
+                decay = 0.5 ** (max(0, days_since) / stability)
+                weight = 1.0 / (access_count * decay + 1)
+            else:
+                weight = 1.0
+            weights.append(weight)
+        memory_id, entry = random.choices(cool_candidates, weights=weights, k=1)[0]
+    else:
+        memory_id, entry = random.choice(candidates)
+
+    return serialize({
+        "id": memory_id,
+        "type": entry.type,
+        "summary": entry.summary,
+        "tags": entry.tags,
+        "intensity": entry.intensity,
+        "access_count": entry.access_count,
+        "last_access": entry.last_access,
+        "status": entry.status,
+        "maturity": entry.maturity,
+        "days_since_last_access": entry.days_since_last_access,
+        "stability": entry.stability,
+    })
 
 
 # ---------------------------------------------------------------------------
@@ -107,10 +148,51 @@ def post_wander():
 @router.post("/validate")
 def post_validate():
     try:
-        result = validate(get_root())
-        return serialize(result)
+        index = load_cm_index()
+        output = io.StringIO()
+        with redirect_stdout(output):
+            error_count, warning_count = validate(get_root())
+        errors, warnings = _parse_validate_output(output.getvalue())
+        return serialize({
+            "validated_count": len(index.memories),
+            "error_count": error_count,
+            "warning_count": warning_count,
+            "errors": errors,
+            "warnings": warnings,
+        })
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+def _parse_validate_output(text: str) -> tuple[list[dict[str, str]], list[dict[str, str]]]:
+    errors: list[dict[str, str]] = []
+    warnings: list[dict[str, str]] = []
+
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        if line.startswith("[ERROR]"):
+            message = line.removeprefix("[ERROR]").strip()
+            issue_type = "schema_compliance" if "schema compliance" in message else "broken_link"
+            errors.append({"type": issue_type, "message": message})
+        elif line.startswith("[WARNING]"):
+            warnings.append({
+                "type": "circular_dependency",
+                "message": line.removeprefix("[WARNING]").strip(),
+            })
+        elif line.startswith("[MATURITY-WARN]"):
+            warnings.append({
+                "type": "maturity",
+                "message": line.removeprefix("[MATURITY-WARN]").strip(),
+            })
+        elif line.startswith("[DECAY-WARN]"):
+            warnings.append({
+                "type": "decay",
+                "message": line.removeprefix("[DECAY-WARN]").strip(),
+            })
+
+    return errors, warnings
 
 
 # ---------------------------------------------------------------------------

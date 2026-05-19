@@ -244,6 +244,44 @@ codememory resolve user/investment/context --depth full --budget 2000
 
 ---
 
+### context-pack — 结构化 agent handoff 上下文包
+
+```bash
+codememory context-pack user/investment/context
+codememory context-pack user/investment/context --format json --budget 2000
+codememory context-pack user/investment/context --format markdown --task-goal "Review this project before coding"
+```
+
+**做什么**：生成可直接交给 agent / harness 的结构化上下文包。Core contract 是 `ContextPack` JSON/Pydantic 对象；XML / Markdown 只是 renderer。
+
+**支持格式**：
+- `xml-markdown`（默认）：XML tags 标定边界，正文用 Markdown/CDATA，适合直接复制给 LLM agent。
+- `json`：机器传输格式，适合 SDK、API、MCP、workflow runtime。
+- `markdown` / `plain-markdown`：人类可读 handoff。
+
+**REST API**：
+
+```http
+POST /api/context-pack
+X-Codememory-Dataset: investment
+
+{
+  "id": "user/investment/context",
+  "depth": "recommended",
+  "budget": 2000,
+  "format": "xml-markdown",
+  "task_goal": "Use this as agent handoff context."
+}
+```
+
+响应包含：
+
+- `pack`：结构化 ContextPack；
+- `rendered`：按 `format` 渲染后的字符串；
+- `target` / `format`：便于 adapter 直接路由。
+
+---
+
 ### search — 检索记忆
 
 ```bash
@@ -685,4 +723,4 @@ async def main():
 asyncio.run(main())
 ```
 
-For a complete working example, see [`examples/example_agent.py`](examples/example_agent.py).
+For a complete working example, see [`examples/example_agent.py`](../examples/example_agent.py).

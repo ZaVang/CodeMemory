@@ -1,33 +1,31 @@
 # CodeMemory Architecture
 
 > **Architecture thesis**
-> CodeMemory 的正式架构不再是“一个带若干拟人特性的记忆工具”，而是：
-> **中立的 Core + 声明式 Layer Profiles + Memory Compiler + 多种 Adapters**。
+> CodeMemory 的核心架构是：**Source Artifact Registry + Atom Graph + Progressive ContextPack + Thin Adapters**。
+> Core 负责可靠表示和装配工作记忆；Layer 负责场景策略；Compiler 负责迁移；Adapters 负责接入。
 
-**最后更新**：2026-05-18
-**适用版本**：v1 / Work Layer first
+**最后更新**：2026-05-19
+**状态**：canonical / v1 Work Layer first
 
 ---
 
-## 1. 设计原则
+## 1. 架构决策
 
-1. **Core neutral, layers opinionated**
-   Core 只定义稳定机制；Layer 负责场景判断。
+### 1.1 v1 Core 不追求“像人”
 
-2. **Dependency resolution before semantic retrieval**
-   对工作记忆而言，先保证依赖完整，再谈搜索丰富。
+v1 的底层目标是可靠工作记忆，不是陪伴体验。拟人化记忆、遗忘、情绪权重、亲密度等能力可以在未来 Companion Layer 中定义，但不能污染 Core contract。
 
-3. **One memory model, many products**
-   同一底层可以支撑 Work Layer，也可以支撑未来 Companion Layer。
+### 1.2 Atomization 是语义边界
 
-4. **Thin adapters**
-   CLI、API、MCP、SDK、UI 都只暴露能力，不私自扩展语义。
+Atom 是可独立引用的语义记忆，不是任意文本块。长文档、代码文件、设计稿、会议记录等原文应进入 Source Artifact Registry，再由 Anchor Atom 和 Derived Atoms 表达其可复用语义。
 
-5. **Migration by compilation**
-   迁移不是搬运旧文件，而是把既有资料编译成可审阅、可追溯的 draft memory graph。
+### 1.3 Source provenance 是一等能力
 
-6. **Portability by construction**
-   纯文本、可审计、可移植、可版本控制，是架构默认值。
+每条重要 atom 应能追溯到 source。Source 不只是 metadata 字段，而是可被登记、校验、展开和迁移的 artifact。
+
+### 1.4 ContextPack 是 agent handoff 的主协议
+
+`resolve` 的历史价值是把 imports DAG 拼成上下文；新的主协议是 ContextPack：它既包含 memory graph，也包含 source_refs、budget、disclosure level 和 notices。
 
 ---
 
@@ -36,415 +34,406 @@
 ```text
 ┌──────────────────────────────────────────────────────────────┐
 │                        Layer Profiles                         │
-│   Work Layer (v1)        Companion Layer (future)        ...  │
-│   policies / schemas / directories / recall / validation      │
+│ Work Layer (v1): directories / schemas / recall / retention   │
+│ Companion Layer (future): timing / affect / forgetting        │
 ├──────────────────────────────────────────────────────────────┤
 │                         CodeMemory Core                        │
-│ format / ids / atom+schema / imports DAG / resolve / lifecycle │
-│ versioning / validation / index / audit / access primitives    │
+│ Atom Graph / Source Artifact Registry / ContextPack Builder   │
+│ index / validate / lifecycle / audit / access primitives      │
 ├──────────────────────────────────────────────────────────────┤
 │                       Memory Compiler                         │
-│ ingest / segment / propose / dedupe / review / materialize     │
+│ ingest sources / propose anchors+atoms / review / materialize │
 ├──────────────────────────────────────────────────────────────┤
 │                            Adapters                           │
-│      CLI       Python SDK       MCP       REST API       UI    │
+│ CLI / Python SDK / MCP / REST API / UI / Harness tools         │
 └──────────────────────────────────────────────────────────────┘
 ```
 
 ### 2.1 Core
 
-Core 是跨场景稳定不变的部分：
+Core 只定义跨场景稳定的机制：
 
-- Markdown + YAML frontmatter 文件格式；
-- `atom` 与 `schema` 两种基础类型；
-- 路径式 ID；
-- 状态、版本、来源、哈希；
-- `imports.required / recommended / related`；
-- DAG 构建、循环检测、拓扑排序、预算裁剪；
-- 索引、校验、更新、审计；
-- 访问统计等通用观测信号。
+- `atom` / `schema`；
+- Source Artifact / Source Ref；
+- imports DAG；
+- index / validate / lifecycle / audit；
+- ContextPack assembly；
+- budget 与 progressive disclosure；
+- adapter 共享 handlers。
+
+Core 不决定“什么值得记”。这属于 Layer Profile。
 
 ### 2.2 Layer Profile
 
-Layer Profile 是对 Core 的声明式解释层。它定义：
+Layer Profile 是声明式策略层，定义：
 
-- 命名空间与目录约定；
+- 目录和 namespace；
 - 默认 schema；
-- 允许的边语义；
 - 写入门槛；
+- imports 语义；
 - 召回策略；
-- 生命周期和保留/遗忘策略；
-- 校验增强规则；
+- lifecycle / retention；
+- source 展开策略；
 - UI 呈现偏好。
 
-**重点**：Layer 不是新的存储引擎，而是策略表。
-不同 layer 可以共享 Core，却表现为不同产品。
+v1 官方 profile 是 Work Layer。Companion Layer 是未来 profile。
 
 ### 2.3 Memory Compiler
 
-Memory Compiler 是把**既有资料**转成 CodeMemory graph 的生成链路。
-它横跨 Layer 与 Core，但不改变两者边界：
-
-- Layer 决定什么样的记忆值得被提议；
-- LLM 负责理解原始材料并生成 proposal；
-- Core 负责校验、版本化、落盘和保真。
-
-默认迁移流：
-
-```text
-source corpus
-  ↓
-ingest
-  ↓
-segment
-  ↓
-llm propose atoms / schemas / imports
-  ↓
-dedupe + conflict detection
-  ↓
-review set
-  ↓
-materialize canonical memories
-```
-
-v1 首个正式支持的 source corpus 是 Markdown。
+Compiler 负责把已有材料迁移成可审阅 memory graph。它调用 LLM 做 proposal，但不绕过 Core 校验和 review。
 
 ### 2.4 Adapters
 
-Adapters 负责让外部系统调用同一套语义：
+Adapters 只暴露能力：
 
-- CLI：本地脚本与手工操作；
-- Python SDK：程序内嵌；
-- MCP：agent 工具调用；
-- REST API：Web 后端；
-- UI：人类浏览与维护；
-- Harness / Sandbox：agent runtime 集成。
+- CLI；
+- Python SDK；
+- MCP；
+- REST API；
+- Operator UI；
+- agent harness tools。
 
-Adapter 必须遵守：
-
-1. 不复制业务语义；
-2. 不偷偷改变 layer 规则；
-3. 同名操作在不同 adapter 下应保持一致输入输出契约。
+Adapter 不应复制 Core 逻辑，也不应私自扩展 memory semantics。
 
 ---
 
 ## 3. Core 数据模型
 
-### 3.1 Memory Types
+### 3.1 Atom
 
-#### `atom`
+Atom 是长期工作记忆的基本语义单元。它可以表示：
 
-通用记忆单元。
-事实、决策、流程、上下文包、复盘，默认都用 `atom` 表示。
+- 事实；
+- 决策；
+- 约束；
+- 流程；
+- 复盘；
+- 上下文入口；
+- 对 Source Artifact 的 anchor。
 
-#### `schema`
-
-结构模板。
-定义某类 atom 所需字段，但自身不是业务记忆。
-
-> 早期文档中的 `instance` 与 `composite`，在当前正式模型中都应视为 **atom 的角色差异**，而不是独立类型：
->
-> - 带 `schema` 的 atom = 旧语义里的 instance；
-> - 带 `imports`、用于打包上下文的 atom = 旧语义里的 composite。
-
-### 3.2 Core Fields
-
-Core 负责理解的基础字段包括：
-
-- `type`
-- `id`
-- `summary`
-- `status`
-- `created`
-- `updated`
-- `version`
-- `tags`
-- `source`
-- `summary_hash`
-- `schema`
-- `imports`
-
-扩展字段允许由 Layer 使用，但只有被 Core 声明支持的字段，才具有跨 adapter 的稳定语义。
-
-### 3.3 Imports
+核心字段：
 
 ```yaml
+type: atom
+id: project/architecture/context
+summary: Stable one-line meaning
+status: active
+created: 2026-05-19
+updated: 2026-05-19
+tags: [architecture, context]
+schema: schemas/decision        # optional
 imports:
   required: []
   recommended: []
   related: []
+source_refs: []                 # planned canonical field
 ```
 
-Core 只保证：
+### 3.2 Schema
 
-- 三种边的存储；
-- resolve 时的加载优先级；
-- required 的强约束行为；
-- 循环与断链的校验。
-
-Layer 才负责解释：
-
-- 某类场景里什么算 required；
-- related 是“主题相关”还是“情感联想”；
-- 是否允许更弱、更强或更特殊的边规则。
-
----
-
-## 4. Layer Profile 规范
-
-Layer Profile 采用声明式定义，概念上类似：
+Schema 定义某类 atom 的结构，不是业务记忆本体。
 
 ```yaml
-id: work
-title: Work Layer
-
-namespaces:
-  - work
-  - schemas
-
-directories:
-  facts: "稳定事实"
-  decisions: "决策与理由"
-  constraints: "长期约束"
-  processes: "流程与手册"
-  contexts: "主题入口"
-  learnings: "复盘与经验"
-
-edge_semantics:
-  required: "缺少它会误解当前记忆"
-  recommended: "有助于理解，但不是前提"
-  related: "同域相关，可用于探索"
-
-defaults:
-  write_threshold: "durable_work_value"
-  recall_mode: "deterministic"
-  retention_policy: "preserve_unless_explicitly_archived"
-
-validation:
-  require_summary: true
-  require_change_note_on_update: true
-  forbid_cycle: true
+type: schema
+id: schemas/decision
+fields:
+  - name: decision
+    required: true
 ```
 
-### 4.1 Work Layer
+### 3.3 Source Artifact
 
-Work Layer 的默认姿态：
+Source Artifact 是原文或外部材料的 registry entry，不是 atom。
 
-- **写入更谨慎**：只保留有长期工作价值的东西；
-- **召回更可靠**：优先完整、稳定、可解释；
-- **保留更强**：对重要判断与约束默认不轻易遗忘；
-- **结构更明确**：鼓励 schema、依赖、状态、审计。
+建议 contract：
 
-### 4.2 Companion Layer
+```yaml
+id: src/project-architecture-md
+kind: markdown                  # markdown | code | text | pdf | url | external
+uri: docs/architecture.md
+sha256: "..."
+title: CodeMemory Architecture
+summary: Canonical architecture document
+when_to_read: Read before changing core contracts.
+sections:
+  - id: progressive-disclosure
+    title: Progressive Disclosure
+    selector: "## 4. Progressive Disclosure"
+status: active                  # active | archived | missing | stale
+created: 2026-05-19
+updated: 2026-05-19
+metadata: {}
+```
 
-Companion Layer 的默认姿态将明显不同：
-
-- 写入门槛更低；
-- 允许更松散的联想边；
-- 时间、情绪、亲密度可能参与召回；
-- “没有被想起”本身也可以是策略的一部分；
-- 隐私、同意、敏感度会更靠前。
-
-这说明 Companion 不是 Core 的一组“小功能”，而是一个正式的 Layer Profile。
-
----
-
-## 5. 数据流
-
-### 5.1 写入流
+Storage recommendation:
 
 ```text
-request
-  ↓
-adapter normalize
-  ↓
-layer policy check
-  ↓
-core create/update
-  ↓
-validate + index refresh + audit
-  ↓
-result
+.codememory/
+  index.json
+  log.md
+  sources/
+    index.json
 ```
 
-职责划分：
+原始文件可以继续留在原路径；registry 只保存引用、hash、摘要和结构化 anchors。
 
-- Adapter：把外部请求变成标准调用；
-- Layer：判断“该不该这样记”；
-- Core：保证“写进去后是正确且一致的”。
+### 3.4 Source Ref
 
-### 5.2 召回流
+Source Ref 是 atom 或 ContextPack 指向 artifact 的引用。
+
+```yaml
+source_refs:
+  - artifact_id: src/project-architecture-md
+    section_id: progressive-disclosure
+    range: null
+    summary: Progressive disclosure policy for context assembly.
+    disclosure_hint: excerpt     # anchor | excerpt | full
+```
+
+关键边界：
+
+| 关系 | 含义 | 是否进入 imports DAG |
+|---|---|---|
+| `imports.required` | 理解当前 atom 必须先理解的 atom | 是 |
+| `imports.recommended` | 有助于理解的 atom | 是 |
+| `imports.related` | 相关但非前提的 atom | 可选 |
+| `source_refs` | provenance 或可展开原文 | 默认否 |
+
+---
+
+## 4. Progressive Memory Disclosure
+
+Context assembly 不应该默认把所有可得文本塞进 prompt，而应按层展开。
+
+| Level | 名称 | 内容 | 默认用途 |
+|---|---|---|---|
+| L0 | Index Card | id、summary、tags、status、heat | 搜索候选、列表、粗筛 |
+| L1 | Atom / Anchor | atom summary、body、imports、source_refs | 默认 ContextPack |
+| L2 | Focused Excerpt | source section、range、derived atoms | 任务需要原文细节 |
+| L3 | Full Artifact | 完整原文 | 明确要求或预算允许 |
+
+默认策略：
 
 ```text
-query / target id
-  ↓
-adapter normalize
-  ↓
-layer recall policy
-  ↓
-core resolve / search
-  ↓
-ordered context bundle
-  ↓
-adapter render
+context_pack(target, disclosure_level=1, include_sources="anchor")
 ```
 
-Work Layer 的典型召回路径：
+只有在以下情况展开到 L2 / L3：
 
-1. 找到目标 memory / context；
-2. 按 `imports` 构建 DAG；
-3. 拓扑排序；
-4. 按预算进行全文 / summary 降级；
-5. 输出可解释、顺序稳定的上下文。
+- 用户或 agent 明确请求；
+- ContextPack notice 指出 source 需要展开；
+- task_goal 与 source section 高度相关；
+- budget 允许且 layer policy 允许。
 
-### 5.3 迁移流
+---
+
+## 5. Context Assembly
+
+### 5.1 ContextPack Contract
+
+ContextPack 是结构化对象，render 只是输出格式。
+
+核心字段：
+
+```yaml
+format_version: context-pack/v1
+target_id: user/project/context
+task_goal: optional string
+budget:
+  requested: 3000
+  estimated: 1800
+disclosure:
+  level: 1
+  include_sources: anchor
+nodes:
+  - id: user/project/fact
+    type: atom
+    summary: ...
+    body: ...
+    source_refs: []
+source_refs:
+  - artifact_id: src/...
+    disclosure_level: 1
+notices:
+  - severity: warning
+    code: budget_exceeded
+```
+
+Render targets:
+
+- XML-tagged Markdown；
+- plain Markdown；
+- JSON。
+
+### 5.2 Resolve Compatibility
+
+`resolve` 继续保留，但定位应下沉为兼容入口。
+
+目标演进：
 
 ```text
-markdown corpus
-  ↓
-source preservation
-  ↓
-compiler segmentation
-  ↓
-llm proposals
-  ↓
-layer policy review
-  ↓
-core validation
-  ↓
-review UI / CLI
-  ↓
-canonical graph
+resolve(id) ≈ render_context_pack(build_context_pack(id), format="plain-markdown")
 ```
 
-迁移流的硬约束：
+这能避免 CLI、REST、MCP 各自维护不同拼装逻辑。
 
-1. 原始文档默认保留，不被静默重写；
-2. 自动生成结果默认是 draft / proposal；
-3. 每条正式记忆都能追溯到 source；
-4. dedupe、conflict、断链、循环必须在 materialize 前暴露；
-5. “编译成功”不等于“已经成为 canonical truth”。
+### 5.3 Source Expansion
 
----
-
-## 6. Core 与 Layer 的边界
-
-| 能力 | Core | Layer |
-|------|------|-------|
-| 文件格式 | ✅ | |
-| atom / schema | ✅ | |
-| ID / version / lifecycle | ✅ | |
-| imports DAG | ✅ | |
-| resolve 算法 | ✅ | |
-| index / validate | ✅ | |
-| access_count 等原始信号 | ✅ | |
-| 哪些目录是官方约定 | | ✅ |
-| 什么值得记 | | ✅ |
-| 什么算高优先级召回 | | ✅ |
-| 遗忘 / wander / salience 的语义 | | ✅ |
-| 某种产品体验是否“像人” | | ✅ |
-| 原始资料的保留、provenance、proposal 协议 | ✅ | ✅ |
-
-一个重要推论是：
-**Core 可以提供观测信号，但不应替任何产品决定这些信号意味着什么。**
-
-例如：
-
-- `last_access`、`access_count` 可以是 Core 信号；
-- “冷记忆是否应该被唤起”是 Layer 策略；
-- “多久没被访问就算该忘”更是 Layer 策略。
-
----
-
-## 7. 当前仓库映射
+Source expansion 应成为独立能力：
 
 ```text
-src/codememory/   →  当前主要承载 Core，也混入了少量尚未分离的策略
-backend/          →  REST Adapter
-frontend/src/     →  Operator UI Adapter
-import_cmd.py / skeletonize / suggest_deps
-                  →  当前已经出现的 compiler 零件，但还不是完整 Memory Compiler
-docs/agent-memory-guide.md
-                  →  目前最接近 Work Layer 使用指南的文档
-docs/companion-mode.md
-                  →  未来 Companion Layer 的探索文档
+expand_source(artifact_id, section_id=None, range=None, mode="excerpt")
 ```
 
-### 7.1 当前实现中的架构漂移
+它返回 excerpt / full artifact，并保留 hash、路径、selector 和 warning。
 
-现有代码已经接近新架构，但还存在一些“层没有分干净”的迹象：
-
-1. `wander`、`stability`、部分 decay 语义更像 layer policy，却已经进入 core vocabulary；
-2. 某些文档仍混用旧的四原语叙事；
-3. 部分 adapter 重新实现了 core 逻辑，增加了契约漂移风险；
-4. 当前 Work / Companion 的目录和语义还没有被正式 profile 化。
-5. 现有 `import`、`skeletonize`、`suggest-deps` 仍是分散工具，尚未形成统一的 proposal / review / materialize 流程。
-
-这些不是推翻现有实现的理由，而是下一阶段重构时最值得优先收敛的边界。
+ContextPack 默认只引用 source；expand_source 按需补充 source body。
 
 ---
 
-## 8. 接入架构
+## 6. Memory Compiler v2
 
-### 8.1 目标
+Compiler 的职责从“把 Markdown 切成 atom”升级为“把文档资产编译成 Source Artifact + Atom Graph proposals”。
 
-CodeMemory 应可以无缝接入主流 agent 框架和 harness 系统。
-决定可接入性的，不是“有没有很多胶水代码”，而是是否具备：
+```text
+source corpus
+  ↓
+register Source Artifacts
+  ↓
+extract sections / anchors
+  ↓
+propose Anchor Atoms
+  ↓
+propose Derived Atoms / schemas / imports / source_refs
+  ↓
+dedupe + conflict detection
+  ↓
+review set
+  ↓
+materialize accepted proposals
+```
 
-- 稳定的操作语义；
-- 纯文本且可携带的数据格式；
-- 明确的工具接口；
-- 可在不同 runtime 中复用的 resolve / validate / update 行为。
+硬约束：
 
-### 8.2 官方接入面
-
-| 接入面 | 适用场景 |
-|--------|----------|
-| CLI | shell agent、脚本、手动调试 |
-| Python SDK | 自定义 agent / app 内嵌 |
-| MCP | 支持 MCP 的 agent runtime |
-| Sandbox / Toolkit | harnesslib 等工具注册体系 |
-| REST API | Web UI 与外部系统 |
-
-### 8.3 架构要求
-
-1. Core 必须可在无 UI、无后端的情况下独立运行；
-2. MCP / SDK / REST 应调用同一业务逻辑；
-3. Layer 选择应显式可见，而非散落在 adapter 代码里；
-4. 默认 profile 应可被替换，但不能破坏 core contracts。
-
----
-
-## 9. 未来演进
-
-### 9.1 近期
-
-- 把 Work Layer 的目录、schema、召回、写入规则 profile 化；
-- 把 companion-like 策略从 Core 中剥离到未来 profile；
-- 把现有导入相关能力收敛成正式 Memory Compiler；
-- 先完成 Markdown corpus → draft graph → review → materialize 闭环；
-- 统一 backend / frontend / MCP / SDK 的契约；
-- 让文档、代码、测试围绕同一套正式模型收敛。
-
-### 9.2 中期
-
-- Companion Layer；
-- Research Layer / Project Layer 等更多 profile；
-- 更正式的 profile schema 与加载机制；
-- 跨 memory root 引用与迁移工具。
-
-### 9.3 暂不优先
-
-- 多 owner 协作；
-- 组织权限；
-- 企业级知识治理；
-- 把 Core 变成重型检索平台。
+1. 原始材料默认保留；
+2. 自动输出默认是 proposal；
+3. 每个 proposal 能追溯到 artifact；
+4. materialize 前必须 validate；
+5. LLM 不直接写 canonical truth。
 
 ---
 
-## 10. 架构判准
+## 7. Work Layer
 
-如果未来某个功能拿不准该放哪里，可用这句判断：
+Work Layer 是 v1 的默认场景策略。
 
-> **如果它改变的是“记忆本身怎么被可靠表示和处理”，它属于 Core；
-> 如果它改变的是“在某个场景里什么值得记、如何被想起”，它属于 Layer。**
+默认原则：
+
+- 写入谨慎；
+- 保留关键事实、约束、决策和流程；
+- imports 追求依赖完整；
+- source_refs 追求可追溯；
+- ContextPack 追求 agent 可直接使用；
+- 过时信息应标记 stale，而不是静默删除。
+
+建议目录：
+
+```text
+project/
+  facts/
+  decisions/
+  constraints/
+  processes/
+  contexts/
+  learnings/
+schemas/
+```
+
+---
+
+## 8. Adapter Contracts
+
+所有 adapter 应共享同一组 core operations：
+
+| Operation | 用途 |
+|---|---|
+| `create_memory` | 创建 atom/schema |
+| `update_memory` | 更新 atom/schema |
+| `search_memory` | 搜索候选 |
+| `context_pack` | 生成 agent handoff context |
+| `expand_source` | 按需展开 Source Artifact |
+| `validate` | 校验 graph、schema、source_refs |
+| `compile_markdown` | 生成 migration review set |
+| `materialize_review` | 晋升 accepted proposals |
+
+优先级：core handler → CLI / REST / MCP / SDK。禁止在 frontend 或 backend router 中重写核心算法。
+
+---
+
+## 9. 当前仓库映射
+
+```text
+src/codememory/              Core implementation
+src/codememory/context_pack.py
+                             Current ContextPack implementation; should evolve to source_refs/disclosure policy
+src/codememory/resolve.py    Existing DAG resolver; should become ContextPack-compatible
+src/codememory/compiler/     Current Markdown compiler; next step is Source Artifact aware compiler
+backend/                     REST adapter
+frontend/src/                Operator UI adapter
+src/harnesslib/              Optional agent harness layer
+src/llm_gateway/             Optional multi-provider LLM gateway
+docs/                        Canonical docs only
+docs/reference/              Historical idea sources and audits
+```
+
+Planned source registry code should live in Core, not backend:
+
+```text
+src/codememory/sources.py
+# or
+src/codememory/sources/
+```
+
+---
+
+## 10. Implementation Priorities
+
+### P0
+
+- Freeze this architecture in `docs/prd.md` and `docs/architecture.md`;
+- keep `docs/` root canonical;
+- make Source Artifact / Atom / ContextPack terms consistent.
+
+### P1
+
+- Implement Source Artifact Registry;
+- add source_refs to atom metadata and validation;
+- update ContextPack to emit source_refs and disclosure policy;
+- add `expand_source`;
+- update compiler to produce Source Artifact + Anchor Atom + Derived Atom proposals.
+
+### P2
+
+- expose `context_pack` and `expand_source` through MCP / toolkit / REST;
+- update UI for source_refs and migration review;
+- improve frontend UX only after backend contract is stable.
+
+### P3
+
+- design Companion Layer as a separate profile.
+
+---
+
+## 11. Architecture Tests
+
+Any new feature should pass these questions:
+
+1. Does it belong to Core, Layer, Compiler, or Adapter?
+2. Is it changing memory semantics, or only presentation?
+3. Does it confuse imports with source_refs?
+4. Does it preserve original source material?
+5. Does it make ContextPack more stable for agents?
+6. Can it run without frontend?
+7. Can another adapter call the same handler?
+
+If the answer is unclear, update architecture before code.
