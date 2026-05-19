@@ -1,5 +1,8 @@
 # 陪伴模式指南 — 对话中自然维护记忆
 
+> **Archive note — 2026-05-19**  
+> 本文已归档到 `docs/reference/`，只作为 Companion Layer 的 idea 来源。当前 v1 判断以 `docs/prd.md` 和 `docs/architecture.md` 为准。
+
 > **Future layer exploration**  
 > 本文描述的是未来 Companion Layer 的产品策略探索，不代表 CodeMemory v1 Core 的默认行为。  
 > 当前正式产品定义见 `docs/prd.md`，正式架构见 `docs/architecture.md`。

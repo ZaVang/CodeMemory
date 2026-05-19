@@ -1,205 +1,244 @@
-# CodeMemory 用户指南
+# CodeMemory User Guide
 
-> 最后更新：2026-05-08
-
-## 一、这是什么？
-
-CodeMemory 是一个 **AI 记忆管理系统**——帮你和 AI Agent 建立共用的结构化长期记忆。
-
-核心理念：**记忆加载是依赖解析问题，不是搜索问题。** 传统搜索可能找到相关片段但丢失因果链；CodeMemory 通过显式依赖图（DAG）保证上下文完整。
-
-### 两种使用方式
-
-| 方式 | 适用场景 | 入口 |
-|------|---------|------|
-| **Web UI** | 浏览、创建、编辑、可视化 | `.\start.ps1` 或 `python bin/codememory.py dev` → http://localhost:5300 |
-| **CLI** | 脚本、Agent 集成、批量操作 | `codememory <command>` |
-| **MCP Server** | AI Agent 直接调用 | 配置到 Claude Code / Cursor 等 |
+> **最后更新**：2026-05-19
+> 本文是日常使用入口。产品定义见 `docs/prd.md`，架构契约见 `docs/architecture.md`。
 
 ---
 
-## 二、快速开始
+## 1. CodeMemory 是什么
 
-### 1. 启动
+CodeMemory 是一个给单 owner 和多个 agent 共享的工作记忆底座。
 
-```bash
-git clone https://github.com/ZaVang/CodeMemory.git
-cd CodeMemory
-pip install -e .
+它的核心不是“搜索更多内容”，而是：
 
-# 一键启动
+- 用 atom 保存长期可复用的事实、决策、约束、流程和上下文入口；
+- 用 imports DAG 表达记忆之间的依赖；
+- 用 ContextPack 把上下文稳定交给 agent；
+- 用 Source Artifact / source_refs 追溯长文档和原始资料。
+
+当前已实现的主线是 atom graph、resolve、ContextPack、compiler review flow。Source Artifact Registry 是下一阶段 P1。
+
+---
+
+## 2. 快速启动
+
+```powershell
+cd D:\work\CodeMemory
 .\start.ps1
 ```
 
-浏览器打开 http://localhost:5300 ，首次访问会看到 Onboarding 引导。
+或：
 
-### 2. 界面概览
+```powershell
+python bin/codememory.py dev
+```
 
-三个主视图，按 `1` `2` `3` 切换：
+默认启动：
 
-| 视图 | 快捷键 | 用途 |
-|------|--------|------|
-| **Graph** | `1` | DAG 可视化，节点颜色按目录区分，右键可 Edit/Resolve/Delete |
-| **List** | `2` | 表格式浏览，按列排序，Health 列显示衰减风险 |
-| **Dashboard** | `3` | 统计卡片、stale 检测、Wander 漫游、Validate 验证 |
-
-### 3. 核心操作
-
-| 操作 | 方式 |
-|------|------|
-| 创建记忆 | 点击 `+ Create Memory` 或 `Ctrl+N` |
-| 编辑记忆 | 右键节点 → Edit，或 List 中点击 |
-| 解析依赖 | 选中记忆 → Resolve，或右键 → Resolve |
-| 搜索 | `Ctrl+K` 聚焦搜索栏 |
-| 切换数据集 | 顶部下拉框选择 |
+- backend: `http://127.0.0.1:8765`
+- frontend: `http://127.0.0.1:5300`
 
 ---
 
-## 三、记忆格式
+## 3. 基础记忆格式
 
-每条记忆是一个 Markdown 文件，以 YAML frontmatter 开头：
+每条 canonical memory 是一个 Markdown 文件：
 
 ```yaml
 ---
-type: atom                          # atom 或 schema
-id: user/investment/my-thesis       # 全局唯一 ID，"/" 分隔层级
-summary: AI存储+AI制造双核心驱动     # 用于检索预览和 token 裁剪降级
-tags: [investment, thesis]          # 标签
-intensity: 7                        # 1-10，影响图节点大小和裁剪优先级
-status: active                      # active / archived / draft
-maturity: proven                    # draft / verified / proven / superseded
-stability: 90.0                     # 半衰期（天），默认 14.0，decision 类型默认 90
-imports:                            # 显式依赖声明
-  required: [user/investment/context]
-  recommended: [user/investment/risk-tolerance]
+type: atom
+id: user/project/context
+summary: Project context entrypoint
+tags: [project, context]
+status: active
+imports:
+  required: []
+  recommended: []
   related: []
 ---
-# Memory body（Markdown 正文）
+
+# Memory body
+
+长期有用、可独立引用的工作记忆正文。
 ```
 
-### 核心字段
+目前稳定类型：
 
-| 字段 | 必填 | 说明 |
-|------|------|------|
-| `type` | 是 | `atom`（通用记忆）或 `schema`（元模板） |
-| `id` | 是 | 全局唯一 ID，含 "/" 分隔符，如 `user/investment/context` |
-| `summary` | 是 | 一句话摘要，token 预算不足时替代 body |
-| `imports` | 否 | 依赖图的核心——显式声明"这条记忆依赖哪些其他记忆" |
+| 类型 | 用途 |
+|---|---|
+| `atom` | 通用语义记忆：事实、决策、约束、流程、上下文入口 |
+| `schema` | 结构模板，不是业务记忆本体 |
+
+下一阶段会把 `source_refs` 明确加入 canonical contract，用于引用 Source Artifact。
 
 ---
 
-## 四、依赖图（DAG）
+## 4. Imports DAG
 
-CodeMemory 区别于其他记忆系统的核心能力：
+`imports` 表示 atom 与 atom 之间的理解依赖。
 
+```yaml
+imports:
+  required:
+    - user/project/core-constraint
+  recommended:
+    - user/project/design-decision
+  related:
+    - user/project/old-note
 ```
-user/investment/semiconductor-thesis (atom)
-├── required → user/investment/context       ← 必须加载
-├── required → user/facts/semiconductor      ← 必须加载
-├── recommended → user/investment/risk-tolerance  ← 预算充足时加载
-└── related → user/observations/market-event      ← 可选参考
-```
 
-### import 强度
+| 强度 | 含义 |
+|---|---|
+| `required` | 缺少它会误解当前记忆 |
+| `recommended` | 有助于理解，但不是硬前提 |
+| `related` | 主题相关，用于探索或补充 |
 
-| 强度 | Resolve 行为 |
-|------|-------------|
-| `required` | 始终加载 |
-| `recommended` | `--depth recommended` 时加载 |
-| `related` | `--depth full` 时加载 |
+注意：`imports` 不是 source provenance。长文档来源应走 Source Artifact / source_refs，而不是塞进 imports。
 
 ---
 
-## 五、时间衰减
+## 5. ContextPack
 
-系统自动追踪每条记忆的访问时间并计算检索概率：
+ContextPack 是给 agent 的主要上下文交接格式。
 
+```powershell
+codememory context-pack user/investment/context --format xml-markdown --budget 2000
+codememory context-pack user/investment/context --format json
 ```
-R = max(0.5^(days/stability), long_term_floor)
+
+它比普通 resolve 更适合 agent，因为它保留结构：
+
+- target；
+- nodes；
+- summaries；
+- body；
+- dependency order；
+- budget notices；
+- render format。
+
+下一阶段 ContextPack 会加入 source_refs 和 progressive disclosure：
+
+```text
+L0 index card
+L1 atom / anchor
+L2 focused source excerpt
+L3 full source artifact
 ```
 
-- **stability**：每记忆可调，默认 14 天，可通过 UI 滑块或 API 修改
-- **自适应增长**：Resolve 访问时 stability 自动增加（间隔效应）
-- **长期保留底线**：90 天后的知识不会静默消失
-- **Touch**：轻量衰减刷新（不触发 DAG 加载）
-- **R-probability 着色**：MemoryDetail 和 List 视图中绿色(>50%) / 琥珀(10-50%) / 红色(<10%)
+默认应该停在 L1，不自动展开长文档全文。
 
 ---
 
-## 六、CLI 命令
+## 6. 常用 CLI
 
-```bash
-# 一键启动
-.\start.ps1
-
-# 扫视 — 启动时自动注入 top 5 相关记忆
-codememory overview --tags "investment"
-
-# 重构 — DAG 拓扑拼装 + token 裁剪
-codememory resolve user/investment/context --budget 2000
-
-# 注视 — 动态切换记忆分辨率
-codememory focus risk-tolerance --level full
-
-# 触景生情 — 随机激活冷记忆
-codememory wander
-
+```powershell
 # 创建 / 更新
-codememory create --id user/ideas/new-idea --summary "..."
-codememory update user/ideas/new-idea --body "..."
+codememory create --id user/project/new-fact --summary "..."
+codememory update user/project/new-fact --body "..."
 
-# 索引 / 验证 / 搜索
-codememory reindex
+# 解析上下文
+codememory resolve user/project/context --budget 2000
+codememory context-pack user/project/context --format xml-markdown
+
+# 搜索 / 验证 / 重建索引
+codememory search --query "architecture"
 codememory validate
-codememory search --query "semiconductor"
+codememory reindex
 
-# 导入
-codememory import --file notes.txt --extract preferences
-codememory skeletonize ./my-notes/ --min-intensity 5   # 从 Markdown 文件批量导入
+# 依赖建议
+codememory suggest-deps user/project/context
 
-# 依赖推断
-codememory suggest-deps user/investment/context
+# Markdown 迁移 review flow
+codememory compile-md docs --review-id docs-review
+codememory materialize-review docs-review --accept-all
+```
+
+完整命令列表：
+
+```powershell
+codememory --help
 ```
 
 ---
 
-## 七、MCP Server
+## 7. Web UI
 
-在 Claude Code 或其他 MCP 客户端中配置：
+Web UI 是 operator console，不定义 canonical memory contract。
 
-```json
-{
-  "codememory": {
-    "command": "python",
-    "args": ["-m", "codememory.mcp_server"]
-  }
-}
+主要用途：
+
+- Graph：查看 imports DAG；
+- List：浏览和筛选 memories；
+- Dashboard：运行 validate / wander 等维护操作；
+- Create / Edit：维护 atom；
+- Resolve / Copy Context：把上下文交给 agent。
+
+下一阶段 UI 应跟随后端契约增加：
+
+- ContextPack 面板；
+- source_refs 展示；
+- expand source；
+- migration review。
+
+---
+
+## 8. Markdown 迁移
+
+当前已有 compiler review flow：
+
+```powershell
+codememory compile-md path\to\docs --review-id docs-review
+codememory materialize-review docs-review --accept-all
+codememory validate
 ```
 
-7 个工具：`resolve_memory` / `overview` / `wander` / `focus` / `snapshot` / `propose_memory` / `propose_update`
+当前 compiler 已经支持 proposal / review / materialize 的基本链路。下一阶段会升级为：
+
+```text
+Markdown corpus
+  ↓
+Source Artifacts
+  ↓
+Anchor Atom proposals
+  ↓
+Derived Atom proposals
+  ↓
+review set
+  ↓
+canonical graph
+```
+
+迁移原则：
+
+1. 原文不被静默改写；
+2. LLM 只生成 proposal；
+3. review 后才进入 canonical memory；
+4. 每条正式记忆应能追溯到 source。
 
 ---
 
-## 八、与其他方案对比
+## 9. 判断一条信息怎么存
 
-| 方案 | 检索方式 | 因果完整性 | 版本控制 | 衰减管理 |
-|------|---------|-----------|---------|---------|
-| 普通笔记 | 全文搜索 | 无 | Git | 无 |
-| RAG | 语义相似度 | 无保证 | 无 | 无 |
-| 知识图谱 | 图遍历 | 有 | 无 | 无 |
-| **CodeMemory** | **DAG 拓扑** | **有** | **Git + version** | **stability + SInc** |
+| 信息类型 | 存法 |
+|---|---|
+| 长文档、会议记录、设计稿 | Source Artifact；再建 Anchor Atom |
+| 单个长期事实 | Atom |
+| 架构/产品决策 | Atom，可挂 schema |
+| 操作流程 | Atom，必要时拆成流程入口 + 步骤 atoms |
+| 旧文档中的多个结论 | Source Artifact + 多个 Derived Atom proposals |
+| 只是临时聊天上下文 | 不一定进入 canonical memory |
+
+核心规则：
+
+> 能独立复用的语义进入 atom；原始材料进入 Source Artifact；二者通过 source_refs 连接。
 
 ---
 
-## 九、提示与快捷键
+## 10. 相关文档
 
-| 快捷键 | 功能 |
-|--------|------|
-| `Ctrl+K` | 搜索 |
-| `Ctrl+N` | 新建记忆 |
-| `Ctrl+Z` | 撤销 |
-| `Ctrl+Shift+D` | 切换亮色/暗色模式 |
-| `Ctrl+Shift+C` | Copy as Context（Resolve 后可用） |
-| `1` / `2` / `3` | 切换 Graph / List / Dashboard |
-| `?` | 快捷键参考 |
-| `Esc` | 关闭面板 / 模态
+- `docs/prd.md` — 产品定义和优先级；
+- `docs/architecture.md` — 架构契约；
+- `docs/INTEGRATION.md` — CLI / API / MCP / harness 接入；
+- `docs/project_structure.md` — 仓库文件职责；
+- `docs/agent-memory-guide.md` — Work Layer agent 写入规则草案；
+- `docs/reference/` — 历史探索和审计记录。

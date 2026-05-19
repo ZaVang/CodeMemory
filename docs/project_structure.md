@@ -9,13 +9,13 @@
 
 ## 1. 阅读顺序
 
-1. `docs/prd.md` — 产品模式：CodeMemory v1 是可靠的 work-memory substrate，不是默认拟人陪伴产品。
-2. `docs/architecture.md` — Core / Layer Profile / Memory Compiler / Adapter 的正式边界。
+1. `docs/prd.md` — 产品模式：CodeMemory v1 是可靠的 work-memory substrate；Source Artifact + Atom Graph + ContextPack 是主线。
+2. `docs/architecture.md` — Source Artifact Registry / Atom Graph / Progressive ContextPack / Adapter 的正式边界。
 3. `docs/project_structure.md` — 当前仓库文件职责和落点规则。
 4. `docs/INTEGRATION.md` — CLI、Python、MCP、主流 agent harness 的接入方式。
 5. `docs/USER_GUIDE.md` — 面向使用者的日常操作手册。
 6. `docs/agent-memory-guide.md` — Work Layer 的 agent 使用规则草案。
-7. `docs/companion-mode.md` — Companion Layer 的未来探索，不代表 v1 默认行为。
+7. `docs/reference/` — idea 来源、历史审计和非 v1 默认方向，仅作追溯。
 
 ---
 
@@ -25,6 +25,8 @@
 |---|---|
 | Core 不知道产品人格 | `src/codememory/` 负责 atom、schema、imports、index、resolve、validate；不直接决定“陪伴感”。 |
 | Layer Profile 才定义场景策略 | Work / Companion / Team 这类策略应表现为目录、schema、tags、召回规则和写入规则。 |
+| Source Artifact 不是 Atom | 长文档、代码、PDF、URL 等原始材料应进入 source registry；atom 只表达可复用语义或 anchor。 |
+| ContextPack 是 agent handoff 单元 | `resolve` 保留兼容价值，但新的主输出应围绕结构化 ContextPack 和 progressive disclosure。 |
 | Memory Compiler 不直接污染 canonical memory | Markdown 迁移必须先生成 review set，再由 `materialize-review` 写入正式 memory root。 |
 | Backend 是 adapter | `backend/` 可以做 API 编排和序列化，但不应重新实现 core 语义。 |
 | Frontend 是 operator UI | `frontend/src/` 展示、编辑、resolve、graph，不应定义 canonical memory contract。 |
@@ -39,6 +41,7 @@
 |---|---|---|
 | 改 memory 数据模型 / schema 规则 | `src/codememory/models.py`, `src/codememory/validate.py` | `tests/unit/test_validate.py`, `tests/unit/test_edge_cases.py` |
 | 改 create / update / resolve / context-pack 行为 | `src/codememory/create.py`, `src/codememory/update.py`, `src/codememory/resolve.py`, `src/codememory/context_pack.py`, `src/codememory/handlers.py` | `tests/unit/test_create_update.py`, `tests/unit/test_resolve.py`, `tests/unit/test_context_pack.py` |
+| 新增 Source Artifact / source_refs | `src/codememory/sources.py` 或 `src/codememory/sources/`, `src/codememory/models.py`, `src/codememory/context_pack.py` | 新增 source registry / context pack tests |
 | 改 Markdown 迁移流程 | `src/codememory/compiler/` | `tests/unit/test_memory_compiler.py` |
 | 改 REST API | `backend/server.py`, `backend/routers/*.py`, `backend/shared.py` | `tests/test_api.py` |
 | 改可视化 UI | `frontend/src/pages/`, `frontend/src/components/`, `frontend/src/App.tsx` | `frontend/tests/smoke.spec.ts`, `npm run build` |
@@ -319,13 +322,13 @@ cd frontend && npm run build
 
 | 文件 | 职责 |
 |---|---|
-| `docs/prd.md` | 产品定义：目标用户、v1 范围、非目标、产品分层、迁移体验。 |
-| `docs/architecture.md` | 系统架构：Core、Layer Profile、Compiler、Adapters、integration contract。 |
+| `docs/prd.md` | 产品定义：目标用户、v1 范围、非目标、Source Artifact / Atom / ContextPack 产品模型和优先级。 |
+| `docs/architecture.md` | 系统架构：Source Artifact Registry、Atom Graph、Progressive ContextPack、Compiler、Adapters。 |
 | `docs/project_structure.md` | 本文：仓库文件地图和落点规则。 |
 | `docs/INTEGRATION.md` | 外部接入指南：CLI、Python API、MCP、agent framework/harness。 |
 | `docs/USER_GUIDE.md` | 使用者指南：安装、创建、检索、维护、迁移。 |
 | `docs/agent-memory-guide.md` | Work Layer agent 操作指南草案。 |
-| `docs/companion-mode.md` | Companion Layer 未来探索文档。 |
+| `docs/reference/` | 历史探索、审计报告、非 v1 默认方向。用于追溯 idea 来源，不作为当前实现依据。 |
 
 已删除的文档类型：
 
@@ -335,7 +338,12 @@ cd frontend && npm run build
 - 早期单点概念文档：`layer0-cognitive-interface.md`
 - UI 设计探索稿：`docs/design/*`
 
-这些内容不再作为当前判断依据；如果需要追溯，用 Git history。
+当前归档：
+
+- `docs/reference/companion-mode.md` — Companion Layer 早期探索；
+- `docs/reference/ux-audit-report.md` — 一次性前端 UX 审计报告。
+
+这些内容不再作为当前判断依据；如果需要追溯，用 `docs/reference/` 或 Git history。
 
 ---
 
@@ -344,6 +352,7 @@ cd frontend && npm run build
 | 新需求 | 应放位置 | 不应放位置 |
 |---|---|---|
 | 新 memory 字段或 contract | `src/codememory/models.py`, `validate.py`, `architecture.md` | `frontend/src/types.ts` 单独新增 |
+| 新 Source Artifact 能力 | `src/codememory/sources.py` / `src/codememory/sources/` + `context_pack.py` + `validate.py` | backend router 或 frontend 内部私有实现 |
 | 新 CLI 子命令 | `src/codememory/cli.py` + `handlers.py` 或专门 core module | backend router 内部私有实现 |
 | 新迁移算法 | `src/codememory/compiler/` | `import_cmd.py` 继续堆逻辑 |
 | 新 REST endpoint | `backend/routers/<domain>.py` | `backend/server.py` |
@@ -357,8 +366,8 @@ cd frontend && npm run build
 
 ## 15. 清理规则
 
-1. `docs/` 中新增文档前，先判断是否能合并进 `prd.md`、`architecture.md`、`project_structure.md`、`INTEGRATION.md` 或 `USER_GUIDE.md`。
-2. 审阅报告、一次性计划、agent 执行日志默认不入 repo；需要保留时放 issue/PR 或 Git history。
+1. `docs/` 根目录新增文档前，先判断是否能合并进 `prd.md`、`architecture.md`、`project_structure.md`、`INTEGRATION.md`、`USER_GUIDE.md` 或 `agent-memory-guide.md`。
+2. 审阅报告、一次性计划、agent 执行日志默认不入 docs 主干；确实要保留 idea 来源时放 `docs/reference/`。
 3. `backend/shared.py` 每次新增 helper 都要问：是否其实应该进 `src/codememory/handlers.py` 或 core。
 4. `frontend/src/App.tsx` 每次超过一个新交互簇，应优先抽组件或 hook。
 5. compiler 任何写文件路径都必须通过路径安全校验，避免 proposal 写出 memory root。

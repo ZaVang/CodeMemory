@@ -1,5 +1,8 @@
 # CodeMemory Frontend UX Audit
 
+> **Archive note — 2026-05-19**  
+> 本文是一次性 UX 审计记录，已完成 P0/P1 修复后的参考归档；不作为当前产品/架构判断的 canonical 文档。
+
 > 审计时间：2026-05-19  
 > 方法：按 `.agents/skills/ux-audit/SKILL.md` 执行。先阅读 `README.md` / `docs/USER_GUIDE.md` / PRD / Architecture，再通过真实浏览器观察前端行为。  
 > 约束：只记录实际观察到的行为，不基于源码猜测。
@@ -368,4 +371,3 @@ Choose dataset → Select recommended entry memory → Resolve → Copy as Conte
 - onboarding 结束后高亮该入口；
 - Resolve 面板把 `Copy as Context` 提升为主按钮；
 - Graph 旁边提供一个可访问的 node list，避免 canvas-only。
-

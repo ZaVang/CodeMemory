@@ -182,13 +182,13 @@ codememory log [--limit N]
 codememory import --file notes.txt --extract preferences,decisions
 codememory import --stdin --extract facts
 codememory skeletonize <file_or_dir> [--min-intensity N] [--dry-run] [--tags "a,b"]
-codememory compile-md <corpus_dir> --target-root <memory_root> [--review-dir <dir>]
-codememory materialize-review <review_id> --target-root <memory_root> [--review-dir <dir>]
+codememory compile-md <corpus_dir> [--review-id <id>] [--tags "a,b"] [--namespace <ns>]
+codememory materialize-review <review_id> [--accept-all]
 
 # 依赖推断
 codememory suggest-deps <id> [--min-score N] [--forward-only] [--retroactive-only]
 
-# Layer 0 认知操作
+# 维护 / 探索操作
 codememory overview [--tags <t>] [--limit N] [--format default|inject] [--with-recall] [--min-maturity verified]
 codememory focus <id> --level full|summary [--resolve] [--content ...]
 codememory wander [--mode cool|random] [--inject]
@@ -224,12 +224,12 @@ tools = toolkit.get_tools_for_openai()  # -> OpenAI format tool list
 ## 文档
 
 - [产品需求](docs/prd.md) -- v1 产品模式、目标用户、范围和非目标
-- [架构设计](docs/architecture.md) -- Core / Layer / Compiler / Adapter 边界
+- [架构设计](docs/architecture.md) -- Source Artifact / Atom Graph / ContextPack / Adapter 边界
 - [项目结构](docs/project_structure.md) -- 每个主要文件的职责与代码落点规则
 - [集成指南](docs/INTEGRATION.md) -- 10 分钟上手集成
 - [用户指南](docs/USER_GUIDE.md) -- 日常使用、维护和迁移
 - [Agent 记忆指南](docs/agent-memory-guide.md) -- Work Layer agent 操作规则草案
-- [Companion Mode](docs/companion-mode.md) -- future companion layer 探索
+- [Reference: Companion Mode](docs/reference/companion-mode.md) -- future companion layer 历史探索，不代表 v1 默认方向
 
 ## 许可证
 
