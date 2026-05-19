@@ -4,6 +4,41 @@ This file records accepted sprint outcomes. Current work belongs in `docs/plan/S
 
 ---
 
+## 2026-05-19 — P1.3 `expand_source`
+
+**Status:** Accepted and archived.
+
+**Commit:** `3ebfa50 feat: add explicit source expansion`
+
+**Delivered:**
+
+- Added `SourceExpansion` as the structured result contract for explicit source expansion.
+- Added `expand_source_artifact()` for local Markdown/text/code Source Artifacts.
+- Added full-content expansion, character-range excerpts, and `max_chars` truncation.
+- Added structured `fresh`, `stale`, `missing`, and `unsupported` statuses.
+- Added `codememory source expand` CLI output as machine-readable JSON.
+- Added `GET /api/sources/expand` REST endpoint backed by the same core behavior.
+- Updated architecture, user guide, integration, project structure, and sprint docs.
+- Added unit/API coverage for expansion model, full content, bounded excerpts, missing artifact/file, stale hash detection, unsupported sources, handler JSON, and REST response shape.
+
+**Acceptance evidence:**
+
+- `python -m pytest -q tests/unit tests/test_api.py` → `162 passed`
+- CLI smoke for `codememory source expand` → passed
+- Markdown local link check → `checked 13 markdown files; no missing local doc links`
+- old plan path check → `no stale old plan paths outside pitfalls/reference notes`
+- `git diff --check` → passed
+
+**Deferred:**
+
+- semantic section lookup
+- PDF/binary parsing beyond unsupported notices
+- frontend source expansion UI
+- MCP/harness exposure for `expand_source`
+- Migration Compiler v2 source-aware proposals
+
+---
+
 ## 2026-05-19 — P1.2 `source_refs`
 
 **Status:** Accepted and archived.
