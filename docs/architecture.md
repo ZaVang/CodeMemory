@@ -1,5 +1,9 @@
 # CodeMemory Architecture
 
+> **状态提示（2026-06-10）**：PRD 已按 memory-as-code 公理重建（见 `docs/prd.md` 与
+> `docs/superpowers/specs/2026-06-10-memory-as-code-prd-rebuild-design.md`）。
+> 本文档尚未随之更新——术语冲突处以新 prd.md 为准；架构重建是下一阶段工作。
+
 > **Architecture thesis**
 > CodeMemory 的核心架构是：**Source Artifact Registry + Atom Graph + Progressive ContextPack + Thin Adapters**。
 > Core 负责可靠表示和装配工作记忆；Layer 负责场景策略；Compiler 负责迁移；Adapters 负责接入。

@@ -2,6 +2,10 @@
 
 > **Purpose:** Long-term roadmap and backlog. Product truth stays in `docs/prd.md`; architecture truth stays in `docs/architecture.md`.
 
+> **注（2026-06-10）**：以下 roadmap 优先级早于 memory-as-code PRD 重建。
+> 选择下一个 sprint 前，按新 `docs/prd.md` 重新推导优先级（候选：proposal 状态、
+> search 词法排序、build 动词收敛、test 最小实现）。
+
 ---
 
 ## Planning Rules
