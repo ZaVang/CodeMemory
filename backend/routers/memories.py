@@ -22,7 +22,6 @@ from shared import (
     ImportRequest,
     UpdateMemoryRequest,
     compute_body_hash,
-    compute_r_probability,
     current_dataset,
     extract_snippet,
     get_root,
@@ -66,16 +65,12 @@ def get_memories(offset: int = 0, limit: int = 100):
             "type": d.get("type", "atom"),
             "summary": d.get("summary", ""),
             "tags": d.get("tags", []),
-            "intensity": d.get("intensity", 5),
             "maturity": d.get("maturity", "draft"),
             "directory": directory,
             "status": d.get("status", "active"),
             "version": d.get("version", 1),
             "access_count": d.get("access_count", 0),
             "last_access": d.get("last_access", None),
-            "days_since_last_access": d.get("days_since_last_access", None),
-            "stability": d.get("stability", 14.0),
-            "stability_source": d.get("stability_source", None),
         })
 
     total = len(result)
@@ -152,9 +147,6 @@ def get_memory(memory_id: str):
         **{k: v for k, v in meta.items()},
         "id": memory_id,
         "body": body,
-        "days_since_last_access": entry.days_since_last_access,
-        "stability": getattr(entry, "stability", 14.0),
-        "stability_source": getattr(entry, "stability_source", None),
         "access_count": entry.access_count,
     }
 
@@ -204,7 +196,6 @@ def post_create_memory(req: CreateMemoryRequest):
         memory_type=req.type,
         memory_id=req.memory_id,
         schema=req.schema,
-        intensity=req.intensity,
         tags=req.tags,
         dry_run=False,
         maturity=req.maturity,
@@ -234,17 +225,12 @@ def post_create_memory(req: CreateMemoryRequest):
     meta, body = parse_frontmatter(filepath)
     index = load_cm_index()
     entry = index.memories.get(req.memory_id)
-    days_since = getattr(entry, "days_since_last_access", None) if entry else None
-    stability_val = getattr(entry, "stability", 14.0) if entry else 14.0
     access_count_val = getattr(entry, "access_count", 0) if entry else 0
 
     result = {
         **{k: v for k, v in meta.items()},
         "id": req.memory_id,
         "body": body,
-        "days_since_last_access": days_since,
-        "stability": stability_val,
-        "stability_source": getattr(entry, "stability_source", None) if entry else None,
         "access_count": access_count_val,
     }
     return serialize(result)
@@ -281,10 +267,8 @@ def put_update_memory(memory_id: str, req: UpdateMemoryRequest):
 
     has_metadata_update = any([
         req.tags is not None,
-        req.intensity is not None,
         req.imports is not None,
         req.maturity is not None,
-        req.stability is not None,
     ])
 
     if has_core_update:
@@ -302,33 +286,22 @@ def put_update_memory(memory_id: str, req: UpdateMemoryRequest):
         meta_updates: dict[str, Any] = {}
         if req.tags is not None:
             meta_updates["tags"] = req.tags
-        if req.intensity is not None:
-            meta_updates["intensity"] = req.intensity
         if req.imports is not None:
             meta_updates["imports"] = req.imports
         if req.maturity is not None:
             meta_updates["maturity"] = req.maturity
-        if req.stability is not None:
-            meta_updates["stability"] = req.stability
-            meta_updates["stability_source"] = "manual"
-        update_frontmatter_fields(filepath, meta_updates)
-
     reindex(get_root())
 
     meta, body = parse_frontmatter(filepath)
     updated_index = load_cm_index()
     updated_entry = updated_index.memories.get(memory_id)
     days_since = getattr(updated_entry, "days_since_last_access", None) if updated_entry else None
-    stability_val = getattr(updated_entry, "stability", 14.0) if updated_entry else 14.0
     access_count_val = getattr(updated_entry, "access_count", 0) if updated_entry else 0
 
     result = {
         **{k: v for k, v in meta.items()},
         "id": memory_id,
         "body": body,
-        "days_since_last_access": days_since,
-        "stability": stability_val,
-        "stability_source": getattr(updated_entry, "stability_source", None) if updated_entry else None,
         "access_count": access_count_val,
     }
     return serialize(result)
@@ -349,14 +322,6 @@ def post_touch(memory_id: str):
 
     now_iso = datetime.now().isoformat()
 
-    if getattr(entry, "stability_source", None) != "manual":
-        old_days_since = getattr(entry, "days_since_last_access", None)
-        if old_days_since is not None and old_days_since > 0 and entry.stability > 0:
-            R = compute_r_probability(old_days_since, entry.stability)
-            s_inc = 1.05 + 0.75 * math.exp(-((R - 0.78) ** 2) / 0.125)
-            diminish = math.sqrt(14.0 / max(entry.stability, 14.0))
-            entry.stability = min(entry.stability * s_inc * diminish, 365.0)
-
     entry.access_count += 1
     entry.last_access = now_iso
     entry.days_since_last_access = 0
@@ -368,9 +333,6 @@ def post_touch(memory_id: str):
         **{k: v for k, v in meta.items()},
         "id": memory_id,
         "body": body,
-        "days_since_last_access": 0,
-        "stability": entry.stability,
-        "stability_source": getattr(entry, "stability_source", None),
         "access_count": entry.access_count,
     }
     return serialize(result)
@@ -436,13 +398,11 @@ def post_import(req: ImportRequest):
     lines = text.split("\n")
     summary = lines[0][:120] if lines else ""
     tags = [req.extract]
-    intensity = 5
 
     file_path_str = handle_create(
         root=root,
         memory_type="atom",
         memory_id=memory_id,
-        intensity=intensity,
         tags=tags,
         maturity="draft",
     )

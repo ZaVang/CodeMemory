@@ -30,18 +30,6 @@ If those files change only because tests reindexed or logged operations, restore
 
 ---
 
-## Validation tests and unrelated decay warnings
-
-**有效期：收敛阶段 C 移除 intensity / decay 机制后本条失效（见 `docs/architecture.md` §6）。**
-
-`validate` can emit decay/staleness warnings for low-intensity memories. When a test is asserting source-ref warning counts, make the fixture memory intentionally non-decaying, for example by using `intensity: 8`.
-
-Otherwise a source-ref test can fail for an unrelated validation warning.
-
-注意：阶段 A 起 `intensity: 8` 不再自动产生 `protected: true`（已解耦），它只影响 decay 行为。
-
----
-
 ## build 不自动展开 asset 原文
 
 实现 asset 相关功能时，不要让 build 产物（resolve / context-pack 输出）自动内联 asset 的原文正文。

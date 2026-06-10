@@ -1,8 +1,9 @@
 """MCP (Model Context Protocol) server for CodeMemory.
 
-Exposes CodeMemory's five Layer 0 cognitive primitives — resolve, overview,
-wander, focus, snapshot — as callable MCP tools.  Each tool delegates to the
-same handlers.py functions used by the CLI and backend API (no logic duplication).
+Exposes CodeMemory's read/write operations — resolve (build pipeline),
+snapshot, propose_memory, propose_update — as callable MCP tools.  Each tool
+delegates to the same handlers.py functions used by the CLI and backend API
+(no logic duplication).
 
 Transport: stdio (JSON-RPC 2.0), compatible with Claude Code, Cursor, Windsurf,
 and any other MCP-compliant client.
@@ -36,12 +37,9 @@ if str(_SRC) not in sys.path:
 
 from codememory.handlers import (  # noqa: E402 - sys.path is adjusted above for module execution
     handle_create,
-    handle_focus,
-    handle_overview,
     handle_resolve,
     handle_snapshot,
     handle_update,
-    handle_wander,
 )
 
 _logger = logging.getLogger("codememory.mcp_server")
@@ -91,84 +89,6 @@ TOOLS = [
         "readOnlyHint": True,
     },
     {
-        "name": "overview",
-        "description": (
-            "Get top 5 related memory summaries for injection into an AI system prompt. "
-            "Returns memories ranked by heat score (dependents * 10 + access_count) "
-            "with stale detection and status markers. "
-            "Use this at the start of a conversation to preload relevant context."
-        ),
-        "inputSchema": {
-            "type": "object",
-            "properties": {
-                "tags": {
-                    "type": "array",
-                    "items": {"type": "string"},
-                    "description": "Filter by tags (optional)",
-                },
-                "min_maturity": {
-                    "type": "string",
-                    "enum": ["draft", "verified", "proven"],
-                    "description": "Minimum maturity level (optional, defaults to no filter)",
-                },
-                "format": {
-                    "type": "string",
-                    "enum": ["default", "inject"],
-                    "default": "inject",
-                    "description": "Output format: 'inject' for system-prompt-ready, 'default' for human-readable",
-                },
-            },
-        },
-        "readOnlyHint": True,
-    },
-    {
-        "name": "wander",
-        "description": (
-            "Serendipitous recall of a cold memory. Returns a memory with low "
-            "access_count weighted by intensity, encouraging re-discovery of "
-            "neglected knowledge. Use this when you need fresh perspectives "
-            "or want to surface forgotten context."
-        ),
-        "inputSchema": {
-            "type": "object",
-            "properties": {
-                "mode": {
-                    "type": "string",
-                    "enum": ["cool", "random"],
-                    "default": "cool",
-                    "description": "Selection mode: 'cool' (low-access weighted) or 'random'",
-                },
-            },
-        },
-        "readOnlyHint": True,
-    },
-    {
-        "name": "focus",
-        "description": (
-            "Focus on a specific memory with adjustable resolution. "
-            "At 'summary' level returns only the summary line; at 'full' level "
-            "returns the complete body text. Use this to dynamically adjust "
-            "the resolution of a specific memory in context."
-        ),
-        "inputSchema": {
-            "type": "object",
-            "properties": {
-                "id": {
-                    "type": "string",
-                    "description": "Memory ID to focus on",
-                },
-                "level": {
-                    "type": "string",
-                    "enum": ["full", "summary"],
-                    "default": "full",
-                    "description": "Resolution level",
-                },
-            },
-            "required": ["id"],
-        },
-        "readOnlyHint": True,
-    },
-    {
         "name": "snapshot",
         "description": (
             "Persist a resolved memory context as a snapshot file in the dataset. "
@@ -196,8 +116,8 @@ TOOLS = [
         "description": (
             "Propose a new memory for review. Creates a memory with maturity=draft "
             "and status=proposed, requiring human review before promotion to "
-            "verified. Proposed memories do not appear in overview top-5 results "
-            "and are visually marked as 'Proposed' in the dashboard. "
+            "verified. Proposed memories do not enter default build/search "
+            "results until merged by the owner. "
             "Use this to write new knowledge back to the CodeMemory brain "
             "during agentic reasoning."
         ),
@@ -220,13 +140,6 @@ TOOLS = [
                     "type": "array",
                     "items": {"type": "string"},
                     "description": "Tags for categorization",
-                },
-                "intensity": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "maximum": 10,
-                    "default": 5,
-                    "description": "Importance rating 1-10",
                 },
             },
             "required": ["id", "summary", "body"],
@@ -290,26 +203,6 @@ def _call_tool(name: str, arguments: dict) -> list[dict]:
         result = handle_resolve(root=root, memory_id=memory_id, depth=depth, budget=budget)
         return [{"type": "text", "text": result}]
 
-    elif name == "overview":
-        tags = arguments.get("tags")
-        format_mode = arguments.get("format", "inject")
-        # min_maturity filtering is done client-side via tags for now
-        result = handle_overview(root=root, tags=tags, format_mode=format_mode)
-        return [{"type": "text", "text": result}]
-
-    elif name == "wander":
-        mode = arguments.get("mode", "cool")
-        result = handle_wander(root=root, mode=mode)
-        return [{"type": "text", "text": result}]
-
-    elif name == "focus":
-        memory_id = arguments.get("id", "")
-        if not memory_id:
-            return [{"type": "text", "text": "Error: 'id' parameter is required for focus"}]
-        level = arguments.get("level", "full")
-        result = handle_focus(root=root, memory_id=memory_id, level=level)
-        return [{"type": "text", "text": result}]
-
     elif name == "snapshot":
         snapshot_id = arguments.get("id", "")
         if not snapshot_id:
@@ -325,32 +218,28 @@ def _call_tool(name: str, arguments: dict) -> list[dict]:
         summary = arguments.get("summary", "")
         body = arguments.get("body", "")
         tags = arguments.get("tags", [])
-        intensity = arguments.get("intensity", 5)
         try:
-            from codememory.core import compute_body_hash, parse_frontmatter
-            import yaml as _yaml
-            filepath = handle_create(
+            handle_create(
                 root=root,
                 memory_type="atom",
                 memory_id=memory_id,
-                intensity=intensity,
                 tags=tags,
                 maturity="draft",
+                propose=True,
             )
-            fp = Path(filepath)
-            meta, _ = parse_frontmatter(fp)
-            meta["summary"] = summary
-            meta["summary_hash"] = compute_body_hash(body.strip())
-            meta["status"] = "proposed"
-            _yaml_str = _yaml.dump(meta, allow_unicode=True, sort_keys=False)
-            fp.write_text(f"---\n{_yaml_str}---\n{body}", encoding="utf-8")
-            from codememory.index import reindex as _mcp_reindex
-            _mcp_reindex(root)
+            handle_update(
+                root=root,
+                memory_id=memory_id,
+                summary=summary,
+                body=body,
+                change_note="proposed via MCP",
+            )
             return [{"type": "text", "text": (
-                f"Memory proposed: {memory_id}\n"
-                f"Status: proposed (maturity=draft)\n"
-                f"Review required before this memory appears in normal results.\n"
-                f"Use the dashboard or CLI to promote maturity from draft to verified."
+                f"Memory proposed: {memory_id}
+"
+                f"Status: proposed (excluded from default build/search)
+"
+                f"Owner review: codememory merge {memory_id} (or reject)."
             )}]
         except Exception as exc:
             return [{"type": "text", "text": f"Error proposing memory '{memory_id}': {exc}"}]

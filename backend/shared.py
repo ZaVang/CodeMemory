@@ -31,12 +31,11 @@ _CODEMEMORY_SRC = Path(__file__).resolve().parent.parent / "src"
 if str(_CODEMEMORY_SRC) not in sys.path:
     sys.path.insert(0, str(_CODEMEMORY_SRC))
 
-from codememory.core import compute_body_hash, compute_retrieval_probability  # noqa: E402
+from codememory.core import compute_body_hash  # noqa: E402
 from codememory.handlers import (  # noqa: E402
     handle_create,
     handle_resolve,
     handle_update,
-    handle_wander,
 )
 from codememory.index import load_index, reindex, save_index  # noqa: E402
 from codememory.models import IndexData, MemoryEntry  # noqa: E402
@@ -192,11 +191,6 @@ def update_frontmatter_fields(filepath: Path, updates: dict[str, Any]) -> None:
     filepath.write_text(new_content, encoding="utf-8")
 
 
-def compute_r_probability(days_since: float, stability: float) -> float:
-    """Hybrid decay formula with long-term retention floor (R15-C2)."""
-    return compute_retrieval_probability(days_since, stability)
-
-
 # ---------------------------------------------------------------------------
 # Fuzzy search helpers
 # ---------------------------------------------------------------------------
@@ -264,7 +258,6 @@ class CreateMemoryRequest(BaseModel):
     )
     summary: str = Field(default="TODO: fill in summary")
     tags: list[str] = Field(default_factory=list)
-    intensity: int = Field(default=5, ge=1, le=10)
     body: str = Field(default="")
     type: str = Field(default="atom", description="atom | schema")
     schema: str | None = None
@@ -279,12 +272,10 @@ class UpdateMemoryRequest(BaseModel):
     body: str | None = None
     summary: str | None = None
     tags: list[str] | None = None
-    intensity: int | None = Field(default=None, ge=1, le=10)
     status: str | None = None
     maturity: str | None = None
     change_note: str | None = None
     imports: dict[str, list[str]] | None = None
-    stability: float | None = Field(default=None, gt=0.0, le=365.0)
 
 
 class SearchRequest(BaseModel):

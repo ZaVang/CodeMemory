@@ -16,10 +16,11 @@ CodeMemory/
 │       ├── core.py              # frontmatter 解析, body hash, logging 配置
 │       ├── models.py            # Pydantic v2 数据模型
 │       ├── handlers.py          # 统一命令处理（cli + tools + REST 共享）
+│       ├── proposals.py         # 修改类提案 patch 队列（propose / merge / reject）
+│       ├── test_contract.py     # 黄金问题导出与 report（agent 是 runner）
 │       ├── index.py             # Index 加载/保存/reindex
 │       ├── build.py             # 统一装配管线：DAG/拓扑/两遍式裁剪/渲染
 │       ├── resolve.py           # build 的 plain-markdown 薄别名（兼容）
-│       ├── context_pack.py      # 兼容 shim（re-export build）
 │       ├── sources.py           # asset 登记/校验/展开（CLI 命令组 source）
 │       ├── validate.py          # check：循环/断链/schema/stale
 │       ├── create.py            # atom 模板生成
@@ -53,16 +54,16 @@ CodeMemory/
 三组 11 概念（完整定义见 `docs/prd.md` 第 4 章）：
 
 - **静态结构**：repo（记忆库）、atom（记忆单元）、imports（依赖）、schema（结构契约）、asset（资产，不进依赖图）
-- **动态操作**：build（装配）、check（校验）、search（入口检索）、test（黄金问题验证，未实现）
-- **变更管理**：proposal（提案，新增类已实装）、log（审计日志）
+- **动态操作**：build（装配）、check（校验）、search（入口检索）、test（黄金问题验证）
+- **变更管理**：proposal（提案）、log（审计日志）
 
-概念 ↔ 当前 CLI 对照：build = `build`（主命令；`resolve` / `context-pack` 为同管线别名）；check = `validate`；asset = `source` 命令组；proposal 新增类 = `create --propose` + `merge` / `reject`，修改类未实装（过渡做法见 guide 第 6 节）。
+概念 ↔ 当前 CLI 对照：build = `build`（主命令；`resolve` / `context-pack` 为同管线别名）；check = `validate`；asset = `source` 命令组；proposal 新增类 = `create --propose`，修改类 = `propose` / `proposals`，统一 `merge` / `reject`；test = `test` / `test report`。
 
 ## 关键设计决策
 
 - 装配是 DAG 依赖解析 + 预算裁剪，不是向量检索；search 只做入口发现，不参与装配。
 - asset（原始材料）不进依赖图；atom 不装长文档。
-- 分级写入纪律：新增 atom 直写（没把握用 `create --propose`，owner merge/reject）；修改已有 atom 或涉及 protected 走 proposal（修改类实装前：会话内征得 owner 同意）。proposed/archived/superseded 不进默认 build 与 search。
+- 分级写入纪律：新增 atom 直写（没把握用 `create --propose`）；修改已有 atom 或涉及 protected 走 `propose` patch 队列；owner 统一 `merge` / `reject`。proposed/archived/superseded 不进默认 build 与 search。
 - 遗忘是路径不可达问题，不是删除问题。系统只建议，不自动删除。
 - 框架（`src/codememory/`）与数据（`CODEMEMORY_ROOT` 指向的记忆库）物理分离。
 - reindex 自动行为（实现细节，不属于概念模型）：`summary_hash` 未变且 `access_count >= 2` → `cache_stable=true`；`ephemeral` 且 `access_count==0` → 自动归档。frontmatter 手动声明优先于自动推断。
@@ -140,7 +141,10 @@ codememory source expand <id> [--start N] [--end N] [--max-chars N]
 # 写路径（纪律见 docs/agent-memory-guide.md 第 6 节）
 codememory create --id <id> [--type atom|schema] [--schema s] [--tags "a,b"] [--propose] [--dry-run]
 codememory update <id> --change-note "..." [--summary "..."] [--body "..."] [--status s] [--import-required ...] [--source-ref <artifact_id>]
-codememory merge <id> | reject <id>        # proposed → active / archived（owner 审阅）
+codememory propose <id> --reason "..." [--summary ...] [--body ...]   # 修改类提案入队
+codememory proposals                        # 待审队列
+codememory merge <id|proposal_id> | reject <id|proposal_id>   # owner 审阅
+codememory test <entry> [--budget N]        # 导出题集+上下文；test report <entry> --results f.json
 codememory source add <uri> [--id ID] [--kind markdown|code|text|pdf|url|external] [--summary "..."]
 
 # 校验与维护
@@ -155,12 +159,12 @@ codememory source list | source get <id> | source check [id]
 
 # 迁移（importer）
 codememory import --file notes.txt --extract preferences
-codememory skeletonize <file_or_dir> [--min-intensity N] [--dry-run] [--tags "a,b"]
+codememory skeletonize <file_or_dir> [--min-weight N] [--dry-run] [--tags "a,b"]
 codememory compile-md <corpus> [--review-id ID] [--namespace user/imports]
 codememory materialize-review <review_id> [--accept-all]
 
-# 兼容命令（概念已废除，命令待收敛，新用法勿依赖）
-codememory focus / overview / wander / snapshot
+# 辅助工具（REPL 草稿）
+codememory snapshot <id> [--target t] [--from-dag f]
 ```
 
 ## 测试规范

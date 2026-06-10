@@ -8,7 +8,6 @@ from .index import load_index
 def find_orphans(
     root_dir: Path,
     type_: str | None = None,
-    min_intensity: int | None = None,
 ) -> list[dict]:
     """Find memories that are not referenced by any other memory's imports."""
     index = load_index(root_dir)
@@ -35,19 +34,16 @@ def find_orphans(
             continue
         if type_ and entry.type != type_:
             continue
-        if min_intensity is not None and entry.intensity < min_intensity:
-            continue
 
-        annotation = "protected" if entry.intensity >= 8 else "decay-risk"
+        annotation = "protected" if entry.protected else "unreachable"
         orphans.append({
             "id": mid,
             "type": entry.type,
-            "intensity": entry.intensity,
             "status": entry.status,
             "access_count": entry.access_count,
             "last_access": entry.last_access,
             "annotation": annotation,
         })
 
-    orphans.sort(key=lambda o: (-o["intensity"], o["id"]))
+    orphans.sort(key=lambda o: (-o["access_count"], o["id"]))
     return orphans

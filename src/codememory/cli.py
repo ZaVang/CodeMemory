@@ -11,13 +11,13 @@ from .handlers import (
     handle_compile_md,
     handle_context_pack,
     handle_create,
-    handle_focus,
     handle_import,
     handle_log,
     handle_materialize_review,
     handle_merge,
     handle_orphans,
-    handle_overview,
+    handle_propose,
+    handle_proposals,
     handle_reindex,
     handle_reject,
     handle_resolve,
@@ -28,12 +28,13 @@ from .handlers import (
     handle_source_get,
     handle_source_list,
     handle_skeletonize,
+    handle_test,
+    handle_test_report,
     handle_snapshot,
     handle_diff,
     handle_suggest_deps,
     handle_update,
     handle_validate,
-    handle_wander,
 )
 
 
@@ -54,7 +55,6 @@ def main(argv: list[str] | None = None):
     p.add_argument("--type", default="atom", choices=["atom", "schema"], help="Memory type (default: atom)")
     p.add_argument("--id", required=True)
     p.add_argument("--schema")
-    p.add_argument("--intensity", type=int, default=5, help="Relevance score 1-10 (default: 5)")
     p.add_argument("--dry-run", action="store_true", help="Preview without creating file")
     p.add_argument("--tags", help="Comma-separated tags")
     p.add_argument("--maturity", choices=["draft", "verified", "proven"], default="draft",
@@ -82,15 +82,40 @@ def main(argv: list[str] | None = None):
     p.add_argument("--source-ref-summary", dest="source_ref_summary",
                    help="Optional summary for the appended source ref")
 
-    # merge
-    p = subparsers.add_parser("merge", help="Merge a proposed memory (proposed -> active)")
+    # test
+    p = subparsers.add_parser("test", help="Export golden questions with assembled context (agent is the runner)")
     _add_logging_flags(p)
-    p.add_argument("id", help="Memory ID to merge")
+    p.add_argument("target", help="Entry memory ID, or 'report' to record runner results")
+    p.add_argument("subtarget", nargs="?", help="Entry memory ID (report mode)")
+    p.add_argument("--results", help="Path to results JSON file (report mode)")
+    p.add_argument("--depth", choices=["required", "recommended", "full"], default="recommended")
+    p.add_argument("--budget", type=int)
+
+    # merge
+    p = subparsers.add_parser("merge", help="Merge a proposal (patch-queue id or proposed memory id)")
+    _add_logging_flags(p)
+    p.add_argument("id", help="Proposal ID or memory ID to merge")
 
     # reject
-    p = subparsers.add_parser("reject", help="Reject a proposed memory (proposed -> archived)")
+    p = subparsers.add_parser("reject", help="Reject a proposal (patch-queue id or proposed memory id)")
     _add_logging_flags(p)
-    p.add_argument("id", help="Memory ID to reject")
+    p.add_argument("id", help="Proposal ID or memory ID to reject")
+
+    # propose (modification-class proposal against an existing atom)
+    p = subparsers.add_parser("propose", help="Queue a modification proposal against an existing atom")
+    _add_logging_flags(p)
+    p.add_argument("id", help="Target memory ID")
+    p.add_argument("--reason", required=True, help="Why this change should happen")
+    p.add_argument("--summary")
+    p.add_argument("--body")
+    p.add_argument("--import-required", nargs="*")
+    p.add_argument("--import-recommended", nargs="*")
+    p.add_argument("--import-related", nargs="*")
+    p.add_argument("--source-ref", dest="source_ref")
+
+    # proposals (list the pending queue)
+    p = subparsers.add_parser("proposals", help="List pending modification proposals")
+    _add_logging_flags(p)
 
     # resolve
     p = subparsers.add_parser("resolve", help="Resolve and print memory context")
@@ -168,36 +193,10 @@ def main(argv: list[str] | None = None):
     sp.add_argument("--end", type=int, help="Optional character end offset")
     sp.add_argument("--max-chars", dest="max_chars", type=int, help="Maximum characters to return")
 
-    # focus
-    p = subparsers.add_parser("focus", help="Focus on a memory")
-    _add_logging_flags(p)
-    p.add_argument("id", help="Memory ID")
-    p.add_argument("--level", choices=["full", "summary"], default="full")
-    p.add_argument("--content", help="Body content (in-context zoom)")
-    p.add_argument("--summary", dest="summary_override", help="Summary text (in-context zoom)")
-    p.add_argument("--resolve", action="store_true", help="Auto-resolve before focusing")
-
-    # overview
-    p = subparsers.add_parser("overview", help="Overview of top memories")
-    _add_logging_flags(p)
-    p.add_argument("--tags", nargs="*")
-    p.add_argument("--limit", type=int, default=5)
-    p.add_argument("--format", choices=["default", "inject"], default="default")
-    p.add_argument("--status", default=None)
-    p.add_argument("--with-recall", action="store_true")
-
-    # wander
-    p = subparsers.add_parser("wander", help="Random walk through memories")
-    _add_logging_flags(p)
-    p.add_argument("--tags", nargs="*")
-    p.add_argument("--mode", choices=["cool", "random"], default="cool")
-    p.add_argument("--inject", action="store_true", help="Compact [recall] format")
-
     # orphans
     p = subparsers.add_parser("orphans", help="Find orphaned memories")
     _add_logging_flags(p)
     p.add_argument("--type", "-T", dest="type_", choices=["atom", "schema"])
-    p.add_argument("--min-intensity", type=int)
 
     # snapshot
     p = subparsers.add_parser("snapshot", help="Persist a transient context snapshot")
@@ -244,8 +243,8 @@ def main(argv: list[str] | None = None):
     p = subparsers.add_parser("skeletonize", help="Import structured memories from Markdown/code files")
     _add_logging_flags(p)
     p.add_argument("source", help=".md/.py/.js/.ts file or directory")
-    p.add_argument("--min-intensity", type=int, default=5,
-                   help="Sections below this intensity are truncated (default: 5)")
+    p.add_argument("--min-weight", "--min-intensity", dest="min_weight", type=int, default=5,
+                   help="Sections below this weight are truncated (default: 5); --min-intensity is a deprecated alias")
     p.add_argument("--dry-run", action="store_true",
                    help="Preview without writing files")
     p.add_argument("--tags", help="Comma-separated tags for generated memories")
@@ -254,7 +253,7 @@ def main(argv: list[str] | None = None):
                    help="Output format: memory (default, write to DAG) or html (self-contained HTML)")
     p.add_argument("--output-dir", help="Output directory for HTML files (required with --format html)")
     p.add_argument("--mode", choices=["file", "module"], default="file",
-                   help="Code skeletonization mode: file (intensity-based) or module (zero-config, signatures only)")
+                   help="Code skeletonization mode: file (weight-based) or module (zero-config, signatures only)")
     p.add_argument("--config", help="Path to .codememory/skeletonize.yaml (auto-detected from cwd by default)")
 
     # compile-md
@@ -283,7 +282,7 @@ def main(argv: list[str] | None = None):
         if args.tags:
             tags_list = [t.strip() for t in args.tags.split(",") if t.strip()]
         print(handle_create(root, args.type, args.id, schema=args.schema,
-                            intensity=args.intensity, tags=tags_list, dry_run=args.dry_run,
+                            tags=tags_list, dry_run=args.dry_run,
                             maturity=args.maturity, cache_stable=args.cache_stable,
                             lifecycle=args.lifecycle, propose=args.propose))
     elif cmd == "update":
@@ -294,10 +293,26 @@ def main(argv: list[str] | None = None):
                             import_related=args.import_related,
                             source_ref=args.source_ref,
                             source_ref_summary=args.source_ref_summary))
+    elif cmd == "test":
+        if args.target == "report":
+            if not args.subtarget or not args.results:
+                parser.error("test report requires <entry> and --results <file>")
+            print(handle_test_report(root, args.subtarget, args.results))
+        else:
+            print(handle_test(root, args.target, depth=args.depth, budget=args.budget))
     elif cmd == "merge":
         print(handle_merge(root, args.id))
     elif cmd == "reject":
         print(handle_reject(root, args.id))
+    elif cmd == "propose":
+        print(handle_propose(root, args.id, reason=args.reason,
+                             summary=args.summary, body=args.body,
+                             import_required=args.import_required,
+                             import_recommended=args.import_recommended,
+                             import_related=args.import_related,
+                             source_ref=args.source_ref))
+    elif cmd == "proposals":
+        print(handle_proposals(root))
     elif cmd == "reindex":
         handle_reindex(root)
     elif cmd == "resolve":
@@ -355,17 +370,8 @@ def main(argv: list[str] | None = None):
                 end=args.end,
                 max_chars=args.max_chars,
             ))
-    elif cmd == "focus":
-        print(handle_focus(root, args.id, level=args.level, content=args.content,
-                           summary_override=args.summary_override, resolve_flag=args.resolve))
-    elif cmd == "overview":
-        print(handle_overview(root, tags=args.tags, limit=args.limit,
-                              format_mode=args.format, status=args.status,
-                              with_recall=args.with_recall))
-    elif cmd == "wander":
-        print(handle_wander(root, tags=args.tags, mode=args.mode, inject=args.inject))
     elif cmd == "orphans":
-        print(handle_orphans(root, type_=args.type_, min_intensity=args.min_intensity))
+        print(handle_orphans(root, type_=args.type_))
     elif cmd == "snapshot":
         print(handle_snapshot(root, args.id, target=args.target,
                               budget=args.budget, from_dag=args.from_dag))
@@ -399,7 +405,7 @@ def main(argv: list[str] | None = None):
             tags_list = [t.strip() for t in args.tags.split(",") if t.strip()]
         print(handle_skeletonize(
             root, args.source,
-            min_intensity=args.min_intensity,
+            min_weight=args.min_weight,
             dry_run=args.dry_run,
             tags=tags_list,
             output_format=args.output_format,

@@ -1,4 +1,4 @@
-"""External configuration for skeletonize — glob-matched default intensity.
+"""External configuration for skeletonize — glob-matched default weight.
 
 Supports a ``.codememory/skeletonize.yaml`` file at the project root::
 
@@ -8,9 +8,9 @@ Supports a ``.codememory/skeletonize.yaml`` file at the project root::
       "src/core/**": 8
       "src/api/**": 7
 
-``@intensity`` annotations in source code always take precedence over
+``@weight`` annotations in source code always take precedence over
 glob-matched defaults. The config file is optional — when absent, all
-files default to intensity 5.
+files default to weight 5.
 """
 
 from __future__ import annotations
@@ -24,10 +24,10 @@ _CONFIG_CACHE: dict[Path, dict[str, int]] = {}
 
 
 def load_config(project_root: Path) -> dict[str, int]:
-    """Load skeletonize intensity defaults from a YAML config file.
+    """Load skeletonize weight defaults from a YAML config file.
 
-    Returns a ``{glob: intensity}`` dict. Result is cached per project_root.
-    Returns the full defaults map (each call to :func:`resolve_intensity`
+    Returns a ``{glob: weight}`` dict. Result is cached per project_root.
+    Returns the full defaults map (each call to :func:`resolve_weight`
     iterates over it).
     """
     if project_root in _CONFIG_CACHE:
@@ -42,9 +42,9 @@ def load_config(project_root: Path) -> dict[str, int]:
             if isinstance(data, dict) and 'defaults' in data:
                 raw = data['defaults']
                 if isinstance(raw, dict):
-                    for pattern, intensity in raw.items():
+                    for pattern, weight in raw.items():
                         try:
-                            ival = int(intensity)
+                            ival = int(weight)
                             defaults[str(pattern)] = max(1, min(10, ival))
                         except (ValueError, TypeError):
                             pass
@@ -55,10 +55,10 @@ def load_config(project_root: Path) -> dict[str, int]:
     return defaults
 
 
-def resolve_intensity(file_path: str | Path, project_root: Path) -> int | None:
-    """Find the default intensity for *file_path* from config globs.
+def resolve_weight(file_path: str | Path, project_root: Path) -> int | None:
+    """Find the default weight for *file_path* from config globs.
 
-    Returns the intensity value if a glob matches, or None if no match.
+    Returns the weight value if a glob matches, or None if no match.
     """
     defaults = load_config(project_root)
     if not defaults:
@@ -66,8 +66,8 @@ def resolve_intensity(file_path: str | Path, project_root: Path) -> int | None:
 
     fp = str(file_path).replace('\\', '/')
 
-    for pattern, intensity in defaults.items():
+    for pattern, weight in defaults.items():
         if fnmatch.fnmatch(fp, pattern):
-            return intensity
+            return weight
 
     return None

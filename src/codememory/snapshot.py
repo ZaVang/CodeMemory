@@ -107,7 +107,6 @@ def snapshot_dag(root_dir: Path, dag, snapshot_id: str) -> Path:
         "updated": today,
         "version": 1,
         "tags": ["snapshot"],
-        "intensity": 7,
         "source": {
             "platform": "codememory",
             "created_by": "snapshot",

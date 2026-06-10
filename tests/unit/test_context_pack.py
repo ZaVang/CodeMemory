@@ -10,7 +10,7 @@ _SRC = Path(__file__).resolve().parent.parent.parent / "src"
 if str(_SRC) not in sys.path:
     sys.path.insert(0, str(_SRC))
 
-from codememory.context_pack import build_context_pack, render_context_pack
+from codememory.build import build_context_pack, render_context_pack
 from codememory.core import compute_body_hash
 from codememory.index import save_index
 from codememory.models import IndexData, MemoryEntry

@@ -79,12 +79,21 @@ def _transition_proposed(root_dir: Path, memory_id: str, new_status: str, op_nam
 
 
 def merge(root_dir: Path, memory_id: str) -> Path:
-    """Merge a proposed memory into the canonical graph (proposed -> active)."""
+    """Merge a proposal: patch-queue id first, else proposed atom -> active."""
+    from .proposals import load_proposal, merge_proposal
+
+    if load_proposal(root_dir, memory_id) is not None:
+        return merge_proposal(root_dir, memory_id)
     return _transition_proposed(root_dir, memory_id, "active", "merge")
 
 
-def reject(root_dir: Path, memory_id: str) -> Path:
-    """Reject a proposed memory (proposed -> archived)."""
+def reject(root_dir: Path, memory_id: str) -> Path | None:
+    """Reject a proposal: patch-queue id first, else proposed atom -> archived."""
+    from .proposals import load_proposal, reject_proposal
+
+    if load_proposal(root_dir, memory_id) is not None:
+        reject_proposal(root_dir, memory_id)
+        return None
     return _transition_proposed(root_dir, memory_id, "archived", "reject")
 
 

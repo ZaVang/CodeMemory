@@ -92,56 +92,6 @@ def get_stats():
 
 
 # ---------------------------------------------------------------------------
-# Wander
-# ---------------------------------------------------------------------------
-
-@router.post("/wander")
-def post_wander(payload: dict[str, Any] | None = Body(default=None)):
-    mode = (payload or {}).get("mode", "cool")
-    index = load_cm_index()
-    candidates = list(index.memories.items())
-    if not candidates:
-        raise HTTPException(status_code=404, detail="No memories found")
-
-    if mode == "cool":
-        cool_candidates = [
-            (mid, entry)
-            for mid, entry in candidates
-            if getattr(entry, "intensity", 5) < 8
-        ] or candidates
-
-        weights: list[float] = []
-        for _mid, entry in cool_candidates:
-            stability = max(getattr(entry, "stability", 14.0), 0.1)
-            days_since = getattr(entry, "days_since_last_access", None)
-            access_count = getattr(entry, "access_count", 0)
-            if access_count > 0 and days_since is not None:
-                # Same effective weighting used by codememory.handlers.handle_wander.
-                decay = 0.5 ** (max(0, days_since) / stability)
-                weight = 1.0 / (access_count * decay + 1)
-            else:
-                weight = 1.0
-            weights.append(weight)
-        memory_id, entry = random.choices(cool_candidates, weights=weights, k=1)[0]
-    else:
-        memory_id, entry = random.choice(candidates)
-
-    return serialize({
-        "id": memory_id,
-        "type": entry.type,
-        "summary": entry.summary,
-        "tags": entry.tags,
-        "intensity": entry.intensity,
-        "access_count": entry.access_count,
-        "last_access": entry.last_access,
-        "status": entry.status,
-        "maturity": entry.maturity,
-        "days_since_last_access": entry.days_since_last_access,
-        "stability": entry.stability,
-    })
-
-
-# ---------------------------------------------------------------------------
 # Validate
 # ---------------------------------------------------------------------------
 

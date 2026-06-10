@@ -65,13 +65,13 @@ CodeMemory 的全部设计从一条公理推导：**记忆像代码一样组织*
 | **build**（装配） | 构建/链接 + tree-shaking | 入口 atom → imports 闭包 → 拓扑排序 → 预算内裁剪（超预算按 target > required > recommended > related 降级为 summary）→ 结构化上下文 | 已实现（CLI 主命令 `build`；`resolve` / `context-pack` 为兼容别名） |
 | **check**（校验） | 类型检查 + linter | 断链、循环、schema 违约、stale asset、孤儿 | 已实现（CLI 名 `validate`） |
 | **search**（检索） | 符号搜索 / LSP | **只负责找入口**；找到后一切走 build。词法排序，不做语义装配 | 已实现（词法排序：字段加权 + OR 语义） |
-| **test**（验证） | 测试 / CI | 入口 atom 可附黄金问题：装配出的上下文应能让 agent 回答 X；最小形态 = 题集 + LLM judge | 未实现（概念已定型） |
+| **test**（验证） | 测试 / CI | 入口 atom 可附黄金问题：装配出的上下文应能让 agent 回答 X；最小形态 = 题集 + LLM judge | 已实现（题集导出 + report 回写 log；runner 是 agent） |
 
 ### 4.3 变更管理（仓库怎么演化）
 
 | 概念 | 代码对应物 | 定义 | 实现状态 |
 |---|---|---|---|
-| **proposal**（提案） | Pull Request | 高风险变更落为 `status: proposed`，不进默认 build，owner merge 后生效 | 未实现（概念已定型；过渡做法见 agent-memory-guide 第 6 节） |
+| **proposal**（提案） | Pull Request | 高风险变更落为 `status: proposed`，不进默认 build，owner merge 后生效 | 已实现（新增类 = `status: proposed`；修改类 = patch 队列 `propose`/`merge`/`reject`） |
 | **log**（日志） | git log | 每次变更的审计轨迹（change_note / log.md） | 已实现 |
 
 ## 5. 核心循环

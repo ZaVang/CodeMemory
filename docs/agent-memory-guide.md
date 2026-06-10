@@ -18,7 +18,8 @@
 | 新增 atom | `codememory create --id <id> [--schema s] [--tags "a,b"]`，然后立即 `update` 填入真实内容（见第 7 节） |
 | 修改 atom | `codememory update <id> --change-note "..."`（高风险，见第 6 节） |
 | proposal（新增类） | `codememory create --propose ...` 落为 proposed；owner 用 `merge <id>` / `reject <id>` 处理 |
-| proposal（修改类） | 未实装（patch 队列属阶段 C）；过渡做法见第 6 节 |
+| proposal（修改类） | `codememory propose <id> --reason "..." [--summary ...] [--body ...]` 入队；`proposals` 看队列；owner `merge <proposal_id>` / `reject <proposal_id>` |
+| test（验证） | `codememory test <entry>` 导出题集+上下文 JSON；答完 `codememory test report <entry> --results <file>` |
 | 绑定 asset | `codememory update <id> --change-note "..." --source-ref <artifact_id> [--source-ref-summary "..."]` |
 
 ---
@@ -125,7 +126,7 @@ codememory update user/contexts/cache-layer \
 
 **新增类 proposal（已实装）**：对要新增的内容没把握、或内容涉及 protected 邻域时，用 `codememory create --propose ...`。产出的 atom 是 `status: proposed`——默认 search 不可见、build 不装配，owner 审阅后 `codememory merge <id>`（进入 canonical）或 `codememory reject <id>`（归档）。
 
-**修改类 proposal 的过渡做法**（patch 队列实装前，属阶段 C）：修改**已有** atom 的高风险变更**不要直接 update**。在会话中向 owner 说明：要改哪个 atom、改成什么、为什么；获得明确同意后再执行 update，并在 `--change-note` 里写清理由。
+**修改类 proposal（已实装）**：修改**已有** atom 的高风险变更**不要直接 update**。用 `codememory propose <id> --reason "..."` 把字段级 patch 入队（支持 --summary / --body / --import-* / --source-ref），目标 atom 不被触碰；owner 审阅后 `merge <proposal_id>`（经 update 应用，version++、change_log 留痕）或 `reject <proposal_id>`。
 
 **protected 的设置**：由 owner 拍板，agent 不自行创建 protected atom。当你认为某条记忆需要保护（核心原则、硬约束），向 owner 建议。
 
@@ -217,5 +218,5 @@ codememory validate
 | create 后不 update，留着 TODO summary | create 只是模板，必须立即 update 填真实 summary/body |
 | 未经 owner 同意 update 已有 atom | 高风险变更先说明、再获同意（proposal 过渡做法） |
 | update 不写 change-note | `--change-note` 必填，它是 log 的原料 |
-| 给记忆打重要性分（`--intensity`） | 概念已废除，不要传该参数；重要性由被依赖数表达，保护语义找 owner 标 protected |
+| 给记忆打重要性分 | intensity 已整体移除（参数不存在）；重要性由被依赖数表达，保护语义找 owner 标 protected |
 | 写完不跑 validate | 任何写入后 `codememory validate` 守门 |

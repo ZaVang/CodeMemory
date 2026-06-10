@@ -11,7 +11,6 @@ from .handlers import (
     handle_import,
     handle_log,
     handle_orphans,
-    handle_overview,
     handle_resolve,
     handle_search,
     handle_update,
@@ -48,7 +47,6 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
                 "type": {"type": "string", "enum": ["atom", "schema"], "default": "atom"},
                 "id": {"type": "string", "description": "Memory identifier"},
                 "schema": {"type": "string", "description": "Schema ID (for atoms with schema)"},
-                "intensity": {"type": "integer", "default": 5, "description": "Relevance score 1-10"},
                 "dry_run": {"type": "boolean", "default": False},
                 "tags": {"type": "array", "items": {"type": "string"}, "description": "Custom tags list"},
                 "root": {"type": "string", "description": "Root directory for memory data"},
@@ -82,22 +80,6 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
             "properties": {
                 "root": {"type": "string", "description": "Root directory for memory data"},
             },
-        },
-    },
-    {
-        "name": "focus_memory",
-        "description": "Focus on a specific memory with adjustable resolution. Supports in-context zoom and auto-resolve.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "id": {"type": "string", "description": "Memory ID"},
-                "level": {"type": "string", "enum": ["full", "summary"], "default": "full"},
-                "content": {"type": "string", "description": "Body content for in-context zoom"},
-                "summary": {"type": "string", "description": "Summary for in-context zoom"},
-                "resolve": {"type": "boolean", "default": False, "description": "Auto-resolve before focusing"},
-                "root": {"type": "string", "description": "Root directory for memory data"},
-            },
-            "required": ["id"],
         },
     },
     {
@@ -139,22 +121,6 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
             "type": "object",
             "properties": {
                 "type": {"type": "string", "enum": ["atom", "schema"]},
-                "min_intensity": {"type": "integer", "description": "Minimum intensity filter"},
-                "root": {"type": "string", "description": "Root directory for memory data"},
-            },
-        },
-    },
-    {
-        "name": "overview",
-        "description": "Overview of top relevant memories with heat scores, status annotations, and stale detection.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "tags": {"type": "array", "items": {"type": "string"}, "description": "Filter by tags (AND logic)"},
-                "limit": {"type": "integer", "default": 5, "description": "Max results (default: 5)"},
-                "format": {"type": "string", "enum": ["default", "inject"], "default": "default"},
-                "status": {"type": "string", "description": "Filter by status"},
-                "with_recall": {"type": "boolean", "default": False, "description": "Append wander recall line"},
                 "root": {"type": "string", "description": "Root directory for memory data"},
             },
         },
@@ -211,7 +177,7 @@ async def _resolve_handler(payload: dict[str, Any]) -> dict[str, Any]:
 async def _create_handler(payload: dict[str, Any]) -> dict[str, Any]:
     root = get_root_dir(payload.get("root"))
     result = handle_create(root, memory_type=payload.get("type", "atom"), memory_id=payload["id"],
-                           schema=payload.get("schema"), intensity=payload.get("intensity", 5),
+                           schema=payload.get("schema"),
                            tags=payload.get("tags"), dry_run=payload.get("dry_run", False),
                            maturity=payload.get("maturity", "draft"))
     return {"result": result}
@@ -254,47 +220,8 @@ async def _snapshot_handler(payload: dict[str, Any]) -> dict[str, Any]:
 
 async def _orphans_handler(payload: dict[str, Any]) -> dict[str, Any]:
     root = get_root_dir(payload.get("root"))
-    result = handle_orphans(root, type_=payload.get("type"), min_intensity=payload.get("min_intensity"))
+    result = handle_orphans(root, type_=payload.get("type"))
     return {"result": result}
-
-
-async def _overview_handler(payload: dict[str, Any]) -> dict[str, Any]:
-    root = get_root_dir(payload.get("root"))
-    result = handle_overview(root, tags=payload.get("tags"), limit=payload.get("limit", 5),
-                             format_mode=payload.get("format", "default"),
-                             status=payload.get("status"), with_recall=payload.get("with_recall", False))
-    return {"result": result}
-
-
-async def _focus_handler(payload: dict[str, Any]) -> dict[str, Any]:
-    root = get_root_dir(payload.get("root"))
-    from .core import parse_frontmatter
-    from .index import load_index
-
-    # --resolve shortcut
-    if payload.get("resolve"):
-        content = handle_resolve(root, payload["id"], depth="recommended")
-        return {"content": content, "type": "resolved_context"}
-
-    # In-context zoom
-    content_override = payload.get("content")
-    summary_override = payload.get("summary")
-    if content_override is not None and summary_override is not None:
-        level = payload.get("level", "full")
-        if level == "summary":
-            return {"content": summary_override, "type": "in_context"}
-        return {"content": content_override, "type": "in_context"}
-
-    # Disk read
-    index = load_index(root)
-    if payload["id"] not in index.memories:
-        return {"error": f"Memory '{payload['id']}' not found"}
-    entry = index.memories[payload["id"]]
-    file_path = root / entry.path
-    meta, body = parse_frontmatter(file_path)
-    if payload.get("level") == "summary":
-        return {"content": entry.summary or "", "type": entry.type}
-    return {"content": body, "type": entry.type, "metadata": meta}
 
 
 async def _changelog_handler(payload: dict[str, Any]) -> dict[str, Any]:
@@ -321,11 +248,9 @@ _HANDLER_MAP = {
     "create_memory": _create_handler,
     "search_memories": _search_handler,
     "validate_memories": _validate_handler,
-    "focus_memory": _focus_handler,
     "update_memory": _update_handler,
     "snapshot": _snapshot_handler,
     "find_orphans": _orphans_handler,
-    "overview": _overview_handler,
     "changelog": _changelog_handler,
     "log": _log_handler,
     "import_memories": _import_handler,

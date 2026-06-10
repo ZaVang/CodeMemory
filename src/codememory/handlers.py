@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import json
 import logging
-import random
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -19,7 +18,6 @@ from .compiler.propose import compile_markdown_corpus
 from .compiler.review import load_review_set, save_review_set, set_all_decisions
 from .build import build_context_pack, render_context_pack
 from .core import compute_body_hash as _cbh
-from .core import compute_retrieval_probability as _retrieval_prob
 from .core import get_memory_path, parse_frontmatter as _pfm
 from .create import create
 from .import_cmd import import_text
@@ -90,11 +88,9 @@ def handle_create(
     memory_type: str,
     memory_id: str,
     schema: str | None = None,
-    intensity: int = 5,
     tags: list[str] | None = None,
     dry_run: bool = False,
     maturity: str = "draft",
-    stability: float | None = None,
     cache_stable: bool = False,
     lifecycle: str = "permanent",
     propose: bool = False,
@@ -105,11 +101,9 @@ def handle_create(
         memory_type,
         memory_id,
         schema=schema,
-        intensity=intensity,
         tags=tags,
         dry_run=dry_run,
         maturity=maturity,
-        stability=stability,
         cache_stable=cache_stable,
         lifecycle=lifecycle,
         propose=propose,
@@ -149,6 +143,31 @@ def handle_update(
     return str(file_path)
 
 
+def handle_test(
+    root: Path,
+    memory_id: str,
+    depth: str = "recommended",
+    budget: int | None = None,
+) -> str:
+    """Export the entry's golden questions plus assembled context as JSON."""
+    import json as _json
+
+    from .test_contract import export_test_bundle
+
+    bundle = export_test_bundle(root, memory_id, depth=depth, budget=budget)
+    return _json.dumps(bundle.model_dump(mode="json"), ensure_ascii=False, indent=2)
+
+
+def handle_test_report(root: Path, memory_id: str, results_path: str) -> str:
+    """Record a runner's golden-question results into the audit log."""
+    import json as _json
+
+    from .test_contract import record_test_report
+
+    results = _json.loads(Path(results_path).read_text(encoding="utf-8"))
+    return record_test_report(root, memory_id, results)
+
+
 def handle_merge(root: Path, memory_id: str) -> str:
     """Merge a proposed memory into the canonical graph. Returns path string."""
     from .update import merge
@@ -157,10 +176,55 @@ def handle_merge(root: Path, memory_id: str) -> str:
 
 
 def handle_reject(root: Path, memory_id: str) -> str:
-    """Reject a proposed memory (proposed -> archived). Returns path string."""
+    """Reject a proposal (patch-queue id or proposed atom). Returns status string."""
     from .update import reject
 
-    return str(reject(root, memory_id))
+    result = reject(root, memory_id)
+    return str(result) if result is not None else f"rejected {memory_id}"
+
+
+def handle_propose(
+    root: Path,
+    target_id: str,
+    reason: str,
+    summary: str | None = None,
+    body: str | None = None,
+    import_required: list[str] | None = None,
+    import_recommended: list[str] | None = None,
+    import_related: list[str] | None = None,
+    source_ref: str | None = None,
+) -> str:
+    """Queue a modification proposal against an existing atom."""
+    from .proposals import create_proposal
+
+    proposal = create_proposal(
+        root,
+        target_id,
+        reason=reason,
+        summary=summary,
+        body=body,
+        import_required=import_required,
+        import_recommended=import_recommended,
+        import_related=import_related,
+        source_ref=source_ref,
+    )
+    return proposal.proposal_id
+
+
+def handle_proposals(root: Path) -> str:
+    """List the pending modification-proposal queue."""
+    from .proposals import list_proposals
+
+    proposals = list_proposals(root)
+    if not proposals:
+        return "(no pending proposals)"
+    lines = []
+    for p in proposals:
+        fields = [name for name in ("summary", "body", "import_required",
+                                    "import_recommended", "import_related", "source_ref")
+                  if getattr(p.patch, name) is not None]
+        lines.append(f"{p.proposal_id}  ->  {p.target_id}  [{', '.join(fields)}]  {p.reason}")
+    return "\n".join(lines)
 
 
 def handle_resolve(
@@ -340,248 +404,12 @@ def handle_search(
     return "\n".join(lines)
 
 
-def handle_focus(
-    root: Path,
-    memory_id: str,
-    level: str = "full",
-    content: str | None = None,
-    summary_override: str | None = None,
-    resolve_flag: bool = False,
-) -> str:
-    """Focus on a memory with adjustable resolution."""
-    # --resolve: auto-resolve dependency subgraph before focusing
-    if resolve_flag:
-        return resolve(root, memory_id, depth="recommended")
-
-    # In-context zoom
-    if content is not None and summary_override is not None:
-        if level == "summary":
-            return f"# {memory_id}\n\n> {summary_override}"
-        return content
-
-    # Default: read from disk
-    index = load_index(root)
-    if memory_id not in index.memories:
-        _logger.error("Memory '%s' not found in index. Did you reindex?", memory_id)
-        sys.exit(1)
-    entry = index.memories[memory_id]
-    file_path = root / entry.path
-    _meta, body = _pfm(file_path)
-
-    if level == "summary":
-        return f"# {memory_id}\n\n> {entry.summary}"
-    return body
-
-
-def handle_overview(
-    root: Path,
-    tags: list[str] | None = None,
-    limit: int = 5,
-    format_mode: str = "default",
-    status: str | None = None,
-    with_recall: bool = False,
-) -> str:
-    """Overview of top relevant memories with heat scores and stale detection."""
-    results = search(root, tags=tags)
-
-    # Filter by status: exclude archived by default
-    if status and status != "all":
-        results = [r for r in results if r.get("status") == status]
-    elif not status or status != "all":
-        results = [r for r in results if r.get("status") != "archived"]
-
-    # Pre-compute cycle participants from required-imports DAG (R13-M2)
-    index = load_index(root)
-    all_graph: dict[str, list[str]] = {}
-    for mid in index.memories:
-        entry = index.memories[mid]
-        imports_dict = entry.imports
-        if isinstance(imports_dict, dict):
-            all_graph[mid] = _resolve_import_ids(imports_dict, ("required",))
-        else:
-            all_graph[mid] = []
-    from .resolve import find_cycle_participants as _fcp
-    cycle_ids = set(_fcp(all_graph))
-
-    lines: list[str] = []
-    for r in results[:limit]:
-        mid = r["id"]
-        mem_type = r["type"]
-        deps = r.get("dependents", 0)
-        access = r.get("access_count", 0)
-
-        # R13-M2: exclude cycle participants from dependents count
-        if mid in cycle_ids:
-            deps = 0
-
-        # R13-M1/M3/M4: time-decay heat calculation using precomputed
-        # days_since_last_access and per-memory stability (default 14.0).
-        # Standard formula: decay = 0.5^(days / stability)
-        # Access bonus = access_count * decay
-        # Zero-access memories get minimal access bonus (10% weight).
-        entry = index.memories.get(mid)
-        stability = max(entry.stability, 0.1) if entry else 14.0  # C2: clamp to safe minimum
-        # C1 fix: read days_since_last_access from MemoryEntry (not from search dict),
-        # as search() previously did not include this field. Also apply C2 safety clamp.
-        days_since = entry.days_since_last_access if entry else None
-        if access > 0 and days_since is not None:
-            days_since = max(0, days_since)
-            decay = _retrieval_prob(days_since, stability)
-            access_bonus = access * decay
-        else:
-            access_bonus = access * 0.1
-
-        heat = int(deps * 10 + access_bonus)
-        entry_status = r.get("status", "active")
-        tags_str = _fmt_tags(r)
-        summary = r.get("summary", "")
-
-        stale = _stale_check(root, r)
-        stale_mark = " [stale]" if stale else ""
-        status_mark = f"[{entry_status}]"
-
-        if format_mode == "inject":
-            line = (
-                f"[{mid}]({mem_type}, heat:{heat}, {entry_status})"
-                f"[{tags_str}] {summary}{stale_mark}"
-            )
-            if len(line) > 120:
-                line = line[:117] + "..."
-            lines.append(line)
-        else:
-            lines.append(
-                f"{mid:45s} {mem_type:9s} heat:{heat:3d} "
-                f"{status_mark}{stale_mark}  [{tags_str}]"
-            )
-            if summary:
-                lines.append(f"    {summary}")
-
-    # --with-recall: append wander inject
-    if with_recall:
-        all_mems = index.memories
-        candidates = [
-            (mid, e) for mid, e in all_mems.items() if e.intensity < 8
-        ]
-        if candidates:
-            # R13-M1: use unified decay formula for cool wander weighting
-            candidates.sort(key=lambda x: x[1].access_count)
-            cutoff = max(1, len(candidates) // 3)
-            pool = candidates[:cutoff]
-            mid, entry = random.choice(pool)
-            tags_str = _fmt_tags(entry)
-            lines.append(
-                f"[recall] {mid} — {entry.summary}"
-                f"（tags: {tags_str}）"
-            )
-
-    return "\n".join(lines)
-
-
-def handle_wander(
-    root: Path,
-    tags: list[str] | None = None,
-    mode: str = "cool",
-    inject: bool = False,
-) -> str:
-    """Random walk through memories. Returns formatted output."""
-    index = load_index(root)
-    memories = index.memories
-    candidates = list(memories.items())
-    if tags:
-        candidates = [
-            (mid, entry)
-            for mid, entry in candidates
-            if all(t in entry.tags for t in tags)
-        ]
-    if not candidates:
-        return "(no matching memories)"
-
-    inject_mode = inject
-    if mode == "cool":
-        # Weighted random: lower decay-adjusted access -> higher weight (R13-M1)
-        cool_candidates = [
-            (mid, entry)
-            for mid, entry in candidates
-            if entry.intensity < 8
-        ]
-        if not cool_candidates:
-            cool_candidates = candidates
-
-        weights = []
-        for _mid, entry in cool_candidates:
-            stability = max(getattr(entry, 'stability', 14.0), 0.1)  # C2: clamp to safe minimum
-            days_since = getattr(entry, 'days_since_last_access', None)
-            if entry.access_count > 0 and days_since is not None:
-                decay = _retrieval_prob(max(0, days_since), stability)
-                weight = 1.0 / (entry.access_count * decay + 1)
-            else:
-                weight = 1.0  # Never accessed — maximally cool
-            weights.append(weight)
-        mid, entry = random.choices(cool_candidates, weights=weights, k=1)[0]
-        mode_label = "[cool]"
-    else:
-        mid, entry = random.choice(candidates)
-        mode_label = "[random]"
-
-    tags_str = _fmt_tags(entry)
-
-    if inject_mode:
-        return (
-            f"[recall] {mid} — {entry.summary}"
-            f"（tags: {tags_str}）"
-        )
-
-    lines: list[str] = []
-    lines.append(f"# Wander {mode_label}: {mid}  [{tags_str}]\n")
-    if entry.summary:
-        lines.append(f"> {entry.summary}")
-    lines.append(
-        f"Type: {entry.type}, "
-        f"Status: {entry.status}, "
-        f"Intensity: {entry.intensity}, "
-        f"Access: {entry.access_count}"
-    )
-
-    # Forward deps
-    imports_dict = entry.imports
-    if isinstance(imports_dict, dict):
-        all_imports = _resolve_import_ids(imports_dict)
-        if all_imports:
-            lines.append("\nForward deps (imports):")
-            for ref in all_imports:
-                lines.append(f"  -> {ref}")
-
-    # Reverse deps
-    reverse_deps: list[str] = []
-    for other_id, other_entry in memories.items():
-        if other_id == mid:
-            continue
-        other_imports = other_entry.imports
-        if not isinstance(other_imports, dict):
-            continue
-        all_refs = _resolve_import_ids(other_imports)
-        for ref_id in all_refs:
-            if ref_id == mid:
-                reverse_deps.append(other_id)
-                break
-
-    if reverse_deps:
-        lines.append("\nReverse deps (referenced by):")
-        for dep_id in reverse_deps:
-            lines.append(f"  <- {dep_id}")
-    elif mode == "cool":
-        lines.append("\n(orphaned -- no other memory references this one)")
-
-    return "\n".join(lines)
-
-
 def handle_orphans(
     root: Path,
     type_: str | None = None,
-    min_intensity: int | None = None,
 ) -> str:
     """Find orphaned memories. Returns formatted listing."""
-    orphans = find_orphans(root, type_=type_, min_intensity=min_intensity)
+    orphans = find_orphans(root, type_=type_)
     if not orphans:
         return "(no orphaned memories)"
     lines: list[str] = []
@@ -590,7 +418,6 @@ def handle_orphans(
         last = o.get("last_access") or "never"
         lines.append(
             f"{o['id']:45s} {o['type']:9s} "
-            f"intensity:{o['intensity']:2d}  "
             f"access:{o['access_count']:3d}  "
             f"last:{last}  {ann}"
         )
@@ -680,7 +507,7 @@ def _write_skeleton_memory(
     memory_id: str,
     summary: str,
     body_text: str,
-    intensity: int,
+    weight: int,
     tags: list[str],
     rel: Path,
     dry_run: bool,
@@ -696,7 +523,7 @@ def _write_skeleton_memory(
         'updated': datetime.now(timezone.utc).strftime('%Y-%m-%d'),
         'version': 1,
         'tags': tags + ['skeletonized'],
-        'intensity': intensity,
+        'weight': weight,
         'maturity': 'draft',
         'source': {
             'platform': 'skeletonize',
@@ -712,7 +539,7 @@ def _write_skeleton_memory(
     content = f'---\n{yaml_str}---\n{body_text}\n'
 
     if dry_run:
-        print(f'[{memory_id}] (intensity={intensity})')
+        print(f'[{memory_id}] (weight={weight})')
         preview = body_text[:200] + ('...' if len(body_text) > 200 else '')
         print(preview)
         print()
@@ -721,7 +548,7 @@ def _write_skeleton_memory(
         file_path = get_memory_path(root, memory_id)
         file_path.parent.mkdir(parents=True, exist_ok=True)
         file_path.write_text(content, encoding='utf-8')
-        print(f'Skeletonized: {file_path} (intensity={intensity})')
+        print(f'Skeletonized: {file_path} (weight={weight})')
         created.append(str(file_path))
 
 
@@ -777,7 +604,7 @@ def handle_materialize_review(
 def handle_skeletonize(
     root: Path,
     source: str,
-    min_intensity: int = 5,
+    min_weight: int = 5,
     dry_run: bool = False,
     tags: list[str] | None = None,
     output_format: str = "memory",
@@ -788,12 +615,12 @@ def handle_skeletonize(
     """Skeletonize Markdown/code files into CodeMemory memories or HTML.
 
     Reads .md/.py/.js/.ts/... files from *source* (file or directory),
-    splits each into sections, applies intensity-based truncation, and
+    splits each into sections, applies weight-based truncation, and
     either writes each section as a memory atom in *root* (--format memory)
     or generates self-contained HTML files (--format html).
 
     *mode* controls code skeletonization depth:
-      ``"file"`` — function/class-level, respects @intensity annotations
+      ``"file"`` — function/class-level, respects @weight annotations
       ``"module"`` — all bodies replaced, preserves imports + signatures only
     """
     import re
@@ -835,8 +662,8 @@ def handle_skeletonize(
 
     tags = tags or []
 
-    # Load skeletonize config for glob-matched intensity defaults
-    from .skeletonize.config import resolve_intensity as _resolve_cfg_intensity
+    # Load skeletonize config for glob-matched weight defaults
+    from .skeletonize.config import resolve_weight as _resolve_cfg_weight
     config_root: Path | None = None
     if config:
         config_root = Path(config).resolve()
@@ -874,14 +701,14 @@ def handle_skeletonize(
 
         if ext == '.md':
             # Markdown: split into sections
-            sections = skeletonize_markdown(text, min_intensity=min_intensity)
+            sections = skeletonize_markdown(text, min_weight=min_weight)
             total_sections += len(sections)
 
             if output_format == 'html':
                 html = _render_html(
                     sections, str(source_file),
-                    metadata={'tags': tags, 'intensity': min_intensity,
-                              'min_intensity': min_intensity},
+                    metadata={'tags': tags, 'weight': min_weight,
+                              'min_weight': min_weight},
                 )
                 if dry_run:
                     created.append(f'[DRY-RUN] HTML: {source_file} ({len(sections)} sections)')
@@ -897,7 +724,7 @@ def handle_skeletonize(
                     summary = _first_sent(section.body, max_chars=100) if section.body else (section.heading or 'Untitled')
                     body_text = f'# {section.heading}\n\n{section.body}' if section.heading else section.body
                     _write_skeleton_memory(
-                        root, memory_id, summary, body_text, section.intensity,
+                        root, memory_id, summary, body_text, section.weight,
                         tags, rel, dry_run, created,
                     )
         else:
@@ -905,12 +732,12 @@ def handle_skeletonize(
             skel_func = skeletonize_module if mode == 'module' else skeletonize_code
             skel_kwargs: dict = {'text': text, 'file_ext': ext}
             if mode == 'file':
-                skel_kwargs['min_intensity'] = min_intensity
-            # Resolve per-file config intensity
+                skel_kwargs['min_weight'] = min_weight
+            # Resolve per-file config weight
             if config_root is not None:
-                cfg_intensity = _resolve_cfg_intensity(str(source_file), config_root)
-                if cfg_intensity is not None:
-                    skel_kwargs['config_intensity'] = cfg_intensity
+                cfg_weight = _resolve_cfg_weight(str(source_file), config_root)
+                if cfg_weight is not None:
+                    skel_kwargs['config_weight'] = cfg_weight
             skeletonized = skel_func(**skel_kwargs)
             heading_slug = _slug(source_file.stem)
             memory_id = f'user/imports/{prefix}/{heading_slug}'
@@ -920,11 +747,11 @@ def handle_skeletonize(
             if output_format == 'html':
                 from .skeletonize.markdown import Section
                 sec = Section(level=1, heading=source_file.stem, body=skeletonized,
-                             intensity=5, raw=text)
+                             weight=5, raw=text)
                 html = _render_html(
                     [sec], str(source_file),
-                    metadata={'tags': tags + ['code'], 'intensity': 5,
-                              'min_intensity': min_intensity},
+                    metadata={'tags': tags + ['code'], 'weight': 5,
+                              'min_weight': min_weight},
                 )
                 if dry_run:
                     created.append(f'[DRY-RUN] HTML: {source_file}')

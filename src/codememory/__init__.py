@@ -16,7 +16,7 @@ from .compiler import (
     save_review_set,
 )
 from .core import compute_body_hash, get_root_dir, parse_frontmatter
-from .context_pack import ContextPack, ContextPackNode, ContextPackNotice, build_context_pack, render_context_pack
+from .build import ContextPack, ContextPackNode, ContextPackNotice, build_context_pack, render_context_pack
 from .create import create
 from .index import load_index, reindex, save_index
 from .integrations import CodememoryToolkit

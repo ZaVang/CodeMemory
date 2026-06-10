@@ -67,13 +67,13 @@ agent 不是系统组件。agent 是消费 build 产物、按写入纪律提交�
 | 概念 | 目标模块 | 现状 → 目标动作 | 阶段 |
 |---|---|---|---|
 | repo | `core.py` + `index.py` + `.codememory/` | 不变 | — |
-| atom / schema | `models.py` + `create.py` / `update.py` | 字段瘦身（第 3.1 节） | C |
-| imports + build | **`build.py`** | 已完成：build.py 为唯一管线（两遍式裁剪），resolve / context_pack 为薄别名与 shim | B ✅ |
-| asset | `sources.py` | 不变；`update` 补 `--source-ref` 写入路径 | A |
-| check | `validate.py` | 新增 proposed 校验、golden_questions 格式校验 | A / C |
+| atom / schema | `models.py` + `create.py` / `update.py` | 已完成：4 个 heat 字段移除（第 3.1 节） | C ✅ |
+| imports + build | **`build.py`** | 已完成：build.py 为唯一管线（两遍式裁剪）；resolve.py 为薄别名，context_pack.py shim 已删除（阶段 C） | B ✅ / C ✅ |
+| asset | `sources.py` | 已完成：`update --source-ref` 写入路径 | A ✅ |
+| check | `validate.py` | 已完成：proposed/queue 校验、golden_questions 格式校验 | A ✅ / C ✅ |
 | search | `search.py` | 已完成：词法排序（字段加权 + OR 语义），零新依赖 | B ✅ |
-| test | **`test_contract.py`（新，最小）** | 导出题集 + 装配上下文；report 写回 log | C |
-| proposal | `models.py`（status）+ `update.py`（merge/reject） | 不需要新模块 | A / C |
+| test | **`test_contract.py`** | 已完成：导出题集 + 装配上下文；report 写回 log | C ✅ |
+| proposal | `models.py`（status）+ `proposals.py`（patch 队列）+ `update.py`（merge/reject 分发） | 已完成（修改类落为独立小模块 `proposals.py`，复用 update 应用 patch） | A ✅ / C ✅ |
 | log | `log.py` / `changelog.py` | 不变 | — |
 
 ### 2.1 保留与定位说明
@@ -81,7 +81,7 @@ agent 不是系统组件。agent 是消费 build 产物、按写入纪律提交�
 - `snapshot.py` / `transient.py`：保留，定位为 REPL 草稿辅助工具（会话级推理链与持久化），不属于 11 概念。
 - `compiler/` 的 review/materialize 机制：保留；阶段 C 实现修改类 proposal 前，先评审复用其底层，避免两套同构机制。
 
-### 2.2 删除清单（阶段 C 终点，汇总见附录）
+### 2.2 删除清单（阶段 C 已执行，汇总见附录）
 
 - `handle_focus` / `handle_overview` / `handle_wander` 及其 cli / tools / mcp 绑定（约 300 行）；
 - `core.py` 的 `compute_retrieval_probability`（召回概率公式，专为 wander/overview 服务）；
@@ -96,19 +96,19 @@ agent 不是系统组件。agent 是消费 build 产物、按写入纪律提交�
 | 字段 | 判决 | 理由 / 现状注记 |
 |---|---|---|
 | type / id / summary / tags / path / version / created / updated | 保留 | 接口核心 |
-| status | 保留，枚举扩为 `active / proposed / archived / superseded / draft` | proposal 载体；现状无 `proposed`（阶段 A 加入） |
+| status | 保留，枚举扩为 `active / proposed / archived / superseded / draft` | proposal 载体（阶段 A 落地） |
 | imports | 保留（required / recommended / related） | 理解性依赖 |
 | schema | 保留 | 结构契约引用 |
 | summary_hash | 保留 | stale 检测（基于 body hash，frontmatter 修改不触发） |
-| source_refs | 保留 | asset 引用，不进依赖图；现状无 CLI 写入路径（阶段 A 补 `update --source-ref`） |
-| protected | 保留，**语义重定义**：仅 owner 手动设置（直接编辑 frontmatter），"动它必须走 proposal"；与 intensity 彻底解耦 | 现状由 `create --intensity 8` 自动触发（阶段 A 移除该挂钩） |
-| **golden_questions** | **新增**（可选 list，入口 atom 用） | test 契约（阶段 C） |
+| source_refs | 保留 | asset 引用，不进依赖图；CLI 写入：`update --source-ref`（阶段 A 落地） |
+| protected | 保留，**语义重定义**：仅 owner 手动设置（直接编辑 frontmatter），"动它必须走 proposal" | 阶段 A 解耦、阶段 C 移除 intensity 本体 |
+| **golden_questions** | **已新增**（可选 list，入口 atom 用） | test 契约（阶段 C 落地） |
 | access_count / last_access | 保留 | 维护循环 telemetry（orphans / diff 使用） |
 | cache_stable / lifecycle | 保留 | build 内部优化提示；`ephemeral` 自动归档已实现 |
 | maturity / evidence | 保留为**惰性元数据**：不参与 build / search / check 的任何机制 | 审计有用，不进概念层 |
 | change_note / change_log | 保留 | log 的原料 |
-| **intensity** | **删除**（阶段 C） | 重要性 = 被依赖数（search 已按 dependents 排序） |
-| **stability / stability_source / days_since_last_access** | **删除**（阶段 C，连同 decay 公式） | 专为已砍的拟人召回服务 |
+| **intensity** | **已删除**（阶段 C 完成；deprecated 别名仅存于 skeletonize 的 --min-intensity 与 @intensity） | 重要性 = 被依赖数 |
+| **stability / stability_source / days_since_last_access** | **已删除**（阶段 C 完成，连同 decay 公式） | 专为已砍的拟人召回服务 |
 
 ### 3.2 status 状态机与过滤语义
 
@@ -133,10 +133,11 @@ create --propose ────▶ proposed ──merge──▶ active
 - 创建：`codememory create --propose ...`——agent 对内容没把握、或内容涉及 protected 邻域时选用；importer 产出默认 proposed。
 - `merge <id>`：status → active + log；`reject <id>`：status → archived + log。
 
-**修改类（阶段 C）**：同一个 .md 不能同时存两个版本，变更落为 `.codememory/proposals/<seq>-<target-id>.json` patch 记录（target_id、字段新值、reason、created_by、created_at）。
+**修改类（阶段 C 已落地）**：同一个 .md 不能同时存两个版本，变更落为 `.codememory/proposals/<seq>-<target-id>.json` patch 记录（target_id、字段新值、reason、created_by、created_at）。
 
-- `merge`：应用 patch + version++ + change_log；`reject`：丢弃记录 + log。
-- 落地前沿用 guide 第 6 节的过渡做法：高风险变更在会话内征得 owner 同意后 update。
+- 入队：`codememory propose <id> --reason "..."`（字段级 patch，目标 atom 不被触碰）；`proposals` 查看队列；
+- `merge <proposal_id>`：经 update 应用 patch（version++ + change_log）+ 清队列；`reject <proposal_id>`：丢弃记录 + log；
+- merge / reject 统一分发：先查 patch 队列，再走新增类（proposed atom）路径。
 
 ### 3.4 golden_questions 契约
 
@@ -211,10 +212,10 @@ entry → closure → order → trim → render
 | 操作 | 语义 | 状态 |
 |---|---|---|
 | `create` | 新 atom 模板，默认 active；低风险直写路径 | 已实现 |
-| `create --propose` | 新 atom，status: proposed | 阶段 A |
-| `update` | 修改已有 atom（高风险，纪律见 guide）；阶段 A 补 `--source-ref` | 已实现 |
-| `merge <id>` | 新增类：proposed → active；修改类：应用 patch + version++ | 阶段 A / C |
-| `reject <id>` | proposed → archived + log | 阶段 A |
+| `create --propose` | 新 atom，status: proposed | 已实现 |
+| `update` | 修改已有 atom（高风险，纪律见 guide）；含 `--source-ref` | 已实现 |
+| `merge <id>` | 新增类：proposed → active；修改类：应用 patch + version++ | 已实现 |
+| `reject <id>` | 新增类归档；修改类丢弃 patch；均留 log | 已实现 |
 
 ---
 
@@ -240,7 +241,7 @@ entry → closure → order → trim → render
 
 ## 6. 收敛路径（目标态 ← 现状的三个阶段）
 
-每阶段独立可合并、独立验收；C 依赖 A（复用 merge 机制）与 B（管线先收敛再清理）。当前状态：A、B 已验收合并；C 未开始。
+每阶段独立可合并、独立验收；C 依赖 A（复用 merge 机制）与 B（管线先收敛再清理）。**当前状态：A、B、C 全部验收合并——收敛路径完成。**
 
 | 阶段 | 内容 | 验收信号 |
 |---|---|---|

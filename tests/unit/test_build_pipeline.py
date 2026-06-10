@@ -129,8 +129,6 @@ def test_build_tracking_writes_only_access_telemetry(tmp_path: Path):
     entry = idx.memories["user/g/solo"]
     entry.access_count = 2
     entry.last_access = (datetime.now() - timedelta(days=10)).isoformat()
-    entry.days_since_last_access = 10
-    entry.stability = 14.0
     entry.maturity = "draft"
     save_index(tmp_path, idx)
 
@@ -138,9 +136,10 @@ def test_build_tracking_writes_only_access_telemetry(tmp_path: Path):
 
     after = load_index(tmp_path).memories["user/g/solo"]
     assert after.access_count == 3
-    assert after.days_since_last_access == 0
+    assert after.last_access > entry.last_access
     assert after.maturity == "draft"      # no auto-upgrade
-    assert after.stability == 14.0        # no SInc growth
+    dump = after.model_dump(mode="json")
+    assert "stability" not in dump        # heat machinery fully removed
 
 
 # ==================================================================

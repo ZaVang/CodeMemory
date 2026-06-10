@@ -1,7 +1,7 @@
 """Code skeletonization using Tree-sitter for multi-language support.
 
 Phase 3: Python, JavaScript/TypeScript via Tree-sitter.
-Annotations: ``# @intensity:N`` (Python) or ``// @intensity:N`` (JS/TS)
+Annotations: ``# @weight:N`` (Python) or ``// @weight:N`` (JS/TS)
 on the line immediately before a function/class definition.
 """
 
@@ -111,17 +111,17 @@ def _register() -> None:
 
 
 def skeletonize_module(text: str, file_ext: str,
-                       config_intensity: int | None = None) -> str:
-    """Skeletonize a source file at module level — zero config, no @intensity needed.
+                       config_weight: int | None = None) -> str:
+    """Skeletonize a source file at module level — zero config, no @weight needed.
 
     Preserves imports, class/function signatures, decorators, and module-level
     variables. All function and class bodies are replaced with stub tokens
     (``pass`` for Python, ``{}`` for JS/TS).
 
-    This is equivalent to ``skeletonize_code(text, ext, min_intensity=11)``.
+    This is equivalent to ``skeletonize_code(text, ext, min_weight=11)``.
     """
-    return skeletonize_code(text, file_ext, min_intensity=11,
-                            config_intensity=config_intensity)
+    return skeletonize_code(text, file_ext, min_weight=11,
+                            config_weight=config_weight)
 
 
 def supports_extension(ext: str) -> bool:
@@ -133,20 +133,20 @@ def supports_extension(ext: str) -> bool:
 # ── Public API ─────────────────────────────────────────────────────────
 
 
-def skeletonize_code(text: str, file_ext: str, min_intensity: int = 5,
-                     config_intensity: int | None = None) -> str:
-    """Skeletonize source code by replacing low-intensity function bodies.
+def skeletonize_code(text: str, file_ext: str, min_weight: int = 5,
+                     config_weight: int | None = None) -> str:
+    """Skeletonize source code by replacing low-weight function bodies.
 
-    Preserves imports, module-level code, and high-intensity definitions.
-    Low-intensity function/class bodies are replaced with stub tokens
+    Preserves imports, module-level code, and high-weight definitions.
+    Low-weight function/class bodies are replaced with stub tokens
     (``pass`` for Python, ``{}`` for JS/TS).
 
     Annotations are read from the line immediately before the definition:
-      # @intensity:7        (Python)
-      // @intensity:7       (JS/TS)
+      # @weight:7        (Python)
+      // @weight:7       (JS/TS)
 
-    *config_intensity* provides a fallback default (from
-    ``.codememory/skeletonize.yaml`` glob matching). ``@intensity``
+    *config_weight* provides a fallback default (from
+    ``.codememory/skeletonize.yaml`` glob matching). ``@weight``
     annotations in source always take precedence.
 
     If a parse error occurs the original text is returned unchanged.
@@ -170,10 +170,10 @@ def skeletonize_code(text: str, file_ext: str, min_intensity: int = 5,
 
     replacements: list[tuple[int, int, str]] = []  # (start_byte, end_byte, new_text)
 
-    default_intensity = config_intensity if config_intensity is not None else 5
+    default_weight = config_weight if config_weight is not None else 5
 
     _walk(tree.root_node, text, ext, definable, comment_prefix,
-          stub_token, min_intensity, default_intensity, replacements)
+          stub_token, min_weight, default_weight, replacements)
 
     # Apply replacements in reverse byte order
     replacements.sort(key=lambda r: r[0], reverse=True)
@@ -188,7 +188,7 @@ def skeletonize_code(text: str, file_ext: str, min_intensity: int = 5,
 
 
 def _walk(node, text: str, ext: str, definable: dict, comment_prefix: str,
-          stub_token: str, min_intensity: int, default_intensity: int,
+          stub_token: str, min_weight: int, default_weight: int,
           replacements: list[tuple[int, int, str]]) -> None:
     """Recursively walk the AST and collect body replacements."""
     node_type = node.type
@@ -204,8 +204,8 @@ def _walk(node, text: str, ext: str, definable: dict, comment_prefix: str,
                 break
 
     if body_field is not None:
-        intensity = _get_node_intensity(node, text, ext, default_intensity)
-        if intensity < min_intensity:
+        weight = _get_node_weight(node, text, ext, default_weight)
+        if weight < min_weight:
             body_node = effective.child_by_field_name(body_field)
             if body_node is not None:
                 indent = _get_indent(text, node.start_byte)
@@ -215,7 +215,7 @@ def _walk(node, text: str, ext: str, definable: dict, comment_prefix: str,
                 if ext == '.py':
                     # block starts AFTER ':\n    ' — already indented
                     repl = (
-                        f'{stub_token}  {comment_prefix} @intensity:{intensity}\n'
+                        f'{stub_token}  {comment_prefix} @weight:{weight}\n'
                         f'{inner_indent}{comment_prefix} <!-- truncated: '
                         f'{removed} chars, ~{removed} tokens -->\n'
                     )
@@ -223,7 +223,7 @@ def _walk(node, text: str, ext: str, definable: dict, comment_prefix: str,
                     # JS/TS: body is statement_block which includes braces
                     repl = (
                         f'{{\n'
-                        f'{inner_indent}{comment_prefix} @intensity:{intensity}\n'
+                        f'{inner_indent}{comment_prefix} @weight:{weight}\n'
                         f'{inner_indent}{comment_prefix} <!-- truncated: '
                         f'{removed} chars, ~{removed} tokens -->\n'
                         f'{indent}}}'
@@ -232,16 +232,16 @@ def _walk(node, text: str, ext: str, definable: dict, comment_prefix: str,
                 replacements.append((body_node.start_byte, body_node.end_byte, repl))
                 return  # don't recurse into replaced body
 
-    # Recurse into children (for nested definitions inside high-intensity containers)
+    # Recurse into children (for nested definitions inside high-weight containers)
     for child in node.children:
         _walk(child, text, ext, definable, comment_prefix,
-              stub_token, min_intensity, default_intensity, replacements)
+              stub_token, min_weight, default_weight, replacements)
 
 
-def _get_node_intensity(node, text: str, ext: str, default_intensity: int = 5) -> int:
-    """Extract intensity from comment line(s) immediately before a node.
+def _get_node_weight(node, text: str, ext: str, default_weight: int = 5) -> int:
+    """Extract weight from comment line(s) immediately before a node.
 
-    Returns the @intensity annotation value if found, otherwise *default_intensity*.
+    Returns the @weight annotation value if found, otherwise *default_weight*.
     """
     node_start = node.start_byte
     prefix = text[:node_start]
@@ -252,8 +252,8 @@ def _get_node_intensity(node, text: str, ext: str, default_intensity: int = 5) -
         stripped = line.strip()
         if not stripped:
             continue
-        from .common import parse_intensity
-        val = parse_intensity(stripped)
+        from .common import parse_weight
+        val = parse_weight(stripped)
         if val is not None:
             return val
         # Stop at first non-comment non-empty line
@@ -262,7 +262,7 @@ def _get_node_intensity(node, text: str, ext: str, default_intensity: int = 5) -
         elif ext in ('.js', '.ts', '.mjs', '.cjs', '.tsx') and not stripped.startswith('//'):
             break
 
-    return default_intensity
+    return default_weight
 
 
 def _get_indent(text: str, byte_pos: int) -> str:

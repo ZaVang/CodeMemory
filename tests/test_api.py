@@ -229,22 +229,6 @@ def test_post_validate_returns_frontend_contract():
     assert isinstance(data["warnings"], list)
 
 
-def test_post_wander_returns_frontend_contract():
-    """POST /api/wander should return a structured memory card, not only text."""
-    resp = client.post("/api/wander", headers=HEADERS)
-    assert resp.status_code == 200, f"Expected 200, got {resp.status_code}: {resp.text}"
-    data = resp.json()
-
-    assert "id" in data and data["id"]
-    assert "summary" in data
-    assert "type" in data
-    assert "tags" in data and isinstance(data["tags"], list)
-    assert "intensity" in data and isinstance(data["intensity"], int)
-    assert "access_count" in data and isinstance(data["access_count"], int)
-    assert "status" in data
-    assert "maturity" in data
-
-
 def test_post_context_pack_returns_structured_pack_and_xml_markdown():
     """POST /api/context-pack should expose backend-first agent handoff output."""
     mem_resp = client.get("/api/memories?limit=1", headers=HEADERS)
