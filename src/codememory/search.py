@@ -1,10 +1,24 @@
-"""Memory search: query by summary, tags, type, body, sorted by dependency count."""
+"""Memory search: lexical entry discovery (architecture.md §4.2).
 
+Query tokens are matched case-insensitively as substrings against id,
+summary, tags, and body. score = Σ(field_weight × hits/total_tokens)
+with weights id=4 / summary=3 / tags=2 / body=1; OR semantics across
+tokens; untokenizable queries fall back to whole-string substring match.
+"""
+
+import re
 from pathlib import Path
 
 from .core import parse_frontmatter
 from .index import load_index
 from .models import IndexData
+
+_TOKEN_RE = re.compile(r"[^\W_]+", re.UNICODE)
+
+
+def _tokenize(query: str) -> list[str]:
+    """Split a query on whitespace/punctuation into lowercase tokens."""
+    return [t.lower() for t in _TOKEN_RE.findall(query)]
 
 
 def _count_dependents(memory_id: str, index: IndexData) -> int:
@@ -92,27 +106,53 @@ def search(
             if not all(t in entry.tags for t in tags):
                 continue
 
-        # R16-C1: search query against id, summary, tags, AND body full-text
+        # Lexical scoring against id, summary, tags, and body full-text.
         match_kind = ""  # "id" | "summary" | "tag" | "body"
         snippet = ""
+        score = 0.0
         if query:
             q_lower = query.lower()
-            # Priority: exact ID match > summary match > tag match > body match
-            if q_lower in mid.lower():
-                match_kind = "id"
-            elif q_lower in entry.summary.lower():
-                match_kind = "summary"
-            elif any(q_lower in t.lower() for t in entry.tags):
-                match_kind = "tag"
+            tokens = _tokenize(query)
+            body = ""
+            file_path = root_dir / entry.path
+            if file_path.exists():
+                _, body = parse_frontmatter(file_path)
+            body_lower = body.lower()
+
+            if tokens:
+                total = len(tokens)
+                id_hits = sum(1 for t in tokens if t in mid.lower())
+                summary_hits = sum(1 for t in tokens if t in entry.summary.lower())
+                tag_hits = sum(1 for t in tokens
+                               if any(t in tag.lower() for tag in entry.tags))
+                body_hits = sum(1 for t in tokens if t in body_lower)
+                score = (4.0 * id_hits + 3.0 * summary_hits
+                         + 2.0 * tag_hits + 1.0 * body_hits) / total
+                if score == 0:
+                    continue
+                # Display field: strongest field with at least one hit
+                if id_hits:
+                    match_kind = "id"
+                elif summary_hits:
+                    match_kind = "summary"
+                elif tag_hits:
+                    match_kind = "tag"
+                else:
+                    match_kind = "body"
+                    first_hit = next(t for t in tokens if t in body_lower)
+                    snippet = _extract_snippet(body, first_hit)
             else:
-                # R16-C1: full-text body search
-                file_path = root_dir / entry.path
-                if file_path.exists():
-                    _, body = parse_frontmatter(file_path)
-                    if q_lower in body.lower():
-                        match_kind = "body"
-                        snippet = _extract_snippet(body, query)
-                if not match_kind:
+                # Fallback: untokenizable query — legacy whole-string substring
+                if q_lower in mid.lower():
+                    match_kind = "id"
+                elif q_lower in entry.summary.lower():
+                    match_kind = "summary"
+                elif any(q_lower in t.lower() for t in entry.tags):
+                    match_kind = "tag"
+                elif body and q_lower in body_lower:
+                    match_kind = "body"
+                    snippet = _extract_snippet(body, query)
+                else:
                     continue
 
         if has_imports:
@@ -130,11 +170,15 @@ def search(
         dump = entry.model_dump(mode="json")
         dump["id"] = mid  # Ensure id uses the index key
         dump["dependents"] = _count_dependents(mid, index)
+        if query:
+            dump["score"] = round(score, 3)
         if match_kind:
             dump["match_field"] = match_kind
         if snippet:
             dump["snippet"] = snippet
         results.append(dump)
 
-    results.sort(key=lambda r: (-r["dependents"], -r["access_count"], r["id"]))
+    results.sort(key=lambda r: (
+        -r.get("score", 0.0), -r["dependents"], -r["access_count"], r["id"],
+    ))
     return results

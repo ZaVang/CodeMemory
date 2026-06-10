@@ -265,9 +265,9 @@ def test_token_budget_all_fit():
                 )
         return ({}, "")
 
-    with patch("codememory.resolve.load_index", return_value=idx), \
-         patch("codememory.resolve.parse_frontmatter", side_effect=side_effect), \
-         patch("codememory.resolve.save_index"):
+    with patch("codememory.build.load_index", return_value=idx), \
+         patch("codememory.build.parse_frontmatter", side_effect=side_effect), \
+         patch("codememory.build.save_index"):
         output = resolve(Path("."), "Root", depth="required", budget=99999)
 
     # All 4 nodes should appear with full text (no SUMMARY marker)
@@ -275,7 +275,7 @@ def test_token_budget_all_fit():
     assert "P1 body" in output
     assert "P2 body" in output
     assert "Leaf body" in output
-    assert "SUMMARY - budget" not in output
+    assert "Trim: `summary`" not in output
 
 
 def test_token_budget_cramped():
@@ -292,14 +292,15 @@ def test_token_budget_cramped():
                 )
         return ({}, "")
 
-    with patch("codememory.resolve.load_index", return_value=idx), \
-         patch("codememory.resolve.parse_frontmatter", side_effect=side_effect), \
-         patch("codememory.resolve.save_index"):
+    with patch("codememory.build.load_index", return_value=idx), \
+         patch("codememory.build.parse_frontmatter", side_effect=side_effect), \
+         patch("codememory.build.save_index"):
         output = resolve(Path("."), "Root", depth="required", budget=50)
 
-    # At budget 50, the root body alone is ~400 chars (tokens = chars),
-    # so root won't fit. All required nodes use summary.
-    assert "SUMMARY - budget" in output
+    # At budget 50, no body fits (tokens = chars), so every node —
+    # including the target — floors at summary.
+    assert "Trim: `summary`" in output
+    assert "Trim: `full`" not in output
 
 
 # ==================================================================

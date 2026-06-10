@@ -98,16 +98,16 @@ async def test_b_resolve_context(sandbox):
         "user/preferences/no-leverage",
         "user/investment/context",
     ]
-    # Find node positions by the heading pattern "## [N/6] <id>"
+    # Find node positions by the heading pattern "### [N/6] <id>"
     positions: dict[str, int] = {}
     all_found = True
     for eid in expected_ids:
-        # Heading format: "## [N/6] <id> (type)"
-        marker = f"] {eid} "
+        # Unified pipeline heading format: "### [N/6] <id>"
+        marker = f"] {eid}"
         idx = text.find(marker)
         if idx >= 0:
-            prefix_start = max(0, idx - 8)
-            if "## [" in text[prefix_start:idx]:
+            prefix_start = max(0, idx - 10)
+            if "### [" in text[prefix_start:idx]:
                 positions[eid] = idx
             else:
                 positions[eid] = -1

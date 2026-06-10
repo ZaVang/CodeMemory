@@ -72,7 +72,7 @@ def test_empty_index_resolve_nonexistent():
     """resolve for missing ID returns an error message, does not crash."""
     idx = IndexData()
 
-    with patch("codememory.resolve.load_index", return_value=idx):
+    with patch("codememory.build.load_index", return_value=idx):
         output = resolve(Path("."), "nonexistent/id")
     assert "not found" in output.lower() or "Error" in output
 
@@ -96,14 +96,14 @@ def test_resolve_handles_cycle_gracefully():
             return ({"summary_hash": compute_body_hash(body_a)}, body_a)
         return ({"summary_hash": compute_body_hash(body_b)}, body_b)
 
-    with patch("codememory.resolve.load_index", return_value=idx), \
-         patch("codememory.resolve.parse_frontmatter", side_effect=mock_pfm), \
-         patch("codememory.resolve.save_index"):
+    with patch("codememory.build.load_index", return_value=idx), \
+         patch("codememory.build.parse_frontmatter", side_effect=mock_pfm), \
+         patch("codememory.build.save_index"):
         output = resolve(Path("."), "A", depth="required", budget=99999)
 
     # Should produce some output without crashing
-    assert "Resolved Context" in output
-    assert "Circular" not in output  # warnings go to logger, not output
+    assert "# CodeMemory Context Pack" in output
+    assert "circular_dependency" in output  # cycle surfaces as a structured notice
     assert "Budget" in output or "budget" in output.lower()
 
 
@@ -136,12 +136,12 @@ def test_huge_budget_all_full_text():
                 return ({"summary_hash": compute_body_hash(body)}, body)
         return ({}, "")
 
-    with patch("codememory.resolve.load_index", return_value=idx), \
-         patch("codememory.resolve.parse_frontmatter", side_effect=mock_pfm), \
-         patch("codememory.resolve.save_index"):
+    with patch("codememory.build.load_index", return_value=idx), \
+         patch("codememory.build.parse_frontmatter", side_effect=mock_pfm), \
+         patch("codememory.build.save_index"):
         output = resolve(Path("."), "Root", depth="required", budget=99999)
 
-    assert "SUMMARY - budget" not in output
+    assert "Trim: `summary`" not in output
     assert "Root " in output
     assert "Child " in output
     assert "Grandchild " in output
@@ -152,7 +152,7 @@ def test_huge_budget_all_full_text():
 # ==================================================================
 
 def test_zero_budget_all_summary():
-    """budget=0 does not crash (treated as unlimited in current impl)."""
+    """budget=0 is honored as a real zero budget: everything floors at summary."""
     idx = IndexData()
     bodies = {
         "R": "Root " * 100,
@@ -170,15 +170,15 @@ def test_zero_budget_all_summary():
                 return ({"summary_hash": compute_body_hash(body)}, body)
         return ({}, "")
 
-    with patch("codememory.resolve.load_index", return_value=idx), \
-         patch("codememory.resolve.parse_frontmatter", side_effect=mock_pfm), \
-         patch("codememory.resolve.save_index"):
+    with patch("codememory.build.load_index", return_value=idx), \
+         patch("codememory.build.parse_frontmatter", side_effect=mock_pfm), \
+         patch("codememory.build.save_index"):
         output = resolve(Path("."), "R", depth="required", budget=0)
 
-    # budget=0 is treated as unlimited by current impl, so full text appears.
-    # The key assertion: resolve does NOT crash with budget=0.
-    assert "Resolved Context" in output
-    assert "Total Budget Used" in output
+    # Phase B: budget=0 is a real budget — required nodes floor at summary.
+    assert "# CodeMemory Context Pack" in output
+    assert "Trim: `summary`" in output
+    assert "Trim: `full`" not in output
 
 
 # ==================================================================
@@ -212,14 +212,14 @@ def test_resolve_skips_missing_imports():
     def mock_pfm(filepath):
         return ({"summary_hash": compute_body_hash(body_a)}, body_a)
 
-    with patch("codememory.resolve.load_index", return_value=idx), \
-         patch("codememory.resolve.parse_frontmatter", side_effect=mock_pfm), \
-         patch("codememory.resolve.save_index"):
+    with patch("codememory.build.load_index", return_value=idx), \
+         patch("codememory.build.parse_frontmatter", side_effect=mock_pfm), \
+         patch("codememory.build.save_index"):
         output = resolve(Path("."), "A", depth="required", budget=99999)
 
-    # The missing import is logged as a warning but resolve completes
-    assert "Resolved Context" in output
-    assert "Total Budget Used" in output
+    # The missing import surfaces as a notice but resolve completes
+    assert "# CodeMemory Context Pack" in output
+    assert "missing_memory" in output
 
 
 # ==================================================================
