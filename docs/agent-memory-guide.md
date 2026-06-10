@@ -1,255 +1,209 @@
-# Agent Memory Guide — 记忆操作决策树
+# Agent Memory Guide — 记忆库贡献规范
 
-> **Status note**  
-> 本文是 Work Layer 的 agent 操作指南草案，不是 Core 规范本身。
-> Core / Layer / Source Artifact / ContextPack 的正式边界见 `docs/architecture.md`。
-
-在对话中自主创建和维护记忆时，按以下决策树选择正确的参数和依赖强度。
+> 你在向一个**代码式记忆库**提交变更。请像读一个仓库的 CONTRIBUTING.md 一样读本文。
+> 概念定义见 `docs/prd.md`；本文只讲"怎么写"。
 
 ---
 
-## 原语选择规则
+## 0. 概念 ↔ 当前命令对照
 
-CodeMemory 有两种记忆类型：
+概念名是 PRD 语言；命令名是当前 CLI 现实（动词收敛前以本表为准）：
 
-### atom — 通用记忆
-
-**所有非模板记忆都是 atom。** 角色通过 `imports`、`schema`、`tags`、目录来表达，不靠 type 字段区分。
-
-**何时使用：** 任何需要长期复用、可独立引用的知识、偏好、决策、事实、流程、约束、上下文入口——用 atom。
-
-- 用户的偏好或习惯："用户偏好长期持有"
-- 一个外部知识点："VIX 指数是恐慌指数"
-- 一个约束条件："不使用杠杆"
-- 一次具体的买入/卖出决策（有 schema 时带上 `--schema` 参数）
-- 将多个关联记忆打包的上下文入口（用 `imports` 引用被包含的记忆）
-
-**不要把长文档整体塞进 atom。** 长 Markdown、会议记录、设计文档、代码文件、PDF、URL 等原始材料应作为 Source Artifact 保存；atom 只保存语义索引、长期结论或可执行事实。典型结构是：
-
-```text
-Source Artifact → Anchor Atom → Derived Atoms
-```
-
-**有 schema 的 atom：** 当一个记忆需要依附某个结构模板（如 `schemas/decision`），使用 `--schema` 参数声明。这和旧版的 `instance` 概念对应，但现在类型统一为 atom。
-
-```
-codememory create --id user/investment/new-decision --schema schemas/decision --tags "investment,decision"
-```
-
-**有 imports 的 atom：** 当一个记忆需要引用其他记忆作为依赖（如上下文包引用其组成部分），使用 `--import-*` 参数声明。这和旧版的 `composite` 概念对应，但现在类型统一为 atom。
-
-### schema — 元模板
-
-**何时使用：** 定义某类记忆的结构。schema 本身不是记忆数据，而是记忆的"类型定义"。
-
-- `schemas/decision`：定义一次决策需要记录哪些字段（日期、标的、金额、理由、结果）
-- `schemas/meeting`：定义一次会议记录的结构
-
-**注意：** schema 只由系统或高级用户创建，Agent 通常不自行创建 schema，而是使用已有的。
+| 概念 | 当前命令 |
+|---|---|
+| build（装配） | `codememory resolve <id> [--depth required\|recommended\|full] [--budget N]`；结构化输出用 `codememory context-pack <id> [--format json\|markdown\|xml-markdown]` |
+| check（校验） | `codememory validate` |
+| search（检索） | `codememory search --query <q> [--tags t1 t2]` |
+| asset（登记/查看/展开） | `codememory source add <uri> [--id ID] [--summary "..."]` / `source list` / `source get <id>` / `source check` / `source expand <id> [--max-chars N]` |
+| 新增 atom | `codememory create --id <id> [--schema s] [--tags "a,b"]`，然后立即 `update` 填入真实内容（见第 7 节） |
+| 修改 atom | `codememory update <id> --change-note "..."`（高风险，见第 6 节） |
+| proposal | 未实装；过渡做法见第 6 节 |
 
 ---
 
-## 目录约定
+## 1. 写入门槛：什么值得记
 
-`id` 的第一段就是目录。创建 atom 时，按以下约定选择目录：
+两个问题，过不了就不要写：
+
+1. **三个月后还重要吗？** 一次性查询结果、临时待办——不记。
+2. **丢了会导致错误决策吗？** 会——必须记，且把"为什么"一起记下来。
+
+代码类比：不是每行调试 print 都值得提交；值得提交的是会被再次调用的函数。
+
+---
+
+## 2. 记成什么：目录与 schema
+
+id 的第一段就是目录。**目录区分"种类"，tags 区分"主题"**：
 
 | 目录 | 用途 | 示例 ID |
 |------|------|---------|
-| `user/facts/` | 外部事实、背景知识（不因用户而变） | `user/facts/nvidia-earnings` |
-| `user/observations/` | 观察到的现象、事件（当时可能不知道原因） | `user/observations/soxl-drop-march` |
-| `user/preferences/` | 偏好、约束、习惯（关于用户的） | `user/preferences/no-leverage` |
-| `user/decisions/` | 具体的决策/行动（有 schema 时带上 `--schema`） | `user/decisions/february-buy` |
-| `user/principles/` | 长期原则、判断框架、投资/工程主线 | `user/principles/semiconductor-thesis` |
-| `user/processes/` | 操作流程、检查清单、排障步骤 | `user/processes/release-checklist` |
-| `user/contexts/` | 给 agent 使用的上下文入口 | `user/contexts/investment-review` |
-| `user/snapshots/` | snapshot 命令固化的推理链 | `user/snapshots/2026-04-28-止盈分析` |
+| `user/facts/` | 外部事实、背景知识 | `user/facts/vite-proxy-behavior` |
+| `user/observations/` | 观察到的现象（当时未必知道原因） | `user/observations/ci-flaky-on-windows` |
+| `user/preferences/` | 偏好、习惯、个人约束 | `user/preferences/no-new-deps` |
+| `user/decisions/` | 具体决策（适用 `schemas/decision` 时带 `--schema`） | `user/decisions/2026-06-pin-python-313` |
+| `user/principles/` | 长期原则、判断框架 | `user/principles/docs-first` |
+| `user/processes/` | 流程、检查清单、排障步骤 | `user/processes/release-checklist` |
+| `user/contexts/` | 给 agent 的上下文入口 | `user/contexts/codememory-dev` |
+| `user/snapshots/` | snapshot 固化的推理链 | `user/snapshots/2026-06-10-缓存层分析` |
 | `api/` | API 文档等外部结构化知识 | `api/quantexpr/sharpe` |
-| `schemas/` | 模板定义（仅 schema 类型） | `schemas/decision` |
+| `schemas/` | 结构契约（仅 schema 类型） | `schemas/decision` |
 
-**规则：**
-1. **目录区分"种类"** — 这是什么东西（事实？观察？偏好？决策？）
-2. **tags 区分"主题"** — 这跟什么有关（`["semiconductor"]`、`["investment"]`）
-3. **不要在目录里按主题再分子文件夹** — 一个 fact 可能同时涉及半导体和市场，放 `user/facts/semiconductor/` 还是 `user/facts/market/`？tags 天然支持交叉，目录不支持
-4. **不确定时默认 `user/facts/`** — 最通用的种类
-5. **陪伴型目录不属于 v1 默认 Work Layer** — 相关探索见 `docs/reference/companion-mode.md`。
+规则：
 
----
-
-## 依赖声明规则
-
-`imports` 有三种强度，从强到弱：
-
-### required — 强依赖
-
-**规则：** 理解 B 必须先读 A，则 A 是 B 的 required 依赖。
-
-- 记忆对其 schema 的引用 → required
-- 上下文包对其核心组成记忆的引用 → required
-- 决策记忆引用其依据的约束条件 → required
-
-**效果：** resolve 时 required 节点一定被加载；token 超预算时降级为 summary 而非丢弃。
-
-### recommended — 推荐依赖
-
-**规则：** 读了 A 能更好理解 B，但不读也不影响核心理解。
-
-- 决策记忆引用相关的市场分析报告
-- 某个知识点引用其背景知识
-
-**效果：** `--depth recommended` 时被加载；仅 `--depth required` 时被跳过。
-
-### related — 弱关联
-
-**规则：** A 和 B 有关联但无理解上的依赖。
-
-- 同行业的另一只股票讨论
-- 同一话题下不同时间的讨论
-
-**效果：** 仅 `--depth full` 时被加载。
+1. 不确定种类时默认 `user/facts/`；
+2. 不要在目录里按主题建子文件夹——主题交叉用 tags 表达；
+3. schema 只使用已有的，agent 不自行创建 schema。
 
 ---
 
-## intensity 评估规则
+## 3. summary：签名 + docstring
 
-intensity 是 1-10 的整数，表示记忆的持久重要性。
+build 超预算时你的 atom 会被裁剪到只剩 summary——所以 summary 必须**独立可读、包含关键结论**。
 
-| 区间 | 等级 | 含义 | 典型场景 |
-|------|------|------|----------|
-| 1-3 | 临时 | 会话结束后可遗忘 | 暂时性的待办事项、一次性查询结果 |
-| 4-6 | 常规 | 值得保留但不关键 | 一般性偏好、日常讨论记录 |
-| 7-9 | 重要 | 关键判断或核心约束 | 投资策略调整、风险偏好变更、重大决策 |
-| 10 | 永久 | 终生不忘的原则 | 价值观声明、"绝不"类型的硬约束 |
+好例子：
 
-**注意：** intensity >= 8 时，系统自动标记 `protected: true`，防止被意外修改或删除。
+- `"2026-06 决定 Python 固定 3.13：tree-sitter 轮子在 3.14 缺 Windows 版"`
+- `"Windows 编码问题排查：先查 PowerShell UTF-16，再查 locale，最后查 autocrlf"`
 
-### 评估技巧
+坏例子：
 
-- 问自己："三个月后，这个信息还重要吗？" → 不重要的给 1-3
-- 问自己："如果这个信息丢失，会导致错误决策吗？" → 会的话给 7+
-- 不要给所有记忆都打 7+：如果一切都很重要，就什么都不重要了
+- `"TODO: fill in summary"`——这是 create 模板的占位符，留着它等于提交了空函数
+- `"关于 Python 版本的一些讨论"`——无结论
+- `"排障笔记"`——无信息量
 
 ---
 
-## summary 写作规则
+## 4. imports：依赖判据
 
-summary 是记忆的"名片"，在 token 裁剪时替代正文。必须独立可理解。
+判断标准不是"相关吗"，而是"**不先读它，能正确理解我吗**"。
 
-### 规则
+- **required**：不读必误解。决策 ← 它依据的约束；上下文入口 ← 核心组成记忆。
+- **recommended**：读了更好懂，不读不误解。决策 ← 背景分析。
+- **related**：同主题但无理解依赖。同领域的另一次讨论。
 
-1. **一句话概括核心内容**，不超过 80 字
-2. **独立可理解**：不依赖正文即可知道这个记忆在说什么
-3. **包含关键数值和结论**：如果是决策记忆，包含"做了什么 + 为什么"
-4. **使用第一人称或第三人称一致**：用户偏好用"用户偏好..."，事实用陈述句
+反模式：
 
-### 好例子
-
-- `"中高风险偏好，可承受30%回撤，投资周期6-12个月"`
-- `"2026年2月购入SOXL 200股，基于半导体上行周期判断"`
-- `"用户明确偏好不碰加密货币，因不熟悉该领域"`
-
-### 差例子
-
-- `"TODO: fill in summary"` — 没有信息量
-- `"关于投资的一些想法"` — 太模糊，不知道具体内容
-- `"风险偏好"` — 缺少具体参数
+- 全标 required（= 全没标）；
+- 用 imports 表达"出处"——出处是 asset 引用的职责，不是依赖。
 
 ---
 
-## 完整对话场景示例
+## 5. asset：长材料的正确姿势
 
-### 场景 A：用户分享偏好
+长文档、会议记录、设计稿、PDF、代码文件——**登记为 asset，不要塞进 atom body**。
 
-**对话：**
-> 用户：我比较喜欢分散投资，单只股票不超过总仓位的 20%。
-> Agent：明白了，我把这个偏好记录下来。
+```bash
+codememory source add docs/rfc-001.md --id src/rfc-001-cache --summary "RFC-001: 缓存层设计"
+```
 
-**Agent 的决策过程：**
+然后写一个轻量 atom 做语义索引：summary 说清"它是什么、什么时候该读"。
 
-1. **选择类型：** 这是单个偏好/约束 → **atom**（无 schema，无 imports）
-2. **评估 intensity：** 这是投资约束，可能影响未来决策 → **7**（重要）
-3. **依赖声明：** 不依赖其他记忆 → 无 imports
-4. **summary：** "用户偏好分散投资，单只股票仓位不超过20%"
+过渡限制：`source_refs` 字段目前没有 CLI 写入路径，请在 atom 的 body 中明确写出 asset id（如"原文见 asset `src/rfc-001-cache`，用 `codememory source expand src/rfc-001-cache` 展开"）。CLI 支持落地后本节将更新。
 
-**生成的 frontmatter：**
-```yaml
-type: atom
-id: user/preferences/position-limit
-summary: "用户偏好分散投资，单只股票仓位不超过20%"
-intensity: 7
-protected: true
-tags: [investment, preference, risk-management]
+需要原文时按需 `source expand`，不要默认展开全文。
+
+---
+
+## 6. 直写还是提案（分级写入纪律）
+
+| 你要做的事 | 等级 | 动作 |
+|---|---|---|
+| 新增 atom，不改任何已有文件（可声明自己的 imports） | 低风险 | 直接 create + update 填内容，写后 validate |
+| 修改**已有** atom 的 body 或 imports | 高风险 | 走 proposal |
+| 涉及 protected atom 的任何变更 | 高风险 | 走 proposal |
+
+**proposal 的过渡做法**（`status: proposed` 实装前）：高风险变更**不要直接 update**。在会话中向 owner 说明：要改哪个 atom、改成什么、为什么；获得明确同意后再执行 update，并在 `--change-note` 里写清理由。proposal 机制落地后，本节将更新为 propose 命令用法。
+
+**protected 的设置**：由 owner 拍板，agent 不自行创建 protected atom。当你认为某条记忆需要保护（核心原则、硬约束），向 owner 建议。
+
+---
+
+## 7. 完整场景示例
+
+### 场景 A：记录一次架构决策（低风险，直写）
+
+> 对话：「以后这个项目的文档主干只留 canonical，历史探索都进 reference/。」
+
+判断：长期决策（三个月后仍约束行为）→ 记；新增 atom、依赖已有原则 → 直写。
+
+```bash
+codememory create --id user/decisions/2026-06-docs-canonical-only \
+  --schema schemas/decision --tags "decision,docs"
+
+codememory update user/decisions/2026-06-docs-canonical-only \
+  --change-note "初始内容：记录文档主干决策" \
+  --summary "2026-06 起 docs/ 主干只留 canonical 文档，历史探索移入 docs/reference/" \
+  --body "决策：docs/ 根目录只保留长期指导文档。理由：两代世界观共存导致漂移。" \
+  --import-required user/principles/docs-first
+
+codememory validate
+```
+
+注意：create 只生成模板（summary 是 TODO 占位符），**必须立即用 update 填入真实内容**。
+
+### 场景 B：沉淀一个排障流程（低风险，直写）
+
+> 对话：「这次 Windows CI 又是编码问题，把排查套路记下来。」
+
+判断：可复用流程 → `user/processes/`；无前置依赖 → 直写，无 imports。
+
+```bash
+codememory create --id user/processes/windows-encoding-triage --tags "process,windows,debugging"
+
+codememory update user/processes/windows-encoding-triage \
+  --change-note "初始内容：Windows 编码排查流程" \
+  --summary "Windows 编码问题排查：先查 PowerShell 默认 UTF-16，再查 Python locale，最后查 git autocrlf" \
+  --body "1. PowerShell Out-File 默认 UTF-16，写文件加 -Encoding utf8；2. 检查 PYTHONIOENCODING；3. 检查 .gitattributes 的 eol 设置。"
+
+codememory validate
+```
+
+### 场景 C：登记一份设计文档（asset + 索引 atom）
+
+> 对话：「这份 30 页的缓存层 RFC 以后会反复用到。」
+
+判断：长文档 → asset，绝不塞进 atom body；另建轻量索引 atom。
+
+```bash
+codememory source add docs/rfc-001.md --id src/rfc-001-cache --summary "RFC-001: 缓存层设计"
+
+codememory create --id user/contexts/cache-layer --tags "architecture,cache"
+
+codememory update user/contexts/cache-layer \
+  --change-note "初始内容：缓存层上下文入口" \
+  --summary "缓存层上下文入口；动缓存实现前必读 RFC-001" \
+  --body "原文见 asset \`src/rfc-001-cache\`（codememory source expand src/rfc-001-cache）。核心结论：写穿透 + 5 分钟 TTL。"
+
+codememory validate
+```
+
+### 场景 D：修正一条已有记忆（高风险，走 proposal 过渡做法）
+
+> 对话：「上次记的'Python 固定 3.13'，现在 3.14 轮子齐了，可以解除。」
+
+判断：修改已有 decision atom → 高风险。先向 owner 说明变更与理由，**获得明确同意后**：
+
+```bash
+codememory update user/decisions/2026-06-pin-python-313 \
+  --change-note "3.14 Windows 轮子已齐，解除版本钉死" \
+  --status archived
+
+codememory validate
 ```
 
 ---
 
-### 场景 B：做出重大决策
-
-**对话：**
-> 用户：我今天把 SOXL 全卖了。AI 芯片需求增速放缓，加上仓位太重，每晚睡不好。
-> Agent：这是一个重要的决策。我记录一下，并关联到你之前的持仓和投资主线。
-
-**Agent 的决策过程：**
-
-1. **选择类型：** 这是一个具体决策事件，需要记录标的、时间、理由 → **atom**，使用 `--schema schemas/decision`
-2. **评估 intensity：** 重大调仓决策 → **8**
-3. **依赖声明：**
-   - `required`：`user/investment/semiconductor-thesis`（主线判断）、`user/investment/current-holdings`（此前的持仓记录）、`user/preferences/position-limit`（偏好约束）
-   - `recommended`：`user/investment/risk-tolerance`（风险偏好作为背景）
-4. **summary：** "2026年4月27日清仓SOXL，因AI需求放缓且仓位过重影响睡眠"
-
-**生成的 frontmatter：**
-```yaml
-type: atom
-id: user/investment/april-sell-soxl
-schema: schemas/decision
-summary: "2026年4月27日清仓SOXL，因AI需求放缓且仓位过重影响睡眠"
-intensity: 8
-protected: true
-tags: [investment, decision, sell]
-imports:
-  required:
-    - user/investment/semiconductor-thesis
-    - user/investment/current-holdings
-    - user/preferences/position-limit
-  recommended:
-    - user/investment/risk-tolerance
-  related: []
-```
-
----
-
-### 场景 C：日常信息记录
-
-**对话：**
-> 用户：对了，下周有个新能源行业的线上分享会，我可能会参加。
-> Agent：好的，我记一下这个信息。
-
-**Agent 的决策过程：**
-
-1. **选择类型：** 这是一个暂时性的待办/事件信息 → **atom**
-2. **评估 intensity：** 下周的事，结束后可能不再重要 → **2**（临时信息）
-3. **依赖声明：** 与现有投资记忆无直接关联 → 无 imports
-4. **summary：** "下周有新能源行业线上分享会，用户可能参加"
-
-**生成的 frontmatter：**
-```yaml
-type: atom
-id: user/observations/new-energy-webinar
-summary: "下周有新能源行业线上分享会，用户可能参加"
-intensity: 2
-tags: [event, new-energy]
-```
-
----
-
-## 常见错误速查
+## 8. 常见错误速查
 
 | 错误 | 正确做法 |
 |------|----------|
-| 把所有偏好放一个 atom | 拆成多个 atom，每个只表达一个事实 |
-| 有 schema 依赖但忘记声明 schema | 使用 `--schema` 参数声明 |
-| 上下文包自己写很长的 body | 上下文包的 body 应简短，内容在被引用的记忆中 |
-| 把所有依赖都标 required | 区分 required / recommended / related |
-| 所有记忆 intensity=5 | 根据重要性差异化评分 |
-| summary 写 "TODO" | 必须写一句话摘要 |
-| 忘记填 change_note 就 update | update 时必须用 `--change-note` 说明改动原因 |
+| 把多个事实塞一个 atom | 一个 atom 一个语义单元，像一个函数只做一件事 |
+| 长文档塞进 atom body | 登记 asset，atom 只做语义索引 |
+| 全部依赖标 required | 按"不读会不会误解"分级 |
+| 用 imports 表达出处 | 出处写 asset 引用（body 中注明 asset id） |
+| create 后不 update，留着 TODO summary | create 只是模板，必须立即 update 填真实 summary/body |
+| 未经 owner 同意 update 已有 atom | 高风险变更先说明、再获同意（proposal 过渡做法） |
+| update 不写 change-note | `--change-note` 必填，它是 log 的原料 |
+| 给记忆打重要性分（`--intensity`） | 概念已废除，不要传该参数；重要性由被依赖数表达，保护语义找 owner 标 protected |
+| 写完不跑 validate | 任何写入后 `codememory validate` 守门 |
