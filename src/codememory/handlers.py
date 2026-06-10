@@ -97,6 +97,7 @@ def handle_create(
     stability: float | None = None,
     cache_stable: bool = False,
     lifecycle: str = "permanent",
+    propose: bool = False,
 ) -> str:
     """Create a new memory.  Returns path string or dry-run preview."""
     file_path = create(
@@ -111,6 +112,7 @@ def handle_create(
         stability=stability,
         cache_stable=cache_stable,
         lifecycle=lifecycle,
+        propose=propose,
     )
     if file_path is None:
         return "dry-run: no file created"
@@ -141,6 +143,20 @@ def handle_update(
         import_related=import_related,
     )
     return str(file_path)
+
+
+def handle_merge(root: Path, memory_id: str) -> str:
+    """Merge a proposed memory into the canonical graph. Returns path string."""
+    from .update import merge
+
+    return str(merge(root, memory_id))
+
+
+def handle_reject(root: Path, memory_id: str) -> str:
+    """Reject a proposed memory (proposed -> archived). Returns path string."""
+    from .update import reject
+
+    return str(reject(root, memory_id))
 
 
 def handle_resolve(

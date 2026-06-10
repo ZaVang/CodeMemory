@@ -31,6 +31,63 @@ def _format_frontmatter_value(value):
     return value
 
 
+def _transition_proposed(root_dir: Path, memory_id: str, new_status: str, op_name: str) -> Path:
+    """Transition a proposed memory to a final status (merge/reject shared core)."""
+    file_path = get_memory_path(root_dir, memory_id)
+
+    if not file_path.exists():
+        _logger.error("Memory '%s' not found at %s", memory_id, file_path)
+        sys.exit(1)
+
+    raw = file_path.read_text(encoding="utf-8-sig")
+    parts = raw.split("---", 2)
+    if len(parts) < 3:
+        _logger.error("%s does not have valid YAML frontmatter", file_path)
+        sys.exit(1)
+
+    try:
+        meta = yaml.safe_load(parts[1]) or {}
+    except yaml.YAMLError as e:
+        _logger.error("Error parsing YAML in %s: %s", file_path, e)
+        sys.exit(1)
+
+    if meta.get("status") != "proposed":
+        _logger.error(
+            "Cannot %s '%s': status is '%s', expected 'proposed'.",
+            op_name, memory_id, meta.get("status"),
+        )
+        sys.exit(1)
+
+    meta["status"] = new_status
+    meta["updated"] = datetime.now().strftime("%Y-%m-%d")
+    meta = _format_frontmatter_value(meta)
+
+    yaml_str = yaml.dump(meta, allow_unicode=True, sort_keys=False)
+    file_path.write_text(f"---\n{yaml_str}---{parts[2]}", encoding="utf-8")
+    print(f"{op_name.capitalize()}d {memory_id}: proposed -> {new_status}")
+
+    print("Updating index...")
+    reindex(root_dir)
+
+    try:
+        from .log import append_log
+        append_log(root_dir, op_name, f"{memory_id}: proposed -> {new_status}")
+    except ImportError:
+        pass
+
+    return file_path
+
+
+def merge(root_dir: Path, memory_id: str) -> Path:
+    """Merge a proposed memory into the canonical graph (proposed -> active)."""
+    return _transition_proposed(root_dir, memory_id, "active", "merge")
+
+
+def reject(root_dir: Path, memory_id: str) -> Path:
+    """Reject a proposed memory (proposed -> archived)."""
+    return _transition_proposed(root_dir, memory_id, "archived", "reject")
+
+
 def update(
     root_dir: Path,
     memory_id: str,

@@ -14,9 +14,11 @@ from .handlers import (
     handle_import,
     handle_log,
     handle_materialize_review,
+    handle_merge,
     handle_orphans,
     handle_overview,
     handle_reindex,
+    handle_reject,
     handle_resolve,
     handle_search,
     handle_source_add,
@@ -60,6 +62,8 @@ def main(argv: list[str] | None = None):
                    help="Mark as suitable for LLM cache prefix")
     p.add_argument("--lifecycle", choices=["permanent", "stable", "ephemeral"], default="permanent",
                    help="Lifecycle: permanent (never auto-archive), stable (auto-upgrade), ephemeral (auto-archive when unused)")
+    p.add_argument("--propose", action="store_true",
+                   help="Create as a proposal (status: proposed); excluded from default build/search until merged")
 
     # update
     p = subparsers.add_parser("update", help="Update an existing memory")
@@ -72,6 +76,16 @@ def main(argv: list[str] | None = None):
     p.add_argument("--import-required", nargs="*")
     p.add_argument("--import-recommended", nargs="*")
     p.add_argument("--import-related", nargs="*")
+
+    # merge
+    p = subparsers.add_parser("merge", help="Merge a proposed memory (proposed -> active)")
+    _add_logging_flags(p)
+    p.add_argument("id", help="Memory ID to merge")
+
+    # reject
+    p = subparsers.add_parser("reject", help="Reject a proposed memory (proposed -> archived)")
+    _add_logging_flags(p)
+    p.add_argument("id", help="Memory ID to reject")
 
     # resolve
     p = subparsers.add_parser("resolve", help="Resolve and print memory context")
@@ -255,13 +269,17 @@ def main(argv: list[str] | None = None):
         print(handle_create(root, args.type, args.id, schema=args.schema,
                             intensity=args.intensity, tags=tags_list, dry_run=args.dry_run,
                             maturity=args.maturity, cache_stable=args.cache_stable,
-                            lifecycle=args.lifecycle))
+                            lifecycle=args.lifecycle, propose=args.propose))
     elif cmd == "update":
         print(handle_update(root, args.id, body=args.body, summary=args.summary,
                             change_note=args.change_note, status=args.status,
                             import_required=args.import_required,
                             import_recommended=args.import_recommended,
                             import_related=args.import_related))
+    elif cmd == "merge":
+        print(handle_merge(root, args.id))
+    elif cmd == "reject":
+        print(handle_reject(root, args.id))
     elif cmd == "reindex":
         handle_reindex(root)
     elif cmd == "resolve":
