@@ -119,10 +119,22 @@ class MemoryEntry(BaseModel):
     maturity: str = Field(default="draft", description="draft | verified | proven | superseded")
     evidence: dict[str, Any] | None = None
 
+    # Golden-question test contract (architecture §3.4). Stored raw so a
+    # malformed atom cannot break reindex; shape is reported by validate.
+    golden_questions: list[Any] = Field(default_factory=list)
+
     # Extra fields that may appear in frontmatter (what/why/when for instances)
     extra: dict[str, Any] = Field(default_factory=dict, exclude=True)
 
     model_config = ConfigDict(extra="allow", populate_by_name=True, protected_namespaces=())
+
+    @field_validator("golden_questions", mode="before")
+    @classmethod
+    def _coerce_golden_questions(cls, v: object) -> list[Any]:
+        """Keep reindex resilient: non-list shapes degrade to [] (validate reports them)."""
+        if isinstance(v, list):
+            return v
+        return []
 
     @field_validator("summary_hash", mode="before")
     @classmethod

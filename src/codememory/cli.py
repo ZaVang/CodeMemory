@@ -28,6 +28,8 @@ from .handlers import (
     handle_source_get,
     handle_source_list,
     handle_skeletonize,
+    handle_test,
+    handle_test_report,
     handle_snapshot,
     handle_diff,
     handle_suggest_deps,
@@ -81,6 +83,15 @@ def main(argv: list[str] | None = None):
                    help="Asset artifact_id to append to source_refs")
     p.add_argument("--source-ref-summary", dest="source_ref_summary",
                    help="Optional summary for the appended source ref")
+
+    # test
+    p = subparsers.add_parser("test", help="Export golden questions with assembled context (agent is the runner)")
+    _add_logging_flags(p)
+    p.add_argument("target", help="Entry memory ID, or 'report' to record runner results")
+    p.add_argument("subtarget", nargs="?", help="Entry memory ID (report mode)")
+    p.add_argument("--results", help="Path to results JSON file (report mode)")
+    p.add_argument("--depth", choices=["required", "recommended", "full"], default="recommended")
+    p.add_argument("--budget", type=int)
 
     # merge
     p = subparsers.add_parser("merge", help="Merge a proposed memory (proposed -> active)")
@@ -294,6 +305,13 @@ def main(argv: list[str] | None = None):
                             import_related=args.import_related,
                             source_ref=args.source_ref,
                             source_ref_summary=args.source_ref_summary))
+    elif cmd == "test":
+        if args.target == "report":
+            if not args.subtarget or not args.results:
+                parser.error("test report requires <entry> and --results <file>")
+            print(handle_test_report(root, args.subtarget, args.results))
+        else:
+            print(handle_test(root, args.target, depth=args.depth, budget=args.budget))
     elif cmd == "merge":
         print(handle_merge(root, args.id))
     elif cmd == "reject":

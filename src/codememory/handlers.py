@@ -149,6 +149,31 @@ def handle_update(
     return str(file_path)
 
 
+def handle_test(
+    root: Path,
+    memory_id: str,
+    depth: str = "recommended",
+    budget: int | None = None,
+) -> str:
+    """Export the entry's golden questions plus assembled context as JSON."""
+    import json as _json
+
+    from .test_contract import export_test_bundle
+
+    bundle = export_test_bundle(root, memory_id, depth=depth, budget=budget)
+    return _json.dumps(bundle.model_dump(mode="json"), ensure_ascii=False, indent=2)
+
+
+def handle_test_report(root: Path, memory_id: str, results_path: str) -> str:
+    """Record a runner's golden-question results into the audit log."""
+    import json as _json
+
+    from .test_contract import record_test_report
+
+    results = _json.loads(Path(results_path).read_text(encoding="utf-8"))
+    return record_test_report(root, memory_id, results)
+
+
 def handle_merge(root: Path, memory_id: str) -> str:
     """Merge a proposed memory into the canonical graph. Returns path string."""
     from .update import merge

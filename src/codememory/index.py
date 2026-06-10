@@ -122,6 +122,10 @@ def reindex(root_dir: Path) -> int:
                         entry.cache_stable = True
                 if "lifecycle" in meta:
                     entry.lifecycle = str(meta["lifecycle"])
+                # Golden-question test contract (architecture §3.4); kept raw,
+                # non-list shapes degrade to [] (validate reports them).
+                if isinstance(meta.get("golden_questions"), list):
+                    entry.golden_questions = meta["golden_questions"]
 
                 # R3: lifecycle auto-transitions
                 # ephemeral + never accessed → auto-archive

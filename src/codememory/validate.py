@@ -214,6 +214,23 @@ def validate(root_dir: Path) -> tuple[int, int]:
                     )
                     warnings += 1
 
+        # 9. golden_questions shape check (Phase C, architecture §3.4)
+        if entry.type != "schema":
+            meta_raw, _raw_body = parse_frontmatter(root_dir / entry.path)
+            gq = meta_raw.get("golden_questions")
+            if gq is not None:
+                if not isinstance(gq, list):
+                    print(f"[GOLDEN-WARN] {mid} golden_questions must be a list.")
+                    warnings += 1
+                else:
+                    for i, item in enumerate(gq):
+                        if not isinstance(item, dict) or not isinstance(item.get("q"), str):
+                            print(
+                                f"[GOLDEN-WARN] {mid} golden_questions[{i}] must be "
+                                f"a mapping with a string 'q' field."
+                            )
+                            warnings += 1
+
     # 7. Source Artifact registry checks
     for result in check_source_registry(root_dir):
         if result.state in {"missing", "stale"}:
