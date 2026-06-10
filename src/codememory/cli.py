@@ -121,7 +121,7 @@ def main(argv: list[str] | None = None):
     p.add_argument("--query", "-q", help="Substring match against summary")
     p.add_argument("--tags", "-t", nargs="*", help="Filter by tags (AND logic)")
     p.add_argument("--type", "-T", dest="type_", choices=["atom", "schema"])
-    p.add_argument("--status", "-s", choices=["active", "archived", "superseded", "draft"])
+    p.add_argument("--status", "-s", choices=["active", "proposed", "archived", "superseded", "draft"])
     p.add_argument("--maturity", "-m", choices=["draft", "verified", "proven", "superseded"])
     p.add_argument("--semantic-type", dest="semantic_type", help="Filter by semantic type tag (e.g. decision, model, guideline)")
     p.add_argument("--has-imports", action="store_true", help="Filter to memories with non-empty imports")

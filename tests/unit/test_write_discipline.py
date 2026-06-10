@@ -121,3 +121,111 @@ def test_merge_non_proposed_exits(tmp_path: Path):
 
     with pytest.raises(SystemExit):
         merge(tmp_path, "user/facts/already-active")
+
+
+# ==================================================================
+# Slice 3: search default status filter
+# ==================================================================
+
+def _status_zoo(tmp_path: Path) -> None:
+    """One atom per status, sharing a searchable summary token."""
+    for status in ("active", "draft", "proposed", "archived", "superseded"):
+        _write_atom(tmp_path, f"user/facts/zoo-{status}", status=status,
+                    summary=f"zootoken {status} entry")
+    reindex(tmp_path)
+
+
+def test_search_default_returns_only_active_and_draft(tmp_path: Path):
+    """Without an explicit status filter, search hides proposed/archived/superseded."""
+    from codememory.search import search
+
+    _status_zoo(tmp_path)
+    results = search(tmp_path, query="zootoken")
+    ids = {r["id"] for r in results}
+    assert ids == {"user/facts/zoo-active", "user/facts/zoo-draft"}
+
+
+def test_search_explicit_status_shows_proposed(tmp_path: Path):
+    """--status proposed makes proposals visible."""
+    from codememory.search import search
+
+    _status_zoo(tmp_path)
+    results = search(tmp_path, query="zootoken", status="proposed")
+    ids = {r["id"] for r in results}
+    assert ids == {"user/facts/zoo-proposed"}
+
+
+# ==================================================================
+# Slice 4: build paths skip non-assemblable statuses
+# ==================================================================
+
+def _graph_with_status_dep(tmp_path: Path, dep_status: str) -> None:
+    """Active entry atom importing a dependency with the given status."""
+    _write_atom(tmp_path, "user/contexts/entry", status="active",
+                imports_required=["user/facts/dep"],
+                summary="entry summary", body="ENTRY-BODY-MARKER")
+    _write_atom(tmp_path, "user/facts/dep", status=dep_status,
+                summary="dep summary", body="DEP-BODY-MARKER")
+    reindex(tmp_path)
+
+
+def test_resolve_skips_proposed_dependency(tmp_path: Path):
+    """resolve assembles the active entry but skips its proposed import, with a notice."""
+    from codememory.resolve import resolve
+
+    _graph_with_status_dep(tmp_path, "proposed")
+    output = resolve(tmp_path, "user/contexts/entry", depth="required")
+
+    assert "ENTRY-BODY-MARKER" in output
+    assert "DEP-BODY-MARKER" not in output
+    assert "user/facts/dep" in output  # named in the notice
+    assert "[NOTICE]" in output
+
+
+def test_resolve_skips_archived_dependency(tmp_path: Path):
+    """archived dependencies are equally non-assemblable."""
+    from codememory.resolve import resolve
+
+    _graph_with_status_dep(tmp_path, "archived")
+    output = resolve(tmp_path, "user/contexts/entry", depth="required")
+
+    assert "ENTRY-BODY-MARKER" in output
+    assert "DEP-BODY-MARKER" not in output
+
+
+def test_resolve_refuses_proposed_target(tmp_path: Path):
+    """Resolving a proposed atom as the target is refused with guidance."""
+    from codememory.resolve import resolve
+
+    _write_atom(tmp_path, "user/facts/pending-target", status="proposed",
+                body="PENDING-BODY-MARKER")
+    reindex(tmp_path)
+
+    output = resolve(tmp_path, "user/facts/pending-target")
+    assert "PENDING-BODY-MARKER" not in output
+    assert "proposed" in output
+    assert "merge" in output
+
+
+def test_context_pack_excludes_proposed_dependency(tmp_path: Path):
+    """ContextPack drops proposed nodes from the graph and emits a notice."""
+    from codememory.context_pack import build_context_pack
+
+    _graph_with_status_dep(tmp_path, "proposed")
+    pack = build_context_pack(tmp_path, "user/contexts/entry", depth="required")
+
+    node_ids = {n.id for n in pack.nodes}
+    assert "user/facts/dep" not in node_ids
+    assert "user/contexts/entry" in node_ids
+    assert any(n.type == "excluded_status" for n in pack.notices)
+
+
+def test_context_pack_refuses_proposed_target(tmp_path: Path):
+    """ContextPack raises for a proposed target, matching missing-target style."""
+    from codememory.context_pack import build_context_pack
+
+    _write_atom(tmp_path, "user/facts/pending-pack", status="proposed")
+    reindex(tmp_path)
+
+    with pytest.raises(ValueError, match="proposed"):
+        build_context_pack(tmp_path, "user/facts/pending-pack")

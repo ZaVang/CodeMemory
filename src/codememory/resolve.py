@@ -7,7 +7,7 @@ from pathlib import Path
 
 from .core import compute_body_hash, compute_retrieval_probability, estimate_tokens, parse_frontmatter
 from .index import load_index, save_index
-from .models import IndexData, MemoryEntry
+from .models import NON_ASSEMBLABLE_STATUSES, IndexData, MemoryEntry
 
 _logger = logging.getLogger("codememory")
 
@@ -163,6 +163,15 @@ def resolve(
         _logger.error(msg)
         return msg
 
+    target_status = index.memories[memory_id].status
+    if target_status in NON_ASSEMBLABLE_STATUSES:
+        msg = (
+            f"Error: Target memory '{memory_id}' has status '{target_status}' and is not "
+            f"assemblable. If it is a proposal, review it and run: codememory merge {memory_id}"
+        )
+        _logger.error(msg)
+        return msg
+
     # 1. Build DAG
     graph = build_dag(memory_id, depth, index)
 
@@ -173,6 +182,18 @@ def resolve(
         _logger.warning("Skipping cycle nodes to continue resolution...")
         for u in list(graph.keys()):
             graph[u] = [v for v in graph[u] if v not in cycle_ids]
+
+    # 2b. Drop non-assemblable nodes (proposed/archived/superseded) from the closure
+    excluded_nodes = sorted(
+        n for n in graph
+        if n != memory_id and n in index.memories
+        and index.memories[n].status in NON_ASSEMBLABLE_STATUSES
+    )
+    if excluded_nodes:
+        for u in list(graph.keys()):
+            graph[u] = [v for v in graph[u] if v not in excluded_nodes]
+        for n in excluded_nodes:
+            graph.pop(n, None)
 
     # 3. Topo Sort
     ordered = topological_sort(graph)
@@ -201,6 +222,12 @@ def resolve(
     full_text_nodes: list[str] = []
     notices: list[str] = []
     stale_ids: list[str] = []  # R16-F5: track stale memories for stability decrease
+
+    if excluded_nodes:
+        notices.append(
+            "[NOTICE] skipped non-assemblable nodes "
+            f"(proposed/archived/superseded): {', '.join(excluded_nodes)}"
+        )
 
     for i, mid in enumerate(ordered):
         if mid not in index.memories:
