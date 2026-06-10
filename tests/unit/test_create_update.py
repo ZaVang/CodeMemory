@@ -26,7 +26,7 @@ from codememory.index import load_index
 
 def test_create_atom_file_generated(tmp_path: Path):
     """create atom produces a .md file with correct YAML frontmatter fields."""
-    filepath = create(tmp_path, "atom", "user/ideas/my-thesis", intensity=5,
+    filepath = create(tmp_path, "atom", "user/ideas/my-thesis",
                        tags=["research", "ai"])
 
     assert filepath is not None
@@ -36,7 +36,6 @@ def test_create_atom_file_generated(tmp_path: Path):
     meta, body = parse_frontmatter(filepath)
     assert meta["type"] == "atom"
     assert meta["id"] == "user/ideas/my-thesis"
-    assert meta["intensity"] == 5
     assert meta["tags"] == ["research", "ai"]
     assert meta["status"] == "active"
     assert meta["version"] == 1
@@ -71,21 +70,14 @@ def test_create_dry_run_no_file(tmp_path: Path):
 # 3.3 protected is decoupled from intensity (Phase A)
 # ==================================================================
 
-def test_create_high_intensity_not_protected(tmp_path: Path):
-    """Phase A: protected is owner-set only; intensity >= 8 no longer sets it."""
-    filepath = create(tmp_path, "atom", "user/test/protected",
-                       intensity=8)
+def test_create_never_sets_protected(tmp_path: Path):
+    """Phase C: protected is owner-set only; create never writes it."""
+    filepath = create(tmp_path, "atom", "user/test/protected")
     assert filepath is not None
     meta, _body = parse_frontmatter(filepath)
     assert "protected" not in meta
 
 
-def test_create_not_protected_low_intensity(tmp_path: Path):
-    """intensity < 8 does not set protected."""
-    filepath = create(tmp_path, "atom", "user/test/normal",
-                       intensity=5)
-    meta, _body = parse_frontmatter(filepath)
-    assert meta.get("protected") is not True
 
 
 # ==================================================================

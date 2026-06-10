@@ -97,7 +97,6 @@ def reindex(root_dir: Path) -> int:
                     updated=meta.get("updated", ""),
                     version=meta.get("version", 1),
                     path=rel_path,
-                    intensity=meta.get("intensity", 5),
                     access_count=old_entry.access_count if old_entry else 0,
                     last_access=old_entry.last_access if old_entry else None,
                 )
@@ -146,16 +145,6 @@ def reindex(root_dir: Path) -> int:
                     entry.maturity = str(meta["maturity"])
                 if "evidence" in meta:
                     entry.evidence = meta["evidence"]
-
-                # R13-M3: precompute days_since_last_access for fast heat calculation
-                if old_entry and old_entry.last_access:
-                    try:
-                        last_dt = datetime.fromisoformat(old_entry.last_access)
-                        if last_dt.tzinfo is None:
-                            last_dt = last_dt.replace(tzinfo=timezone.utc)
-                        entry.days_since_last_access = max(0, (datetime.now(timezone.utc) - last_dt).days)
-                    except (ValueError, TypeError, OSError):
-                        entry.days_since_last_access = None
 
                 index_data.memories[actual_id] = entry
                 count += 1

@@ -1,22 +1,23 @@
-"""Shared utilities: intensity annotation parsing, text truncation, slugify."""
+"""Shared utilities: weight annotation parsing, text truncation, slugify."""
 
 import re
 
-# Matches: <!-- @intensity:N --> | # @intensity:N | // @intensity:N
-_INTENSITY_RE = re.compile(r'(?:<!--|#|//)\s*@intensity:\s*(\d+)\s*(?:-->)?')
+# Matches: <!-- @weight:N --> | # @weight:N | // @weight:N
+# (@intensity is accepted as a deprecated alias for one release)
+_WEIGHT_RE = re.compile(r'(?:<!--|#|//)\s*@(?:weight|intensity):\s*(\d+)\s*(?:-->)?')
 
 
-def parse_intensity(text: str) -> int | None:
-    """Extract @intensity value from annotation markers.
+def parse_weight(text: str) -> int | None:
+    """Extract @weight value from annotation markers.
 
     Supported formats:
-      <!-- @intensity:N -->  (Markdown / HTML)
-      # @intensity:N         (Python, YAML, shell)
-      // @intensity:N        (JS, TS, Go, Rust, Java)
+      <!-- @weight:N -->  (Markdown / HTML)
+      # @weight:N         (Python, YAML, shell)
+      // @weight:N        (JS, TS, Go, Rust, Java)
 
     Returns None if no marker found. Values clamped to 1-10.
     """
-    m = _INTENSITY_RE.search(text)
+    m = _WEIGHT_RE.search(text)
     if not m:
         return None
     try:
@@ -30,9 +31,9 @@ def extract_first_sentence(text: str, max_chars: int = 200) -> str:
     """Extract the first sentence from text.
 
     Sentence boundaries: 。！？.!? followed by end-of-sentence context,
-    or newline. Strips leading intensity markers.
+    or newline. Strips leading weight markers.
     """
-    text = _INTENSITY_RE.sub('', text).strip()
+    text = _WEIGHT_RE.sub('', text).strip()
     if not text:
         return ''
 
@@ -47,9 +48,9 @@ def extract_first_sentence(text: str, max_chars: int = 200) -> str:
     return text[:max_chars] + '...'
 
 
-def strip_intensity_markers(text: str) -> str:
-    """Remove all @intensity annotation markers from text."""
-    return _INTENSITY_RE.sub('', text)
+def strip_weight_markers(text: str) -> str:
+    """Remove all @weight annotation markers from text."""
+    return _WEIGHT_RE.sub('', text)
 
 
 def slugify(text: str, max_len: int = 50) -> str:
@@ -75,14 +76,14 @@ def render_to_html(
     meta = metadata or {}
     title = meta.get("title", source_file)
     tags = meta.get("tags", [])
-    intensity = meta.get("intensity", 5)
+    weight = meta.get("weight", 5)
 
     jsonld = {
         "@context": "https://schema.org",
         "@type": "CreativeWork",
         "name": title,
         "keywords": tags,
-        "intensity": intensity,
+        "weight": weight,
         "sourceFile": source_file,
     }
 
@@ -99,7 +100,7 @@ def render_to_html(
             f'<span class="tag">{html.escape(t)}</span>' for t in tags
         )
         body_parts.append(f'<span class="tag-list">Tags: {tags_html}</span>')
-    body_parts.append(f'<span>Intensity: {intensity}/10</span>')
+    body_parts.append(f'<span>Weight: {weight}/10</span>')
     body_parts.append('</div>')
     body_parts.append('</header>')
 
@@ -107,8 +108,8 @@ def render_to_html(
     for i, section in enumerate(sections):
         heading = getattr(section, 'heading', '') or f'Section {i}'
         body_text = getattr(section, 'body', '') or ''
-        sec_intensity = getattr(section, 'intensity', 5)
-        truncated = 'truncated' if sec_intensity < (meta.get('min_intensity', 5)) else ''
+        sec_weight = getattr(section, 'weight', 5)
+        truncated = 'truncated' if sec_weight < (meta.get('min_weight', 5)) else ''
 
         body_parts.append(
             f'<details {"open" if not truncated else ""} class="{truncated}">'
@@ -116,7 +117,7 @@ def render_to_html(
         body_parts.append(
             f'<summary>'
             f'<span class="section-heading">{html.escape(heading)}</span>'
-            f'<span class="intensity-badge">{sec_intensity}</span>'
+            f'<span class="weight-badge">{sec_weight}</span>'
             f'</summary>'
         )
         body_parts.append(
@@ -219,7 +220,7 @@ summary {
 }
 summary:hover { background: var(--summary-hover); }
 .section-heading { flex: 1; }
-.intensity-badge {
+.weight-badge {
     display: inline-block;
     padding: 0.1rem 0.5rem;
     background: var(--badge-bg);

@@ -47,7 +47,6 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
                 "type": {"type": "string", "enum": ["atom", "schema"], "default": "atom"},
                 "id": {"type": "string", "description": "Memory identifier"},
                 "schema": {"type": "string", "description": "Schema ID (for atoms with schema)"},
-                "intensity": {"type": "integer", "default": 5, "description": "Relevance score 1-10"},
                 "dry_run": {"type": "boolean", "default": False},
                 "tags": {"type": "array", "items": {"type": "string"}, "description": "Custom tags list"},
                 "root": {"type": "string", "description": "Root directory for memory data"},
@@ -122,7 +121,6 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
             "type": "object",
             "properties": {
                 "type": {"type": "string", "enum": ["atom", "schema"]},
-                "min_intensity": {"type": "integer", "description": "Minimum intensity filter"},
                 "root": {"type": "string", "description": "Root directory for memory data"},
             },
         },
@@ -179,7 +177,7 @@ async def _resolve_handler(payload: dict[str, Any]) -> dict[str, Any]:
 async def _create_handler(payload: dict[str, Any]) -> dict[str, Any]:
     root = get_root_dir(payload.get("root"))
     result = handle_create(root, memory_type=payload.get("type", "atom"), memory_id=payload["id"],
-                           schema=payload.get("schema"), intensity=payload.get("intensity", 5),
+                           schema=payload.get("schema"),
                            tags=payload.get("tags"), dry_run=payload.get("dry_run", False),
                            maturity=payload.get("maturity", "draft"))
     return {"result": result}
@@ -222,7 +220,7 @@ async def _snapshot_handler(payload: dict[str, Any]) -> dict[str, Any]:
 
 async def _orphans_handler(payload: dict[str, Any]) -> dict[str, Any]:
     root = get_root_dir(payload.get("root"))
-    result = handle_orphans(root, type_=payload.get("type"), min_intensity=payload.get("min_intensity"))
+    result = handle_orphans(root, type_=payload.get("type"))
     return {"result": result}
 
 

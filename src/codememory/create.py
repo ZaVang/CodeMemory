@@ -12,58 +12,14 @@ from .index import reindex
 
 _logger = logging.getLogger("codememory")
 
-# R15-C3: Domain-differentiated default stability lookup
-# Maps semantic_type (tag) to default stability in days.
-# These override the universal default of 14.0 for new memories at creation time.
-SEMANTIC_TYPE_STABILITY: dict[str, float] = {
-    "schemas": 365.0,          # Schema definitions are permanent reference
-    "api": 365.0,               # API documentation is permanent reference
-    "architectural-decision": 90.0,  # Architecture decisions have medium lifecycle
-    "decision": 90.0,           # General decisions have medium lifecycle
-    "research": 90.0,           # Research notes have medium lifecycle
-    "context": 30.0,            # Context summaries are medium-term
-    "meeting": 7.0,             # Meeting notes decay within a week
-    "daily": 5.0,               # Daily notes are ephemeral
-    "daily-notes": 5.0,         # Daily notes alias
-}
-
-
-def _default_stability(tags: list[str] | None, schema: str | None, root_dir: Path | None = None) -> float:
-    """Determine the default stability for a newly created memory.
-
-    Priority:
-    1. Any tag matching a known semantic_type → lookup table value
-    2. Schema reference → inherit schema's stability default (365d)
-    3. Universal default 14.0
-    """
-    # Check tags for semantic type matches
-    if tags:
-        for tag in tags:
-            if tag in SEMANTIC_TYPE_STABILITY:
-                return SEMANTIC_TYPE_STABILITY[tag]
-
-    # Check if the schema itself has a stability default
-    if schema:
-        # Schemas get permanent retention
-        if schema.startswith("schemas/"):
-            return 365.0
-        # Could load schema entry from index to inherit its stability,
-        # but keeping it simple: schema-backed memories get 365d
-        return 365.0
-
-    return 14.0
-
-
 def create(
     root_dir: Path,
     memory_type: str,
     memory_id: str,
     schema: str | None = None,
-    intensity: int = 5,
     tags: list[str] | None = None,
     dry_run: bool = False,
     maturity: str = "draft",
-    stability: float | None = None,
     cache_stable: bool = False,
     lifecycle: str = "permanent",
     propose: bool = False,
@@ -75,11 +31,9 @@ def create(
         memory_type: 'atom' or 'schema'.
         memory_id: The memory identifier (e.g. 'user/ideas/my-thesis').
         schema: Optional schema ID reference.
-        intensity: Relevance score 1-10 (default 5).
         tags: Custom tags list (defaults to ["untagged"]).
         dry_run: If True, preview frontmatter + body to stdout without writing.
         maturity: Initial maturity (default "draft").
-        stability: Explicit stability override. If None, use domain default.
         cache_stable: Mark as suitable for LLM cache prefix.
         lifecycle: permanent | stable | ephemeral.
         propose: If True, write the atom as a proposal (status: proposed);
@@ -98,13 +52,6 @@ def create(
 
     tag_list = tags if tags is not None else ["untagged"]
 
-    # R15-C3: determine default stability from semantic_type / schema
-    # Explicit stability override takes precedence over domain defaults
-    if stability is None:
-        stability = _default_stability(tag_list, schema, root_dir)
-    else:
-        stability = max(stability, 0.1)  # safety floor
-
     frontmatter = {
         "type": memory_type,
         "id": memory_id,
@@ -114,9 +61,7 @@ def create(
         "updated": now,
         "version": 1,
         "tags": tag_list,
-        "intensity": intensity,
         "maturity": maturity,
-        "stability": stability,
         "cache_stable": cache_stable,
         "lifecycle": lifecycle,
         "evidence": {

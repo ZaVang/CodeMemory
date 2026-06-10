@@ -501,7 +501,7 @@ def _track_context_pack_access(
     """Record access telemetry for assembled nodes.
 
     architecture.md §5.1: assembly writes only access_count / last_access;
-    maturity and stability are inert metadata and are never fed by build.
+    maturity stays inert metadata and is never fed by build.
     """
     now_iso = datetime.now().isoformat()
     for node_id in full_text_nodes:
@@ -510,7 +510,6 @@ def _track_context_pack_access(
         entry = index.memories[node_id]
         entry.access_count += 1
         entry.last_access = now_iso
-        entry.days_since_last_access = 0
 
     save_index(root_dir, index)
 

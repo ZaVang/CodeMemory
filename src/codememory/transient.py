@@ -25,7 +25,6 @@ class TransientNode(BaseModel):
     summary: str = ""
     body: str = ""
     imports: dict[str, list[str]] = Field(default_factory=dict)
-    intensity: int = 5
 
 
 class TransientDAG:
@@ -50,7 +49,6 @@ class TransientDAG:
         summary: str = "",
         body: str = "",
         imports: dict[str, list[str]] | None = None,
-        intensity: int = 5,
     ) -> TransientNode:
         """Add a transient node. Overwrites if id already exists."""
         node = TransientNode(
@@ -59,7 +57,6 @@ class TransientDAG:
             summary=summary,
             body=body,
             imports=imports or {},
-            intensity=intensity,
         )
         self._nodes[id] = node
         return node

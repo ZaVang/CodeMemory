@@ -80,13 +80,11 @@ def get_graph(focus: str | None = None):
                 "directory": _directory,
                 "type": d.get("type", "atom"),
                 "summary": d.get("summary", ""),
-                "intensity": d.get("intensity", 5),
                 "status": d.get("status", "active"),
                 "dependents": deps_count,
                 "maturity": d.get("maturity", "draft"),
                 "tags": d.get("tags", []),
                 "days_since_last_access": d.get("days_since_last_access"),
-                "stability": d.get("stability", 14.0),
             },
         })
 
@@ -284,7 +282,6 @@ def post_search(req: SearchRequest):
                 "summary": summary,
                 "type": d.get("type", "atom"),
                 "tags": d.get("tags", []),
-                "intensity": d.get("intensity", 5),
                 "maturity": d.get("maturity", "draft"),
                 "status": d.get("status", "active"),
                 "snippet": snippet,
@@ -292,8 +289,6 @@ def post_search(req: SearchRequest):
                 "match_score": round(best_score, 2),
                 "match_fields": match_fields,
                 "days_since_last_access": d.get("days_since_last_access", None),
-                "stability": d.get("stability", 14.0),
-                "stability_source": d.get("stability_source", None),
                 "access_count": d.get("access_count", 0),
             }
 
@@ -307,7 +302,6 @@ def post_search(req: SearchRequest):
                 "summary": summary,
                 "type": d.get("type", "atom"),
                 "tags": d.get("tags", []),
-                "intensity": d.get("intensity", 5),
                 "maturity": d.get("maturity", "draft"),
                 "status": d.get("status", "active"),
                 "snippet": "",
@@ -315,8 +309,6 @@ def post_search(req: SearchRequest):
                 "match_score": 0,
                 "match_fields": [],
                 "days_since_last_access": d.get("days_since_last_access", None),
-                "stability": d.get("stability", 14.0),
-                "stability_source": d.get("stability_source", None),
                 "access_count": d.get("access_count", 0),
             }
             exact_matches.append(match_entry)

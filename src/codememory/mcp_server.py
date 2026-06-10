@@ -141,13 +141,6 @@ TOOLS = [
                     "items": {"type": "string"},
                     "description": "Tags for categorization",
                 },
-                "intensity": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "maximum": 10,
-                    "default": 5,
-                    "description": "Importance rating 1-10",
-                },
             },
             "required": ["id", "summary", "body"],
         },
@@ -225,32 +218,28 @@ def _call_tool(name: str, arguments: dict) -> list[dict]:
         summary = arguments.get("summary", "")
         body = arguments.get("body", "")
         tags = arguments.get("tags", [])
-        intensity = arguments.get("intensity", 5)
         try:
-            from codememory.core import compute_body_hash, parse_frontmatter
-            import yaml as _yaml
-            filepath = handle_create(
+            handle_create(
                 root=root,
                 memory_type="atom",
                 memory_id=memory_id,
-                intensity=intensity,
                 tags=tags,
                 maturity="draft",
+                propose=True,
             )
-            fp = Path(filepath)
-            meta, _ = parse_frontmatter(fp)
-            meta["summary"] = summary
-            meta["summary_hash"] = compute_body_hash(body.strip())
-            meta["status"] = "proposed"
-            _yaml_str = _yaml.dump(meta, allow_unicode=True, sort_keys=False)
-            fp.write_text(f"---\n{_yaml_str}---\n{body}", encoding="utf-8")
-            from codememory.index import reindex as _mcp_reindex
-            _mcp_reindex(root)
+            handle_update(
+                root=root,
+                memory_id=memory_id,
+                summary=summary,
+                body=body,
+                change_note="proposed via MCP",
+            )
             return [{"type": "text", "text": (
-                f"Memory proposed: {memory_id}\n"
-                f"Status: proposed (maturity=draft)\n"
-                f"Review required before this memory appears in normal results.\n"
-                f"Use the dashboard or CLI to promote maturity from draft to verified."
+                f"Memory proposed: {memory_id}
+"
+                f"Status: proposed (excluded from default build/search)
+"
+                f"Owner review: codememory merge {memory_id} (or reject)."
             )}]
         except Exception as exc:
             return [{"type": "text", "text": f"Error proposing memory '{memory_id}': {exc}"}]

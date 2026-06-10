@@ -10,36 +10,36 @@ if str(_SRC) not in sys.path:
     sys.path.insert(0, str(_SRC))
 
 import pytest
-from codememory.skeletonize.common import parse_intensity, extract_first_sentence, slugify
+from codememory.skeletonize.common import parse_weight, extract_first_sentence, slugify
 
 
-class TestParseIntensity:
+class TestParseWeight:
     def test_standard_marker(self):
-        assert parse_intensity("<!-- @intensity:7 -->") == 7
+        assert parse_weight("<!-- @weight:7 -->") == 7
 
     def test_marker_with_surrounding_text(self):
-        assert parse_intensity("<!-- @intensity:3 -->\n## Some Heading") == 3
+        assert parse_weight("<!-- @weight:3 -->\n## Some Heading") == 3
 
     def test_marker_with_whitespace(self):
-        assert parse_intensity("<!--   @intensity:  9  -->") == 9
+        assert parse_weight("<!--   @weight:  9  -->") == 9
 
     def test_no_marker(self):
-        assert parse_intensity("## Just a heading") is None
+        assert parse_weight("## Just a heading") is None
 
     def test_empty_string(self):
-        assert parse_intensity("") is None
+        assert parse_weight("") is None
 
     def test_clamp_low(self):
-        assert parse_intensity("<!-- @intensity:0 -->") == 1
+        assert parse_weight("<!-- @weight:0 -->") == 1
 
     def test_clamp_high(self):
-        assert parse_intensity("<!-- @intensity:99 -->") == 10
+        assert parse_weight("<!-- @weight:99 -->") == 10
 
     def test_malformed_marker(self):
-        assert parse_intensity("<!-- @intensity:abc -->") is None
+        assert parse_weight("<!-- @weight:abc -->") is None
 
     def test_bare_text_not_matched(self):
-        assert parse_intensity("@intensity:5") is None
+        assert parse_weight("@weight:5") is None
 
 
 class TestExtractFirstSentence:
@@ -63,8 +63,8 @@ class TestExtractFirstSentence:
         result = extract_first_sentence(text, max_chars=50)
         assert len(result) <= 53  # 50 + "..."
 
-    def test_strips_intensity_marker(self):
-        assert extract_first_sentence("<!-- @intensity:3 -->\nActual first sentence. More.") == "Actual first sentence."
+    def test_strips_weight_marker(self):
+        assert extract_first_sentence("<!-- @weight:3 -->\nActual first sentence. More.") == "Actual first sentence."
 
     def test_empty_string(self):
         assert extract_first_sentence("") == ""
@@ -117,21 +117,21 @@ class TestSplitSections:
         assert sections[0].heading == ''
         assert sections[0].body == text
 
-    def test_default_intensity(self):
+    def test_default_weight(self):
         text = "## Plain Section\nSome content without marker."
         sections = split_sections(text)
-        assert sections[0].intensity == 5
+        assert sections[0].weight == 5
 
-    def test_intensity_before_heading(self):
-        text = "<!-- @intensity:8 -->\n## Important Section\nFull content here."
+    def test_weight_before_heading(self):
+        text = "<!-- @weight:8 -->\n## Important Section\nFull content here."
         sections = split_sections(text)
-        assert sections[0].intensity == 8
+        assert sections[0].weight == 8
         assert sections[0].heading == 'Important Section'
 
-    def test_intensity_in_body(self):
-        text = "## Section\n<!-- @intensity:3 -->\nMore text."
+    def test_weight_in_body(self):
+        text = "## Section\n<!-- @weight:3 -->\nMore text."
         sections = split_sections(text)
-        assert sections[0].intensity == 3
+        assert sections[0].weight == 3
 
     def test_nested_headings_create_separate_sections(self):
         text = "## Top\nTop content.\n### Sub\nSub content.\n## Another\nMore."
@@ -149,45 +149,45 @@ class TestSplitSections:
 
 
 class TestSkeletonizeMarkdown:
-    def test_high_intensity_preserved(self):
-        text = "## Core Logic\n<!-- @intensity:8 -->\nDetailed implementation kept fully."
-        sections = skeletonize_markdown(text, min_intensity=5)
+    def test_high_weight_preserved(self):
+        text = "## Core Logic\n<!-- @weight:8 -->\nDetailed implementation kept fully."
+        sections = skeletonize_markdown(text, min_weight=5)
         assert 'Detailed implementation' in sections[0].body
         assert 'truncated' not in sections[0].body
 
-    def test_low_intensity_truncated(self):
-        text = "## Helper\n<!-- @intensity:2 -->\nFirst sentence. Second sentence to be cut."
-        sections = skeletonize_markdown(text, min_intensity=5)
+    def test_low_weight_truncated(self):
+        text = "## Helper\n<!-- @weight:2 -->\nFirst sentence. Second sentence to be cut."
+        sections = skeletonize_markdown(text, min_weight=5)
         assert 'truncated' in sections[0].body
         assert 'First sentence.' in sections[0].body
         assert 'Second sentence' not in sections[0].body
 
-    def test_boundary_intensity_kept(self):
-        text = "## Boundary\n<!-- @intensity:5 -->\nFull content at boundary."
-        sections = skeletonize_markdown(text, min_intensity=5)
+    def test_boundary_weight_kept(self):
+        text = "## Boundary\n<!-- @weight:5 -->\nFull content at boundary."
+        sections = skeletonize_markdown(text, min_weight=5)
         assert 'Full content' in sections[0].body
         assert 'truncated' not in sections[0].body
 
     def test_mixed_intensities(self):
         text = (
-            "## Important\n<!-- @intensity:8 -->\nKeep all of this.\n\n"
-            "## Minor\n<!-- @intensity:2 -->\nDrop most. Extra filler."
+            "## Important\n<!-- @weight:8 -->\nKeep all of this.\n\n"
+            "## Minor\n<!-- @weight:2 -->\nDrop most. Extra filler."
         )
-        sections = skeletonize_markdown(text, min_intensity=5)
+        sections = skeletonize_markdown(text, min_weight=5)
         assert len(sections) == 2
         assert 'Keep all' in sections[0].body
         assert 'truncated' not in sections[0].body
         assert 'truncated' in sections[1].body
 
     def test_no_headings_document(self):
-        text = "<!-- @intensity:2 -->\nNo heading doc. Extra filler text here."
-        sections = skeletonize_markdown(text, min_intensity=5)
+        text = "<!-- @weight:2 -->\nNo heading doc. Extra filler text here."
+        sections = skeletonize_markdown(text, min_weight=5)
         assert 'truncated' in sections[0].body
 
-    def test_short_low_intensity_not_truncated(self):
-        """Single short sentence with low intensity — nothing to truncate."""
-        text = "## Note\n<!-- @intensity:1 -->\nShort."
-        sections = skeletonize_markdown(text, min_intensity=5)
+    def test_short_low_weight_not_truncated(self):
+        """Single short sentence with low weight — nothing to truncate."""
+        text = "## Note\n<!-- @weight:1 -->\nShort."
+        sections = skeletonize_markdown(text, min_weight=5)
         assert 'truncated' not in sections[0].body
 
 
@@ -224,55 +224,55 @@ class TestSupportsExtension:
 
 
 class TestSkeletonizePython:
-    def test_low_intensity_replaced(self):
-        code = "# @intensity:3\ndef foo():\n    return 1\n"
-        result = skeletonize_code(code, '.py', min_intensity=5)
+    def test_low_weight_replaced(self):
+        code = "# @weight:3\ndef foo():\n    return 1\n"
+        result = skeletonize_code(code, '.py', min_weight=5)
         assert 'pass' in result
-        assert '@intensity:3' in result
+        assert '@weight:3' in result
         assert 'truncated' in result
 
-    def test_high_intensity_preserved(self):
-        code = "# @intensity:8\ndef foo():\n    return 1\n"
-        result = skeletonize_code(code, '.py', min_intensity=5)
+    def test_high_weight_preserved(self):
+        code = "# @weight:8\ndef foo():\n    return 1\n"
+        result = skeletonize_code(code, '.py', min_weight=5)
         assert 'return 1' in result
         assert 'pass' not in result
 
     def test_no_annotation_default_kept(self):
         code = "def foo():\n    return 1\n"
-        result = skeletonize_code(code, '.py', min_intensity=5)
+        result = skeletonize_code(code, '.py', min_weight=5)
         assert 'return 1' in result
 
     def test_mixed_intensities(self):
         code = (
-            "# @intensity:2\n"
+            "# @weight:2\n"
             "def helper():\n"
             "    return 1\n"
             "\n"
-            "# @intensity:9\n"
+            "# @weight:9\n"
             "def core():\n"
             "    return 99\n"
         )
-        result = skeletonize_code(code, '.py', min_intensity=5)
+        result = skeletonize_code(code, '.py', min_weight=5)
         assert 'pass' in result  # helper skeletonized
         assert 'return 99' in result  # core preserved
 
     def test_class_definition_skeletonized(self):
-        code = "# @intensity:3\nclass Helper:\n    def method(self):\n        return 1\n"
-        result = skeletonize_code(code, '.py', min_intensity=5)
+        code = "# @weight:3\nclass Helper:\n    def method(self):\n        return 1\n"
+        result = skeletonize_code(code, '.py', min_weight=5)
         assert 'pass' in result
 
 
 class TestSkeletonizeJavaScript:
-    def test_low_intensity_replaced(self):
-        code = "// @intensity:2\nfunction foo() {\n  return 1;\n}\n"
-        result = skeletonize_code(code, '.js', min_intensity=5)
+    def test_low_weight_replaced(self):
+        code = "// @weight:2\nfunction foo() {\n  return 1;\n}\n"
+        result = skeletonize_code(code, '.js', min_weight=5)
         assert 'truncated' in result
         assert '{' in result
         assert '}' in result
 
-    def test_high_intensity_preserved(self):
-        code = "// @intensity:8\nfunction foo() {\n  return 1;\n}\n"
-        result = skeletonize_code(code, '.js', min_intensity=5)
+    def test_high_weight_preserved(self):
+        code = "// @weight:8\nfunction foo() {\n  return 1;\n}\n"
+        result = skeletonize_code(code, '.js', min_weight=5)
         assert 'return 1' in result
 
     def test_parse_error_returns_original(self):
@@ -281,19 +281,19 @@ class TestSkeletonizeJavaScript:
 
 
 class TestSkeletonizeTypeScript:
-    def test_low_intensity_replaced(self):
-        code = "// @intensity:2\nfunction foo(x: number): number {\n  return x;\n}\n"
-        result = skeletonize_code(code, '.ts', min_intensity=5)
+    def test_low_weight_replaced(self):
+        code = "// @weight:2\nfunction foo(x: number): number {\n  return x;\n}\n"
+        result = skeletonize_code(code, '.ts', min_weight=5)
         assert 'truncated' in result
 
-    def test_high_intensity_preserved(self):
-        code = "// @intensity:7\nfunction foo(x: number): number {\n  return x;\n}\n"
-        result = skeletonize_code(code, '.ts', min_intensity=5)
+    def test_high_weight_preserved(self):
+        code = "// @weight:7\nfunction foo(x: number): number {\n  return x;\n}\n"
+        result = skeletonize_code(code, '.ts', min_weight=5)
         assert 'return x' in result
 
 
 class TestSkeletonizeModule:
-    """Module mode: all bodies replaced regardless of @intensity."""
+    """Module mode: all bodies replaced regardless of @weight."""
 
     def test_all_bodies_replaced_python(self):
         from codememory.skeletonize.code import skeletonize_module
@@ -301,7 +301,7 @@ class TestSkeletonizeModule:
 
 VALUE = 1
 
-# @intensity:9
+# @weight:9
 def important():
     return VALUE
 
@@ -315,7 +315,7 @@ class Helper:
         assert 'def important():' in result
         assert 'return VALUE' not in result  # body replaced
         assert 'class Helper:' in result
-        assert 'pass  # @intensity:' in result  # intensity shown in stub marker
+        assert 'pass  # @weight:' in result  # weight shown in stub marker
 
     def test_all_bodies_replaced_js(self):
         from codememory.skeletonize.code import skeletonize_module
@@ -323,7 +323,7 @@ class Helper:
 
 const X = 1;
 
-// @intensity:8
+// @weight:8
 function calc(n) {
   return n * 2;
 }
@@ -341,36 +341,36 @@ function calc(n) {
 
 
 class TestSkeletonizeGo:
-    def test_low_intensity_replaced(self):
-        code = "package main\n\n// @intensity:2\nfunc main() {\n  x := 1\n  _ = x\n}\n"
-        result = skeletonize_code(code, '.go', min_intensity=5)
+    def test_low_weight_replaced(self):
+        code = "package main\n\n// @weight:2\nfunc main() {\n  x := 1\n  _ = x\n}\n"
+        result = skeletonize_code(code, '.go', min_weight=5)
         assert 'truncated' in result
 
-    def test_high_intensity_preserved(self):
-        code = "package main\n\n// @intensity:8\nfunc add(a, b int) int {\n  return a + b\n}\n"
-        result = skeletonize_code(code, '.go', min_intensity=5)
+    def test_high_weight_preserved(self):
+        code = "package main\n\n// @weight:8\nfunc add(a, b int) int {\n  return a + b\n}\n"
+        result = skeletonize_code(code, '.go', min_weight=5)
         assert 'return a + b' in result
 
 
 class TestSkeletonizeRust:
-    def test_low_intensity_replaced(self):
-        code = "// @intensity:2\nfn main() {\n    println!(\"hello\");\n}\n"
-        result = skeletonize_code(code, '.rs', min_intensity=5)
+    def test_low_weight_replaced(self):
+        code = "// @weight:2\nfn main() {\n    println!(\"hello\");\n}\n"
+        result = skeletonize_code(code, '.rs', min_weight=5)
         assert 'truncated' in result
 
-    def test_high_intensity_preserved(self):
-        code = "// @intensity:8\nfn calc() -> i32 {\n    42\n}\n"
-        result = skeletonize_code(code, '.rs', min_intensity=5)
+    def test_high_weight_preserved(self):
+        code = "// @weight:8\nfn calc() -> i32 {\n    42\n}\n"
+        result = skeletonize_code(code, '.rs', min_weight=5)
         assert '42' in result
 
 
 class TestSkeletonizeJava:
-    def test_low_intensity_replaced(self):
-        code = "// @intensity:2\nclass Main {\n    void foo() { return; }\n}\n"
-        result = skeletonize_code(code, '.java', min_intensity=5)
+    def test_low_weight_replaced(self):
+        code = "// @weight:2\nclass Main {\n    void foo() { return; }\n}\n"
+        result = skeletonize_code(code, '.java', min_weight=5)
         assert 'truncated' in result
 
-    def test_high_intensity_preserved(self):
-        code = "// @intensity:8\nclass Calc {\n    int add(int a, int b) { return a + b; }\n}\n"
-        result = skeletonize_code(code, '.java', min_intensity=5)
+    def test_high_weight_preserved(self):
+        code = "// @weight:8\nclass Calc {\n    int add(int a, int b) { return a + b; }\n}\n"
+        result = skeletonize_code(code, '.java', min_weight=5)
         assert 'return a + b' in result

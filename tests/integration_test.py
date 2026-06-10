@@ -53,7 +53,6 @@ async def test_a_create_and_search(sandbox):
         "type": "atom",
         "id": "user/test/sprint5-a-test",
         "tags": ["test", "sprint5", "scenario-a"],
-        "intensity": 5,
         "root": _ROOT,
     })
     create_result = res.get("result", str(res))
@@ -141,7 +140,6 @@ async def test_c_update_and_stale(sandbox):
         "type": "atom",
         "id": "user/test/sprint5-c-stale",
         "tags": ["test", "sprint5", "scenario-c"],
-        "intensity": 5,
         "root": _ROOT,
     })
     test_file = _ROOT_PATH / "user" / "test" / "sprint5-c-stale.md"
@@ -255,7 +253,6 @@ async def test_e_snapshot_persistence(sandbox):
         type="atom",
         summary="Raw data collected during session",
         body="## Session Data\n\nCollected Q1 earnings data: revenue +15%, profit +8%.\n",
-        intensity=6,
     )
     dag.add(
         "s/step-analysis",
@@ -264,7 +261,6 @@ async def test_e_snapshot_persistence(sandbox):
         body="## Session Analysis\n\nBased on Q1 data: growth is accelerating, "
              "sector rotation toward tech continues.\n",
         imports={"required": ["s/step-data"]},
-        intensity=7,
     )
 
     dag_dict = dag.to_dict()

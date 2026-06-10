@@ -52,7 +52,6 @@ class MemoryProposal(BaseModel):
     type: str = "atom"
     status: str = "active"
     maturity: str = "draft"
-    intensity: int = Field(default=5, ge=1, le=10)
     imports: dict[str, list[Any]] = Field(default_factory=dict)
 
 

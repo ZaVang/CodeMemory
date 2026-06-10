@@ -258,7 +258,6 @@ class CreateMemoryRequest(BaseModel):
     )
     summary: str = Field(default="TODO: fill in summary")
     tags: list[str] = Field(default_factory=list)
-    intensity: int = Field(default=5, ge=1, le=10)
     body: str = Field(default="")
     type: str = Field(default="atom", description="atom | schema")
     schema: str | None = None
@@ -273,12 +272,10 @@ class UpdateMemoryRequest(BaseModel):
     body: str | None = None
     summary: str | None = None
     tags: list[str] | None = None
-    intensity: int | None = Field(default=None, ge=1, le=10)
     status: str | None = None
     maturity: str | None = None
     change_note: str | None = None
     imports: dict[str, list[str]] | None = None
-    stability: float | None = Field(default=None, gt=0.0, le=365.0)
 
 
 class SearchRequest(BaseModel):

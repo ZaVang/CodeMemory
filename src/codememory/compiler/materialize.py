@@ -42,7 +42,6 @@ def _frontmatter_for_proposal(proposal: MemoryProposal) -> dict:
         "updated": today,
         "version": 1,
         "tags": proposal.tags,
-        "intensity": proposal.intensity,
         "maturity": proposal.maturity,
         "source": proposal.source,
         "evidence": {

@@ -67,7 +67,6 @@ def import_text(
             "updated": now,
             "version": 1,
             "tags": tags,
-            "intensity": 3,
             "maturity": "draft",
             "evidence": {
                 "contributors": ["import"],

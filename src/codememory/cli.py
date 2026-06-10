@@ -55,7 +55,6 @@ def main(argv: list[str] | None = None):
     p.add_argument("--type", default="atom", choices=["atom", "schema"], help="Memory type (default: atom)")
     p.add_argument("--id", required=True)
     p.add_argument("--schema")
-    p.add_argument("--intensity", type=int, default=5, help="Relevance score 1-10 (default: 5)")
     p.add_argument("--dry-run", action="store_true", help="Preview without creating file")
     p.add_argument("--tags", help="Comma-separated tags")
     p.add_argument("--maturity", choices=["draft", "verified", "proven"], default="draft",
@@ -198,7 +197,6 @@ def main(argv: list[str] | None = None):
     p = subparsers.add_parser("orphans", help="Find orphaned memories")
     _add_logging_flags(p)
     p.add_argument("--type", "-T", dest="type_", choices=["atom", "schema"])
-    p.add_argument("--min-intensity", type=int)
 
     # snapshot
     p = subparsers.add_parser("snapshot", help="Persist a transient context snapshot")
@@ -245,8 +243,8 @@ def main(argv: list[str] | None = None):
     p = subparsers.add_parser("skeletonize", help="Import structured memories from Markdown/code files")
     _add_logging_flags(p)
     p.add_argument("source", help=".md/.py/.js/.ts file or directory")
-    p.add_argument("--min-intensity", type=int, default=5,
-                   help="Sections below this intensity are truncated (default: 5)")
+    p.add_argument("--min-weight", "--min-intensity", dest="min_weight", type=int, default=5,
+                   help="Sections below this weight are truncated (default: 5); --min-intensity is a deprecated alias")
     p.add_argument("--dry-run", action="store_true",
                    help="Preview without writing files")
     p.add_argument("--tags", help="Comma-separated tags for generated memories")
@@ -255,7 +253,7 @@ def main(argv: list[str] | None = None):
                    help="Output format: memory (default, write to DAG) or html (self-contained HTML)")
     p.add_argument("--output-dir", help="Output directory for HTML files (required with --format html)")
     p.add_argument("--mode", choices=["file", "module"], default="file",
-                   help="Code skeletonization mode: file (intensity-based) or module (zero-config, signatures only)")
+                   help="Code skeletonization mode: file (weight-based) or module (zero-config, signatures only)")
     p.add_argument("--config", help="Path to .codememory/skeletonize.yaml (auto-detected from cwd by default)")
 
     # compile-md
@@ -284,7 +282,7 @@ def main(argv: list[str] | None = None):
         if args.tags:
             tags_list = [t.strip() for t in args.tags.split(",") if t.strip()]
         print(handle_create(root, args.type, args.id, schema=args.schema,
-                            intensity=args.intensity, tags=tags_list, dry_run=args.dry_run,
+                            tags=tags_list, dry_run=args.dry_run,
                             maturity=args.maturity, cache_stable=args.cache_stable,
                             lifecycle=args.lifecycle, propose=args.propose))
     elif cmd == "update":
@@ -373,7 +371,7 @@ def main(argv: list[str] | None = None):
                 max_chars=args.max_chars,
             ))
     elif cmd == "orphans":
-        print(handle_orphans(root, type_=args.type_, min_intensity=args.min_intensity))
+        print(handle_orphans(root, type_=args.type_))
     elif cmd == "snapshot":
         print(handle_snapshot(root, args.id, target=args.target,
                               budget=args.budget, from_dag=args.from_dag))
@@ -407,7 +405,7 @@ def main(argv: list[str] | None = None):
             tags_list = [t.strip() for t in args.tags.split(",") if t.strip()]
         print(handle_skeletonize(
             root, args.source,
-            min_intensity=args.min_intensity,
+            min_weight=args.min_weight,
             dry_run=args.dry_run,
             tags=tags_list,
             output_format=args.output_format,

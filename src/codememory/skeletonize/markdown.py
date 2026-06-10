@@ -1,11 +1,11 @@
-"""Markdown skeletonization — section splitting and intensity-based truncation."""
+"""Markdown skeletonization — section splitting and weight-based truncation."""
 
 from __future__ import annotations
 
 import re
 from dataclasses import dataclass
 
-from .common import parse_intensity, extract_first_sentence, strip_intensity_markers
+from .common import parse_weight, extract_first_sentence, strip_weight_markers
 
 _HEADING_RE = re.compile(r'^(#{1,6})\s+(.+)$', re.MULTILINE)
 
@@ -16,12 +16,12 @@ class Section:
     level: int          # heading level 0-6 (0 = preamble / no heading)
     heading: str        # heading text without # prefix
     body: str           # body content
-    intensity: int      # parsed or default (5)
+    weight: int      # parsed or default (5)
     raw: str            # original text including heading line
 
 
-def _find_section_intensity(heading_start: int, text: str, body: str) -> int:
-    """Determine intensity for a section starting at heading_start.
+def _find_section_weight(heading_start: int, text: str, body: str) -> int:
+    """Determine weight for a section starting at heading_start.
 
     Checks (in order):
     1. Line immediately before the heading
@@ -37,13 +37,13 @@ def _find_section_intensity(heading_start: int, text: str, body: str) -> int:
             prev_line = text[prev_start:line_end]
         else:
             prev_line = text[:heading_start]
-        val = parse_intensity(prev_line)
+        val = parse_weight(prev_line)
         if val is not None:
             return val
 
     # Check body prefix, but strip trailing markers that belong to next section
-    body_clean = re.sub(r'\n?\s*<!--\s*@intensity:\s*\d+\s*-->\s*$', '', body)
-    val = parse_intensity(body_clean[:200])
+    body_clean = re.sub(r'\n?\s*<!--\s*@weight:\s*\d+\s*-->\s*$', '', body)
+    val = parse_weight(body_clean[:200])
     if val is not None:
         return val
 
@@ -58,14 +58,14 @@ def split_sections(text: str) -> list[Section]:
     preamble section.
     """
     if not text or not text.strip():
-        return [Section(level=0, heading='', body='', intensity=5, raw='')]
+        return [Section(level=0, heading='', body='', weight=5, raw='')]
 
     headings = list(_HEADING_RE.finditer(text))
 
     if not headings:
-        intensity = parse_intensity(text) or 5
+        weight = parse_weight(text) or 5
         return [Section(level=0, heading='', body=text.strip(),
-                        intensity=intensity, raw=text)]
+                        weight=weight, raw=text)]
 
     sections: list[Section] = []
 
@@ -74,13 +74,13 @@ def split_sections(text: str) -> list[Section]:
     if first_pos > 0:
         preamble = text[:first_pos].strip()
         if preamble:
-            # Don't create a preamble section if it's only an intensity marker
-            non_marker = strip_intensity_markers(preamble).strip()
+            # Don't create a preamble section if it's only an weight marker
+            non_marker = strip_weight_markers(preamble).strip()
             if non_marker:
-                intensity = parse_intensity(preamble) or 5
+                weight = parse_weight(preamble) or 5
                 sections.append(Section(
                     level=0, heading='', body=preamble,
-                    intensity=intensity, raw=preamble,
+                    weight=weight, raw=preamble,
                 ))
 
     for i, match in enumerate(headings):
@@ -94,30 +94,30 @@ def split_sections(text: str) -> list[Section]:
         body_end = headings[i + 1].start() if i + 1 < len(headings) else len(text)
         body = text[body_start:body_end].strip()
 
-        intensity = _find_section_intensity(match.start(), text, body)
+        weight = _find_section_weight(match.start(), text, body)
         raw = text[match.start():body_end]
 
         sections.append(Section(
             level=level, heading=heading_text, body=body,
-            intensity=intensity, raw=raw,
+            weight=weight, raw=raw,
         ))
 
     return sections
 
 
-def skeletonize_markdown(text: str, min_intensity: int = 5) -> list[Section]:
-    """Skeletonize markdown by truncating low-intensity sections.
+def skeletonize_markdown(text: str, min_weight: int = 5) -> list[Section]:
+    """Skeletonize markdown by truncating low-weight sections.
 
-    Sections with intensity >= min_intensity are kept in full.
-    Sections with intensity < min_intensity get body truncated to
+    Sections with weight >= min_weight are kept in full.
+    Sections with weight < min_weight get body truncated to
     first sentence + a `<!-- truncated: ... -->` marker.
     """
     sections = split_sections(text)
 
     for section in sections:
-        if section.intensity < min_intensity:
-            # Clean body of intensity markers before computing truncation
-            clean = strip_intensity_markers(section.body).strip()
+        if section.weight < min_weight:
+            # Clean body of weight markers before computing truncation
+            clean = strip_weight_markers(section.body).strip()
             first_sent = extract_first_sentence(clean)
             remaining = clean[len(first_sent):].strip()
             if remaining:

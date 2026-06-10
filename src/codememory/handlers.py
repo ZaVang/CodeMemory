@@ -88,11 +88,9 @@ def handle_create(
     memory_type: str,
     memory_id: str,
     schema: str | None = None,
-    intensity: int = 5,
     tags: list[str] | None = None,
     dry_run: bool = False,
     maturity: str = "draft",
-    stability: float | None = None,
     cache_stable: bool = False,
     lifecycle: str = "permanent",
     propose: bool = False,
@@ -103,11 +101,9 @@ def handle_create(
         memory_type,
         memory_id,
         schema=schema,
-        intensity=intensity,
         tags=tags,
         dry_run=dry_run,
         maturity=maturity,
-        stability=stability,
         cache_stable=cache_stable,
         lifecycle=lifecycle,
         propose=propose,
@@ -411,10 +407,9 @@ def handle_search(
 def handle_orphans(
     root: Path,
     type_: str | None = None,
-    min_intensity: int | None = None,
 ) -> str:
     """Find orphaned memories. Returns formatted listing."""
-    orphans = find_orphans(root, type_=type_, min_intensity=min_intensity)
+    orphans = find_orphans(root, type_=type_)
     if not orphans:
         return "(no orphaned memories)"
     lines: list[str] = []
@@ -423,7 +418,6 @@ def handle_orphans(
         last = o.get("last_access") or "never"
         lines.append(
             f"{o['id']:45s} {o['type']:9s} "
-            f"intensity:{o['intensity']:2d}  "
             f"access:{o['access_count']:3d}  "
             f"last:{last}  {ann}"
         )
@@ -513,7 +507,7 @@ def _write_skeleton_memory(
     memory_id: str,
     summary: str,
     body_text: str,
-    intensity: int,
+    weight: int,
     tags: list[str],
     rel: Path,
     dry_run: bool,
@@ -529,7 +523,7 @@ def _write_skeleton_memory(
         'updated': datetime.now(timezone.utc).strftime('%Y-%m-%d'),
         'version': 1,
         'tags': tags + ['skeletonized'],
-        'intensity': intensity,
+        'weight': weight,
         'maturity': 'draft',
         'source': {
             'platform': 'skeletonize',
@@ -545,7 +539,7 @@ def _write_skeleton_memory(
     content = f'---\n{yaml_str}---\n{body_text}\n'
 
     if dry_run:
-        print(f'[{memory_id}] (intensity={intensity})')
+        print(f'[{memory_id}] (weight={weight})')
         preview = body_text[:200] + ('...' if len(body_text) > 200 else '')
         print(preview)
         print()
@@ -554,7 +548,7 @@ def _write_skeleton_memory(
         file_path = get_memory_path(root, memory_id)
         file_path.parent.mkdir(parents=True, exist_ok=True)
         file_path.write_text(content, encoding='utf-8')
-        print(f'Skeletonized: {file_path} (intensity={intensity})')
+        print(f'Skeletonized: {file_path} (weight={weight})')
         created.append(str(file_path))
 
 
@@ -610,7 +604,7 @@ def handle_materialize_review(
 def handle_skeletonize(
     root: Path,
     source: str,
-    min_intensity: int = 5,
+    min_weight: int = 5,
     dry_run: bool = False,
     tags: list[str] | None = None,
     output_format: str = "memory",
@@ -621,12 +615,12 @@ def handle_skeletonize(
     """Skeletonize Markdown/code files into CodeMemory memories or HTML.
 
     Reads .md/.py/.js/.ts/... files from *source* (file or directory),
-    splits each into sections, applies intensity-based truncation, and
+    splits each into sections, applies weight-based truncation, and
     either writes each section as a memory atom in *root* (--format memory)
     or generates self-contained HTML files (--format html).
 
     *mode* controls code skeletonization depth:
-      ``"file"`` — function/class-level, respects @intensity annotations
+      ``"file"`` — function/class-level, respects @weight annotations
       ``"module"`` — all bodies replaced, preserves imports + signatures only
     """
     import re
@@ -668,8 +662,8 @@ def handle_skeletonize(
 
     tags = tags or []
 
-    # Load skeletonize config for glob-matched intensity defaults
-    from .skeletonize.config import resolve_intensity as _resolve_cfg_intensity
+    # Load skeletonize config for glob-matched weight defaults
+    from .skeletonize.config import resolve_weight as _resolve_cfg_weight
     config_root: Path | None = None
     if config:
         config_root = Path(config).resolve()
@@ -707,14 +701,14 @@ def handle_skeletonize(
 
         if ext == '.md':
             # Markdown: split into sections
-            sections = skeletonize_markdown(text, min_intensity=min_intensity)
+            sections = skeletonize_markdown(text, min_weight=min_weight)
             total_sections += len(sections)
 
             if output_format == 'html':
                 html = _render_html(
                     sections, str(source_file),
-                    metadata={'tags': tags, 'intensity': min_intensity,
-                              'min_intensity': min_intensity},
+                    metadata={'tags': tags, 'weight': min_weight,
+                              'min_weight': min_weight},
                 )
                 if dry_run:
                     created.append(f'[DRY-RUN] HTML: {source_file} ({len(sections)} sections)')
@@ -730,7 +724,7 @@ def handle_skeletonize(
                     summary = _first_sent(section.body, max_chars=100) if section.body else (section.heading or 'Untitled')
                     body_text = f'# {section.heading}\n\n{section.body}' if section.heading else section.body
                     _write_skeleton_memory(
-                        root, memory_id, summary, body_text, section.intensity,
+                        root, memory_id, summary, body_text, section.weight,
                         tags, rel, dry_run, created,
                     )
         else:
@@ -738,12 +732,12 @@ def handle_skeletonize(
             skel_func = skeletonize_module if mode == 'module' else skeletonize_code
             skel_kwargs: dict = {'text': text, 'file_ext': ext}
             if mode == 'file':
-                skel_kwargs['min_intensity'] = min_intensity
-            # Resolve per-file config intensity
+                skel_kwargs['min_weight'] = min_weight
+            # Resolve per-file config weight
             if config_root is not None:
-                cfg_intensity = _resolve_cfg_intensity(str(source_file), config_root)
-                if cfg_intensity is not None:
-                    skel_kwargs['config_intensity'] = cfg_intensity
+                cfg_weight = _resolve_cfg_weight(str(source_file), config_root)
+                if cfg_weight is not None:
+                    skel_kwargs['config_weight'] = cfg_weight
             skeletonized = skel_func(**skel_kwargs)
             heading_slug = _slug(source_file.stem)
             memory_id = f'user/imports/{prefix}/{heading_slug}'
@@ -753,11 +747,11 @@ def handle_skeletonize(
             if output_format == 'html':
                 from .skeletonize.markdown import Section
                 sec = Section(level=1, heading=source_file.stem, body=skeletonized,
-                             intensity=5, raw=text)
+                             weight=5, raw=text)
                 html = _render_html(
                     [sec], str(source_file),
-                    metadata={'tags': tags + ['code'], 'intensity': 5,
-                              'min_intensity': min_intensity},
+                    metadata={'tags': tags + ['code'], 'weight': 5,
+                              'min_weight': min_weight},
                 )
                 if dry_run:
                     created.append(f'[DRY-RUN] HTML: {source_file}')
