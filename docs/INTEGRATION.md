@@ -1,5 +1,11 @@
 # CodeMemory Integration Guide
 
+> **Terminology note (2026-06-10):** This guide predates the memory-as-code rebuild.
+> Conceptual terms (Source Artifact / ContextPack / disclosure, etc.) are superseded by
+> the new model in `docs/prd.md` and `docs/architecture.md` (mapping table in prd
+> Appendix A). CLI commands shown here still match the current implementation; a full
+> rewrite is scheduled after the convergence phases (see `docs/plan/FUTURE.md`).
+
 This guide gets you from zero to a working codememory integration in **under 10 minutes**.
 
 ## Quick Start

@@ -32,7 +32,7 @@
 
 - **MCP / toolkit 对齐**：暴露 build / search / expand_source / create / propose 最小工具集，全部走共享 handler（原 P2.1 的新表述）。
 - **Operator UI 对齐**：UI 跟随新契约展示 proposed 队列、golden_questions 与 build 产物（原 P2.2）。
-- **文档与示例**：USER_GUIDE / INTEGRATION / `examples/` 随新术语更新；examples 增加 asset 背书的记忆流（原 P2.3）。
+- **文档与示例**：USER_GUIDE / INTEGRATION / project_structure / `examples/` 随新术语更新；examples 增加 asset 背书的记忆流（原 P2.3）。
 - **eval harness**：ContextPack vs 原文全文 vs 无记忆的对照实验，把 PRD 产品成功标准变成可测数字。
 
 ---

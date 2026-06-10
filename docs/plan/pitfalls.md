@@ -32,14 +32,18 @@ If those files change only because tests reindexed or logged operations, restore
 
 ## Validation tests and unrelated decay warnings
 
-`validate` can emit decay/staleness warnings for low-intensity memories. When a test is asserting source-ref warning counts, make the fixture memory intentionally non-decaying, for example by using `intensity: 8` or `status: protected`.
+**有效期：收敛阶段 C 移除 intensity / decay 机制后本条失效（见 `docs/architecture.md` §6）。**
+
+`validate` can emit decay/staleness warnings for low-intensity memories. When a test is asserting source-ref warning counts, make the fixture memory intentionally non-decaying, for example by using `intensity: 8`.
 
 Otherwise a source-ref test can fail for an unrelated validation warning.
 
+注意：阶段 A 起 `intensity: 8` 不再自动产生 `protected: true`（已解耦），它只影响 decay 行为。
+
 ---
 
-## Progressive disclosure boundary
+## build 不自动展开 asset 原文
 
-Do not make ContextPack automatically expand Source Artifact bodies while implementing source-related features.
+实现 asset 相关功能时，不要让 build 产物（resolve / context-pack 输出）自动内联 asset 的原文正文。
 
-Default ContextPack output should carry `source_refs`; source body retrieval belongs behind explicit `expand_source` calls. This keeps long documents out of agent handoff prompts unless the caller intentionally asks for them.
+build 产物默认只携带 asset 引用（source_refs）；原文获取必须走显式的 `source expand`。这保证长文档不会未经请求就进入 agent 的 handoff 上下文。（概念边界见 `docs/architecture.md` §3.5。）

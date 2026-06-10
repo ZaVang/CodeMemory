@@ -3,6 +3,11 @@
 > **最后更新**：2026-05-19
 > 本文是日常使用入口。产品定义见 `docs/prd.md`，架构契约见 `docs/architecture.md`。
 
+> **术语提示（2026-06-10）**：本文成文于 memory-as-code 重建之前，概念叙述
+> （Source Artifact / ContextPack / disclosure 等）以新版 `docs/prd.md` 与
+> `docs/architecture.md` 为准（对照表见 prd 附录 A）。文中的 CLI 命令与当前实现
+> 一致、仍可照用；全文随收敛阶段完成后统一更新。
+
 ---
 
 ## 1. CodeMemory 是什么

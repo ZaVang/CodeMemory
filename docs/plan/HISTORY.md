@@ -4,6 +4,26 @@ This file records accepted sprint outcomes. Current work belongs in `docs/plan/S
 
 ---
 
+## 2026-06-10 — memory-as-code 文档重建（非 sprint 流程）
+
+**Status:** Accepted（owner 逐节批准 + 独立验收）。
+
+**Commits:** `66cad6d`…`f09f4e7`（prd / agent-memory-guide / CLAUDE.md / architecture / FUTURE 重建）
+
+**Delivered:**
+
+- `docs/prd.md` 按唯一公理重建：记忆按代码方式组织——原子化、显式依赖、按需装配；三组 11 概念，含实现状态标注与旧概念对照表（附录 A）。
+- `docs/agent-memory-guide.md` 重写为记忆库贡献规范（CONTRIBUTING），示例域从投资换为工作。
+- `.claude/CLAUDE.md` 同步新术语，修复陈旧文件清单。
+- `docs/architecture.md` 重建为契约级参考：三层结构、概念→模块映射、字段表、proposal 状态机、build/search/check/test 管线契约、收敛三阶段（A/B/C）。
+- `docs/plan/FUTURE.md`：roadmap 替换为收敛三阶段，旧条目标注 Superseded。
+
+**设计记录：** `docs/superpowers/specs/2026-06-10-*.md`（两份 spec）、`docs/superpowers/plans/2026-06-10-memory-as-code-docs-rebuild.md`（执行计划）。
+
+**Acceptance evidence:** 三份文档与计划内嵌文本逐字节一致；计划内全部 grep 验证通过；`pytest tests/unit` 153 passed（零代码变更）。
+
+---
+
 ## 2026-05-19 — P1.3 `expand_source`
 
 **Status:** Accepted and archived.

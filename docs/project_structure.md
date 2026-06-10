@@ -3,6 +3,11 @@
 > 本文是仓库地图：记录每个主要文件负责什么、应该改哪里、不要把逻辑塞到哪里。
 > 产品判断读 `docs/prd.md`；架构边界读 `docs/architecture.md`；接入方法读 `docs/INTEGRATION.md`。
 
+> **术语提示（2026-06-10）**：本文成文于 memory-as-code 重建之前，叙述中的旧概念
+> （Source Artifact / ContextPack / Layer Profile 等）已被新概念模型取代——术语以
+> `docs/prd.md` 与 `docs/architecture.md` 为准（对照表见 prd 附录 A）。文件职责映射
+> 仍可参考；全文随收敛阶段完成后统一更新（见 `docs/plan/FUTURE.md` post-convergence backlog）。
+
 不记录生成物和本地缓存：`__pycache__/`、`.pytest_cache/`、`frontend/node_modules/`、`frontend/dist/`、Playwright 报告、临时 review 目录等。
 
 ---
