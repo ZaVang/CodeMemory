@@ -2,10 +2,6 @@
 
 > **Purpose:** Long-term roadmap and backlog. Product truth stays in `docs/prd.md`; architecture truth stays in `docs/architecture.md`.
 
-> **注（2026-06-10）**：以下 roadmap 优先级早于 memory-as-code PRD 重建。
-> 选择下一个 sprint 前，按新 `docs/prd.md` 重新推导优先级（候选：proposal 状态、
-> search 词法排序、build 动词收敛、test 最小实现）。
-
 ---
 
 ## Planning Rules
@@ -18,16 +14,37 @@
 
 ---
 
-## Roadmap Priority
+## Roadmap Priority — 收敛三阶段
 
-1. **Source Artifact Registry** — preserve and index original documents without treating them as atoms.
-2. **`source_refs`** — connect atoms and ContextPacks to Source Artifacts.
-3. **`expand_source`** — retrieve source excerpt/full content by explicit request.
-4. **ContextPack / resolve v2** — make progressive disclosure the default context assembly model.
-5. **Migration Compiler v2** — compile Markdown into Source Artifacts, Anchor Atoms, and Derived Atom proposals.
-6. **MCP / harness integration** — expose stable `context_pack` and `expand_source` tools.
-7. **UI support for source refs and migration review** — show refs, expansion, and review status in the operator UI.
-8. **Companion Layer later** — design as a separate Layer Profile after Work Layer contracts are stable.
+依据 `docs/architecture.md` 第 6 章的收敛路径执行，每阶段一个 sprint、独立可合并、独立验收：
+
+1. **阶段 A 写入纪律**：`status: proposed`（新增类）+ `create --propose` + merge/reject 命令 + build/search/check 过滤语义 + protected 解耦 intensity + `update --source-ref`。
+2. **阶段 B 读路径收敛**：`build` 命令落地（resolve / context-pack 变薄别名）+ 两遍式 trim + search 词法排序。
+3. **阶段 C 清理与 test**：intensity 全链路移除 + 删 focus/overview/wander + models 瘦身 + test 契约落地 + 修改类 proposal patch 队列。
+
+验收信号见 `docs/architecture.md` 第 6 章；概念依据见 `docs/prd.md` 第 4 章。
+
+---
+
+## Post-convergence Backlog
+
+收敛三阶段完成后再排期：
+
+- **MCP / toolkit 对齐**：暴露 build / search / expand_source / create / propose 最小工具集，全部走共享 handler（原 P2.1 的新表述）。
+- **Operator UI 对齐**：UI 跟随新契约展示 proposed 队列、golden_questions 与 build 产物（原 P2.2）。
+- **文档与示例**：USER_GUIDE / INTEGRATION / `examples/` 随新术语更新；examples 增加 asset 背书的记忆流（原 P2.3）。
+- **eval harness**：ContextPack vs 原文全文 vs 无记忆的对照实验，把 PRD 产品成功标准变成可测数字。
+
+---
+
+## Superseded Backlog Items
+
+随 2026-06-10 memory-as-code 重建被取代或废除的旧条目：
+
+- **P1.4 ContextPack / resolve v2** → 由阶段 B 取代（`include_sources` / `disclosure_level` 概念已废除，按需展开由 build 预算 + `source expand` 覆盖）。
+- **P1.5 Migration Compiler v2** → importer "产出默认 proposal" 的纪律在阶段 A 后自然对齐，不再单列。
+- **P3.1 Companion Layer Profile** → 已废除（见 `docs/prd.md` 非目标；历史探索在 `docs/reference/`）。
+- **P3.2 Advanced Recall Strategies** → 词法排序并入阶段 B；语义召回仍为非目标（`docs/prd.md` 第 8 章）。
 
 ---
 
@@ -69,85 +86,3 @@
 - Artifacts have stable `id`, `kind`, `uri`, `sha256`, `summary`, and `status`.
 - Core can add, list, get, and save artifacts without frontend involvement.
 - Missing and stale artifacts are detected by tests and `validate`.
-
----
-
-## P1 Backlog
-
-### P1.4 ContextPack / resolve v2
-
-**Goal:** Make ContextPack the canonical agent handoff object and keep resolve as compatibility rendering.
-
-**Acceptance signals:**
-
-- ContextPack supports `include_sources` and `disclosure_level`.
-- Default output includes source anchors/refs, not full source bodies.
-- Resolve output is consistent with ContextPack ordering and budget behavior.
-
-### P1.5 Migration Compiler v2
-
-**Goal:** Upgrade Markdown migration from “segment into atoms” to “Source Artifact + Anchor Atom + Derived Atom proposals”.
-
-**Acceptance signals:**
-
-- Compiler registers source artifacts before proposing atoms.
-- Review sets include artifact provenance for every proposal.
-- Materialization writes only approved memory files.
-
----
-
-## P2 Backlog
-
-### P2.1 MCP / Harness Tools
-
-**Goal:** Expose Source Artifact and ContextPack capabilities to mainstream agent runtimes.
-
-**Acceptance signals:**
-
-- Tool definitions include `context_pack` and `expand_source`.
-- CLI, MCP, REST, and toolkit paths call shared core handlers.
-- Tool output is stable enough for OpenAI / Anthropic style function calling.
-
-### P2.2 Operator UI for Sources
-
-**Goal:** Let users inspect source refs and migration review from the frontend.
-
-**Acceptance signals:**
-
-- Memory detail shows source refs.
-- ContextPack panel shows disclosure level and available source expansions.
-- Migration review can distinguish source artifact, anchor atom, and derived atom proposals.
-
-### P2.3 Documentation and Examples
-
-**Goal:** Keep docs and examples aligned with the Work Layer substrate model.
-
-**Acceptance signals:**
-
-- User guide explains Source Artifact vs Atom vs ContextPack.
-- Example datasets include at least one source-backed memory flow.
-- Integration guide documents current CLI/API/tool contracts.
-
----
-
-## P3 Backlog
-
-### P3.1 Companion Layer Profile
-
-**Goal:** Design companion behavior as a separate Layer Profile after Work Layer is stable.
-
-**Acceptance signals:**
-
-- Companion rules do not change Core contracts.
-- Memory timing, affect, and forgetting are profile-level policies.
-- Historical companion docs remain reference material, not v1 product truth.
-
-### P3.2 Advanced Recall Strategies
-
-**Goal:** Add richer recall policies only after deterministic context assembly is reliable.
-
-**Acceptance signals:**
-
-- Advanced recall never bypasses required imports.
-- Any semantic or salience-based recall remains explainable.
-- Work Layer defaults remain deterministic.

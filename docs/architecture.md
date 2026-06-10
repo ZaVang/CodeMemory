@@ -1,460 +1,287 @@
 # CodeMemory Architecture
 
-> **状态提示（2026-06-10）**：PRD 已按 memory-as-code 公理重建（见 `docs/prd.md` 与
-> `docs/superpowers/specs/2026-06-10-memory-as-code-prd-rebuild-design.md`）。
-> 本文档尚未随之更新——术语冲突处以新 prd.md 为准；架构重建是下一阶段工作。
-
 > **Architecture thesis**
-> CodeMemory 的核心架构是：**Source Artifact Registry + Atom Graph + Progressive ContextPack + Thin Adapters**。
-> Core 负责可靠表示和装配工作记忆；Layer 负责场景策略；Compiler 负责迁移；Adapters 负责接入。
+> 三层结构：**Adapters 接入，Core 实现机制，Importer 负责迁移**。
+> Core 实现 PRD 的 11 概念；agent 不在系统内——agent 是运行时，经 adapter 调用系统。
+> 本文档是契约级参考：字段表、状态机、管线分解、收敛路径是后续 sprint 的直接依据，sprint 不再做架构决策。
+> 冲突裁决顺序：`docs/prd.md`（概念）> 本文档（结构与契约）> 代码现状。
 
-**最后更新**：2026-05-19
-**状态**：canonical / v1 Work Layer first
-
----
-
-## 1. 架构决策
-
-### 1.1 v1 Core 不追求“像人”
-
-v1 的底层目标是可靠工作记忆，不是陪伴体验。拟人化记忆、遗忘、情绪权重、亲密度等能力可以在未来 Companion Layer 中定义，但不能污染 Core contract。
-
-### 1.2 Atomization 是语义边界
-
-Atom 是可独立引用的语义记忆，不是任意文本块。长文档、代码文件、设计稿、会议记录等原文应进入 Source Artifact Registry，再由 Anchor Atom 和 Derived Atoms 表达其可复用语义。
-
-### 1.3 Source provenance 是一等能力
-
-每条重要 atom 应能追溯到 source。Source 不只是 metadata 字段，而是可被登记、校验、展开和迁移的 artifact。
-
-### 1.4 ContextPack 是 agent handoff 的主协议
-
-`resolve` 的历史价值是把 imports DAG 拼成上下文；新的主协议是 ContextPack：它既包含 memory graph，也包含 source_refs、budget、disclosure level 和 notices。
+**最后更新**：2026-06-10
+**状态**：canonical / 契约级
+**上游**：`docs/prd.md`（memory-as-code，11 概念）；设计依据 `docs/superpowers/specs/2026-06-10-architecture-rebuild-design.md`
 
 ---
 
-## 2. 总体分层
+## 1. 总体分层
 
 ```text
-┌──────────────────────────────────────────────────────────────┐
-│                        Layer Profiles                         │
-│ Work Layer (v1): directories / schemas / recall / retention   │
-│ Companion Layer (future): timing / affect / forgetting        │
-├──────────────────────────────────────────────────────────────┤
-│                         CodeMemory Core                        │
-│ Atom Graph / Source Artifact Registry / ContextPack Builder   │
-│ index / validate / lifecycle / audit / access primitives      │
-├──────────────────────────────────────────────────────────────┤
-│                       Memory Compiler                         │
-│ ingest sources / propose anchors+atoms / review / materialize │
-├──────────────────────────────────────────────────────────────┤
-│                            Adapters                           │
-│ CLI / Python SDK / MCP / REST API / UI / Harness tools         │
-└──────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────┐
+│                    Adapters                       │
+│  cli.py / tools.py / mcp_server.py /              │
+│  integrations.py / backend(REST) / frontend(UI)   │
+│  只做参数解析与传输格式，零业务逻辑                  │
+├──────────────────────────────────────────────────┤
+│                 Core（机制层）                     │
+│  表示：models.py  core.py  index.py               │
+│  操作：build  search  check  test(仅契约)          │
+│  变更：create  update  merge  log  changelog      │
+│  资产：sources.py    维护：orphans suggest_deps    │
+├──────────────────────────────────────────────────┤
+│               Importer（迁移层）                   │
+│  import_cmd / skeletonize/ / compiler/            │
+│  产出一律是 proposal，经 review 晋升               │
+└──────────────────────────────────────────────────┘
 ```
 
-### 2.1 Core
+旧体系的 Layer Profiles 层已删除："什么值得记"是 `docs/agent-memory-guide.md`（CONTRIBUTING）的职责，不是代码层。
 
-Core 只定义跨场景稳定的机制：
+### 1.1 Adapters（接入层）
 
-- `atom` / `schema`；
-- Source Artifact / Source Ref；
-- imports DAG；
-- index / validate / lifecycle / audit；
-- ContextPack assembly；
-- budget 与 progressive disclosure；
-- adapter 共享 handlers。
+- 成员：`cli.py`、`tools.py`、`mcp_server.py`、`integrations.py`、`backend/`（REST）、`frontend/`（Operator UI）。
+- 职责：参数解析、传输格式、呈现。
+- 禁区：零业务逻辑；不得私自实现装配、过滤或排序；不得扩展记忆语义。
 
-Core 不决定“什么值得记”。这属于 Layer Profile。
+### 1.2 Core（机制层）
 
-### 2.2 Layer Profile
+- 表示：`models.py`（Pydantic v2 契约）、`core.py`（frontmatter 解析 / hash / root 解析）、`index.py`。
+- 操作：build（装配）、search（入口检索）、check（校验，CLI 名 `validate`）、test（仅契约，零 LLM 依赖）。
+- 变更：`create.py`、`update.py`（含 merge/reject 操作）、`log.py`、`changelog.py`。
+- 资产：`sources.py`。维护：`orphans.py`、`suggest_deps.py`、`diff.py`。
+- **`handlers.py` 是 Core 的唯一门面**，所有 adapter 经它调用。
+- 禁区：不依赖任何 LLM provider；不依赖 harnesslib / llm_gateway；不决定"什么值得记"。
 
-Layer Profile 是声明式策略层，定义：
+### 1.3 Importer（迁移层）
 
-- 目录和 namespace；
-- 默认 schema；
-- 写入门槛；
-- imports 语义；
-- 召回策略；
-- lifecycle / retention；
-- source 展开策略；
-- UI 呈现偏好。
+- 成员：`import_cmd.py`、`skeletonize/`、`compiler/`。
+- 职责：外部材料 → asset 登记 + atom proposals。
+- 铁律：产出一律是 proposal，经 review 晋升；LLM 只 propose，不写 canonical truth；原始材料默认保留。
 
-v1 官方 profile 是 Work Layer。Companion Layer 是未来 profile。
+### 1.4 agent 在哪里
 
-### 2.3 Memory Compiler
-
-Compiler 负责把已有材料迁移成可审阅 memory graph。它调用 LLM 做 proposal，但不绕过 Core 校验和 review。
-
-### 2.4 Adapters
-
-Adapters 只暴露能力：
-
-- CLI；
-- Python SDK；
-- MCP；
-- REST API；
-- Operator UI；
-- agent harness tools。
-
-Adapter 不应复制 Core 逻辑，也不应私自扩展 memory semantics。
+agent 不是系统组件。agent 是消费 build 产物、按写入纪律提交变更的运行时，永远经 adapter（CLI bash 命令 / MCP / toolkit）调用系统，不 import codememory、不直接读写记忆库的 .md 文件。
 
 ---
 
-## 3. Core 数据模型
+## 2. 概念 → 模块映射（目标态）
 
-### 3.1 Atom
+| 概念 | 目标模块 | 现状 → 目标动作 | 阶段 |
+|---|---|---|---|
+| repo | `core.py` + `index.py` + `.codememory/` | 不变 | — |
+| atom / schema | `models.py` + `create.py` / `update.py` | 字段瘦身（第 3.1 节） | C |
+| imports + build | **`build.py`（新）** | `resolve.py` + `context_pack.py` 合并为单一管线；`ContextPack` 类保留为 build 产物模型 | B |
+| asset | `sources.py` | 不变；`update` 补 `--source-ref` 写入路径 | A |
+| check | `validate.py` | 新增 proposed 校验、golden_questions 格式校验 | A / C |
+| search | `search.py` | 加词法排序，零新依赖 | B |
+| test | **`test_contract.py`（新，最小）** | 导出题集 + 装配上下文；report 写回 log | C |
+| proposal | `models.py`（status）+ `update.py`（merge/reject） | 不需要新模块 | A / C |
+| log | `log.py` / `changelog.py` | 不变 | — |
 
-Atom 是长期工作记忆的基本语义单元。它可以表示：
+### 2.1 保留与定位说明
 
-- 事实；
-- 决策；
-- 约束；
-- 流程；
-- 复盘；
-- 上下文入口；
-- 对 Source Artifact 的 anchor。
+- `snapshot.py` / `transient.py`：保留，定位为 REPL 草稿辅助工具（会话级推理链与持久化），不属于 11 概念。
+- `compiler/` 的 review/materialize 机制：保留；阶段 C 实现修改类 proposal 前，先评审复用其底层，避免两套同构机制。
 
-核心字段：
+### 2.2 删除清单（阶段 C 终点，汇总见附录）
 
-```yaml
-type: atom
-id: project/architecture/context
-summary: Stable one-line meaning
-status: active
-created: 2026-05-19
-updated: 2026-05-19
-tags: [architecture, context]
-schema: schemas/decision        # optional
-imports:
-  required: []
-  recommended: []
-  related: []
-source_refs: []                 # provenance links to Source Artifacts
+- `handle_focus` / `handle_overview` / `handle_wander` 及其 cli / tools / mcp 绑定（约 300 行）；
+- `core.py` 的 `compute_retrieval_probability`（召回概率公式，专为 wander/overview 服务）；
+- `models.py` 字段：`intensity`、`stability`、`stability_source`、`days_since_last_access`。
+
+---
+
+## 3. 数据契约
+
+### 3.1 atom frontmatter（目标态权威字段表）
+
+| 字段 | 判决 | 理由 / 现状注记 |
+|---|---|---|
+| type / id / summary / tags / path / version / created / updated | 保留 | 接口核心 |
+| status | 保留，枚举扩为 `active / proposed / archived / superseded / draft` | proposal 载体；现状无 `proposed`（阶段 A 加入） |
+| imports | 保留（required / recommended / related） | 理解性依赖 |
+| schema | 保留 | 结构契约引用 |
+| summary_hash | 保留 | stale 检测（基于 body hash，frontmatter 修改不触发） |
+| source_refs | 保留 | asset 引用，不进依赖图；现状无 CLI 写入路径（阶段 A 补 `update --source-ref`） |
+| protected | 保留，**语义重定义**：仅 owner 手动设置（直接编辑 frontmatter），"动它必须走 proposal"；与 intensity 彻底解耦 | 现状由 `create --intensity 8` 自动触发（阶段 A 移除该挂钩） |
+| **golden_questions** | **新增**（可选 list，入口 atom 用） | test 契约（阶段 C） |
+| access_count / last_access | 保留 | 维护循环 telemetry（orphans / diff 使用） |
+| cache_stable / lifecycle | 保留 | build 内部优化提示；`ephemeral` 自动归档已实现 |
+| maturity / evidence | 保留为**惰性元数据**：不参与 build / search / check 的任何机制 | 审计有用，不进概念层 |
+| change_note / change_log | 保留 | log 的原料 |
+| **intensity** | **删除**（阶段 C） | 重要性 = 被依赖数（search 已按 dependents 排序） |
+| **stability / stability_source / days_since_last_access** | **删除**（阶段 C，连同 decay 公式） | 专为已砍的拟人召回服务 |
+
+### 3.2 status 状态机与过滤语义
+
+```text
+create ──────────────▶ active ──update──▶ archived / superseded
+create --propose ────▶ proposed ──merge──▶ active
+                            └────reject──▶ archived
+（draft：owner 手工标记的未完成内容，不属于 proposal 流程）
 ```
 
-### 3.2 Schema
+| status | build 装配 | search 默认返回 | check |
+|---|---|---|---|
+| active | ✓ | ✓ | 常规校验 |
+| draft | ✓ | ✓ | 常规校验 |
+| proposed | ✗（closure 跳过 + notice） | ✗（`--status proposed` 显式可见） | 积压提醒（超 14 天）；"被 active atom import"警告 |
+| archived / superseded | ✗（closure 跳过 + notice） | ✗（显式 status 过滤可见） | "被 active atom import"警告 |
 
-Schema 定义某类 atom 的结构，不是业务记忆本体。
+### 3.3 proposal：一个概念，两种载体
+
+**新增类（阶段 A）**：一个 `status: proposed` 的普通 .md 文件，owner 直接可读。
+
+- 创建：`codememory create --propose ...`——agent 对内容没把握、或内容涉及 protected 邻域时选用；importer 产出默认 proposed。
+- `merge <id>`：status → active + log；`reject <id>`：status → archived + log。
+
+**修改类（阶段 C）**：同一个 .md 不能同时存两个版本，变更落为 `.codememory/proposals/<seq>-<target-id>.json` patch 记录（target_id、字段新值、reason、created_by、created_at）。
+
+- `merge`：应用 patch + version++ + change_log；`reject`：丢弃记录 + log。
+- 落地前沿用 guide 第 6 节的过渡做法：高风险变更在会话内征得 owner 同意后 update。
+
+### 3.4 golden_questions 契约
 
 ```yaml
-type: schema
-id: schemas/decision
-fields:
-  - name: decision
-    required: true
+golden_questions:
+  - q: "缓存层用什么失效策略，为什么？"
+    expect: "写穿透 + 5min TTL；因为读写比 9:1"   # 期望要点，判分参考，可选
 ```
 
-### 3.3 Source Artifact
+- `codememory test <entry>`：输出 `{ format_version, entry, context: <build 产物>, questions: [...] }` 结构化 JSON，由 agent / CI 答题判分；题集为空时退出码 0 + notice（无题不是错误）。
+- `codememory test report <entry> --results <file>`：校验 `{q, answer, pass}` 格式后写回 log。
+- Core 全程零 LLM 依赖——代码类比：pytest 独立于编译器，runner 是 agent。
 
-Source Artifact 是原文或外部材料的 registry entry，不是 atom。
-
-当前已实现的最小 contract：
+### 3.5 asset 契约（沿用现实现）
 
 ```yaml
-id: src/project-architecture-md
+id: src/rfc-001-cache
 kind: markdown                  # markdown | code | text | pdf | url | external
-uri: docs/architecture.md
+uri: docs/rfc-001.md
 sha256: "..."
-summary: Canonical architecture document
+summary: "RFC-001: 缓存层设计"
 status: active                  # active | archived | missing | stale
 ```
 
-Registry storage:
+- 存储：`.codememory/sources/index.json`（实现类 `SourceArtifact` / `SourceRegistry`，CLI 命令组现名 `source`）；原始文件留在原路径。
+- 展开：`expand_source(artifact_id, start, end, max_chars)` → 结构化 `SourceExpansion`（含 hash 比对、stale/missing 状态、截断标记）。
+- 引用边界（与 imports 的分界是本架构最重要的不变量之一）：
 
-```text
-.codememory/
-  index.json
-  log.md
-  sources/
-    index.json
-```
-
-原始文件继续留在原路径；registry 保存引用、hash、摘要和状态。当前 Core 支持：
-
-- `src/codememory/sources.py` 中的 `SourceArtifact` / `SourceRegistry`；
-- `.codememory/sources/index.json` 的 load / save；
-- add / list / get；
-- fresh / stale / missing / external 检查；
-- explicit source expansion for local markdown / text / code artifacts；
-- `validate` 对 stale / missing Source Artifact 输出 warning；
-- CLI：`codememory source add|list|get|check|expand`；
-- REST：`GET /api/sources/expand?artifact_id=...`。
-
-`title`、`when_to_read`、sections、range selector 等 richer metadata 仍属于后续 Source Registry v2。
-
-### 3.4 Source Ref
-
-Source Ref 是 atom 或 ContextPack 指向 artifact 的引用。
-
-```yaml
-source_refs:
-  - artifact_id: src/project-architecture-md
-    section_id: progressive-disclosure
-    range: null
-    summary: Progressive disclosure policy for context assembly.
-    disclosure_hint: excerpt     # anchor | excerpt | full
-```
-
-当前已实现：
-
-- `SourceRef` model；
-- atom frontmatter 的 `source_refs` 在 reindex 后进入 `MemoryEntry.source_refs`；
-- `validate` 会把缺失的 Source Artifact reference 作为 `[SOURCE-REF-WARN]`，与 broken imports error 分开；
-- ContextPack node 会携带并渲染 `source_refs`；
-- JSON / Markdown / XML-tagged Markdown renderers 只展示 source refs，不展开 source body。
-
-关键边界：
-
-| 关系 | 含义 | 是否进入 imports DAG |
+| 关系 | 含义 | 进 imports DAG |
 |---|---|---|
-| `imports.required` | 理解当前 atom 必须先理解的 atom | 是 |
-| `imports.recommended` | 有助于理解的 atom | 是 |
-| `imports.related` | 相关但非前提的 atom | 可选 |
-| `source_refs` | provenance 或可展开原文 | 否 |
+| imports.required / recommended | 理解性依赖 | 是 |
+| imports.related | 弱关联 | depth=full 时 |
+| source_refs（asset 引用） | 出处 / 可展开原文 | **否** |
 
 ---
 
-## 4. Progressive Memory Disclosure
+## 4. 操作管线契约
 
-Context assembly 不应该默认把所有可得文本塞进 prompt，而应按层展开。
+### 4.1 build 管线（目标态 `build.py`，单一管线服务所有出口）
 
-| Level | 名称 | 内容 | 默认用途 |
+```text
+entry → closure → order → trim → render
+```
+
+1. **entry**：入口 id 校验，不存在即报错。
+2. **closure**：按 depth（required / recommended / full）收集 imports 闭包；跳过 proposed / archived / superseded 节点并发 notice。
+3. **order**：拓扑排序；检测到环时将环上节点降权处理并发 notice（沿用现实现）。
+4. **trim（两遍式）**：
+   - 第一遍按角色分配预算：target → required → recommended → related 依序拿全文；某一级放不下时，级内按（被依赖数 desc → access_count desc）排序，靠后的降级为 summary；target / required 永不 skipped（最低降到 summary）；related 可 skipped。
+   - 第二遍按拓扑序渲染——**阅读顺序与预算分配解耦**，修正现状"拓扑序先到先得"导致低价值叶子吃掉 target 预算的缺陷。
+   - 预算单位：字符（`len(text)` 近似，沿用）。
+5. **render**：xml-markdown / markdown / json；`ContextPack` 是管线的中间产物模型，渲染只是输出格式。
+
+命令关系：`build` = 新主命令；`resolve` = 管线 + plain-markdown 的薄别名；`context-pack` = 管线 + 指定格式的薄别名。三命令一个管线，输出必须一致。
+
+### 4.2 search（词法排序，零新依赖）
+
+- 保留现有过滤器（tags / type / status / maturity / has-imports / has-schema）。
+- query 分词：按空白与标点切分；每个 token 对字段做大小写不敏感子串匹配。
+- 计分：`score = Σ(field_weight × 命中 token 数 / 总 token 数)`，字段权重 id=4 / summary=3 / tags=2 / body=1。
+- 淘汰规则：全部 token 零命中才淘汰（OR 语义）；单 token query 行为 = 现状子串匹配的加权版。
+- tie-break：被依赖数 desc → access_count desc → id asc（沿用现状）。
+
+### 4.3 check（CLI 名 `validate`）
+
+现有项：断链（error）、循环依赖、schema 违约、stale asset、孤儿、source-ref 缺失（warning）。
+
+新增项：proposed 积压提醒（超 14 天，阶段 A）、"proposed / archived 被 active atom import"警告（阶段 A）、golden_questions 格式校验（阶段 C）。
+
+### 4.4 变更操作
+
+| 操作 | 语义 | 状态 |
+|---|---|---|
+| `create` | 新 atom 模板，默认 active；低风险直写路径 | 已实现 |
+| `create --propose` | 新 atom，status: proposed | 阶段 A |
+| `update` | 修改已有 atom（高风险，纪律见 guide）；阶段 A 补 `--source-ref` | 已实现 |
+| `merge <id>` | 新增类：proposed → active；修改类：应用 patch + version++ | 阶段 A / C |
+| `reject <id>` | proposed → archived + log | 阶段 A |
+
+---
+
+## 5. Adapter Contracts
+
+| 概念操作 | handler（目标态） | CLI | MCP / toolkit 最小集 |
 |---|---|---|---|
-| L0 | Index Card | id、summary、tags、status、heat | 搜索候选、列表、粗筛 |
-| L1 | Atom / Anchor | atom summary、body、imports、source_refs | 默认 ContextPack |
-| L2 | Focused Excerpt | source section、range、derived atoms | 任务需要原文细节 |
-| L3 | Full Artifact | 完整原文 | 明确要求或预算允许 |
+| build | `handle_build`（现 `handle_resolve` + `handle_context_pack`） | `build` / `resolve` / `context-pack` | `build` |
+| search | `handle_search` | `search` | `search` |
+| check | `handle_validate` | `validate` | — |
+| test | `handle_test` / `handle_test_report` | `test` / `test report` | — |
+| 变更 | `handle_create` / `handle_update` / `handle_merge` / `handle_reject` | `create` / `update` / `merge` / `reject` | `create`、`propose` |
+| asset | `handle_source_*` | `source add/list/get/check/expand` | `expand_source` |
+| importer | `handle_import` / `handle_skeletonize` / `handle_compile_md` / `handle_materialize_review` | `import` / `skeletonize` / `compile-md` / `materialize-review` | — |
 
-默认策略：
+规则：
 
-```text
-context_pack(target, disclosure_level=1, include_sources="anchor")
-```
-
-只有在以下情况展开到 L2 / L3：
-
-- 用户或 agent 明确请求；
-- ContextPack notice 指出 source 需要展开；
-- task_goal 与 source section 高度相关；
-- budget 允许且 layer policy 允许。
+1. 每个概念操作一个 handler，CLI / REST / MCP / tools 全部委托同一 handler；
+2. REST 路由随收敛阶段对齐，禁止在 backend router 或 frontend 内实现任何装配、过滤、排序逻辑；
+3. MCP / toolkit 只暴露最小工具集（build / search / expand_source / create / propose），其余操作属于 owner 的 CLI 工作面。
 
 ---
 
-## 5. Context Assembly
+## 6. 收敛路径（目标态 ← 现状的三个阶段）
 
-### 5.1 ContextPack Contract
+每阶段独立可合并、独立验收；C 依赖 A（复用 merge 机制）与 B（管线先收敛再清理）。当前状态：均未开始。
 
-ContextPack 是结构化对象，render 只是输出格式。
+| 阶段 | 内容 | 验收信号 |
+|---|---|---|
+| **A 写入纪律** | `status: proposed`（新增类）+ `create --propose` + merge/reject 命令 + build/search/check 过滤语义 + protected 解耦 intensity（仅 owner 手动设置）+ `update --source-ref` | 高风险新增默认 proposed；merge 前不进 build；check 报积压；protected 不再随 intensity 自动出现；atom 可经 CLI 绑定 asset |
+| **B 读路径收敛** | `build` 命令落地（resolve / context-pack 变薄别名调同一管线）+ 两遍式 trim + search 词法排序 | 三命令输出一致性测试通过；裁剪优先级金测试（低价值叶子不再挤占 target 预算）；排序金测试 |
+| **C 清理与 test** | intensity 全链路移除（skeletonize 参数改名 `--min-weight`，旧名 deprecated 别名）+ 删 focus/overview/wander + `compute_retrieval_probability` + models 瘦身（4 字段）+ test 契约落地 + 修改类 proposal patch 队列 | `grep intensity src/` 仅剩 deprecated 别名一处；全测试绿；`codememory test` 可输出题集；patch 队列可 merge |
 
-核心字段：
-
-```yaml
-format_version: context-pack/v1
-target_id: user/project/context
-task_goal: optional string
-budget:
-  requested: 3000
-  estimated: 1800
-disclosure:
-  level: 1
-  include_sources: anchor
-nodes:
-  - id: user/project/fact
-    type: atom
-    summary: ...
-    body: ...
-    source_refs: []
-source_refs:
-  - artifact_id: src/...
-    disclosure_level: 1
-notices:
-  - severity: warning
-    code: budget_exceeded
-```
-
-Render targets:
-
-- XML-tagged Markdown；
-- plain Markdown；
-- JSON。
-
-### 5.2 Resolve Compatibility
-
-`resolve` 继续保留，但定位应下沉为兼容入口。
-
-目标演进：
-
-```text
-resolve(id) ≈ render_context_pack(build_context_pack(id), format="plain-markdown")
-```
-
-这能避免 CLI、REST、MCP 各自维护不同拼装逻辑。
-
-### 5.3 Source Expansion
-
-Source expansion 是独立能力：
-
-```text
-expand_source(artifact_id, start=None, end=None, max_chars=None)
-```
-
-当前已实现的最小 contract：
-
-- core function: `expand_source_artifact(root_dir, source_id, start=None, end=None, max_chars=None)`；
-- CLI: `codememory source expand src/design-md --max-chars 2000`；
-- REST: `GET /api/sources/expand?artifact_id=src/design-md&max_chars=2000`；
-- output 是 `SourceExpansion` JSON，包含 `artifact_id`、`kind`、`uri`、`path`、`sha256`、`current_sha256`、`status`、`content`、`range_start`、`range_end`、`truncated`、`message`；
-- 支持 `markdown` / `text` / `code` 的本地文件全文或字符范围展开；
-- 对 missing artifact、missing file、stale hash、unsupported external/pdf/binary 返回结构化 status/message，而不是抛给 adapter 自行解释。
-
-ContextPack 默认只引用 source；expand_source 按需补充 source body。
+每阶段 sprint 的验收必须包含"文档-实现一致"检查：实现若需偏离本文契约，先改本文档（经 owner 确认），再写代码。
 
 ---
 
-## 6. Memory Compiler v2
+## 7. 架构守门问题
 
-Compiler 的职责从“把 Markdown 切成 atom”升级为“把文档资产编译成 Source Artifact + Atom Graph proposals”。
+任何新功能过这 7 问：
 
-```text
-source corpus
-  ↓
-register Source Artifacts
-  ↓
-extract sections / anchors
-  ↓
-propose Anchor Atoms
-  ↓
-propose Derived Atoms / schemas / imports / source_refs
-  ↓
-dedupe + conflict detection
-  ↓
-review set
-  ↓
-materialize accepted proposals
-```
+1. 它在代码世界的对应物是什么？（公理筛选，过不了直接拒）
+2. 它属于 Core / Importer / Adapter 哪一层？是否跨层？
+3. 它改变记忆语义，还是只改呈现？
+4. 它把 imports（理解依赖）和 asset 引用（出处）混淆了吗？
+5. 它让 LLM 绕过 proposal 直写 canonical 了吗？
+6. 它需要新依赖吗？理由写在哪？
+7. 另一个 adapter 能通过同一个 handler 调到它吗？
 
-硬约束：
-
-1. 原始材料默认保留；
-2. 自动输出默认是 proposal；
-3. 每个 proposal 能追溯到 artifact；
-4. materialize 前必须 validate；
-5. LLM 不直接写 canonical truth。
+任何一问答案不清楚：**先改架构文档，再写代码。**
 
 ---
 
-## 7. Work Layer
+## 附录：删除清单汇总（阶段 C 终点）
 
-Work Layer 是 v1 的默认场景策略。
+**代码符号**：
 
-默认原则：
+- `handlers.py`：`handle_focus`、`handle_overview`、`handle_wander`；
+- `core.py`：`compute_retrieval_probability`；
+- `cli.py` / `tools.py` / `mcp_server.py`：focus / overview / wander 命令与工具绑定。
 
-- 写入谨慎；
-- 保留关键事实、约束、决策和流程；
-- imports 追求依赖完整；
-- source_refs 追求可追溯；
-- ContextPack 追求 agent 可直接使用；
-- 过时信息应标记 stale，而不是静默删除。
+**字段（models.py / frontmatter）**：`intensity`、`stability`、`stability_source`、`days_since_last_access`。
 
-建议目录：
+**CLI 参数**：`create --intensity`、`orphans --min-intensity`；`skeletonize --min-intensity` 改名 `--min-weight`（旧名保留为 deprecated 别名一个版本）。
 
-```text
-project/
-  facts/
-  decisions/
-  constraints/
-  processes/
-  contexts/
-  learnings/
-schemas/
-```
+**保留不删**：`snapshot` / `transient`（REPL 草稿辅助工具）、`maturity` / `evidence`（惰性元数据）、`cache_stable` / `lifecycle`（build 内部优化与归档自动化）。
 
 ---
 
-## 8. Adapter Contracts
-
-所有 adapter 应共享同一组 core operations：
-
-| Operation | 用途 |
-|---|---|
-| `create_memory` | 创建 atom/schema |
-| `update_memory` | 更新 atom/schema |
-| `search_memory` | 搜索候选 |
-| `context_pack` | 生成 agent handoff context |
-| `expand_source` | 按需展开 Source Artifact；Core / CLI / REST implemented，MCP / harness deferred |
-| `validate` | 校验 graph、schema、source_refs |
-| `compile_markdown` | 生成 migration review set |
-| `materialize_review` | 晋升 accepted proposals |
-
-优先级：core handler → CLI / REST / MCP / SDK。禁止在 frontend 或 backend router 中重写核心算法。
-
----
-
-## 9. 当前仓库映射
-
-```text
-src/codememory/              Core implementation
-src/codememory/context_pack.py
-                             Current ContextPack implementation; should evolve to source_refs/disclosure policy
-src/codememory/resolve.py    Existing DAG resolver; should become ContextPack-compatible
-src/codememory/compiler/     Current Markdown compiler; next step is Source Artifact aware compiler
-backend/                     REST adapter
-frontend/src/                Operator UI adapter
-src/harnesslib/              Optional agent harness layer
-src/llm_gateway/             Optional multi-provider LLM gateway
-docs/                        Canonical docs only
-docs/reference/              Historical idea sources and audits
-```
-
-Planned source registry code should live in Core, not backend:
-
-```text
-src/codememory/sources.py
-# or
-src/codememory/sources/
-```
-
----
-
-## 10. Implementation Priorities
-
-### P0
-
-- Freeze this architecture in `docs/prd.md` and `docs/architecture.md`;
-- keep `docs/` root canonical;
-- make Source Artifact / Atom / ContextPack terms consistent.
-
-### P1
-
-- Implement Source Artifact Registry;
-- add source_refs to atom metadata and validation;
-- update ContextPack to emit source_refs and disclosure policy;
-- add `expand_source`;
-- update compiler to produce Source Artifact + Anchor Atom + Derived Atom proposals.
-
-### P2
-
-- expose `context_pack` and `expand_source` through MCP / toolkit;
-- update UI for source_refs and migration review;
-- improve frontend UX only after backend contract is stable.
-
-### P3
-
-- design Companion Layer as a separate profile.
-
----
-
-## 11. Architecture Tests
-
-Any new feature should pass these questions:
-
-1. Does it belong to Core, Layer, Compiler, or Adapter?
-2. Is it changing memory semantics, or only presentation?
-3. Does it confuse imports with source_refs?
-4. Does it preserve original source material?
-5. Does it make ContextPack more stable for agents?
-6. Can it run without frontend?
-7. Can another adapter call the same handler?
-
-If the answer is unclear, update architecture before code.
+工程规约（编码约定、测试规范、端口、禁止事项）见 `.claude/CLAUDE.md` 与 `.claude/rules/`，本文不重复。
