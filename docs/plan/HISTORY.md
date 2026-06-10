@@ -4,6 +4,37 @@ This file records accepted sprint outcomes. Current work belongs in `docs/plan/S
 
 ---
 
+## 2026-06-10 — 阶段 C：清理与 test
+
+**Status:** Accepted and merged.
+
+**Merge commit:** `3e11331`（branch `sprint/phase-c-cleanup-and-test`，6 commits：`0e7ffb4` / `8a20378` / `5f375f0` / `bdcb4a0` / `65f2f99` 等）
+
+**Delivered:**
+
+- test 契约（`test_contract.py`）：`codememory test <entry>` 导出 `{format_version, entry, context, questions}` JSON，空题集出 notice；`test report` 校验 `{q, answer, pass}` 后写审计日志；validate 新增 `[GOLDEN-WARN]`；Core 零 LLM 依赖；
+- 修改类 proposal patch 队列（`proposals.py`）：`propose` 入队字段级 patch（目标不被触碰）、`proposals` 列队、merge/reject 统一分发（先 patch 队列后新增类），merge 经 update 应用（version++ / change_log）；validate 新增 `[PROPOSAL-WARN]`（积压 / 目标缺失）；评审结论：不复用 compiler review（粒度不匹配），独立小模块；
+- 删除拟人范式残留：focus / overview / wander 全链路（handlers / cli / tools / mcp / backend 路由）、`compute_retrieval_probability`、validate decay check；
+- intensity / stability 全链路移除：models 4 字段、create / index / orphans / cli / tools / mcp / importer / compiler / transient / backend 请求模型与序列化清扫；skeletonize 评分改名 weight（`--min-intensity` 与 `@intensity` 为仅存的两处 deprecated 别名）；MCP propose_memory 现代化为 `create --propose` 委托；
+- shim 处置：`context_pack.py` 删除，importer 全部指向 `build`；
+- 附带修复：backend `/api/resolve` 从"regex 解析渲染文本"改为直接消费结构化管线（阶段 B 潜在债，test_api 捕获）；
+- 文档同步：CLAUDE.md / guide / prd / architecture（A/B/C 全部标记完成，过时现状注记刷新）/ pitfalls（decay 条目移除）/ rules/python.md。
+
+**Acceptance evidence:**
+
+- `pytest tests/unit tests/test_api.py -q` → `197 passed`；`integration_test.py` → `21/21 passed`
+- `grep -rn "intensity" src/ backend/ --include="*.py"` → 仅 2 处 deprecated 别名（4 行）；stability 引用清零
+- CLI 冒烟：`test` 导出题集 JSON；`propose → proposals → merge` 全链路（patch 应用、version++、队列清空）；`focus` 报 invalid choice
+- examples 生成文件提交前恢复，残留测试垃圾清理
+
+**Deferred:**
+
+- MCP / toolkit 工具面对齐（build/search/expand_source/create/propose 最小集）→ post-convergence backlog
+- Operator UI 对齐（wander 面板已 404、proposed 队列展示）→ post-convergence backlog
+- skeletonize deprecated 别名按计划在下一版本移除
+
+---
+
 ## 2026-06-10 — 阶段 B：读路径收敛
 
 **Status:** Accepted and merged.

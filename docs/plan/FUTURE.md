@@ -14,26 +14,16 @@
 
 ---
 
-## Roadmap Priority — 收敛三阶段
+## Roadmap Priority
 
-依据 `docs/architecture.md` 第 6 章的收敛路径执行，每阶段一个 sprint、独立可合并、独立验收：
+**收敛三阶段（A 写入纪律 / B 读路径收敛 / C 清理与 test）已于 2026-06-10 全部验收合并——代码与 11 概念模型对齐完成。** 下一批工作从 Post-convergence Backlog 中提升：
 
-1. **阶段 C 清理与 test**：intensity 全链路移除 + 删 focus/overview/wander + models 瘦身 + test 契约落地 + 修改类 proposal patch 队列 + resolve/context_pack shim 处置。
+1. **MCP / toolkit 对齐**：暴露 build / search / expand_source / create / propose 最小工具集，全部走共享 handler。
+2. **Operator UI 对齐**：UI 跟随新契约（proposed / patch 队列展示、golden_questions、build 产物；wander 面板已随后端删除）。
+3. **文档与示例**：USER_GUIDE / INTEGRATION / project_structure / `examples/` 随新术语更新。
+4. **eval harness**：ContextPack vs 原文全文 vs 无记忆的对照实验，把 PRD 产品成功标准变成可测数字。
 
-（阶段 A 写入纪律、阶段 B 读路径收敛已于 2026-06-10 验收合并，见 Completed Roadmap Items。）
-
-验收信号见 `docs/architecture.md` 第 6 章；概念依据见 `docs/prd.md` 第 4 章。
-
----
-
-## Post-convergence Backlog
-
-收敛三阶段完成后再排期：
-
-- **MCP / toolkit 对齐**：暴露 build / search / expand_source / create / propose 最小工具集，全部走共享 handler（原 P2.1 的新表述）。
-- **Operator UI 对齐**：UI 跟随新契约展示 proposed 队列、golden_questions 与 build 产物（原 P2.2）。
-- **文档与示例**：USER_GUIDE / INTEGRATION / project_structure / `examples/` 随新术语更新；examples 增加 asset 背书的记忆流（原 P2.3）。
-- **eval harness**：ContextPack vs 原文全文 vs 无记忆的对照实验，把 PRD 产品成功标准变成可测数字。
+排期前按 Planning Rules 第 5 条确认是否需要先更新 prd / architecture。
 
 ---
 
@@ -49,6 +39,22 @@
 ---
 
 ## Completed Roadmap Items
+
+### 2026-06-10 — 阶段 C：清理与 test
+
+**Completed in:** `3e11331`（merge of `sprint/phase-c-cleanup-and-test`）
+
+**Acceptance signals met:**
+
+- `grep intensity src/` 仅剩 2 处 deprecated 别名（skeletonize `--min-intensity` 与 `@intensity`）；
+- `codememory test <entry>` 导出题集 + 装配上下文 JSON，空题集退出码 0 + notice；
+- `propose → proposals → merge` 全链路：patch 经 update 应用（version++、change_log），队列清空；
+- focus / overview / wander 与 `compute_retrieval_probability` 不复存在；models 无 4 个 heat 字段；validate 无 DECAY-WARN；
+- 单测 + API 197 passed、集成 21/21（断言迁移后零回归）。
+
+详细记录见 `docs/plan/HISTORY.md`。
+
+---
 
 ### 2026-06-10 — 阶段 B：读路径收敛
 
