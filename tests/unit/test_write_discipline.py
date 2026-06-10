@@ -179,7 +179,7 @@ def test_resolve_skips_proposed_dependency(tmp_path: Path):
     assert "ENTRY-BODY-MARKER" in output
     assert "DEP-BODY-MARKER" not in output
     assert "user/facts/dep" in output  # named in the notice
-    assert "[NOTICE]" in output
+    assert "excluded_status" in output
 
 
 def test_resolve_skips_archived_dependency(tmp_path: Path):

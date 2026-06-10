@@ -17,7 +17,7 @@ from pathlib import Path
 from .compiler.materialize import materialize_review_set
 from .compiler.propose import compile_markdown_corpus
 from .compiler.review import load_review_set, save_review_set, set_all_decisions
-from .context_pack import build_context_pack, render_context_pack
+from .build import build_context_pack, render_context_pack
 from .core import compute_body_hash as _cbh
 from .core import compute_retrieval_probability as _retrieval_prob
 from .core import get_memory_path, parse_frontmatter as _pfm
@@ -174,7 +174,7 @@ def handle_resolve(
     return resolve(root, memory_id, depth=depth, budget=budget, focus=focus)
 
 
-def handle_context_pack(
+def handle_build(
     root: Path,
     memory_id: str,
     depth: str = "recommended",
@@ -183,7 +183,7 @@ def handle_context_pack(
     task_goal: str | None = None,
     output_format: str = "xml-markdown",
 ) -> str:
-    """Build and render a structured ContextPack for agent handoff."""
+    """Run the unified assembly pipeline and render it (primary verb)."""
     pack = build_context_pack(
         root,
         memory_id,
@@ -193,6 +193,27 @@ def handle_context_pack(
         task_goal=task_goal,
     )
     return render_context_pack(pack, output_format)  # type: ignore[arg-type]
+
+
+def handle_context_pack(
+    root: Path,
+    memory_id: str,
+    depth: str = "recommended",
+    budget: int | None = None,
+    focus: str | None = None,
+    task_goal: str | None = None,
+    output_format: str = "xml-markdown",
+) -> str:
+    """Compatibility alias for handle_build (same pipeline, same output)."""
+    return handle_build(
+        root,
+        memory_id,
+        depth=depth,
+        budget=budget,
+        focus=focus,
+        task_goal=task_goal,
+        output_format=output_format,
+    )
 
 
 def handle_reindex(root: Path) -> str:

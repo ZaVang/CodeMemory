@@ -141,3 +141,64 @@ def test_build_tracking_writes_only_access_telemetry(tmp_path: Path):
     assert after.days_since_last_access == 0
     assert after.maturity == "draft"      # no auto-upgrade
     assert after.stability == 14.0        # no SInc growth
+
+
+# ==================================================================
+# Slice 4: one pipeline behind build / resolve / context-pack
+# ==================================================================
+
+def _strip_volatile(text: str) -> str:
+    """Drop the generation-timestamp line so cross-invocation outputs compare."""
+    return "\n".join(
+        line for line in text.splitlines()
+        if "Generated At" not in line and "generated_at" not in line
+    )
+
+
+def _consistency_fixture(tmp_path: Path) -> None:
+    _atom(tmp_path, "user/g/ctx", body="C" * 80, summary="ctx summary",
+          required=["user/g/factx"])
+    _atom(tmp_path, "user/g/factx", body="F" * 80, summary="factx summary")
+    reindex(tmp_path)
+
+
+def test_resolve_renders_through_the_pipeline(tmp_path: Path):
+    """resolve output is the pipeline's plain-markdown render, not a bespoke format."""
+    from codememory.resolve import resolve
+
+    _consistency_fixture(tmp_path)
+    output = resolve(tmp_path, "user/g/ctx", depth="required")
+    assert output.startswith("# CodeMemory Context Pack: user/g/ctx")
+    assert "C" * 80 in output
+    assert "F" * 80 in output
+
+
+def test_build_plain_markdown_equals_resolve(tmp_path: Path):
+    """handle_build(plain-markdown) and handle_resolve produce identical output."""
+    from codememory.handlers import handle_build, handle_resolve
+
+    _consistency_fixture(tmp_path)
+    built = handle_build(tmp_path, "user/g/ctx", depth="required",
+                         output_format="plain-markdown")
+    resolved = handle_resolve(tmp_path, "user/g/ctx", depth="required")
+    assert _strip_volatile(built) == _strip_volatile(resolved)
+
+
+def test_build_xml_equals_context_pack(tmp_path: Path):
+    """handle_build(xml-markdown) and handle_context_pack produce identical output."""
+    from codememory.handlers import handle_build, handle_context_pack
+
+    _consistency_fixture(tmp_path)
+    built = handle_build(tmp_path, "user/g/ctx", depth="recommended")
+    packed = handle_context_pack(tmp_path, "user/g/ctx", depth="recommended")
+    assert _strip_volatile(built) == _strip_volatile(packed)
+
+
+def test_resolve_missing_target_keeps_error_string_contract(tmp_path: Path):
+    """resolve still returns an Error: string for missing targets (CLI contract)."""
+    from codememory.resolve import resolve
+
+    _consistency_fixture(tmp_path)
+    output = resolve(tmp_path, "user/g/nonexistent")
+    assert output.startswith("Error:")
+    assert "user/g/nonexistent" in output

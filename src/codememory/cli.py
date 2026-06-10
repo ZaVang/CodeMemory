@@ -6,6 +6,7 @@ from pathlib import Path
 
 from .core import configure_logging, get_root_dir
 from .handlers import (
+    handle_build,
     handle_changelog,
     handle_compile_md,
     handle_context_pack,
@@ -98,6 +99,17 @@ def main(argv: list[str] | None = None):
     p.add_argument("--depth", choices=["required", "recommended", "full"], default="required")
     p.add_argument("--budget", type=int)
     p.add_argument("--focus", help="Keep full text only for nodes matching this semantic type tag")
+
+    # build (primary assembly verb; resolve/context-pack are aliases of the same pipeline)
+    p = subparsers.add_parser("build", help="Assemble context from an entry memory (unified pipeline)")
+    _add_logging_flags(p)
+    p.add_argument("id", help="Entry memory ID to build context from")
+    p.add_argument("--depth", choices=["required", "recommended", "full"], default="recommended")
+    p.add_argument("--budget", type=int)
+    p.add_argument("--focus", help="Keep full text only for nodes matching this semantic type tag")
+    p.add_argument("--task-goal", help="Optional task goal to embed in the output")
+    p.add_argument("--format", dest="output_format", choices=["xml-markdown", "markdown", "plain-markdown", "json"],
+                   default="xml-markdown")
 
     # context-pack
     p = subparsers.add_parser("context-pack", help="Build a structured agent handoff context pack")
@@ -291,6 +303,16 @@ def main(argv: list[str] | None = None):
     elif cmd == "resolve":
         print(handle_resolve(root, args.id, depth=args.depth, budget=args.budget,
                             focus=args.focus))
+    elif cmd == "build":
+        print(handle_build(
+            root,
+            args.id,
+            depth=args.depth,
+            budget=args.budget,
+            focus=args.focus,
+            task_goal=args.task_goal,
+            output_format=args.output_format,
+        ))
     elif cmd == "context-pack":
         print(handle_context_pack(
             root,
