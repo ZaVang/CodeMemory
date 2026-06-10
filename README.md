@@ -147,7 +147,7 @@ codememory orphans [--type <t>]
 codememory changelog <id> | log [--limit N] | diff [--since "2 days ago"]
 codememory suggest-deps <id> [--min-score N]
 
-# 迁移（importer）
+# 迁移（importer）—— 高质量导入用 agent 提炼范式（docs/agent-memory-guide.md 第 9 节）
 codememory import --file notes.txt --extract preferences,decisions
 codememory skeletonize <file_or_dir> [--min-weight N] [--dry-run] [--tags "a,b"]
 codememory compile-md <corpus_dir> [--review-id <id>] [--namespace <ns>]

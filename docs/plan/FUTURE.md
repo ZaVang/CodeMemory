@@ -19,7 +19,7 @@
 **收敛三阶段（A 写入纪律 / B 读路径收敛 / C 清理与 test）已于 2026-06-10 全部验收合并——代码与 11 概念模型对齐完成。** 下一批工作从 Post-convergence Backlog 中提升：
 
 1. **导入链路升级（importer v2）**：补齐 PRD §5.1 与实现之间的缺口——现有 import/compile-md/skeletonize 都是结构切分，没有语义提炼。两个递进子项：
-   - 最小版（零 LLM，确定性）：compile-md 升级为"先 `source add` 登记 asset → 生成 anchor atom（含 source_refs）→ 切分段落作为 derived 候选"，产出全部 proposed；外加一份 agent-as-importer 工作流指南（agent 读旧文档按 guide 纪律 `create --propose` 提炼，owner merge）。
+   - 最小版（零 LLM，确定性）：compile-md 升级为"先 `source add` 登记 asset → 生成 anchor atom（含 source_refs）→ 切分段落作为 derived 候选"，产出全部 proposed；agent-as-importer 工作流指南**已交付**（guide 第 9 节 + `.claude/skills/memory-import`，2026-06-10 dogfood 验证）；剩余子项为 compile-md 升级。
    - 完整版（可选 LLM proposer）：compiler 接 LLM 提炼 Derived Atoms 与 imports 建议；LLM 只 propose，产出仍走 review（架构 §1.3 铁律不变；LLM 依赖只进 Importer 层的可选路径，Core 不碰）。
 2. **MCP / toolkit 对齐**：暴露 build / search / expand_source / create / propose 最小工具集，全部走共享 handler。
 3. **Operator UI 对齐**：UI 跟随新契约（proposed / patch 队列展示、golden_questions、build 产物；wander 面板已随后端删除）。

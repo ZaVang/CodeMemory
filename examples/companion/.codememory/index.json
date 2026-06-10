@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-05-18T14:26:41.915939",
+  "updated": "2026-06-10T17:39:13.135975",
   "memories": {
     "user/context": {
       "type": "atom",
@@ -12,12 +12,10 @@
         "context",
         "entry-point"
       ],
-      "intensity": 8,
       "version": 3,
       "path": "user/context.md",
-      "access_count": 2,
-      "last_access": "2026-05-07T14:32:15.790527",
-      "days_since_last_access": 10,
+      "access_count": 4,
+      "last_access": "2026-06-10T17:39:13.135465",
       "created": "2026-04-27",
       "updated": "2026-05-07",
       "imports": {
@@ -37,16 +35,20 @@
       },
       "schema": null,
       "summary_hash": "3d6cf56",
-      "stability": 14.0,
-      "stability_source": null,
       "protected": true,
       "cache_stable": true,
       "lifecycle": "permanent",
       "change_note": null,
       "change_log": [],
       "source": null,
+      "source_refs": [],
       "maturity": "verified",
-      "evidence": null
+      "evidence": null,
+      "golden_questions": [],
+      "intensity": 8,
+      "days_since_last_access": 10,
+      "stability": 14.0,
+      "stability_source": null
     },
     "user/beliefs/friendship-view": {
       "type": "atom",
@@ -59,12 +61,10 @@
         "friendship",
         "value"
       ],
-      "intensity": 6,
       "version": 1,
       "path": "user/beliefs/friendship-view.md",
-      "access_count": 45,
-      "last_access": "2026-05-18T14:26:41.915500",
-      "days_since_last_access": 0,
+      "access_count": 47,
+      "last_access": "2026-06-10T17:39:13.135465",
       "created": "2026-04-22",
       "updated": "",
       "imports": {
@@ -74,14 +74,13 @@
       },
       "schema": null,
       "summary_hash": "a818dc9",
-      "stability": 14.0,
-      "stability_source": null,
       "protected": null,
       "cache_stable": true,
       "lifecycle": "permanent",
       "change_note": null,
       "change_log": [],
       "source": null,
+      "source_refs": [],
       "maturity": "verified",
       "evidence": {
         "verified_in": [
@@ -90,7 +89,12 @@
             "date": "2026-05-18"
           }
         ]
-      }
+      },
+      "golden_questions": [],
+      "intensity": 6,
+      "days_since_last_access": 0,
+      "stability": 14.0,
+      "stability_source": null
     },
     "user/beliefs/life-pace": {
       "type": "atom",
@@ -103,12 +107,10 @@
         "value",
         "reflection"
       ],
-      "intensity": 6,
       "version": 1,
       "path": "user/beliefs/life-pace.md",
       "access_count": 2,
       "last_access": "2026-05-07T14:32:15.790527",
-      "days_since_last_access": 10,
       "created": "2026-04-27",
       "updated": "",
       "imports": {
@@ -119,16 +121,20 @@
       },
       "schema": null,
       "summary_hash": "4e3ca19",
-      "stability": 14.0,
-      "stability_source": null,
       "protected": null,
       "cache_stable": true,
       "lifecycle": "permanent",
       "change_note": null,
       "change_log": [],
       "source": null,
+      "source_refs": [],
       "maturity": "draft",
-      "evidence": null
+      "evidence": null,
+      "golden_questions": [],
+      "intensity": 6,
+      "days_since_last_access": 10,
+      "stability": 14.0,
+      "stability_source": null
     },
     "user/feelings/burnout-april": {
       "type": "atom",
@@ -141,12 +147,10 @@
         "work",
         "mental-health"
       ],
-      "intensity": 7,
       "version": 1,
       "path": "user/feelings/burnout-april.md",
-      "access_count": 43,
-      "last_access": "2026-05-18T14:26:41.915500",
-      "days_since_last_access": 0,
+      "access_count": 45,
+      "last_access": "2026-06-10T17:39:13.135465",
       "created": "2026-04-14",
       "updated": "",
       "imports": {
@@ -159,14 +163,13 @@
       },
       "schema": null,
       "summary_hash": "e20af68",
-      "stability": 14.0,
-      "stability_source": null,
       "protected": null,
       "cache_stable": true,
       "lifecycle": "permanent",
       "change_note": null,
       "change_log": [],
       "source": null,
+      "source_refs": [],
       "maturity": "proven",
       "evidence": {
         "verified_in": [
@@ -175,7 +178,12 @@
             "date": "2026-05-18"
           }
         ]
-      }
+      },
+      "golden_questions": [],
+      "intensity": 7,
+      "days_since_last_access": 0,
+      "stability": 14.0,
+      "stability_source": null
     },
     "user/feelings/proud-moment": {
       "type": "atom",
@@ -188,12 +196,10 @@
         "work",
         "achievement"
       ],
-      "intensity": 6,
       "version": 1,
       "path": "user/feelings/proud-moment.md",
-      "access_count": 42,
-      "last_access": "2026-05-18T14:26:41.915500",
-      "days_since_last_access": 0,
+      "access_count": 44,
+      "last_access": "2026-06-10T17:39:13.135465",
       "created": "2026-04-26",
       "updated": "",
       "imports": {
@@ -205,14 +211,13 @@
       },
       "schema": null,
       "summary_hash": "c6fdb81",
-      "stability": 14.0,
-      "stability_source": null,
       "protected": null,
       "cache_stable": true,
       "lifecycle": "permanent",
       "change_note": null,
       "change_log": [],
       "source": null,
+      "source_refs": [],
       "maturity": "verified",
       "evidence": {
         "verified_in": [
@@ -221,7 +226,12 @@
             "date": "2026-05-18"
           }
         ]
-      }
+      },
+      "golden_questions": [],
+      "intensity": 6,
+      "days_since_last_access": 0,
+      "stability": 14.0,
+      "stability_source": null
     },
     "user/moments/rainy-sunday": {
       "type": "atom",
@@ -234,12 +244,10 @@
         "weekend",
         "movie"
       ],
-      "intensity": 4,
       "version": 1,
       "path": "user/moments/rainy-sunday.md",
       "access_count": 40,
       "last_access": "2026-05-18T14:26:41.915500",
-      "days_since_last_access": 0,
       "created": "2026-04-19",
       "updated": "",
       "imports": {
@@ -252,14 +260,13 @@
       },
       "schema": null,
       "summary_hash": "d34a1d8",
-      "stability": 14.0,
-      "stability_source": null,
       "protected": null,
       "cache_stable": true,
       "lifecycle": "permanent",
       "change_note": null,
       "change_log": [],
       "source": null,
+      "source_refs": [],
       "maturity": "verified",
       "evidence": {
         "verified_in": [
@@ -268,7 +275,12 @@
             "date": "2026-05-18"
           }
         ]
-      }
+      },
+      "golden_questions": [],
+      "intensity": 4,
+      "days_since_last_access": 0,
+      "stability": 14.0,
+      "stability_source": null
     },
     "user/people/best-friend-li": {
       "type": "atom",
@@ -280,12 +292,10 @@
         "people",
         "friendship"
       ],
-      "intensity": 6,
       "version": 1,
       "path": "user/people/best-friend-li.md",
       "access_count": 3,
       "last_access": "2026-05-07T14:32:15.790527",
-      "days_since_last_access": 10,
       "created": "2026-04-25",
       "updated": "",
       "imports": {
@@ -295,16 +305,20 @@
       },
       "schema": null,
       "summary_hash": "52a1079",
-      "stability": 14.0,
-      "stability_source": null,
       "protected": null,
       "cache_stable": true,
       "lifecycle": "permanent",
       "change_note": null,
       "change_log": [],
       "source": null,
+      "source_refs": [],
       "maturity": "draft",
-      "evidence": null
+      "evidence": null,
+      "golden_questions": [],
+      "intensity": 6,
+      "days_since_last_access": 10,
+      "stability": 14.0,
+      "stability_source": null
     },
     "user/people/mom-weekly-call": {
       "type": "atom",
@@ -317,12 +331,10 @@
         "routine",
         "mom"
       ],
-      "intensity": 7,
       "version": 1,
       "path": "user/people/mom-weekly-call.md",
       "access_count": 2,
       "last_access": "2026-05-07T14:32:15.790527",
-      "days_since_last_access": 10,
       "created": "2026-04-18",
       "updated": "",
       "imports": {
@@ -332,16 +344,20 @@
       },
       "schema": null,
       "summary_hash": "7ab2594",
-      "stability": 14.0,
-      "stability_source": null,
       "protected": null,
       "cache_stable": true,
       "lifecycle": "permanent",
       "change_note": null,
       "change_log": [],
       "source": null,
+      "source_refs": [],
       "maturity": "verified",
-      "evidence": null
+      "evidence": null,
+      "golden_questions": [],
+      "intensity": 7,
+      "days_since_last_access": 10,
+      "stability": 14.0,
+      "stability_source": null
     },
     "user/preferences/dislike-crowds": {
       "type": "atom",
@@ -353,25 +369,22 @@
         "preference",
         "lifestyle"
       ],
-      "intensity": 5,
       "version": 1,
       "path": "user/preferences/dislike-crowds.md",
-      "access_count": 42,
-      "last_access": "2026-05-18T14:26:41.915500",
-      "days_since_last_access": 0,
+      "access_count": 44,
+      "last_access": "2026-06-10T17:39:13.135465",
       "created": "2026-04-10",
       "updated": "",
       "imports": {},
       "schema": null,
       "summary_hash": "37e79f0",
-      "stability": 14.0,
-      "stability_source": null,
       "protected": null,
       "cache_stable": true,
       "lifecycle": "permanent",
       "change_note": null,
       "change_log": [],
       "source": null,
+      "source_refs": [],
       "maturity": "verified",
       "evidence": {
         "verified_in": [
@@ -380,7 +393,12 @@
             "date": "2026-05-18"
           }
         ]
-      }
+      },
+      "golden_questions": [],
+      "intensity": 5,
+      "days_since_last_access": 0,
+      "stability": 14.0,
+      "stability_source": null
     },
     "user/preferences/morning-coffee": {
       "type": "atom",
@@ -392,25 +410,22 @@
         "habit",
         "daily-life"
       ],
-      "intensity": 5,
       "version": 1,
       "path": "user/preferences/morning-coffee.md",
-      "access_count": 44,
-      "last_access": "2026-05-18T14:26:41.915500",
-      "days_since_last_access": 0,
+      "access_count": 46,
+      "last_access": "2026-06-10T17:39:13.135465",
       "created": "2026-04-10",
       "updated": "",
       "imports": {},
       "schema": null,
       "summary_hash": "4f5a488",
-      "stability": 14.0,
-      "stability_source": null,
       "protected": null,
       "cache_stable": true,
       "lifecycle": "permanent",
       "change_note": null,
       "change_log": [],
       "source": null,
+      "source_refs": [],
       "maturity": "proven",
       "evidence": {
         "verified_in": [
@@ -419,7 +434,12 @@
             "date": "2026-05-18"
           }
         ]
-      }
+      },
+      "golden_questions": [],
+      "intensity": 5,
+      "days_since_last_access": 0,
+      "stability": 14.0,
+      "stability_source": null
     },
     "user/test/f1-test2": {
       "type": "atom",
@@ -427,19 +447,15 @@
       "summary": "F1 test",
       "status": "active",
       "tags": [],
-      "intensity": 5,
       "version": 1,
       "path": "user/test/f1-test2.md",
       "access_count": 0,
       "last_access": null,
-      "days_since_last_access": null,
       "created": "2026-05-07",
       "updated": "2026-05-07",
       "imports": {},
       "schema": null,
       "summary_hash": "63efb31",
-      "stability": 14.0,
-      "stability_source": null,
       "protected": null,
       "cache_stable": false,
       "lifecycle": "permanent",
@@ -449,13 +465,19 @@
         "platform": "manual",
         "created_by": "user"
       },
+      "source_refs": [],
       "maturity": "draft",
       "evidence": {
         "contributors": [
           "user"
         ],
         "sessions": []
-      }
+      },
+      "golden_questions": [],
+      "intensity": 5,
+      "days_since_last_access": null,
+      "stability": 14.0,
+      "stability_source": null
     }
   }
 }

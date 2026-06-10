@@ -21,6 +21,7 @@
 | proposal（修改类） | `codememory propose <id> --reason "..." [--summary ...] [--body ...]` 入队；`proposals` 看队列；owner `merge <proposal_id>` / `reject <proposal_id>` |
 | test（验证） | `codememory test <entry>` 导出题集+上下文 JSON；答完 `codememory test report <entry> --results <file>` |
 | 绑定 asset | `codememory update <id> --change-note "..." --source-ref <artifact_id> [--source-ref-summary "..."]` |
+| 批量导入存量材料 | agent 提炼范式见第 9 节；机械切分用 `compile-md` / `skeletonize` / `import` |
 
 ---
 
@@ -220,3 +221,63 @@ codememory validate
 | update 不写 change-note | `--change-note` 必填，它是 log 的原料 |
 | 给记忆打重要性分 | intensity 已整体移除（参数不存在）；重要性由被依赖数表达，保护语义找 owner 标 protected |
 | 写完不跑 validate | 任何写入后 `codememory validate` 守门 |
+
+---
+
+## 9. 导入工作流：agent 即 importer
+
+存量文档、笔记、聊天记录的高质量导入靠 **agent 提炼**，不靠机械切分。机械路径（`compile-md` 按标题切、`import` 按段落切、`skeletonize` 骨架化）只适合结构本来就规整、内容本来就一节一条的材料；其余情况按本节流程走——你的价值是**判断与取舍**，不是搬运。
+
+### 六步流程（每批材料）
+
+**第 0 步 · 盘点分类**。每份材料三选一：
+
+- 原文有长期参考价值（设计稿 / RFC / 规范）→ 走 asset 登记 + 提炼；
+- 只有结论有价值（聊天记录、会议速记、草稿）→ 只提炼，不登记 asset；
+- 过不了第 1 节的写入门槛两问 → 跳过，在审阅清单里注明跳过原因。
+
+**第 1 步 · 登记 asset**（如适用）：
+
+```bash
+codememory source add <path> --id src/<slug> --summary "一句话说明它是什么"
+```
+
+原文留在原地，不动、不删、不改。
+
+**第 2 步 · 提炼 atoms**。通读材料，找出"可独立引用的语义单元"——事实、决策、约束、流程、原则。纪律：
+
+- 每条过第 1 节的两问（三个月后还重要吗？丢了会导致错误决策吗？）——**宁缺毋滥**；
+- 一个 atom 一个语义单元（第 8 节反模式）；
+- 目录按第 2 节的种类表选，**直接进正确目录**（`user/facts/`、`user/decisions/`……），不要堆进 `user/imports/`；
+- **一律 `create --propose`**：批量导入是典型的"没把握"场景，全部落为 proposed 走审；
+- create 后立即 update 填真实 summary（第 3 节规范）与简短 body。
+
+**第 3 步 · 声明关联**：
+
+- imports：按第 4 节判据指向库里已有 atom 或**同批** atom；
+- 出处：`update <id> --change-note "..." --source-ref src/<slug>` 绑回 asset；body 不抄原文，只写结论。
+
+**第 4 步 · 批次校验**：`codememory validate`。
+
+- `[ERROR]` 断链：当场修（通常是 imports 拼错 id）；
+- 同批 proposed 互相引用**不产生告警**（实测）；若出现 `[STATUS-WARN]`，说明库里**已有的 active atom** 引用了你新导入的 proposed——属预期，owner merge 后消失，不要为了消警告而直写 active。
+
+**第 5 步 · 交付审阅清单**。给 owner 一张表：每条 proposed 的 id、一句话 summary、出处 asset；并给出**建议的 merge 顺序——被依赖者先 merge**（build 会跳过 proposed 节点，依赖链需要自底向上激活）。owner 用 `codememory merge <id>` / `reject <id>` 逐条或批量处理。
+
+**第 6 步 · 收尾**（owner merge 后）。为这批记忆建一个上下文入口 atom（`user/contexts/<主题>`，imports.required 指向核心条目），配 2-3 个 `golden_questions`，然后：
+
+```bash
+codememory test user/contexts/<主题>     # 自答题集，验证导入质量
+codememory test report user/contexts/<主题> --results results.json
+```
+
+### 导入反模式速查
+
+| 错误 | 正确做法 |
+|------|----------|
+| 每段原文一条 atom | 那是 compile-md 的机械行为；agent 的价值是提炼与取舍 |
+| 批量导入直写 active | 一律 `--propose`，owner 审后 merge |
+| atom body 抄原文 | 原文在 asset；atom 只写结论 + source_ref |
+| 全部塞进 user/imports/ | 按种类直接进正确目录，imports 目录是机械导入器的着陆区 |
+| 乱序 merge | 被依赖者先 merge，否则入口 build 暂时缺节点 |
+| 跳过第 6 步 | 没有入口和黄金问题的导入批次，三个月后没人找得到 |

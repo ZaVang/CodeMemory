@@ -157,7 +157,7 @@ codememory diff [--since "2 days ago"]
 codememory suggest-deps <id> [--min-score N]
 codememory source list | source get <id> | source check [id]
 
-# 迁移（importer）
+# 迁移（importer）—— agent 提炼范式见 docs/agent-memory-guide.md 第 9 节（/memory-import skill）
 codememory import --file notes.txt --extract preferences
 codememory skeletonize <file_or_dir> [--min-weight N] [--dry-run] [--tags "a,b"]
 codememory compile-md <corpus> [--review-id ID] [--namespace user/imports]
