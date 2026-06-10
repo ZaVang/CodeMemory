@@ -18,10 +18,9 @@
 
 依据 `docs/architecture.md` 第 6 章的收敛路径执行，每阶段一个 sprint、独立可合并、独立验收：
 
-1. **阶段 B 读路径收敛**：`build` 命令落地（resolve / context-pack 变薄别名）+ 两遍式 trim + search 词法排序。
-2. **阶段 C 清理与 test**：intensity 全链路移除 + 删 focus/overview/wander + models 瘦身 + test 契约落地 + 修改类 proposal patch 队列。
+1. **阶段 C 清理与 test**：intensity 全链路移除 + 删 focus/overview/wander + models 瘦身 + test 契约落地 + 修改类 proposal patch 队列 + resolve/context_pack shim 处置。
 
-（阶段 A 写入纪律已于 2026-06-10 验收合并，见 Completed Roadmap Items。）
+（阶段 A 写入纪律、阶段 B 读路径收敛已于 2026-06-10 验收合并，见 Completed Roadmap Items。）
 
 验收信号见 `docs/architecture.md` 第 6 章；概念依据见 `docs/prd.md` 第 4 章。
 
@@ -50,6 +49,22 @@
 ---
 
 ## Completed Roadmap Items
+
+### 2026-06-10 — 阶段 B：读路径收敛
+
+**Completed in:** `b778abd`（merge of `sprint/phase-b-read-path`）
+
+**Acceptance signals met:**
+
+- 三命令一致性：`build --format plain-markdown` ≡ `resolve`、`build` ≡ `context-pack`（剔除时间戳后逐字符相等，金测试 + CLI diff 双重固化）；
+- 裁剪金测试：预算不足时 target 全文保留、低价值 required 叶子降级 summary、related 预算外 skipped；
+- 排序金测试：多 token 多字段命中排在 body 弱命中之前，单 token 行为兼容；
+- 装配不再写 maturity / stability（惰性元数据契约金测试）；
+- 单测 184 passed（断言迁移后零回归）、集成 24/24。
+
+详细记录见 `docs/plan/HISTORY.md`。
+
+---
 
 ### 2026-06-10 — 阶段 A：写入纪律
 

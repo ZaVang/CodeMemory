@@ -4,6 +4,36 @@ This file records accepted sprint outcomes. Current work belongs in `docs/plan/S
 
 ---
 
+## 2026-06-10 — 阶段 B：读路径收敛
+
+**Status:** Accepted and merged.
+
+**Merge commit:** `b778abd`（branch `sprint/phase-b-read-path`，5 commits：`2c38526` / `e2386bd` / `9f0e9a4` / `110ccf1` / `e6cef18`）
+
+**Delivered:**
+
+- `build.py`：统一装配管线（DAG 工具 + ContextPack builder + renderers 单一实现）；`context_pack.py` 变 re-export shim，`resolve.py` 变薄别名（管线 + plain-markdown，错误映射为 `Error:` 字符串）；
+- 两遍式 trim：第一遍按角色优先级分配预算（target > required > recommended > related，级内 tie-break 被依赖数 → access_count），target/required/recommended 最低 summary，related 可 skipped；第二遍按拓扑序渲染——阅读顺序与预算分配解耦；
+- 装配副作用收敛为纯访问遥测：移除 maturity 自动升级、stability SInc 与 stale 衰减写入（architecture §5.1 惰性元数据契约）；
+- `codememory build` 命令落地（默认 xml-markdown），`handle_build` 为主 handler，`handle_context_pack` 委托之；
+- search 词法排序：分词 + 字段加权（id=4/summary=3/tags=2/body=1）+ OR 语义 + score 排序，零新依赖；
+- 行为修正：`--budget 0` 从"视为无限"改为真实零预算（全员降级 summary）；
+- 文档同步：guide §0、CLAUDE.md（对照/速查/文件树）、prd §4.2 实现状态、architecture §2/§6 阶段标记。
+
+**Acceptance evidence:**
+
+- `pytest tests/unit -q` → `184 passed`（新增 search 排序 5 + 管线 8 个金测试；7 个旧格式断言测试按契约迁移）
+- `tests/integration_test.py` → `24/24 passed`（解析器迁移到统一渲染格式）
+- CLI 冒烟：`build --format plain-markdown` ≡ `resolve`、`build` ≡ `context-pack`（剔除时间戳行后 diff 为空）；多 token 排序符合预期
+- examples 生成文件提交前已恢复（pitfalls 纪律）
+
+**Deferred:**
+
+- 修改类 proposal patch 队列、intensity 移除、legacy 命令删除、test 契约 → 阶段 C
+- resolve / context_pack shim 的去留 → 阶段 C 处置
+
+---
+
 ## 2026-06-10 — 阶段 A：写入纪律
 
 **Status:** Accepted and merged.
