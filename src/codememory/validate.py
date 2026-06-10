@@ -237,6 +237,26 @@ def validate(root_dir: Path) -> tuple[int, int]:
             print(f"[SOURCE-WARN] {result.artifact_id} is {result.state}: {result.message}")
             warnings += 1
 
+    # 8. Modification-proposal queue checks (Phase C, architecture §3.3)
+    from .proposals import list_proposals
+    for prop in list_proposals(root_dir):
+        if prop.target_id not in memories:
+            print(
+                f"[PROPOSAL-WARN] {prop.proposal_id} targets non-existent memory "
+                f"{prop.target_id}; reject it or restore the target."
+            )
+            warnings += 1
+        try:
+            age_days = (datetime.now() - datetime.fromisoformat(prop.created_at)).days
+        except (ValueError, TypeError):
+            age_days = None
+        if age_days is not None and age_days > 14:
+            print(
+                f"[PROPOSAL-WARN] {prop.proposal_id} has been pending for {age_days} days. "
+                f"Review it: codememory merge {prop.proposal_id} (or reject)."
+            )
+            warnings += 1
+
     print(f"\nValidation complete. {len(memories)} memories checked.")
     print(f"Errors: {errors}, Warnings: {warnings}")
     return errors, warnings

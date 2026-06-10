@@ -182,10 +182,55 @@ def handle_merge(root: Path, memory_id: str) -> str:
 
 
 def handle_reject(root: Path, memory_id: str) -> str:
-    """Reject a proposed memory (proposed -> archived). Returns path string."""
+    """Reject a proposal (patch-queue id or proposed atom). Returns status string."""
     from .update import reject
 
-    return str(reject(root, memory_id))
+    result = reject(root, memory_id)
+    return str(result) if result is not None else f"rejected {memory_id}"
+
+
+def handle_propose(
+    root: Path,
+    target_id: str,
+    reason: str,
+    summary: str | None = None,
+    body: str | None = None,
+    import_required: list[str] | None = None,
+    import_recommended: list[str] | None = None,
+    import_related: list[str] | None = None,
+    source_ref: str | None = None,
+) -> str:
+    """Queue a modification proposal against an existing atom."""
+    from .proposals import create_proposal
+
+    proposal = create_proposal(
+        root,
+        target_id,
+        reason=reason,
+        summary=summary,
+        body=body,
+        import_required=import_required,
+        import_recommended=import_recommended,
+        import_related=import_related,
+        source_ref=source_ref,
+    )
+    return proposal.proposal_id
+
+
+def handle_proposals(root: Path) -> str:
+    """List the pending modification-proposal queue."""
+    from .proposals import list_proposals
+
+    proposals = list_proposals(root)
+    if not proposals:
+        return "(no pending proposals)"
+    lines = []
+    for p in proposals:
+        fields = [name for name in ("summary", "body", "import_required",
+                                    "import_recommended", "import_related", "source_ref")
+                  if getattr(p.patch, name) is not None]
+        lines.append(f"{p.proposal_id}  ->  {p.target_id}  [{', '.join(fields)}]  {p.reason}")
+    return "\n".join(lines)
 
 
 def handle_resolve(

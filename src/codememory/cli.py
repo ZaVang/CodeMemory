@@ -18,6 +18,8 @@ from .handlers import (
     handle_merge,
     handle_orphans,
     handle_overview,
+    handle_propose,
+    handle_proposals,
     handle_reindex,
     handle_reject,
     handle_resolve,
@@ -94,14 +96,30 @@ def main(argv: list[str] | None = None):
     p.add_argument("--budget", type=int)
 
     # merge
-    p = subparsers.add_parser("merge", help="Merge a proposed memory (proposed -> active)")
+    p = subparsers.add_parser("merge", help="Merge a proposal (patch-queue id or proposed memory id)")
     _add_logging_flags(p)
-    p.add_argument("id", help="Memory ID to merge")
+    p.add_argument("id", help="Proposal ID or memory ID to merge")
 
     # reject
-    p = subparsers.add_parser("reject", help="Reject a proposed memory (proposed -> archived)")
+    p = subparsers.add_parser("reject", help="Reject a proposal (patch-queue id or proposed memory id)")
     _add_logging_flags(p)
-    p.add_argument("id", help="Memory ID to reject")
+    p.add_argument("id", help="Proposal ID or memory ID to reject")
+
+    # propose (modification-class proposal against an existing atom)
+    p = subparsers.add_parser("propose", help="Queue a modification proposal against an existing atom")
+    _add_logging_flags(p)
+    p.add_argument("id", help="Target memory ID")
+    p.add_argument("--reason", required=True, help="Why this change should happen")
+    p.add_argument("--summary")
+    p.add_argument("--body")
+    p.add_argument("--import-required", nargs="*")
+    p.add_argument("--import-recommended", nargs="*")
+    p.add_argument("--import-related", nargs="*")
+    p.add_argument("--source-ref", dest="source_ref")
+
+    # proposals (list the pending queue)
+    p = subparsers.add_parser("proposals", help="List pending modification proposals")
+    _add_logging_flags(p)
 
     # resolve
     p = subparsers.add_parser("resolve", help="Resolve and print memory context")
@@ -316,6 +334,15 @@ def main(argv: list[str] | None = None):
         print(handle_merge(root, args.id))
     elif cmd == "reject":
         print(handle_reject(root, args.id))
+    elif cmd == "propose":
+        print(handle_propose(root, args.id, reason=args.reason,
+                             summary=args.summary, body=args.body,
+                             import_required=args.import_required,
+                             import_recommended=args.import_recommended,
+                             import_related=args.import_related,
+                             source_ref=args.source_ref))
+    elif cmd == "proposals":
+        print(handle_proposals(root))
     elif cmd == "reindex":
         handle_reindex(root)
     elif cmd == "resolve":
