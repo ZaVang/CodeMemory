@@ -11,7 +11,6 @@ from __future__ import annotations
 import html
 import json
 import logging
-import math
 from datetime import datetime
 from pathlib import Path
 from typing import Literal
@@ -20,7 +19,6 @@ from pydantic import BaseModel, Field
 
 from .core import (
     compute_body_hash,
-    compute_retrieval_probability,
     estimate_tokens,
     parse_frontmatter,
 )
@@ -281,7 +279,6 @@ def build_context_pack(
     full_text_nodes: list[str] = []
     stale_ids: list[str] = []
     nodes: list[ContextPackNode] = []
-    total = len([node_id for node_id in ordered if node_id in index.memories])
 
     for node_id in ordered:
         if node_id not in index.memories:
@@ -290,52 +287,91 @@ def build_context_pack(
                 memory_id=node_id,
                 message=f"Referenced memory '{node_id}' was not found in the index.",
             ))
-            continue
 
+    positions = [node_id for node_id in ordered if node_id in index.memories]
+    total = len(positions)
+
+    # Pass 0: read bodies, compute render costs and roles at final positions.
+    node_info: dict[str, dict] = {}
+    for pos, node_id in enumerate(positions, start=1):
         entry = index.memories[node_id]
         file_path = root_dir / entry.path
         meta, body = parse_frontmatter(file_path)
         _collect_metadata_notices(index, entry, node_id, body, meta, notices, stale_ids)
+        node_info[node_id] = {
+            "entry": entry,
+            "body": body,
+            "pos": pos,
+            "role": _dependency_role(memory_id, node_id, required_graph, recommended_graph, full_graph),
+            "full_cost": estimate_tokens(_node_render_text(node_id, entry, body, pos, total, trim="full")),
+            "summary_cost": estimate_tokens(_node_render_text(node_id, entry, entry.summary, pos, total, trim="summary")),
+        }
 
-        full_render_text = _node_render_text(node_id, entry, body, len(nodes) + 1, total, trim="full")
-        summary_render_text = _node_render_text(node_id, entry, entry.summary, len(nodes) + 1, total, trim="summary")
-        full_cost = estimate_tokens(full_render_text)
-        summary_cost = estimate_tokens(summary_render_text)
-        role = _dependency_role(memory_id, node_id, required_graph, recommended_graph, full_graph)
-
-        if focus:
-            if focus in entry.tags and used_budget + full_cost <= max_budget:
-                trim: TrimMode = "full"
-                content = body
-                cost = full_cost
-                full_text_nodes.append(node_id)
+    # Pass 1: budget allocation (architecture §4.1 step 4). Roles claim budget
+    # in priority order; within a level, more dependents (then access_count)
+    # keep full text. target/required/recommended floor at summary; related
+    # and unknown nodes may be skipped entirely.
+    trim_for: dict[str, TrimMode] = {}
+    remaining = max_budget
+    if focus:
+        # Legacy focus semantics: matching tags get full text while budget
+        # lasts (in reading order); everything else stays summary.
+        for node_id in positions:
+            info = node_info[node_id]
+            if focus in info["entry"].tags and info["full_cost"] <= remaining:
+                trim_for[node_id] = "full"
+                remaining -= info["full_cost"]
             else:
-                trim = "summary"
-                content = None
-                cost = summary_cost
-        elif used_budget + full_cost <= max_budget:
-            trim = "full"
-            content = body
-            cost = full_cost
+                trim_for[node_id] = "summary"
+                remaining -= info["summary_cost"]
+    else:
+        role_rank = {"target": 0, "required": 1, "recommended": 2, "related": 3, "unknown": 4}
+        by_value = sorted(
+            positions,
+            key=lambda nid: (
+                role_rank.get(node_info[nid]["role"], 4),
+                -_count_dependents(nid, index),
+                -node_info[nid]["entry"].access_count,
+                node_info[nid]["pos"],
+            ),
+        )
+        for node_id in by_value:
+            info = node_info[node_id]
+            if info["full_cost"] <= remaining:
+                trim_for[node_id] = "full"
+                remaining -= info["full_cost"]
+            elif info["role"] in ("target", "required", "recommended"):
+                trim_for[node_id] = "summary"
+                remaining -= info["summary_cost"]
+            else:
+                trim_for[node_id] = "skipped"
+
+    # Pass 2: render in topological (reading) order with the allocated trims —
+    # reading order and budget allocation are decoupled by design.
+    for node_id in positions:
+        info = node_info[node_id]
+        entry = info["entry"]
+        trim = trim_for[node_id]
+        if trim == "full":
+            content = info["body"]
+            cost = info["full_cost"]
             full_text_nodes.append(node_id)
-        elif role in ("required", "recommended", "target"):
-            trim = "summary"
+        elif trim == "summary":
             content = None
-            cost = summary_cost
+            cost = info["summary_cost"]
         else:
-            trim = "skipped"
             content = None
             cost = 0
 
         used_budget += cost
         nodes.append(ContextPackNode(
             id=node_id,
-            index=len(nodes) + 1,
+            index=info["pos"],
             total=total,
             type=entry.type,
             summary=entry.summary,
             trim=trim,
-            dependency_role=role,
+            dependency_role=info["role"],
             maturity=entry.maturity,
             status=entry.status,
             tags=entry.tags,
@@ -355,7 +391,7 @@ def build_context_pack(
         ))
 
     if track_access:
-        _track_context_pack_access(root_dir, index, full_text_nodes, stale_ids, notices)
+        _track_context_pack_access(root_dir, index, full_text_nodes)
 
     return ContextPack(
         target_id=memory_id,
@@ -461,61 +497,22 @@ def _track_context_pack_access(
     root_dir: Path,
     index: IndexData,
     full_text_nodes: list[str],
-    stale_ids: list[str],
-    notices: list[ContextPackNotice],
 ) -> None:
-    stale_decay = 0.90
-    stability_floor = 14.0
-    for node_id in stale_ids:
-        if node_id in index.memories:
-            stale_entry = index.memories[node_id]
-            old_stability = stale_entry.stability
-            new_stability = max(old_stability * stale_decay, stability_floor)
-            if new_stability < old_stability:
-                stale_entry.stability = new_stability
-                notices.append(ContextPackNotice(
-                    type="stability_decreased",
-                    memory_id=node_id,
-                    message=f"Stability decreased for {node_id}: {old_stability:.1f}d → {new_stability:.1f}d.",
-                ))
+    """Record access telemetry for assembled nodes.
 
+    architecture.md §5.1: assembly writes only access_count / last_access;
+    maturity and stability are inert metadata and are never fed by build.
+    """
     now_iso = datetime.now().isoformat()
-    maturity_changes: list[str] = []
     for node_id in full_text_nodes:
         if node_id not in index.memories:
             continue
         entry = index.memories[node_id]
-        if getattr(entry, "stability_source", None) != "manual":
-            old_days_since = entry.days_since_last_access
-            if old_days_since is not None and old_days_since > 0 and entry.stability > 0:
-                retrieval_probability = compute_retrieval_probability(old_days_since, entry.stability)
-                stability_increase = 1.05 + 0.75 * math.exp(-((retrieval_probability - 0.78) ** 2) / 0.125)
-                diminish = math.sqrt(14.0 / max(entry.stability, 14.0))
-                entry.stability = min(entry.stability * stability_increase * diminish, 365.0)
-
         entry.access_count += 1
         entry.last_access = now_iso
         entry.days_since_last_access = 0
 
-        old_maturity = entry.maturity
-        if old_maturity == "draft" and entry.access_count >= 3:
-            entry.maturity = "verified"
-            if entry.evidence is None:
-                entry.evidence = {}
-            verified_in = entry.evidence.get("verified_in", [])
-            verified_in.append({"version": entry.version, "date": now_iso[:10]})
-            entry.evidence["verified_in"] = verified_in
-            maturity_changes.append(f"{node_id}: draft -> verified")
-
     save_index(root_dir, index)
-
-    if maturity_changes:
-        try:
-            from .log import append_log
-            for change in maturity_changes:
-                append_log(root_dir, "maturity", change)
-        except ImportError:
-            pass
 
 
 def _render_markdown(pack: ContextPack) -> str:
