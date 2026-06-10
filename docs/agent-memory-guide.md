@@ -11,7 +11,7 @@
 
 | 概念 | 当前命令 |
 |---|---|
-| build（装配） | `codememory resolve <id> [--depth required\|recommended\|full] [--budget N]`；结构化输出用 `codememory context-pack <id> [--format json\|markdown\|xml-markdown]` |
+| build（装配） | `codememory build <id> [--depth required\|recommended\|full] [--budget N] [--format xml-markdown\|markdown\|plain-markdown\|json]`（主命令）；`resolve` / `context-pack` 是同一管线的兼容别名 |
 | check（校验） | `codememory validate` |
 | search（检索） | `codememory search --query <q> [--tags t1 t2]` |
 | asset（登记/查看/展开） | `codememory source add <uri> [--id ID] [--summary "..."]` / `source list` / `source get <id>` / `source check` / `source expand <id> [--max-chars N]` |

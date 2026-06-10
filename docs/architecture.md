@@ -68,10 +68,10 @@ agent 不是系统组件。agent 是消费 build 产物、按写入纪律提交�
 |---|---|---|---|
 | repo | `core.py` + `index.py` + `.codememory/` | 不变 | — |
 | atom / schema | `models.py` + `create.py` / `update.py` | 字段瘦身（第 3.1 节） | C |
-| imports + build | **`build.py`（新）** | `resolve.py` + `context_pack.py` 合并为单一管线；`ContextPack` 类保留为 build 产物模型 | B |
+| imports + build | **`build.py`** | 已完成：build.py 为唯一管线（两遍式裁剪），resolve / context_pack 为薄别名与 shim | B ✅ |
 | asset | `sources.py` | 不变；`update` 补 `--source-ref` 写入路径 | A |
 | check | `validate.py` | 新增 proposed 校验、golden_questions 格式校验 | A / C |
-| search | `search.py` | 加词法排序，零新依赖 | B |
+| search | `search.py` | 已完成：词法排序（字段加权 + OR 语义），零新依赖 | B ✅ |
 | test | **`test_contract.py`（新，最小）** | 导出题集 + 装配上下文；report 写回 log | C |
 | proposal | `models.py`（status）+ `update.py`（merge/reject） | 不需要新模块 | A / C |
 | log | `log.py` / `changelog.py` | 不变 | — |
@@ -240,7 +240,7 @@ entry → closure → order → trim → render
 
 ## 6. 收敛路径（目标态 ← 现状的三个阶段）
 
-每阶段独立可合并、独立验收；C 依赖 A（复用 merge 机制）与 B（管线先收敛再清理）。当前状态：均未开始。
+每阶段独立可合并、独立验收；C 依赖 A（复用 merge 机制）与 B（管线先收敛再清理）。当前状态：A、B 已验收合并；C 未开始。
 
 | 阶段 | 内容 | 验收信号 |
 |---|---|---|

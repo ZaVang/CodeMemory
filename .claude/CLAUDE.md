@@ -17,8 +17,9 @@ CodeMemory/
 │       ├── models.py            # Pydantic v2 数据模型
 │       ├── handlers.py          # 统一命令处理（cli + tools + REST 共享）
 │       ├── index.py             # Index 加载/保存/reindex
-│       ├── resolve.py           # DAG + 拓扑排序 + token 裁剪（build 的底层）
-│       ├── context_pack.py      # 结构化装配产物（build 的结构化输出）
+│       ├── build.py             # 统一装配管线：DAG/拓扑/两遍式裁剪/渲染
+│       ├── resolve.py           # build 的 plain-markdown 薄别名（兼容）
+│       ├── context_pack.py      # 兼容 shim（re-export build）
 │       ├── sources.py           # asset 登记/校验/展开（CLI 命令组 source）
 │       ├── validate.py          # check：循环/断链/schema/stale
 │       ├── create.py            # atom 模板生成
@@ -55,7 +56,7 @@ CodeMemory/
 - **动态操作**：build（装配）、check（校验）、search（入口检索）、test（黄金问题验证，未实现）
 - **变更管理**：proposal（提案，新增类已实装）、log（审计日志）
 
-概念 ↔ 当前 CLI 对照：build = `resolve` / `context-pack`（待收敛）；check = `validate`；asset = `source` 命令组；proposal 新增类 = `create --propose` + `merge` / `reject`，修改类未实装（过渡做法见 guide 第 6 节）。
+概念 ↔ 当前 CLI 对照：build = `build`（主命令；`resolve` / `context-pack` 为同管线别名）；check = `validate`；asset = `source` 命令组；proposal 新增类 = `create --propose` + `merge` / `reject`，修改类未实装（过渡做法见 guide 第 6 节）。
 
 ## 关键设计决策
 
@@ -131,8 +132,9 @@ data = entry.model_dump(mode="json")
 ```bash
 # 读路径
 codememory search [--query q] [--tags t1 t2] [--type atom|schema] [--status s]
-codememory resolve <id> [--depth required|recommended|full] [--budget N]
-codememory context-pack <id> [--format xml-markdown|markdown|json] [--budget N] [--task-goal "..."]
+codememory build <id> [--depth required|recommended|full] [--budget N] [--format xml-markdown|markdown|plain-markdown|json]
+codememory resolve <id> [--depth ...] [--budget N]        # build 的 plain-markdown 别名
+codememory context-pack <id> [--format ...] [--budget N] [--task-goal "..."]   # build 的别名
 codememory source expand <id> [--start N] [--end N] [--max-chars N]
 
 # 写路径（纪律见 docs/agent-memory-guide.md 第 6 节）
