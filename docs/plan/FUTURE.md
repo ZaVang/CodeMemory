@@ -18,9 +18,10 @@
 
 依据 `docs/architecture.md` 第 6 章的收敛路径执行，每阶段一个 sprint、独立可合并、独立验收：
 
-1. **阶段 A 写入纪律**：`status: proposed`（新增类）+ `create --propose` + merge/reject 命令 + build/search/check 过滤语义 + protected 解耦 intensity + `update --source-ref`。
-2. **阶段 B 读路径收敛**：`build` 命令落地（resolve / context-pack 变薄别名）+ 两遍式 trim + search 词法排序。
-3. **阶段 C 清理与 test**：intensity 全链路移除 + 删 focus/overview/wander + models 瘦身 + test 契约落地 + 修改类 proposal patch 队列。
+1. **阶段 B 读路径收敛**：`build` 命令落地（resolve / context-pack 变薄别名）+ 两遍式 trim + search 词法排序。
+2. **阶段 C 清理与 test**：intensity 全链路移除 + 删 focus/overview/wander + models 瘦身 + test 契约落地 + 修改类 proposal patch 队列。
+
+（阶段 A 写入纪律已于 2026-06-10 验收合并，见 Completed Roadmap Items。）
 
 验收信号见 `docs/architecture.md` 第 6 章；概念依据见 `docs/prd.md` 第 4 章。
 
@@ -49,6 +50,23 @@
 ---
 
 ## Completed Roadmap Items
+
+### 2026-06-10 — 阶段 A：写入纪律
+
+**Completed in:** `ae30ee8`（merge of `sprint/phase-a-write-discipline`）
+
+**Acceptance signals met:**
+
+- `create --propose` 产出的 atom 默认 search 不可见、build 不装配（有 notice）；
+- `merge` 后可见可装配，`reject` 后归档，均留审计日志；
+- validate 报 proposed 积压与"active 引用非可装配节点"警告；
+- `create --intensity 8` 不再自动 protected（解耦完成）；
+- `update --source-ref` 绑定 asset，经 reindex 进入 index 并被 context-pack 渲染；
+- 单测 171 passed（零回归）、集成 24/24、合同冒烟全过。
+
+详细记录见 `docs/plan/HISTORY.md`。
+
+---
 
 ### 2026-05-19 — P1.3 `expand_source`
 

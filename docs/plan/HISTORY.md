@@ -4,6 +4,36 @@ This file records accepted sprint outcomes. Current work belongs in `docs/plan/S
 
 ---
 
+## 2026-06-10 — 阶段 A：写入纪律
+
+**Status:** Accepted and merged.
+
+**Merge commit:** `ae30ee8`（branch `sprint/phase-a-write-discipline`，4 commits：`e1408cc` / `546b3db` / `1ad9129` / `067a943`）
+
+**Delivered:**
+
+- `create --propose` 产出 `status: proposed` 的 atom；
+- `merge <id>` / `reject <id>`：proposed → active / archived，写审计日志，非 proposed 目标报错退出；
+- 过滤语义：search 默认仅返回 active/draft（显式 `--status` 可见任意状态）；resolve 与 context-pack 跳过 proposed/archived/superseded 节点并出 notice，拒绝非可装配 target 并给出 merge 指引；共享契约常量 `NON_ASSEMBLABLE_STATUSES`（models.py）；
+- validate 新增 `[PROPOSED-WARN]`（proposed 积压 >14 天）与 `[STATUS-WARN]`（active atom 引用非可装配节点）；
+- protected 与 intensity 解耦：仅 owner 手动设置，`create --intensity 8` 不再自动加锁；
+- `update --source-ref / --source-ref-summary`：asset 绑定的 CLI 写入路径（按 artifact_id 幂等，经 context-pack 渲染）；
+- 文档同步：agent-memory-guide §0/§5/§6、CLAUDE.md 概念对照与 CLI 速查。
+
+**Acceptance evidence:**
+
+- `PYTHONPATH=src python -m pytest tests/unit -q` → `171 passed`（新增 18 个写入纪律测试，零回归）
+- `PYTHONPATH=src python tests/integration_test.py` → `24/24 passed`
+- SPRINT 合同 7 步 CLI 冒烟逐步执行，行为全部符合契约
+- examples 生成文件按 pitfalls 规则恢复（`ccc05ab`）
+
+**Deferred:**
+
+- 修改类 proposal patch 队列 → 阶段 C
+- `build` 动词收敛、两遍式 trim、search 词法排序 → 阶段 B
+
+---
+
 ## 2026-06-10 — memory-as-code 文档重建（非 sprint 流程）
 
 **Status:** Accepted（owner 逐节批准 + 独立验收）。
