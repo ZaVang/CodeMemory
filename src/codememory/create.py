@@ -66,6 +66,7 @@ def create(
     stability: float | None = None,
     cache_stable: bool = False,
     lifecycle: str = "permanent",
+    propose: bool = False,
 ) -> Path | None:
     """Create a new memory file with frontmatter template.
 
@@ -81,6 +82,8 @@ def create(
         stability: Explicit stability override. If None, use domain default.
         cache_stable: Mark as suitable for LLM cache prefix.
         lifecycle: permanent | stable | ephemeral.
+        propose: If True, write the atom as a proposal (status: proposed);
+            it stays out of default build/search until merged.
 
     Returns:
         Path to the created file, or None if dry_run.
@@ -106,7 +109,7 @@ def create(
         "type": memory_type,
         "id": memory_id,
         "summary": "TODO: fill in summary",
-        "status": "active",
+        "status": "proposed" if propose else "active",
         "created": now,
         "updated": now,
         "version": 1,
@@ -128,9 +131,6 @@ def create(
 
     if schema:
         frontmatter["schema"] = schema
-
-    if intensity >= 8:
-        frontmatter["protected"] = True
 
     body_template = (
         f"\n# {memory_id.split('/')[-1].replace('-', ' ').title()}\n\n"

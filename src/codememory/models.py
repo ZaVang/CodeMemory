@@ -16,6 +16,10 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 # shadow warning (we never call the deprecated ``.schema()`` method).
 warnings.filterwarnings("ignore", message=".*shadows.*BaseModel", category=UserWarning)
 
+# Statuses that never enter default context assembly (architecture.md §3.2):
+# proposed awaits owner merge; archived/superseded are out of the canonical graph.
+NON_ASSEMBLABLE_STATUSES: tuple[str, ...] = ("proposed", "archived", "superseded")
+
 
 def _strdate(v: object) -> str:
     """Coerce YAML-parsed date objects to ISO-format strings."""

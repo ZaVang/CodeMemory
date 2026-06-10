@@ -14,9 +14,11 @@ from .handlers import (
     handle_import,
     handle_log,
     handle_materialize_review,
+    handle_merge,
     handle_orphans,
     handle_overview,
     handle_reindex,
+    handle_reject,
     handle_resolve,
     handle_search,
     handle_source_add,
@@ -60,6 +62,8 @@ def main(argv: list[str] | None = None):
                    help="Mark as suitable for LLM cache prefix")
     p.add_argument("--lifecycle", choices=["permanent", "stable", "ephemeral"], default="permanent",
                    help="Lifecycle: permanent (never auto-archive), stable (auto-upgrade), ephemeral (auto-archive when unused)")
+    p.add_argument("--propose", action="store_true",
+                   help="Create as a proposal (status: proposed); excluded from default build/search until merged")
 
     # update
     p = subparsers.add_parser("update", help="Update an existing memory")
@@ -72,6 +76,20 @@ def main(argv: list[str] | None = None):
     p.add_argument("--import-required", nargs="*")
     p.add_argument("--import-recommended", nargs="*")
     p.add_argument("--import-related", nargs="*")
+    p.add_argument("--source-ref", dest="source_ref",
+                   help="Asset artifact_id to append to source_refs")
+    p.add_argument("--source-ref-summary", dest="source_ref_summary",
+                   help="Optional summary for the appended source ref")
+
+    # merge
+    p = subparsers.add_parser("merge", help="Merge a proposed memory (proposed -> active)")
+    _add_logging_flags(p)
+    p.add_argument("id", help="Memory ID to merge")
+
+    # reject
+    p = subparsers.add_parser("reject", help="Reject a proposed memory (proposed -> archived)")
+    _add_logging_flags(p)
+    p.add_argument("id", help="Memory ID to reject")
 
     # resolve
     p = subparsers.add_parser("resolve", help="Resolve and print memory context")
@@ -107,7 +125,7 @@ def main(argv: list[str] | None = None):
     p.add_argument("--query", "-q", help="Substring match against summary")
     p.add_argument("--tags", "-t", nargs="*", help="Filter by tags (AND logic)")
     p.add_argument("--type", "-T", dest="type_", choices=["atom", "schema"])
-    p.add_argument("--status", "-s", choices=["active", "archived", "superseded", "draft"])
+    p.add_argument("--status", "-s", choices=["active", "proposed", "archived", "superseded", "draft"])
     p.add_argument("--maturity", "-m", choices=["draft", "verified", "proven", "superseded"])
     p.add_argument("--semantic-type", dest="semantic_type", help="Filter by semantic type tag (e.g. decision, model, guideline)")
     p.add_argument("--has-imports", action="store_true", help="Filter to memories with non-empty imports")
@@ -255,13 +273,19 @@ def main(argv: list[str] | None = None):
         print(handle_create(root, args.type, args.id, schema=args.schema,
                             intensity=args.intensity, tags=tags_list, dry_run=args.dry_run,
                             maturity=args.maturity, cache_stable=args.cache_stable,
-                            lifecycle=args.lifecycle))
+                            lifecycle=args.lifecycle, propose=args.propose))
     elif cmd == "update":
         print(handle_update(root, args.id, body=args.body, summary=args.summary,
                             change_note=args.change_note, status=args.status,
                             import_required=args.import_required,
                             import_recommended=args.import_recommended,
-                            import_related=args.import_related))
+                            import_related=args.import_related,
+                            source_ref=args.source_ref,
+                            source_ref_summary=args.source_ref_summary))
+    elif cmd == "merge":
+        print(handle_merge(root, args.id))
+    elif cmd == "reject":
+        print(handle_reject(root, args.id))
     elif cmd == "reindex":
         handle_reindex(root)
     elif cmd == "resolve":

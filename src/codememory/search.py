@@ -67,6 +67,9 @@ def search(
 
     Results are sorted by dependents descending, then access_count descending,
     then id ascending.
+
+    Phase A: when ``status`` is None, only active/draft memories are returned;
+    proposed/archived/superseded require an explicit status filter.
     """
     index = load_index(root_dir)
     results: list[dict] = []
@@ -74,7 +77,12 @@ def search(
     for mid, entry in index.memories.items():
         if type_ and entry.type != type_:
             continue
-        if status and entry.status != status:
+        if status:
+            if entry.status != status:
+                continue
+        elif entry.status not in ("active", "draft"):
+            # Default view shows only assemblable statuses; proposed/archived/
+            # superseded require an explicit --status filter (Phase A contract).
             continue
         if maturity and entry.maturity != maturity:
             continue

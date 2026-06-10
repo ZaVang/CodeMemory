@@ -68,16 +68,16 @@ def test_create_dry_run_no_file(tmp_path: Path):
 
 
 # ==================================================================
-# 3.3 create intensity >= 8 → protected
+# 3.3 protected is decoupled from intensity (Phase A)
 # ==================================================================
 
-def test_create_protected_high_intensity(tmp_path: Path):
-    """intensity >= 8 automatically marks protected: true."""
+def test_create_high_intensity_not_protected(tmp_path: Path):
+    """Phase A: protected is owner-set only; intensity >= 8 no longer sets it."""
     filepath = create(tmp_path, "atom", "user/test/protected",
                        intensity=8)
     assert filepath is not None
     meta, _body = parse_frontmatter(filepath)
-    assert meta.get("protected") is True
+    assert "protected" not in meta
 
 
 def test_create_not_protected_low_intensity(tmp_path: Path):

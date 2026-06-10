@@ -53,15 +53,15 @@ CodeMemory/
 
 - **静态结构**：repo（记忆库）、atom（记忆单元）、imports（依赖）、schema（结构契约）、asset（资产，不进依赖图）
 - **动态操作**：build（装配）、check（校验）、search（入口检索）、test（黄金问题验证，未实现）
-- **变更管理**：proposal（提案，未实现）、log（审计日志）
+- **变更管理**：proposal（提案，新增类已实装）、log（审计日志）
 
-概念 ↔ 当前 CLI 对照：build = `resolve` / `context-pack`（待收敛）；check = `validate`；asset = `source` 命令组；proposal 未实装（过渡做法见 guide 第 6 节）。
+概念 ↔ 当前 CLI 对照：build = `resolve` / `context-pack`（待收敛）；check = `validate`；asset = `source` 命令组；proposal 新增类 = `create --propose` + `merge` / `reject`，修改类未实装（过渡做法见 guide 第 6 节）。
 
 ## 关键设计决策
 
 - 装配是 DAG 依赖解析 + 预算裁剪，不是向量检索；search 只做入口发现，不参与装配。
 - asset（原始材料）不进依赖图；atom 不装长文档。
-- 分级写入纪律：新增 atom 直写；修改已有 atom 或涉及 protected 走 proposal（实装前：会话内征得 owner 同意）。
+- 分级写入纪律：新增 atom 直写（没把握用 `create --propose`，owner merge/reject）；修改已有 atom 或涉及 protected 走 proposal（修改类实装前：会话内征得 owner 同意）。proposed/archived/superseded 不进默认 build 与 search。
 - 遗忘是路径不可达问题，不是删除问题。系统只建议，不自动删除。
 - 框架（`src/codememory/`）与数据（`CODEMEMORY_ROOT` 指向的记忆库）物理分离。
 - reindex 自动行为（实现细节，不属于概念模型）：`summary_hash` 未变且 `access_count >= 2` → `cache_stable=true`；`ephemeral` 且 `access_count==0` → 自动归档。frontmatter 手动声明优先于自动推断。
@@ -136,8 +136,9 @@ codememory context-pack <id> [--format xml-markdown|markdown|json] [--budget N] 
 codememory source expand <id> [--start N] [--end N] [--max-chars N]
 
 # 写路径（纪律见 docs/agent-memory-guide.md 第 6 节）
-codememory create --id <id> [--type atom|schema] [--schema s] [--tags "a,b"] [--dry-run]
-codememory update <id> --change-note "..." [--summary "..."] [--body "..."] [--status s] [--import-required ...]
+codememory create --id <id> [--type atom|schema] [--schema s] [--tags "a,b"] [--propose] [--dry-run]
+codememory update <id> --change-note "..." [--summary "..."] [--body "..."] [--status s] [--import-required ...] [--source-ref <artifact_id>]
+codememory merge <id> | reject <id>        # proposed → active / archived（owner 审阅）
 codememory source add <uri> [--id ID] [--kind markdown|code|text|pdf|url|external] [--summary "..."]
 
 # 校验与维护

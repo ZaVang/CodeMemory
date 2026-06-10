@@ -23,7 +23,7 @@ from .core import (
     parse_frontmatter,
 )
 from .index import load_index, save_index
-from .models import IndexData, MemoryEntry, SourceRef
+from .models import NON_ASSEMBLABLE_STATUSES, IndexData, MemoryEntry, SourceRef
 from .resolve import build_dag, find_cycle_participants, topological_sort
 
 ContextPackFormat = Literal["xml-markdown", "markdown", "plain-markdown", "json"]
@@ -93,6 +93,13 @@ def build_context_pack(
     if memory_id not in index.memories:
         raise ValueError(f"Target memory '{memory_id}' not found. Did you reindex?")
 
+    target_status = index.memories[memory_id].status
+    if target_status in NON_ASSEMBLABLE_STATUSES:
+        raise ValueError(
+            f"Target memory '{memory_id}' has status '{target_status}' and is not assemblable; "
+            f"if it is a proposal, review it and run: codememory merge {memory_id}"
+        )
+
     graph = build_dag(memory_id, depth, index)
     notices: list[ContextPackNotice] = []
 
@@ -104,6 +111,24 @@ def build_context_pack(
         ))
         for node_id in list(graph.keys()):
             graph[node_id] = [dep for dep in graph[node_id] if dep not in cycle_ids]
+
+    excluded_ids = sorted(
+        nid for nid in graph
+        if nid != memory_id and nid in index.memories
+        and index.memories[nid].status in NON_ASSEMBLABLE_STATUSES
+    )
+    if excluded_ids:
+        notices.append(ContextPackNotice(
+            type="excluded_status",
+            message=(
+                "Skipped non-assemblable nodes "
+                f"(proposed/archived/superseded): {', '.join(excluded_ids)}"
+            ),
+        ))
+        for node_id in list(graph.keys()):
+            graph[node_id] = [dep for dep in graph[node_id] if dep not in excluded_ids]
+        for node_id in excluded_ids:
+            graph.pop(node_id, None)
 
     ordered = topological_sort(graph)
     for node_id in graph:
