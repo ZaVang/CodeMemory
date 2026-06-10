@@ -17,7 +17,9 @@
 | asset（登记/查看/展开） | `codememory source add <uri> [--id ID] [--summary "..."]` / `source list` / `source get <id>` / `source check` / `source expand <id> [--max-chars N]` |
 | 新增 atom | `codememory create --id <id> [--schema s] [--tags "a,b"]`，然后立即 `update` 填入真实内容（见第 7 节） |
 | 修改 atom | `codememory update <id> --change-note "..."`（高风险，见第 6 节） |
-| proposal | 未实装；过渡做法见第 6 节 |
+| proposal（新增类） | `codememory create --propose ...` 落为 proposed；owner 用 `merge <id>` / `reject <id>` 处理 |
+| proposal（修改类） | 未实装（patch 队列属阶段 C）；过渡做法见第 6 节 |
+| 绑定 asset | `codememory update <id> --change-note "..." --source-ref <artifact_id> [--source-ref-summary "..."]` |
 
 ---
 
@@ -99,7 +101,15 @@ codememory source add docs/rfc-001.md --id src/rfc-001-cache --summary "RFC-001:
 
 然后写一个轻量 atom 做语义索引：summary 说清"它是什么、什么时候该读"。
 
-过渡限制：`source_refs` 字段目前没有 CLI 写入路径，请在 atom 的 body 中明确写出 asset id（如"原文见 asset `src/rfc-001-cache`，用 `codememory source expand src/rfc-001-cache` 展开"）。CLI 支持落地后本节将更新。
+绑定方式：
+
+```bash
+codememory update user/contexts/cache-layer \
+  --change-note "绑定 RFC-001 asset" \
+  --source-ref src/rfc-001-cache --source-ref-summary "RFC-001 缓存层设计"
+```
+
+同一 artifact 重复绑定会被自动跳过。在 body 中顺带写明 asset id 与展开命令仍是好实践（agent 阅读时可直接行动）。
 
 需要原文时按需 `source expand`，不要默认展开全文。
 
@@ -113,7 +123,9 @@ codememory source add docs/rfc-001.md --id src/rfc-001-cache --summary "RFC-001:
 | 修改**已有** atom 的 body 或 imports | 高风险 | 走 proposal |
 | 涉及 protected atom 的任何变更 | 高风险 | 走 proposal |
 
-**proposal 的过渡做法**（`status: proposed` 实装前）：高风险变更**不要直接 update**。在会话中向 owner 说明：要改哪个 atom、改成什么、为什么；获得明确同意后再执行 update，并在 `--change-note` 里写清理由。proposal 机制落地后，本节将更新为 propose 命令用法。
+**新增类 proposal（已实装）**：对要新增的内容没把握、或内容涉及 protected 邻域时，用 `codememory create --propose ...`。产出的 atom 是 `status: proposed`——默认 search 不可见、build 不装配，owner 审阅后 `codememory merge <id>`（进入 canonical）或 `codememory reject <id>`（归档）。
+
+**修改类 proposal 的过渡做法**（patch 队列实装前，属阶段 C）：修改**已有** atom 的高风险变更**不要直接 update**。在会话中向 owner 说明：要改哪个 atom、改成什么、为什么；获得明确同意后再执行 update，并在 `--change-note` 里写清理由。
 
 **protected 的设置**：由 owner 拍板，agent 不自行创建 protected atom。当你认为某条记忆需要保护（核心原则、硬约束），向 owner 建议。
 

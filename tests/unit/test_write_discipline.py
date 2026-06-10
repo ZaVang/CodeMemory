@@ -307,6 +307,13 @@ def test_update_appends_source_ref(tmp_path: Path):
     assert any(r.artifact_id == "src/rfc-001-cache" for r in entry_refs)
     assert any(r.summary == "RFC-001 cache design" for r in entry_refs)
 
+    # Acceptance signal 5: the bound ref is carried into the context pack.
+    from codememory.context_pack import build_context_pack
+
+    pack = build_context_pack(tmp_path, "user/contexts/cache-layer", track_access=False)
+    target_node = next(n for n in pack.nodes if n.id == "user/contexts/cache-layer")
+    assert any(r.artifact_id == "src/rfc-001-cache" for r in target_node.source_refs)
+
 
 def test_update_source_ref_duplicate_skipped(tmp_path: Path):
     """Binding the same artifact twice keeps a single source_ref entry."""
