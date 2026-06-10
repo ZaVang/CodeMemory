@@ -12,136 +12,15 @@ from .models import NON_ASSEMBLABLE_STATUSES, IndexData, MemoryEntry
 _logger = logging.getLogger("codememory")
 
 
-def _count_dependents(memory_id: str, index: IndexData) -> int:
-    """Count how many other memories import this one."""
-    count = 0
-    for mid, entry in index.memories.items():
-        if mid == memory_id:
-            continue
-        imports_dict = entry.imports
-        if not isinstance(imports_dict, dict):
-            continue
-        all_refs = (
-            imports_dict.get("required", [])
-            + imports_dict.get("recommended", [])
-            + imports_dict.get("related", [])
-        )
-        for ref in all_refs:
-            ref_id = ref if isinstance(ref, str) else ref.get("id", "")
-            if ref_id == memory_id:
-                count += 1
-                break
-    return count
-
-
-def _get_imports(entry: MemoryEntry | dict, depth: str) -> list[str]:
-    """Extract dependency IDs from a memory's imports dict based on depth.
-
-    Accepts both MemoryEntry and legacy dict for backward compatibility.
-    """
-    if isinstance(entry, MemoryEntry):
-        imports_dict = entry.imports
-    else:
-        imports_dict = entry.get("imports", {})
-
-    if not isinstance(imports_dict, dict):
-        return []
-
-    deps: list[str] = []
-    for r in imports_dict.get("required", []):
-        if isinstance(r, str):
-            deps.append(r)
-        elif isinstance(r, dict) and "id" in r:
-            deps.append(r["id"])
-
-    if depth in ("recommended", "full"):
-        for r in imports_dict.get("recommended", []):
-            if isinstance(r, str):
-                deps.append(r)
-            elif isinstance(r, dict) and "id" in r:
-                deps.append(r["id"])
-
-    if depth == "full":
-        for r in imports_dict.get("related", []):
-            if isinstance(r, str):
-                deps.append(r)
-            elif isinstance(r, dict) and "id" in r:
-                deps.append(r["id"])
-
-    return deps
-
-
-def build_dag(memory_id: str, depth: str, index: IndexData) -> dict[str, list[str]]:
-    """Build a dependency graph from the target memory.
-
-    Returns {node_id: [dependency_ids]}.
-    """
-    graph: dict[str, list[str]] = {}
-    queue = [memory_id]
-
-    while queue:
-        curr = queue.pop(0)
-        if curr in graph:
-            continue
-
-        if curr not in index.memories:
-            _logger.warning("Memory '%s' not found in index.", curr)
-            graph[curr] = []
-            continue
-
-        entry = index.memories[curr]
-        deps = _get_imports(entry, depth)
-        graph[curr] = deps
-        queue.extend(deps)
-
-    return graph
-
-
-def find_cycle_participants(graph: dict) -> list[str]:
-    """Find all nodes involved in cycles using DFS coloring.
-
-    0=white, 1=gray, 2=black
-    """
-    color = {u: 0 for u in graph}
-    cycle_nodes: set[str] = set()
-
-    def dfs(u, path):
-        color[u] = 1
-        for v in graph.get(u, []):
-            if color.get(v, 0) == 1:
-                cycle_start = path.index(v) if v in path else 0
-                cycle_nodes.update(path[cycle_start:])
-                cycle_nodes.add(v)
-            elif color.get(v, 0) == 0:
-                dfs(v, path + [v])
-        color[u] = 2
-
-    for u in graph:
-        if color[u] == 0:
-            dfs(u, [u])
-
-    return list(cycle_nodes)
-
-
-def topological_sort(graph: dict) -> list[str]:
-    """Kahn's algorithm, reversed so dependencies come before dependents."""
-    in_degree = {u: 0 for u in graph}
-    for u in graph:
-        for v in graph[u]:
-            in_degree[v] = in_degree.get(v, 0) + 1
-
-    queue = [u for u in in_degree if in_degree[u] == 0]
-    topo_order: list[str] = []
-
-    while queue:
-        u = queue.pop(0)
-        topo_order.append(u)
-        for v in graph.get(u, []):
-            in_degree[v] -= 1
-            if in_degree[v] == 0:
-                queue.append(v)
-
-    return list(reversed(topo_order))
+# DAG utilities moved to build.py (Phase B); re-exported here so existing
+# import paths (validate, transient, handlers, tests) keep working.
+from .build import (  # noqa: F401
+    _count_dependents,
+    _get_imports,
+    build_dag,
+    find_cycle_participants,
+    topological_sort,
+)
 
 
 def resolve(
