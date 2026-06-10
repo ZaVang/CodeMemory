@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """integration_test.py — 5-scenario end-to-end test for codememory.
 
-Covers: create+search, resolve context, update+stale, wander cold memory,
+Covers: create+search, resolve context, update+stale,
 snapshot persistence.  Uses the Python API and Sandbox interface.
 
 Usage::
@@ -161,16 +161,14 @@ async def test_c_update_and_stale(sandbox):
     })
     _check("C2: initial update succeeds", ".md" in res.get("result", ""))
 
-    # Step 2: Overview fresh memory — should NOT be stale
-    # Use default format to avoid inject-format line truncation hiding [stale]
-    res = await sandbox.execute("overview", {
-        "tags": ["test", "sprint5", "scenario-c"],
-        "limit": 10,
-        "format": "default",
+    # Step 2: Resolve fresh memory — pipeline should NOT emit a stale notice
+    res = await sandbox.execute("resolve_context", {
+        "id": "user/test/sprint5-c-stale",
+        "depth": "required",
         "root": _ROOT,
     })
-    overview_text = res.get("result", str(res))
-    no_stale = "[stale]" not in overview_text
+    resolve_text = res.get("result", str(res))
+    no_stale = "stale_summary" not in resolve_text
     _check("C3: freshly updated memory is NOT stale", no_stale)
 
     # Step 3: Update body alone (NOT summary) — triggers stale
@@ -183,15 +181,14 @@ async def test_c_update_and_stale(sandbox):
     })
     _check("C4: body-only update succeeds", ".md" in res.get("result", ""))
 
-    # Step 4: Overview should now show stale
-    res = await sandbox.execute("overview", {
-        "tags": ["test", "sprint5", "scenario-c"],
-        "limit": 10,
-        "format": "default",
+    # Step 4: Resolve should now emit a stale_summary notice
+    res = await sandbox.execute("resolve_context", {
+        "id": "user/test/sprint5-c-stale",
+        "depth": "required",
         "root": _ROOT,
     })
-    overview_text = res.get("result", str(res))
-    is_stale = "[stale]" in overview_text
+    resolve_text = res.get("result", str(res))
+    is_stale = "stale_summary" in resolve_text
     _check("C5: stale detected after body-only update", is_stale)
 
     # Step 5: Update summary to fix stale
@@ -203,20 +200,17 @@ async def test_c_update_and_stale(sandbox):
     })
     _check("C6: summary update succeeds", ".md" in res.get("result", ""))
 
-    # Step 6: Verify stale is gone
-    res = await sandbox.execute("overview", {
-        "tags": ["test", "sprint5", "scenario-c"],
-        "limit": 10,
-        "format": "default",
+    # Step 6: Verify the stale notice is gone
+    res = await sandbox.execute("resolve_context", {
+        "id": "user/test/sprint5-c-stale",
+        "depth": "required",
         "root": _ROOT,
     })
-    overview_text = res.get("result", str(res))
-    stale_gone = "[stale]" not in overview_text
+    resolve_text = res.get("result", str(res))
+    stale_gone = "stale_summary" not in resolve_text
     _check("C7: stale disappears after summary update", stale_gone)
 
 
-# ===================================================================
-# Scenario D — Wander Cold Memory
 # ===================================================================
 
 async def test_d_wander_cold_memory(sandbox):
@@ -319,13 +313,12 @@ async def main():
     await toolkit.register_to_sandbox(sandbox)
 
     names = [t.name for t in sandbox.list_tools()]
-    _check("INIT: 12 tools registered", len(names) == 12, f"got {len(names)}")
+    _check("INIT: 10 tools registered", len(names) == 10, f"got {len(names)}")
 
     # Run all scenarios
     await test_a_create_and_search(sandbox)
     await test_b_resolve_context(sandbox)
     await test_c_update_and_stale(sandbox)
-    await test_d_wander_cold_memory(sandbox)
     await test_e_snapshot_persistence(sandbox)
 
     # ── Cleanup ──────────────────────────────────────────────────────

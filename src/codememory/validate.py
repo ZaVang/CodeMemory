@@ -4,7 +4,6 @@ import logging
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from .core import compute_retrieval_probability
 from .core import parse_frontmatter
 from .index import load_index
 from .models import NON_ASSEMBLABLE_STATUSES, IndexData, MemoryEntry
@@ -71,46 +70,6 @@ def _check_maturity_stale(memory_id: str, entry: MemoryEntry) -> list[str]:
             )
     except (ValueError, TypeError):
         pass
-    return warnings
-
-
-def _check_decay(memory_id: str, entry: MemoryEntry, index: IndexData) -> list[str]:
-    """Check whether a memory is at risk of decay (R13-M1: unified formula).
-
-    Uses the same continuous decay formula as overview/wander:
-        R = 0.5^(days_since / stability)
-    Triggers a warning when retrieval probability drops below 0.1
-    (roughly 3.3 half-lives — equivalent to ~46 days at default stability=14.0).
-    """
-    warnings: list[str] = []
-
-    if entry.intensity >= 8:
-        return warnings
-
-    # Use precomputed days_since field, or compute from last_access
-    days_since = getattr(entry, 'days_since_last_access', None)
-    if days_since is None and entry.access_count > 0 and entry.last_access:
-        try:
-            last_access = datetime.fromisoformat(entry.last_access)
-            days_since = max(0, (datetime.now() - last_access).days)
-        except (ValueError, TypeError):
-            pass
-
-    stability = getattr(entry, 'stability', 14.0)
-
-    if days_since is not None and days_since >= 0:
-        retrieval_prob = compute_retrieval_probability(days_since, stability)
-        if retrieval_prob > 0.1:
-            return warnings
-
-    if _compute_in_degree(memory_id, index) > 0:
-        return warnings
-
-    warnings.append(
-        f"{memory_id} has low access (access_count={entry.access_count}), "
-        f"no recent access, and is not referenced by any other memory. "
-        f"Consider re-linking or archiving this memory."
-    )
     return warnings
 
 
@@ -182,12 +141,6 @@ def validate(root_dir: Path) -> tuple[int, int]:
         for msg in _check_source_refs(mid, entry, source_ids):
             print(f"[SOURCE-REF-WARN] {msg}")
             warnings += 1
-
-        # 6. Decay check
-        if entry.type != "schema":
-            for msg in _check_decay(mid, entry, index):
-                print(f"[DECAY-WARN] {msg}")
-                warnings += 1
 
         # 7. Proposed backlog check (Phase A: unreviewed proposals pile up)
         if entry.status == "proposed":

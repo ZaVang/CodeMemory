@@ -11,13 +11,11 @@ from .handlers import (
     handle_compile_md,
     handle_context_pack,
     handle_create,
-    handle_focus,
     handle_import,
     handle_log,
     handle_materialize_review,
     handle_merge,
     handle_orphans,
-    handle_overview,
     handle_propose,
     handle_proposals,
     handle_reindex,
@@ -37,7 +35,6 @@ from .handlers import (
     handle_suggest_deps,
     handle_update,
     handle_validate,
-    handle_wander,
 )
 
 
@@ -196,31 +193,6 @@ def main(argv: list[str] | None = None):
     sp.add_argument("--start", type=int, help="Optional character start offset")
     sp.add_argument("--end", type=int, help="Optional character end offset")
     sp.add_argument("--max-chars", dest="max_chars", type=int, help="Maximum characters to return")
-
-    # focus
-    p = subparsers.add_parser("focus", help="Focus on a memory")
-    _add_logging_flags(p)
-    p.add_argument("id", help="Memory ID")
-    p.add_argument("--level", choices=["full", "summary"], default="full")
-    p.add_argument("--content", help="Body content (in-context zoom)")
-    p.add_argument("--summary", dest="summary_override", help="Summary text (in-context zoom)")
-    p.add_argument("--resolve", action="store_true", help="Auto-resolve before focusing")
-
-    # overview
-    p = subparsers.add_parser("overview", help="Overview of top memories")
-    _add_logging_flags(p)
-    p.add_argument("--tags", nargs="*")
-    p.add_argument("--limit", type=int, default=5)
-    p.add_argument("--format", choices=["default", "inject"], default="default")
-    p.add_argument("--status", default=None)
-    p.add_argument("--with-recall", action="store_true")
-
-    # wander
-    p = subparsers.add_parser("wander", help="Random walk through memories")
-    _add_logging_flags(p)
-    p.add_argument("--tags", nargs="*")
-    p.add_argument("--mode", choices=["cool", "random"], default="cool")
-    p.add_argument("--inject", action="store_true", help="Compact [recall] format")
 
     # orphans
     p = subparsers.add_parser("orphans", help="Find orphaned memories")
@@ -400,15 +372,6 @@ def main(argv: list[str] | None = None):
                 end=args.end,
                 max_chars=args.max_chars,
             ))
-    elif cmd == "focus":
-        print(handle_focus(root, args.id, level=args.level, content=args.content,
-                           summary_override=args.summary_override, resolve_flag=args.resolve))
-    elif cmd == "overview":
-        print(handle_overview(root, tags=args.tags, limit=args.limit,
-                              format_mode=args.format, status=args.status,
-                              with_recall=args.with_recall))
-    elif cmd == "wander":
-        print(handle_wander(root, tags=args.tags, mode=args.mode, inject=args.inject))
     elif cmd == "orphans":
         print(handle_orphans(root, type_=args.type_, min_intensity=args.min_intensity))
     elif cmd == "snapshot":

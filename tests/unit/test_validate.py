@@ -19,7 +19,6 @@ from codememory.models import IndexData, MemoryEntry
 from codememory.sources import add_source_artifact
 from codememory.validate import (
     check_schema_compliance,
-    _check_decay,
     _compute_in_degree,
     validate,
 )
@@ -175,73 +174,6 @@ def test_validate_detects_cycle():
          patch("codememory.validate.parse_frontmatter", mock_pfm):
         errors, warnings = validate(Path("."))
     assert warnings >= 1  # Cycle warning
-
-
-# ==================================================================
-# 2.4-2.7 Decay rules
-# ==================================================================
-
-def test_decay_rule1_protected_intensity():
-    """intensity >= 8 → skip (no decay warning)."""
-    idx = IndexData()
-    idx.memories["P"] = _make_entry("P", intensity=9, access_count=0)
-
-    entry = idx.memories["P"]
-    warnings = _check_decay("P", entry, idx)
-    assert warnings == []
-
-
-def test_decay_rule2_recent_access():
-    """access_count > 0 + last_access within 30 days → skip."""
-    idx = IndexData()
-    recent = datetime.now() - timedelta(days=10)
-    idx.memories["R"] = _make_entry(
-        "R", intensity=5, access_count=1,
-        last_access=recent.isoformat(),
-    )
-
-    entry = idx.memories["R"]
-    warnings = _check_decay("R", entry, idx)
-    assert warnings == []
-
-
-def test_decay_rule2_old_access_decays():
-    """access_count > 0 but last_access older than 30 days → may decay."""
-    idx = IndexData()
-    old = datetime.now() - timedelta(days=60)
-    idx.memories["O"] = _make_entry(
-        "O", intensity=5, access_count=2,
-        last_access=old.isoformat(),
-    )
-
-    entry = idx.memories["O"]
-    warnings = _check_decay("O", entry, idx)
-    # Since in_degree is also 0, this should decay
-    assert len(warnings) >= 1
-
-
-def test_decay_rule3_referenced_skip():
-    """in_degree > 0 (referenced by another memory) → skip."""
-    idx = IndexData()
-    idx.memories["Ref"] = _make_entry("Ref", intensity=5, access_count=0)
-    idx.memories["User"] = _make_entry("User", required=["Ref"])
-
-    entry = idx.memories["Ref"]
-    warnings = _check_decay("Ref", entry, idx)
-    assert warnings == []
-
-
-def test_decay_rule4_no_protection_decays():
-    """No protection, no access, no references → DECAY-WARN."""
-    idx = IndexData()
-    idx.memories["Cold"] = _make_entry(
-        "Cold", intensity=3, access_count=0,
-    )
-
-    entry = idx.memories["Cold"]
-    warnings = _check_decay("Cold", entry, idx)
-    assert len(warnings) >= 1
-    assert "low access" in warnings[0].lower() or "re-link" in warnings[0].lower()
 
 
 # ==================================================================

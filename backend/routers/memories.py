@@ -22,7 +22,6 @@ from shared import (
     ImportRequest,
     UpdateMemoryRequest,
     compute_body_hash,
-    compute_r_probability,
     current_dataset,
     extract_snippet,
     get_root,
@@ -348,14 +347,6 @@ def post_touch(memory_id: str):
         raise HTTPException(status_code=404, detail=f"Memory '{memory_id}' not found")
 
     now_iso = datetime.now().isoformat()
-
-    if getattr(entry, "stability_source", None) != "manual":
-        old_days_since = getattr(entry, "days_since_last_access", None)
-        if old_days_since is not None and old_days_since > 0 and entry.stability > 0:
-            R = compute_r_probability(old_days_since, entry.stability)
-            s_inc = 1.05 + 0.75 * math.exp(-((R - 0.78) ** 2) / 0.125)
-            diminish = math.sqrt(14.0 / max(entry.stability, 14.0))
-            entry.stability = min(entry.stability * s_inc * diminish, 365.0)
 
     entry.access_count += 1
     entry.last_access = now_iso

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import re
 from pathlib import Path
 from typing import Any
 
@@ -22,7 +21,6 @@ from shared import (
     serialize,
 )
 from codememory.context_pack import build_context_pack, render_context_pack
-from codememory.handlers import handle_resolve
 from codememory.index import load_index
 from codememory.models import IndexData, MemoryEntry
 
@@ -125,9 +123,9 @@ def post_resolve(req: ResolveRequest):
         raise HTTPException(status_code=404, detail=f"Memory '{req.memory_id}' not found in index")
 
     try:
-        text = handle_resolve(
-            root=get_root(),
-            memory_id=req.memory_id,
+        pack = build_context_pack(
+            get_root(),
+            req.memory_id,
             depth=req.depth,
             budget=req.budget,
         )
@@ -136,87 +134,32 @@ def post_resolve(req: ResolveRequest):
     except FileNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
 
-    # Parse the resolve text to extract structured node information
-    nodes: list[dict[str, Any]] = []
-    lines = text.split("\n")
-    i = 0
-
-    while i < len(lines):
-        line = lines[i]
-        if line.startswith("## ["):
-            break
-        i += 1
-
-    while i < len(lines):
-        line = lines[i]
-        m = re.match(r"^##\s+\[(\d+)/(\d+)\]\s+(.+?)\s+\((.+)\)\s*$", line)
-        if not m:
-            i += 1
-            continue
-
-        node_index = int(m.group(1))
-        node_total = int(m.group(2))
-        node_id = m.group(3).strip()
-        node_info = m.group(4)
-
-        if "SKIPPED" in node_info:
-            trim = "skipped"
-            node_type = node_info.replace("SKIPPED - budget", "").strip().rstrip(",").strip() or "atom"
-        elif "SUMMARY" in node_info:
-            trim = "summary"
-            node_type = node_info.split(" - SUMMARY")[0].strip() or "atom"
-        else:
-            trim = "full"
-            node_type = node_info
-
-        body_lines: list[str] = []
-        i += 2
-        while i < len(lines):
-            next_line = lines[i]
-            if next_line.startswith("## [") or next_line.startswith("---"):
-                break
-            body_lines.append(next_line)
-            i += 1
-
-        body_text = "\n".join(body_lines).strip()
-
-        node_meta = memories.get(node_id)
-        node_entry: dict[str, Any] = {
-            "id": node_id, "type": node_type, "trim": trim,
-            "index": node_index, "total": node_total, "body": body_text,
+    # Adapter rule: consume the structured pipeline product; never parse
+    # rendered text (architecture.md section 5).
+    nodes: list[dict[str, Any]] = [
+        {
+            "id": node.id,
+            "type": node.type,
+            "trim": node.trim,
+            "index": node.index,
+            "total": node.total,
+            "body": node.content or "",
+            "summary": node.summary,
+            "maturity": node.maturity,
+            "status": node.status,
+            "tags": node.tags,
         }
-        if node_meta is not None:
-            if hasattr(node_meta, "model_dump"):
-                md = node_meta.model_dump(mode="json")
-            elif isinstance(node_meta, dict):
-                md = node_meta
-            else:
-                md = {}
-            node_entry["summary"] = md.get("summary", "")
-            node_entry["maturity"] = md.get("maturity", "draft")
-            node_entry["status"] = md.get("status", "active")
-            node_entry["tags"] = md.get("tags", [])
-        else:
-            node_entry["summary"] = ""
-            node_entry["maturity"] = "draft"
-            node_entry["status"] = "active"
-            node_entry["tags"] = []
-
-        nodes.append(node_entry)
-
-        if i < len(lines) and lines[i].startswith("---"):
-            break
-
-    # Parse notices
-    notice_lines = [ln.strip() for ln in lines if ln.strip().startswith("[NOTICE]")]
-    notices = [ln.removeprefix("[NOTICE]").strip() for ln in notice_lines]
+        for node in pack.nodes
+    ]
+    notices = [f"{n.type}: {n.message}" for n in pack.notices]
+    full_text = render_context_pack(pack, "plain-markdown")
 
     return {
         "target": req.memory_id,
         "depth": req.depth,
         "budget": req.budget,
         "nodes": nodes,
-        "full_text": text,
+        "full_text": full_text,
         "notices": notices,
     }
 

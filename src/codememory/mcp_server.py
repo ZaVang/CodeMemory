@@ -1,8 +1,9 @@
 """MCP (Model Context Protocol) server for CodeMemory.
 
-Exposes CodeMemory's five Layer 0 cognitive primitives — resolve, overview,
-wander, focus, snapshot — as callable MCP tools.  Each tool delegates to the
-same handlers.py functions used by the CLI and backend API (no logic duplication).
+Exposes CodeMemory's read/write operations — resolve (build pipeline),
+snapshot, propose_memory, propose_update — as callable MCP tools.  Each tool
+delegates to the same handlers.py functions used by the CLI and backend API
+(no logic duplication).
 
 Transport: stdio (JSON-RPC 2.0), compatible with Claude Code, Cursor, Windsurf,
 and any other MCP-compliant client.
@@ -36,12 +37,9 @@ if str(_SRC) not in sys.path:
 
 from codememory.handlers import (  # noqa: E402 - sys.path is adjusted above for module execution
     handle_create,
-    handle_focus,
-    handle_overview,
     handle_resolve,
     handle_snapshot,
     handle_update,
-    handle_wander,
 )
 
 _logger = logging.getLogger("codememory.mcp_server")
@@ -91,84 +89,6 @@ TOOLS = [
         "readOnlyHint": True,
     },
     {
-        "name": "overview",
-        "description": (
-            "Get top 5 related memory summaries for injection into an AI system prompt. "
-            "Returns memories ranked by heat score (dependents * 10 + access_count) "
-            "with stale detection and status markers. "
-            "Use this at the start of a conversation to preload relevant context."
-        ),
-        "inputSchema": {
-            "type": "object",
-            "properties": {
-                "tags": {
-                    "type": "array",
-                    "items": {"type": "string"},
-                    "description": "Filter by tags (optional)",
-                },
-                "min_maturity": {
-                    "type": "string",
-                    "enum": ["draft", "verified", "proven"],
-                    "description": "Minimum maturity level (optional, defaults to no filter)",
-                },
-                "format": {
-                    "type": "string",
-                    "enum": ["default", "inject"],
-                    "default": "inject",
-                    "description": "Output format: 'inject' for system-prompt-ready, 'default' for human-readable",
-                },
-            },
-        },
-        "readOnlyHint": True,
-    },
-    {
-        "name": "wander",
-        "description": (
-            "Serendipitous recall of a cold memory. Returns a memory with low "
-            "access_count weighted by intensity, encouraging re-discovery of "
-            "neglected knowledge. Use this when you need fresh perspectives "
-            "or want to surface forgotten context."
-        ),
-        "inputSchema": {
-            "type": "object",
-            "properties": {
-                "mode": {
-                    "type": "string",
-                    "enum": ["cool", "random"],
-                    "default": "cool",
-                    "description": "Selection mode: 'cool' (low-access weighted) or 'random'",
-                },
-            },
-        },
-        "readOnlyHint": True,
-    },
-    {
-        "name": "focus",
-        "description": (
-            "Focus on a specific memory with adjustable resolution. "
-            "At 'summary' level returns only the summary line; at 'full' level "
-            "returns the complete body text. Use this to dynamically adjust "
-            "the resolution of a specific memory in context."
-        ),
-        "inputSchema": {
-            "type": "object",
-            "properties": {
-                "id": {
-                    "type": "string",
-                    "description": "Memory ID to focus on",
-                },
-                "level": {
-                    "type": "string",
-                    "enum": ["full", "summary"],
-                    "default": "full",
-                    "description": "Resolution level",
-                },
-            },
-            "required": ["id"],
-        },
-        "readOnlyHint": True,
-    },
-    {
         "name": "snapshot",
         "description": (
             "Persist a resolved memory context as a snapshot file in the dataset. "
@@ -196,8 +116,8 @@ TOOLS = [
         "description": (
             "Propose a new memory for review. Creates a memory with maturity=draft "
             "and status=proposed, requiring human review before promotion to "
-            "verified. Proposed memories do not appear in overview top-5 results "
-            "and are visually marked as 'Proposed' in the dashboard. "
+            "verified. Proposed memories do not enter default build/search "
+            "results until merged by the owner. "
             "Use this to write new knowledge back to the CodeMemory brain "
             "during agentic reasoning."
         ),
@@ -288,26 +208,6 @@ def _call_tool(name: str, arguments: dict) -> list[dict]:
         depth = arguments.get("depth", "recommended")
         budget = arguments.get("budget", 2000)
         result = handle_resolve(root=root, memory_id=memory_id, depth=depth, budget=budget)
-        return [{"type": "text", "text": result}]
-
-    elif name == "overview":
-        tags = arguments.get("tags")
-        format_mode = arguments.get("format", "inject")
-        # min_maturity filtering is done client-side via tags for now
-        result = handle_overview(root=root, tags=tags, format_mode=format_mode)
-        return [{"type": "text", "text": result}]
-
-    elif name == "wander":
-        mode = arguments.get("mode", "cool")
-        result = handle_wander(root=root, mode=mode)
-        return [{"type": "text", "text": result}]
-
-    elif name == "focus":
-        memory_id = arguments.get("id", "")
-        if not memory_id:
-            return [{"type": "text", "text": "Error: 'id' parameter is required for focus"}]
-        level = arguments.get("level", "full")
-        result = handle_focus(root=root, memory_id=memory_id, level=level)
         return [{"type": "text", "text": result}]
 
     elif name == "snapshot":
