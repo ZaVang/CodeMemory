@@ -235,7 +235,7 @@ Web UI 是 operator console，不定义 canonical memory contract。
 
 - Graph：查看 imports DAG；
 - List：浏览和筛选 memories；
-- Dashboard：运行 validate / wander 等维护操作；
+- Dashboard：运行 validate / reindex 等维护操作；
 - Create / Edit：维护 atom；
 - Resolve / Copy Context：把上下文交给 agent。
 

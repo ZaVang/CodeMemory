@@ -1,8 +1,8 @@
 # CodeMemory
 
-**记忆原子化协议** -- 将 AI 记忆拆分为可依赖解析的原子单元。
+**memory as code** —— 记忆按代码的方式组织：原子化、显式依赖、按需装配。
 
-记忆加载是依赖解析问题，不是搜索问题。CodeMemory 用显式依赖图（DAG）替代语义相似度检索，保证加载的上下文因果完整。
+一个记忆库就是一个仓库，agent 是它的运行时。记忆装配是依赖解析问题，不是搜索问题：CodeMemory 用显式依赖图（DAG）+ 预算化构建替代语义相似度检索，保证交给 agent 的上下文因果完整、可追溯。
 
 ## 快速开始
 
@@ -16,14 +16,14 @@ pip install -e ".[code]"
 # 重建索引
 codememory --root examples/investment reindex
 
-# 验证完整性
+# 验证完整性（断链 / 循环 / schema / stale asset / 提案积压）
 codememory --root examples/investment validate
 
-# 加载投资决策上下文（DAG 拓扑拼装）
-codememory --root examples/investment resolve user/investment/context
+# 找入口（词法排序检索）
+codememory --root examples/investment search --query "半导体 持仓"
 
-# 查看记忆概览
-codememory --root examples/investment overview --limit 5
+# 装配上下文（DAG 闭包 + 两遍式预算裁剪）
+codememory --root examples/investment build user/investment/context --budget 2000
 ```
 
 设置 `CODEMEMORY_ROOT` 环境变量可省略 `--root`：
@@ -86,112 +86,74 @@ Vite 默认监听 5173 端口；端口被占用时自动选择下一个可用端
 
 ## 核心概念
 
-记忆有两种**原语**：
+三组共 11 个概念（完整定义见 [docs/prd.md](docs/prd.md) 第 4 章）：
 
-| 类型 | 说明 |
-|------|------|
-| **atom** | 通用记忆——角色通过 `imports`、`schema`、`tags`、目录表达，不靠 type 区分 |
-| **schema** | 元模板——定义记忆结构（如决策模板、会议模板），atom 通过 `schema` 字段引用 |
+| 组 | 概念 | 代码对应物 |
+|----|------|-----------|
+| **静态结构** | repo（记忆库）、atom（记忆单元）、imports（依赖）、schema（结构契约）、asset（资产，不进依赖图） | git 仓库、模块、import 语句、接口、repo 里的 data/ |
+| **动态操作** | build（装配）、check（校验）、search（入口检索）、test（黄金问题验证） | 构建 + tree-shaking、类型检查、符号搜索、测试/CI |
+| **变更管理** | proposal（提案）、log（审计日志） | Pull Request、git log |
 
-每个记忆是一个 Markdown 文件（YAML frontmatter + body），通过 `imports` 显式声明依赖关系。记忆加载是 DAG 解析问题，不是 vector search。
+每个 atom 是一个 Markdown 文件（YAML frontmatter = 接口，body = 实现），通过 `imports` 显式声明依赖。写入有分级纪律：新增直写，没把握走 `create --propose`，修改已有 atom 走 `propose` patch 队列，owner 统一 `merge` / `reject`。
 
 ## 架构
+
+三层结构（契约级定义见 [docs/architecture.md](docs/architecture.md)）：
+
+| 层 | 组件 | 职责 |
+|----|------|------|
+| **Adapters** | `cli.py` / `tools.py` / `mcp_server.py` / `integrations.py` / `backend/` / `frontend/` | 参数解析与传输格式，零业务逻辑 |
+| **Core** | `build.py`（统一管线）、`models.py`、`search.py`、`validate.py`、`proposals.py`、`test_contract.py` 等 | 表示、装配、校验、变更管理 |
+| **Importer** | `import_cmd.py` / `skeletonize/` / `compiler/` | 外部材料 → asset + atom proposals（一律经 review 晋升） |
+
+agent 不在系统内——agent 是消费 build 产物、按写入纪律提交变更的运行时，永远经 adapter 调用。`harnesslib/` 与 `llm_gateway/` 是跨项目复用的可选编排层（上游维护）。
 
 ```
 CodeMemory/
 ├── src/
-│   ├── codememory/              # 记忆管理核心（本项目）
-│   │   ├── __init__.py          # Public API
-│   │   ├── core.py              # frontmatter 解析, body hash, logging
-│   │   ├── models.py            # Pydantic v2 数据模型
-│   │   ├── handlers.py          # 统一命令处理（cli + tools 共享）
-│   │   ├── index.py             # Index 加载/保存/reindex
-│   │   ├── resolve.py           # DAG + 拓扑排序 + token 裁剪
-│   │   ├── validate.py          # 循环检测 + 断链 + schema 合规 + 衰减建议
-│   │   ├── create.py            # 记忆模板生成
-│   │   ├── update.py            # 版本控制 + change tracking
-│   │   ├── search.py            # 检索
-│   │   ├── orphans.py           # 孤立记忆检测
-│   │   ├── changelog.py         # 变更历史查看
-│   │   ├── transient.py         # 瞬态 DAG（会话内推理链）
-│   │   ├── snapshot.py          # TransientDAG -> persistent .md
-│   │   ├── log.py                # 全局追加审计日志
-│   │   ├── import_cmd.py         # 冷启动文本导入
-│   │   ├── suggest_deps.py       # 自动依赖推断（三层过滤）
-│   │   ├── compiler/             # Markdown corpus -> proposal review -> materialize
-│   │   ├── skeletonize/          # 结构化批量导入
-│   │   │   ├── common.py         # intensity 解析 + 文本工具
-│   │   │   ├── markdown.py       # Markdown 节拆分 + 骨架化
-│   │   │   └── code.py           # 代码骨架化（Python/JS/TS，Tree-sitter）
-│   │   ├── integrations.py      # CodememoryToolkit（OpenAI/Anthropic/Gemini）
-│   │   ├── cli.py               # argparse CLI 壳
-│   │   └── tools.py             # Sandbox tool 注册
+│   ├── codememory/              # 记忆管理核心（结构详见 .claude/CLAUDE.md 文件架构）
 │   ├── harnesslib/              # 通用 Agent 编排（跨项目复用）
-│   │   ├── harness.py           # Agent 主循环
-│   │   ├── sandbox.py           # 工具执行环境
-│   │   └── event.py             # 事件总线
 │   └── llm_gateway/             # 多 provider LLM 接入（跨项目复用）
-│       ├── bridge.py            # LLMBridge 统一入口
-│       ├── router.py            # 重试/fallback/负载均衡
-│       ├── models.py            # Pydantic 数据模型
-│       ├── providers/           # Provider 适配器
-│       └── tools.py             # 内置工具（文件读取等）
-├── examples/
-│   ├── investment/              # 示例：投资决策记忆库（12 条记忆）
-│   └── example_agent.py         # 最小 Agent 示例（mock LLM）
-├── tests/
-│   ├── unit/                     # 108 个单元测试
-│   └── integration_test.py      # 24 个集成测试
-├── docs/
-├── pyproject.toml
-└── README.md
+├── backend/                     # REST adapter（FastAPI）
+├── frontend/                    # Operator UI adapter（Vite）
+├── examples/                    # 示例记忆库数据（独立于框架）
+├── tests/                       # 单元 / API / 集成测试
+└── docs/                        # canonical 文档 + plan/ + reference/
 ```
-
-### 四层架构
-
-| 层 | 组件 | 职责 |
-|----|------|------|
-| **Agent 应用** | `example_agent.py`, your app | 业务逻辑 + 对话循环 |
-| **集成外观** | `CodememoryToolkit` | 一行代码注册全部记忆工具 |
-| **记忆引擎** | `codememory` package | DAG 解析, 拓扑拼装, stale 检测 |
-| **编排 + LLM** | `harnesslib` + `llm_gateway` | Agent 循环, 多 provider, 重试/fallback |
 
 ## CLI 命令速查
 
 ```bash
-# 记忆生命周期
-codememory create --id user/ideas/my-thesis --tags "ai"         # 默认 type=atom
-codememory create --type schema --id schemas/my-template --tags "template"
-codememory create --id user/decisions/buy --schema schemas/decision --tags "investment"
-codememory update <id> --change-note "..." [--body ...] [--summary ...] [--status ...]
+# 写路径（纪律见 docs/agent-memory-guide.md）
+codememory create --id user/decisions/buy --schema schemas/decision --tags "investment" [--propose]
+codememory update <id> --change-note "..." [--body ...] [--summary ...] [--import-required ...] [--source-ref <artifact_id>]
+codememory propose <id> --reason "..." [--summary ...] [--body ...]   # 修改类提案入队
+codememory proposals                                                  # 待审队列
+codememory merge <id|proposal_id> | reject <id|proposal_id>           # owner 审阅
 
-# 检索
-codememory resolve <id> [--depth required|recommended|full] [--budget N] [--focus decision]
-codememory search [--query <q>] [--tags <t>] [--type <t>] [--status <s>] [--maturity proven] [--semantic-type decision]
-codememory search --has-imports          # 有依赖的记忆
-codememory search --has-schema           # 有 schema 引用的记忆
+# 读路径
+codememory search [--query <q>] [--tags <t>] [--type <t>] [--status <s>] [--has-imports] [--has-schema]
+codememory build <id> [--depth required|recommended|full] [--budget N] [--format xml-markdown|markdown|plain-markdown|json]
+codememory resolve <id> [...]        # build 的 plain-markdown 别名
+codememory context-pack <id> [...]   # build 的别名
+codememory source add <uri> [--id ID] [--summary "..."] | source list | source expand <id>
 
-# 维护
+# 验证与维护
 codememory reindex
 codememory validate
-codememory orphans [--type <t>] [--min-intensity N]
-codememory changelog <id>
-codememory log [--limit N]
+codememory test <entry> [--budget N]                        # 导出黄金问题 + 装配上下文
+codememory test report <entry> --results results.json      # 回写判分结果
+codememory orphans [--type <t>]
+codememory changelog <id> | log [--limit N] | diff [--since "2 days ago"]
+codememory suggest-deps <id> [--min-score N]
 
-# 导入
+# 迁移（importer）
 codememory import --file notes.txt --extract preferences,decisions
-codememory import --stdin --extract facts
-codememory skeletonize <file_or_dir> [--min-intensity N] [--dry-run] [--tags "a,b"]
-codememory compile-md <corpus_dir> [--review-id <id>] [--tags "a,b"] [--namespace <ns>]
+codememory skeletonize <file_or_dir> [--min-weight N] [--dry-run] [--tags "a,b"]
+codememory compile-md <corpus_dir> [--review-id <id>] [--namespace <ns>]
 codememory materialize-review <review_id> [--accept-all]
 
-# 依赖推断
-codememory suggest-deps <id> [--min-score N] [--forward-only] [--retroactive-only]
-
-# 维护 / 探索操作
-codememory overview [--tags <t>] [--limit N] [--format default|inject] [--with-recall] [--min-maturity verified]
-codememory focus <id> --level full|summary [--resolve] [--content ...]
-codememory wander [--mode cool|random] [--inject]
+# 辅助工具（REPL 草稿）
 codememory snapshot <id> [--target <id>] [--budget N] [--from-dag <file>]
 ```
 
@@ -201,14 +163,14 @@ codememory snapshot <id> [--target <id>] [--budget N] [--from-dag <file>]
 from codememory import (
     # Memory operations
     create, update, resolve, search, validate, reindex,
+    # Pipeline
+    build_context_pack, render_context_pack, ContextPack,
     # Inspection
     find_orphans,
     # Transient reasoning
     TransientDAG, TransientNode,
     # Index
     load_index, save_index,
-    # Skeletonize
-    skeletonize_markdown, Section,
     # Core utilities
     parse_frontmatter, compute_body_hash, get_root_dir,
     # Integration
@@ -223,14 +185,14 @@ tools = toolkit.get_tools_for_openai()  # -> OpenAI format tool list
 
 ## 文档
 
-- [产品需求](docs/prd.md) -- v1 产品模式、目标用户、范围和非目标
-- [架构设计](docs/architecture.md) -- Source Artifact / Atom Graph / ContextPack / Adapter 边界
-- [项目结构](docs/project_structure.md) -- 每个主要文件的职责与代码落点规则
-- [集成指南](docs/INTEGRATION.md) -- 10 分钟上手集成
-- [用户指南](docs/USER_GUIDE.md) -- 日常使用、维护和迁移
-- [Agent 记忆指南](docs/agent-memory-guide.md) -- Work Layer agent 操作规则草案
+- [产品需求](docs/prd.md) -- memory-as-code 公理、11 概念模型、写入纪律、非目标
+- [架构设计](docs/architecture.md) -- 契约级参考：三层结构、数据契约、管线契约、收敛路径（已完成）
+- [Agent 记忆指南](docs/agent-memory-guide.md) -- 记忆库贡献规范（agent 的 CONTRIBUTING.md）
+- [项目结构](docs/project_structure.md) -- 文件职责映射（待随新术语统一更新，见文内提示）
+- [集成指南](docs/INTEGRATION.md) -- 接入方式（部分命令示例待更新，见文内提示）
+- [用户指南](docs/USER_GUIDE.md) -- 日常使用、维护和迁移（同上）
 - [Roadmap / Sprint](docs/plan/FUTURE.md) -- 长期 backlog；当前任务见 [SPRINT](docs/plan/SPRINT.md)
-- [Reference: Companion Mode](docs/reference/companion-mode.md) -- future companion layer 历史探索，不代表 v1 默认方向
+- [Reference: Companion Mode](docs/reference/companion-mode.md) -- 历史探索，不代表 v1 方向
 
 ## 许可证
 

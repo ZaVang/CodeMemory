@@ -5,8 +5,9 @@
 
 > **术语提示（2026-06-10）**：本文成文于 memory-as-code 重建之前，叙述中的旧概念
 > （Source Artifact / ContextPack / Layer Profile 等）已被新概念模型取代——术语以
-> `docs/prd.md` 与 `docs/architecture.md` 为准（对照表见 prd 附录 A）。文件职责映射
-> 仍可参考；全文随收敛阶段完成后统一更新（见 `docs/plan/FUTURE.md` post-convergence backlog）。
+> `docs/prd.md` 与 `docs/architecture.md` 为准（对照表见 prd 附录 A）。文件职责映射大体可参考，但收敛阶段后已有偏差
+> （context_pack.py 已删除、focus/overview/wander 路由已删除、skeletonize 评分改名 weight）；
+> 以 `.claude/CLAUDE.md` 文件架构为准，全文更新见 `docs/plan/FUTURE.md` post-convergence backlog。
 
 不记录生成物和本地缓存：`__pycache__/`、`.pytest_cache/`、`frontend/node_modules/`、`frontend/dist/`、Playwright 报告、临时 review 目录等。
 

@@ -191,7 +191,7 @@ codememory update user/contexts/cache-layer \
 codememory validate
 ```
 
-### 场景 D：修正一条已有记忆（高风险，走 proposal 过渡做法）
+### 场景 D：修正一条已有记忆（高风险，走修改类 proposal）
 
 > 对话：「上次记的'Python 固定 3.13'，现在 3.14 轮子齐了，可以解除。」
 
@@ -216,7 +216,7 @@ codememory validate
 | 全部依赖标 required | 按"不读会不会误解"分级 |
 | 用 imports 表达出处 | 出处写 asset 引用（body 中注明 asset id） |
 | create 后不 update，留着 TODO summary | create 只是模板，必须立即 update 填真实 summary/body |
-| 未经 owner 同意 update 已有 atom | 高风险变更先说明、再获同意（proposal 过渡做法） |
+| 直接 update 已有 atom | 高风险变更走 `propose` 入队，owner `merge` 后生效 |
 | update 不写 change-note | `--change-note` 必填，它是 log 的原料 |
 | 给记忆打重要性分 | intensity 已整体移除（参数不存在）；重要性由被依赖数表达，保护语义找 owner 标 protected |
 | 写完不跑 validate | 任何写入后 `codememory validate` 守门 |
