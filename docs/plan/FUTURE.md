@@ -18,10 +18,13 @@
 
 **收敛三阶段（A 写入纪律 / B 读路径收敛 / C 清理与 test）已于 2026-06-10 全部验收合并——代码与 11 概念模型对齐完成。** 下一批工作从 Post-convergence Backlog 中提升：
 
-1. **MCP / toolkit 对齐**：暴露 build / search / expand_source / create / propose 最小工具集，全部走共享 handler。
-2. **Operator UI 对齐**：UI 跟随新契约（proposed / patch 队列展示、golden_questions、build 产物；wander 面板已随后端删除）。
-3. **文档与示例**：USER_GUIDE / INTEGRATION / project_structure / `examples/` 随新术语更新。
-4. **eval harness**：ContextPack vs 原文全文 vs 无记忆的对照实验，把 PRD 产品成功标准变成可测数字。
+1. **导入链路升级（importer v2）**：补齐 PRD §5.1 与实现之间的缺口——现有 import/compile-md/skeletonize 都是结构切分，没有语义提炼。两个递进子项：
+   - 最小版（零 LLM，确定性）：compile-md 升级为"先 `source add` 登记 asset → 生成 anchor atom（含 source_refs）→ 切分段落作为 derived 候选"，产出全部 proposed；外加一份 agent-as-importer 工作流指南（agent 读旧文档按 guide 纪律 `create --propose` 提炼，owner merge）。
+   - 完整版（可选 LLM proposer）：compiler 接 LLM 提炼 Derived Atoms 与 imports 建议；LLM 只 propose，产出仍走 review（架构 §1.3 铁律不变；LLM 依赖只进 Importer 层的可选路径，Core 不碰）。
+2. **MCP / toolkit 对齐**：暴露 build / search / expand_source / create / propose 最小工具集，全部走共享 handler。
+3. **Operator UI 对齐**：UI 跟随新契约（proposed / patch 队列展示、golden_questions、build 产物；wander 面板已随后端删除）。
+4. **文档与示例**：USER_GUIDE / INTEGRATION / project_structure / `examples/` 随新术语更新。
+5. **eval harness**：ContextPack vs 原文全文 vs 无记忆的对照实验，把 PRD 产品成功标准变成可测数字。
 
 排期前按 Planning Rules 第 5 条确认是否需要先更新 prd / architecture。
 
@@ -32,7 +35,7 @@
 随 2026-06-10 memory-as-code 重建被取代或废除的旧条目：
 
 - **P1.4 ContextPack / resolve v2** → 由阶段 B 取代（`include_sources` / `disclosure_level` 概念已废除，按需展开由 build 预算 + `source expand` 覆盖）。
-- **P1.5 Migration Compiler v2** → importer "产出默认 proposal" 的纪律在阶段 A 后自然对齐，不再单列。
+- **P1.5 Migration Compiler v2** → 纪律部分（产出默认 proposal）随阶段 A 对齐；语义提炼部分（asset 登记 + anchor + derived + imports 建议）重新立项为 Roadmap 第 1 条（导入链路升级）——此前过早标记 Superseded 系遗漏。
 - **P3.1 Companion Layer Profile** → 已废除（见 `docs/prd.md` 非目标；历史探索在 `docs/reference/`）。
 - **P3.2 Advanced Recall Strategies** → 词法排序并入阶段 B；语义召回仍为非目标（`docs/prd.md` 第 8 章）。
 
