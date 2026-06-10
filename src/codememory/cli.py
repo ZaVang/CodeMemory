@@ -76,6 +76,10 @@ def main(argv: list[str] | None = None):
     p.add_argument("--import-required", nargs="*")
     p.add_argument("--import-recommended", nargs="*")
     p.add_argument("--import-related", nargs="*")
+    p.add_argument("--source-ref", dest="source_ref",
+                   help="Asset artifact_id to append to source_refs")
+    p.add_argument("--source-ref-summary", dest="source_ref_summary",
+                   help="Optional summary for the appended source ref")
 
     # merge
     p = subparsers.add_parser("merge", help="Merge a proposed memory (proposed -> active)")
@@ -275,7 +279,9 @@ def main(argv: list[str] | None = None):
                             change_note=args.change_note, status=args.status,
                             import_required=args.import_required,
                             import_recommended=args.import_recommended,
-                            import_related=args.import_related))
+                            import_related=args.import_related,
+                            source_ref=args.source_ref,
+                            source_ref_summary=args.source_ref_summary))
     elif cmd == "merge":
         print(handle_merge(root, args.id))
     elif cmd == "reject":

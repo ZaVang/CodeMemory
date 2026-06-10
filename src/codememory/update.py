@@ -98,6 +98,8 @@ def update(
     import_required: list[str] | None = None,
     import_recommended: list[str] | None = None,
     import_related: list[str] | None = None,
+    source_ref: str | None = None,
+    source_ref_summary: str | None = None,
 ) -> Path:
     """Update an existing memory with version control and change tracking.
 
@@ -111,6 +113,8 @@ def update(
         import_required: New required imports list (replaces existing).
         import_recommended: New recommended imports list (replaces existing).
         import_related: New related imports list (replaces existing).
+        source_ref: Asset artifact_id to append to source_refs (Phase A).
+        source_ref_summary: Optional summary for the appended source_ref.
 
     Returns:
         Path to the updated file.
@@ -225,6 +229,27 @@ def update(
 
     if import_required is not None or import_recommended is not None or import_related is not None:
         meta["imports"] = imports
+
+    # Append asset reference (Phase A: CLI write path for source_refs).
+    # Existence of the artifact is not enforced here; validate reports
+    # missing artifacts via SOURCE-REF-WARN without blocking the write.
+    if source_ref is not None:
+        source_refs = meta.get("source_refs", [])
+        if not isinstance(source_refs, list):
+            source_refs = []
+        existing_ids = {r.get("artifact_id") for r in source_refs if isinstance(r, dict)}
+        if source_ref in existing_ids:
+            _logger.warning(
+                "source_ref '%s' already present on %s; skipping duplicate.",
+                source_ref, memory_id,
+            )
+        else:
+            source_refs.append({
+                "artifact_id": source_ref,
+                "summary": source_ref_summary or "",
+                "disclosure_hint": "anchor",
+            })
+            meta["source_refs"] = source_refs
 
     # Recompute summary_hash only when summary is explicitly updated.
     # When only body changes, leave old summary_hash so stale detection works.

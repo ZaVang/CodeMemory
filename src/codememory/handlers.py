@@ -129,6 +129,8 @@ def handle_update(
     import_required: list[str] | None = None,
     import_recommended: list[str] | None = None,
     import_related: list[str] | None = None,
+    source_ref: str | None = None,
+    source_ref_summary: str | None = None,
 ) -> str:
     """Update a memory.  Returns path string."""
     file_path = update(
@@ -141,6 +143,8 @@ def handle_update(
         import_required=import_required,
         import_recommended=import_recommended,
         import_related=import_related,
+        source_ref=source_ref,
+        source_ref_summary=source_ref_summary,
     )
     return str(file_path)
 

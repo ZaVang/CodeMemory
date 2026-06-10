@@ -7,7 +7,7 @@ from pathlib import Path
 from .core import compute_retrieval_probability
 from .core import parse_frontmatter
 from .index import load_index
-from .models import IndexData, MemoryEntry
+from .models import NON_ASSEMBLABLE_STATUSES, IndexData, MemoryEntry
 from .resolve import _get_imports, build_dag, find_cycle_participants
 from .sources import check_source_registry, load_source_registry
 
@@ -188,6 +188,31 @@ def validate(root_dir: Path) -> tuple[int, int]:
             for msg in _check_decay(mid, entry, index):
                 print(f"[DECAY-WARN] {msg}")
                 warnings += 1
+
+        # 7. Proposed backlog check (Phase A: unreviewed proposals pile up)
+        if entry.status == "proposed":
+            try:
+                updated_dt = datetime.fromisoformat(entry.updated)
+                age_days = (datetime.now() - updated_dt).days
+            except (ValueError, TypeError):
+                age_days = None
+            if age_days is not None and age_days > 14:
+                print(
+                    f"[PROPOSED-WARN] {mid} has been proposed for {age_days} days. "
+                    f"Review it: codememory merge {mid} (or reject)."
+                )
+                warnings += 1
+
+        # 8. Status edge check (Phase A: active atoms importing non-assemblable nodes)
+        if entry.status == "active":
+            for dep in deps:
+                dep_entry = memories.get(dep)
+                if dep_entry is not None and dep_entry.status in NON_ASSEMBLABLE_STATUSES:
+                    print(
+                        f"[STATUS-WARN] {mid} (active) imports {dep} "
+                        f"({dep_entry.status}); it will be skipped at build time."
+                    )
+                    warnings += 1
 
     # 7. Source Artifact registry checks
     for result in check_source_registry(root_dir):

@@ -229,3 +229,98 @@ def test_context_pack_refuses_proposed_target(tmp_path: Path):
 
     with pytest.raises(ValueError, match="proposed"):
         build_context_pack(tmp_path, "user/facts/pending-pack")
+
+
+# ==================================================================
+# Slice 5: validate warnings (proposed backlog, status edges)
+# ==================================================================
+
+def test_validate_warns_stale_proposed_backlog(tmp_path: Path, capsys):
+    """A proposal sitting unreviewed for >14 days triggers PROPOSED-WARN."""
+    from codememory.validate import validate
+
+    _write_atom(tmp_path, "user/facts/old-proposal", status="proposed",
+                updated="2026-05-01")
+    reindex(tmp_path)
+
+    _errors, warnings = validate(tmp_path)
+    out = capsys.readouterr().out
+    assert "[PROPOSED-WARN]" in out
+    assert "user/facts/old-proposal" in out
+    assert warnings >= 1
+
+
+def test_validate_fresh_proposed_no_backlog_warning(tmp_path: Path, capsys):
+    """A proposal updated today is not flagged as backlog."""
+    from datetime import datetime
+    from codememory.validate import validate
+
+    _write_atom(tmp_path, "user/facts/new-proposal", status="proposed",
+                updated=datetime.now().strftime("%Y-%m-%d"))
+    reindex(tmp_path)
+
+    validate(tmp_path)
+    out = capsys.readouterr().out
+    assert "[PROPOSED-WARN]" not in out
+
+
+def test_validate_warns_active_imports_proposed(tmp_path: Path, capsys):
+    """An active atom importing a proposed one triggers STATUS-WARN."""
+    from datetime import datetime
+    from codememory.validate import validate
+
+    today = datetime.now().strftime("%Y-%m-%d")
+    _write_atom(tmp_path, "user/contexts/live-entry", status="active",
+                imports_required=["user/facts/limbo"], updated=today)
+    _write_atom(tmp_path, "user/facts/limbo", status="proposed", updated=today)
+    reindex(tmp_path)
+
+    _errors, warnings = validate(tmp_path)
+    out = capsys.readouterr().out
+    assert "[STATUS-WARN]" in out
+    assert "user/facts/limbo" in out
+    assert warnings >= 1
+
+
+# ==================================================================
+# Slice 6: update --source-ref (asset binding via CLI path)
+# ==================================================================
+
+def test_update_appends_source_ref(tmp_path: Path):
+    """update with source_ref binds an asset reference into frontmatter and index."""
+    from codememory.update import update
+
+    filepath = create(tmp_path, "atom", "user/contexts/cache-layer")
+    assert filepath is not None
+
+    update(tmp_path, "user/contexts/cache-layer",
+           change_note="bind rfc asset",
+           source_ref="src/rfc-001-cache",
+           source_ref_summary="RFC-001 cache design")
+
+    meta, _body = parse_frontmatter(filepath)
+    refs = meta.get("source_refs", [])
+    assert any(r.get("artifact_id") == "src/rfc-001-cache" for r in refs)
+
+    idx = load_index(tmp_path)
+    entry_refs = idx.memories["user/contexts/cache-layer"].source_refs
+    assert any(r.artifact_id == "src/rfc-001-cache" for r in entry_refs)
+    assert any(r.summary == "RFC-001 cache design" for r in entry_refs)
+
+
+def test_update_source_ref_duplicate_skipped(tmp_path: Path):
+    """Binding the same artifact twice keeps a single source_ref entry."""
+    from codememory.update import update
+
+    filepath = create(tmp_path, "atom", "user/contexts/dup-check")
+    assert filepath is not None
+
+    update(tmp_path, "user/contexts/dup-check",
+           change_note="bind once", source_ref="src/spec-md")
+    update(tmp_path, "user/contexts/dup-check",
+           change_note="bind twice", source_ref="src/spec-md")
+
+    meta, _body = parse_frontmatter(filepath)
+    refs = [r for r in meta.get("source_refs", [])
+            if r.get("artifact_id") == "src/spec-md"]
+    assert len(refs) == 1
