@@ -219,7 +219,7 @@ def test_resolve_refuses_proposed_target(tmp_path: Path):
 
 def test_context_pack_excludes_proposed_dependency(tmp_path: Path):
     """ContextPack drops proposed nodes from the graph and emits a notice."""
-    from codememory.context_pack import build_context_pack
+    from codememory.build import build_context_pack
 
     _graph_with_status_dep(tmp_path, "proposed")
     pack = build_context_pack(tmp_path, "user/contexts/entry", depth="required")
@@ -232,7 +232,7 @@ def test_context_pack_excludes_proposed_dependency(tmp_path: Path):
 
 def test_context_pack_refuses_proposed_target(tmp_path: Path):
     """ContextPack raises for a proposed target, matching missing-target style."""
-    from codememory.context_pack import build_context_pack
+    from codememory.build import build_context_pack
 
     _write_atom(tmp_path, "user/facts/pending-pack", status="proposed")
     reindex(tmp_path)
@@ -318,7 +318,7 @@ def test_update_appends_source_ref(tmp_path: Path):
     assert any(r.summary == "RFC-001 cache design" for r in entry_refs)
 
     # Acceptance signal 5: the bound ref is carried into the context pack.
-    from codememory.context_pack import build_context_pack
+    from codememory.build import build_context_pack
 
     pack = build_context_pack(tmp_path, "user/contexts/cache-layer", track_access=False)
     target_node = next(n for n in pack.nodes if n.id == "user/contexts/cache-layer")

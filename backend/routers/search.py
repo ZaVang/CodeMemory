@@ -20,7 +20,7 @@ from shared import (
     parse_frontmatter,
     serialize,
 )
-from codememory.context_pack import build_context_pack, render_context_pack
+from codememory.build import build_context_pack, render_context_pack
 from codememory.index import load_index
 from codememory.models import IndexData, MemoryEntry
 

@@ -9,8 +9,8 @@ paths:
 ## 技术栈
 
 - Python 3.13+，核心依赖：`pyyaml>=6.0`、`pydantic>=2.0`
-- 核心实现：`src/codememory/` package（16 个模块）
-- 命令处理：`handlers.py` 统一业务逻辑，`cli.py`（薄 argparse 壳，< 200 行）和 `tools.py`（Sandbox handler 委托）各司其职
+- 核心实现：`src/codememory/` package（25 个模块 + skeletonize/、compiler/ 子包）
+- 命令处理：`handlers.py` 统一业务逻辑，`cli.py`（薄 argparse 壳）和 `tools.py`（Sandbox handler 委托）各司其职
 
 ## 代码组织
 
