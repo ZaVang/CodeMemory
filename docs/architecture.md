@@ -58,13 +58,16 @@
 - 职责：外部材料 → asset 登记 + atom proposals。
 - 铁律：产出一律是 proposal，经 review 晋升；LLM 只 propose，不写 canonical truth；原始材料默认保留。
 
-确定性 Markdown compiler 的阶段边界：
+Markdown compiler 的阶段边界：
 
 1. ingest 只读扫描原文，以 resolved URI 生成不随正文变化的 artifact ID，并记录当前 hash；
 2. compiler 幂等 upsert Source Artifact，随后为每份文档生成一个 anchor、为每个非空段落生成一个 derived candidate；
 3. anchor / derived 都携带 `source_refs`；derived 另带 paragraph ID、hash 与精确行范围；
 4. review 的 accept/reject 只决定是否 materialize，写出的 atom 仍为 `status: proposed`；只有 owner merge 后才进入 canonical graph；
-5. 确定性路径不生成 imports。语义提炼和 imports 建议属于未来可选 proposer，依赖只能进入 Importer 层，Core 继续零 LLM provider 依赖。
+5. 确定性路径不生成 imports，保持默认且不加载任何 provider；显式 `--proposer llm` 路径以 paragraph ID + body 和有界 existing-Atom inventory 请求 typed structured output；
+6. provider-neutral 的 prompt / provenance / stable-ID 逻辑位于 `compiler/llm_proposer.py`；`compiler/gateway_adapter.py` 只在显式 LLM 路径惰性加载 `llm_gateway` 和 provider SDK；
+7. CodeMemory 丢弃未知 provenance、未知 imports target 与 model 控制的 path/status/frontmatter。semantic review materialize 前对整个 accepted batch 做 source refs、路径、覆盖、imports 可解析性与同批环检测，任一错误即零写入；
+8. review 记录安全的 prompt version、requested/response model、provider 与 token usage，不保存 config 路径/正文、credential、raw thinking 或 prompt source text。
 
 ### 1.4 agent 在哪里
 
@@ -96,7 +99,7 @@ Git credential、GitHub 访问控制和通知通道属于运行环境，不写�
 | test | **`test_contract.py`** | 已完成：导出题集 + 装配上下文；report 写回 log | C ✅ |
 | proposal | `models.py`（status）+ `proposals.py`（patch 队列）+ `update.py`（merge/reject 分发） | 已完成（修改类落为独立小模块 `proposals.py`，复用 update 应用 patch） | A ✅ / C ✅ |
 | log | `log.py` / `changelog.py` | 不变 | — |
-| importer | `compiler/` + `sources.py` | v2A：asset + anchor + paragraph-derived proposals；可选语义 proposer延期 | Importer v2A |
+| importer | `compiler/` + `sources.py` | v2A：确定性 asset + anchor + paragraph-derived；v2B：显式可选 semantic proposer + imports 建议，仍只产 proposed | Importer v2A ✅ / v2B active |
 | Personal Profile | `profile.py` / `capture.py` / `personal_index.py` / `maintenance.py` / `promotion.py` / `git_delivery.py` | 1A / 1B 已完成并经 owner 接受 | 1A / 1B ✅ |
 
 ### 2.1 保留与定位说明

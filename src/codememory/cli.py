@@ -1,6 +1,7 @@
 """CodeMemory CLI — thin argparse shell delegating to handlers."""
 
 import argparse
+import asyncio
 import sys
 from pathlib import Path
 
@@ -10,6 +11,7 @@ from .handlers import (
     handle_capture,
     handle_changelog,
     handle_compile_md,
+    handle_compile_md_llm,
     handle_context_pack,
     handle_create,
     handle_import,
@@ -314,7 +316,13 @@ def main(argv: list[str] | None = None):
     p.add_argument("source", help="Markdown file or directory to compile")
     p.add_argument("--review-id", help="Stable review ID; defaults to timestamp")
     p.add_argument("--tags", help="Comma-separated tags for generated proposals")
-    p.add_argument("--namespace", default="user/imports", help="Memory ID namespace for proposals")
+    p.add_argument("--namespace", help="Proposal namespace (default: user/imports deterministic, user for LLM)")
+    p.add_argument("--proposer", choices=["deterministic", "llm"], default="deterministic",
+                   help="Proposal engine; LLM mode is explicit opt-in")
+    p.add_argument("--llm-config", help="Explicit llm_gateway YAML config path (LLM proposer only)")
+    p.add_argument("--llm-model", help="Explicit model alias or provider/model (LLM proposer only)")
+    p.add_argument("--llm-max-tokens", type=int, default=4096,
+                   help="Maximum structured output tokens in LLM mode (default: 4096)")
 
     # materialize-review
     p = subparsers.add_parser("materialize-review", help="Materialize accepted compiler candidates as proposed atoms")
@@ -511,13 +519,31 @@ def main(argv: list[str] | None = None):
         tags_list = None
         if args.tags:
             tags_list = [t.strip() for t in args.tags.split(",") if t.strip()]
-        print(handle_compile_md(
-            root,
-            args.source,
-            review_id=args.review_id,
-            tags=tags_list,
-            namespace=args.namespace,
-        ))
+        if args.proposer == "llm":
+            if not args.llm_config or not args.llm_model:
+                parser.error("--proposer llm requires --llm-config and --llm-model")
+            if args.llm_max_tokens < 1:
+                parser.error("--llm-max-tokens must be positive")
+            print(asyncio.run(handle_compile_md_llm(
+                root,
+                args.source,
+                config_path=args.llm_config,
+                model=args.llm_model,
+                review_id=args.review_id,
+                tags=tags_list,
+                namespace=args.namespace or "user",
+                max_tokens=args.llm_max_tokens,
+            )))
+        else:
+            if args.llm_config or args.llm_model or args.llm_max_tokens != 4096:
+                parser.error("LLM flags require --proposer llm")
+            print(handle_compile_md(
+                root,
+                args.source,
+                review_id=args.review_id,
+                tags=tags_list,
+                namespace=args.namespace or "user/imports",
+            ))
     elif cmd == "materialize-review":
         print(handle_materialize_review(
             root,

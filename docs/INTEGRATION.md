@@ -55,6 +55,23 @@ Compiler guarantees:
 - The review JSON can be edited before materialization.
 - Existing memory files are not overwritten.
 
+### Optional semantic proposer
+
+Deterministic compilation remains the default. An integration may explicitly opt into the Importer-only semantic proposer by supplying all three LLM arguments:
+
+```bash
+pip install -e ".[llm]"
+codememory --root examples/work compile-md ./docs \
+  --review-id docs-semantic \
+  --proposer llm \
+  --llm-config ./llm_gateway/config.yaml \
+  --llm-model smart
+```
+
+This opt-in sends the source paragraph bodies to the configured model. The adapter requests typed structured output with a fixed untrusted-source system instruction, no tools, and bounded output. It never places the gateway config path/body, credentials, raw response, or model thinking in the review metadata. The provider-neutral compiler validates cited paragraph IDs and restricts imports to same-document drafts or the bounded existing-Atom inventory supplied in that call.
+
+LLM mode creates one deterministic anchor per document plus the validated semantic proposals; it does not also create paragraph-copy derived proposals. Same `review_id` + identical source/options is a no-call retry that preserves decisions. Any changed source, namespace, tags, requested model, or config fingerprint conflicts before a model call; use a new review ID to refresh the stable Source Artifact. Materialization preflights the complete accepted semantic batch and writes nothing if a source ref, path, overwrite, import target, or same-batch cycle is invalid. Every resulting atom is still forced to `status: proposed`.
+
 ### Compiler Architecture
 
 The migration path is intentionally split into small modules so each stage can be tested independently:
@@ -64,8 +81,10 @@ The migration path is intentionally split into small modules so each stage can b
 | Source manifest | `codememory.compiler.ingest` | Discover Markdown files, skip `.codememory`, compute SHA-256, and never mutate source files. |
 | Segmentation | `codememory.compiler.segment` | Preserve heading context, split non-empty paragraphs, and attach exact line provenance. |
 | Proposal graph | `codememory.compiler.propose` | Idempotently register assets and generate deterministic anchor/derived proposals with `source_refs`. |
+| Semantic proposer | `codememory.compiler.llm_proposer` | Build safe prompts, validate typed semantic drafts/provenance/imports, and generate CodeMemory-owned IDs and proposals. |
+| Optional gateway | `codememory.compiler.gateway_adapter` | Lazily adapt explicit `llm_gateway` config/model selection; never loads on the deterministic path. |
 | Review persistence | `codememory.compiler.review` | Store/load `.codememory/reviews/{review_id}.json`; identical retries preserve decisions and conflicting reuse is rejected. |
-| Materialization | `codememory.compiler.materialize` | Write only accepted candidates as proposed atom files, avoid overwrites, and reindex. |
+| Materialization | `codememory.compiler.materialize` | Write only accepted candidates as proposed atom files; semantic batches preflight atomically before writes. |
 
 Operational rule of thumb: `compile-md` never edits the source corpus, but it does update the memory root's Source Artifact registry and review JSON. Inspect/edit that review, run `materialize-review` for selected candidates, validate, then use the normal owner merge path to activate them.
 

@@ -12,6 +12,7 @@ from codememory.models import SourceRef
 
 Decision = Literal["pending", "accepted", "rejected"]
 ProposalRole = Literal["anchor", "derived"]
+ProposerMode = Literal["llm"]
 
 
 def _utc_timestamp() -> str:
@@ -78,6 +79,29 @@ class MemoryProposal(BaseModel):
     imports: dict[str, list[Any]] = Field(default_factory=dict)
 
 
+class ProposerCallMetadata(BaseModel):
+    """Safe provider response metadata; never stores prompts or thinking."""
+
+    source_id: str
+    provider: str = ""
+    model: str = ""
+    model_id: str | None = None
+    input_tokens: int = 0
+    output_tokens: int = 0
+    total_tokens: int = 0
+
+
+class ProposerMetadata(BaseModel):
+    """Audit metadata for an explicitly enabled semantic proposer run."""
+
+    mode: ProposerMode = "llm"
+    prompt_version: str
+    requested_model: str
+    input_digest: str
+    calls: list[ProposerCallMetadata] = Field(default_factory=list)
+    diagnostics: list[str] = Field(default_factory=list)
+
+
 class ReviewSet(BaseModel):
     """A saved compiler review set containing source manifest and proposals."""
 
@@ -91,6 +115,7 @@ class ReviewSet(BaseModel):
     segments: list[SourceSegment] = Field(default_factory=list)
     paragraphs: list[SourceParagraph] = Field(default_factory=list)
     proposals: list[MemoryProposal] = Field(default_factory=list)
+    proposer: ProposerMetadata | None = None
 
 
 class MaterializeResult(BaseModel):

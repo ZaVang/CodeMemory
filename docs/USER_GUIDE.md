@@ -270,6 +270,7 @@ codememory suggest-deps user/project/context
 
 # Markdown 迁移 review flow
 codememory compile-md docs --review-id docs-review
+codememory compile-md docs --review-id semantic-review --proposer llm --llm-config path\to\gateway.yaml --llm-model smart
 codememory materialize-review docs-review --accept-all
 ```
 
@@ -340,6 +341,30 @@ canonical graph
 6. 确定性路径不生成 imports，也不调用 LLM。
 
 重复使用同一 `review-id` 编译相同输入会保留已有 decisions，且不会重写未变化的 registry / review 文件。若输入、tags 或 namespace 已变化，应使用新的 review ID；旧 ID 会安全拒绝覆盖。
+
+### 9.1 显式 LLM semantic proposer
+
+需要语义提炼时，可以安装可选 provider 依赖并显式选择 LLM proposer：
+
+```powershell
+pip install -e ".[llm]"
+codememory --root path\to\memory compile-md path\to\docs `
+  --review-id semantic-review-1 `
+  --proposer llm `
+  --llm-config path\to\llm_gateway.yaml `
+  --llm-model smart
+```
+
+该模式与确定性模式的边界不同：
+
+- Source 正文会发送到你显式配置的模型；运行前应先确认文档适合交给该 provider 处理。
+- CodeMemory 不会把 gateway 配置正文或路径放入 review，也不会为 proposer 开启 tools / Web。
+- 模型只返回 typed semantic drafts。CodeMemory 自己生成 ID/path/status/source_refs，并丢弃未知 paragraph provenance 或未授权 import target。
+- 同一 `review-id`、相同 source/options 会直接返回已有 review，不再次调用模型；输入或模型/config 变化必须使用新的 review ID。
+- materialize 仍只生成 `status: proposed` atom；需要 owner 继续审阅并执行正常 `merge` 后才进入默认 search/build。
+- semantic accepted batch 会先整体预检；source ref、路径、覆盖、import 解析或同批环任一失败时，一个文件也不会写入。
+
+不带 `--proposer llm` 时仍走 v2A 确定性路径，不读取 LLM 配置、不加载 `llm_gateway`、不发起 provider/network 调用。
 
 ---
 

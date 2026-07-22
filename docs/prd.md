@@ -153,13 +153,14 @@ maintenance run 的状态与日志只存放在 `.codememory/`，不得写入 jou
 ```text
 Markdown corpus → 登记 Source Artifacts（稳定 URI-derived ID + hash）
                 → 每份文档生成一个轻量 anchor proposal
-                → 每个非空段落生成一个带精确 locator 的 derived proposal
+                → 默认：每个非空段落生成一个带精确 locator 的 derived proposal
+                → 显式 LLM 模式：从带 paragraph ID 的原文提炼较少的 semantic proposals
                 → review 选择需要 materialize 的候选
                 → 写入 status: proposed 的 atom 文件
                 → owner merge 后才进入 canonical graph
 ```
 
-确定性 importer 只做可复现的结构转换，不声称已经完成语义提炼，也不自动发明 imports。未来可选 LLM proposer 仍只能提出候选与依赖建议，不能跳过 review / owner merge。原文保持不变，anchor 与 derived 都通过 `source_refs` 回指 asset；`source_refs` 永不进入 imports DAG。
+确定性 importer 只做可复现的结构转换，不声称已经完成语义提炼，也不自动发明 imports。可选 LLM proposer 必须由 owner 显式提供 gateway 配置和模型后才启用；它只提出候选与依赖建议，不能跳过 review / owner merge。Source 文本会发送到该显式配置的模型，但不启用 tools / Web，也不发送 gateway 配置内容。原文保持不变，anchor 与 derived 都通过 `source_refs` 回指 asset；`source_refs` 永不进入 imports DAG。
 
 ## 6. 写入纪律
 

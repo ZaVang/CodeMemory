@@ -118,17 +118,19 @@
 
 ### 5.1 `src/codememory/compiler/` — Markdown Memory Compiler
 
-该目录负责“把已有 Markdown 记忆迁移成 CodeMemory graph”。核心约束：先登记 asset，再生成 anchor / paragraph-derived proposal，经 review 选择后只 materialize 为 proposed atom，最后由 owner merge。
+该目录负责“把已有 Markdown 记忆迁移成 CodeMemory graph”。核心约束：先登记 asset；默认生成 anchor / paragraph-derived proposal，或由显式可选 LLM proposer 生成 anchor / semantic-derived proposal；两条路径都经 review 选择、只 materialize 为 proposed atom，最后由 owner merge。
 
 | 文件 | 职责 |
 |---|---|
 | `src/codememory/compiler/__init__.py` | compiler package marker。 |
-| `src/codememory/compiler/models.py` | source、segment、paragraph、anchor/derived proposal、review set、materialization result 的 Pydantic contract。 |
+| `src/codememory/compiler/models.py` | source、segment、paragraph、anchor/derived proposal、semantic proposer metadata、review set、materialization result 的 Pydantic contract。 |
 | `src/codememory/compiler/ingest.py` | 只读扫描 Markdown corpus，以 resolved URI 生成稳定 artifact id，并保留 hash/provenance。 |
 | `src/codememory/compiler/segment.py` | 保留 heading context，将正文切成带稳定 ID、hash 和行范围的非空段落。 |
 | `src/codememory/compiler/propose.py` | 幂等登记 Source Artifacts，生成每文档一个 anchor 与每段一个 derived proposal；确定性路径不建议 imports。 |
+| `src/codememory/compiler/llm_proposer.py` | provider-neutral typed semantic draft、prompt/provenance/import 校验、稳定 proposal/path 映射与安全 metadata；不 import provider。 |
+| `src/codememory/compiler/gateway_adapter.py` | 仅在显式 LLM 路径惰性加载 `llm_gateway`，请求无 tools 的 structured output。 |
 | `src/codememory/compiler/review.py` | 写入 review set，保留相同输入重试的 decisions，拒绝冲突 review ID。 |
-| `src/codememory/compiler/materialize.py` | 只将 accepted candidates 写为 `status: proposed` atom，保留 source_refs 并做路径安全校验。 |
+| `src/codememory/compiler/materialize.py` | 只将 accepted candidates 写为 `status: proposed` atom；semantic batch 写前整体校验 source refs/path/imports/cycle，失败零写入。 |
 
 ### 5.2 `src/codememory/skeletonize/` — 旧版结构化导入
 
@@ -325,6 +327,7 @@ Frontend 是本地操作台：查看 graph、resolve context、编辑 memory、�
 | `tests/unit/test_create_update.py` | create/update 行为测试。 |
 | `tests/unit/test_edge_cases.py` | 边界条件和异常路径测试。 |
 | `tests/unit/test_memory_compiler.py` | Markdown compiler ingest/propose/review/materialize 测试。 |
+| `tests/unit/test_importer_llm.py` | 显式 semantic proposer、lazy gateway、provenance/imports、幂等与零写入 preflight 测试（fake bridge，无真实网络）。 |
 | `tests/unit/test_resolve.py` | DAG resolve、预算裁剪、拓扑顺序测试。 |
 | `tests/unit/test_context_pack.py` | 结构化 ContextPack 和 renderer 测试。 |
 | `tests/unit/test_source_refs.py` | source_refs metadata、reindex、validate、ContextPack 关联测试。 |

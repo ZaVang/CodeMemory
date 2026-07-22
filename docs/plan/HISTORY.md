@@ -4,6 +4,38 @@ This file records accepted sprint outcomes. Current work belongs in `docs/plan/S
 
 ---
 
+## 2026-07-22 — Importer v2B: Optional LLM Semantic Proposer
+
+**Status:** Accepted by owner.
+
+**Delivered:**
+
+- Added an explicitly enabled `compile-md --proposer llm` path requiring both gateway config and model arguments; deterministic v2A remains the default and loads no provider dependency.
+- Added a provider-neutral semantic proposer with fixed untrusted-source instructions, typed structured output, bounded existing-Atom inventory, stable proposal/path ownership, paragraph-level provenance validation, and controlled same-document/existing-Atom imports.
+- Added a lazy `llm_gateway` adapter with low-temperature bounded generation and no tools/Web; review metadata stores safe per-call provider/model/token usage that can be losslessly aggregated, without config paths/content, credentials, prompts, or raw thinking.
+- Added semantic review idempotency: identical `review_id` source/options retries make no second model call and preserve registry/review bytes and decisions; changed inputs conflict before model invocation or mutation.
+- Added whole-batch semantic materialization preflight for exact source paragraph/range provenance, safe/non-existing paths, resolvable imports, and same-batch cycle freedom; any failure writes zero files.
+- Preserved the canonical gate: even tampered active proposals materialize as `status: proposed`, and default search/build excludes them until owner merge.
+- Updated PRD, architecture, roadmap, guides, project structure, optional dependency packaging, and fake-bridge regression coverage without any live provider/network requirement.
+
+**Acceptance evidence:**
+
+- Owner independently reproduced explicit-only activation, pre-call digest conflicts, lazy gateway loading, bad-provenance and unknown-import rejection, valid same-document import resolution, no-call retry byte stability, same-batch cycle zero-write, forced-proposed materialization, and default search exclusion with no actionable findings.
+- Importer/LLM focused suite → `37 passed`
+- `python -m pytest tests/unit tests/test_api.py -q` → `217 passed`
+- Personal Profile suite → `38 passed`
+- `python tests/integration_test.py` → `21/21 passed`
+- `python tests/integration_personal.py` → `15 passed, 0 failed`
+- Core import boundary → `core import ok`, `llm_gateway` not loaded
+- `git diff --check` → passed; generated example test differences restored
+
+**Deferred:**
+
+- MCP/toolkit importer surface and Operator UI review workflows.
+- Web/PDF/non-Markdown ingestion, cross-document semantic deduplication, and Personal Memory semantic discovery.
+
+---
+
 ## 2026-07-22 — Importer v2A: Deterministic Source-Aware Markdown Compiler
 
 **Status:** Accepted by owner.

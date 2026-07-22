@@ -7,6 +7,7 @@ decide whether to print to stderr, sys.exit, or return an error dict).
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import sys
@@ -14,6 +15,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from .compiler.materialize import materialize_review_set
+from .compiler.ingest import scan_markdown_corpus
+from .compiler.llm_proposer import (
+    SemanticProposerClient,
+    compile_markdown_corpus_with_client,
+    semantic_input_digest,
+)
 from .compiler.propose import compile_markdown_corpus, register_source_docs
 from .compiler.review import (
     equivalent_compiler_input,
@@ -747,6 +754,93 @@ def handle_compile_md(
         f"paragraphs: {len(review.paragraphs)}\n"
         f"anchors: {anchors}\n"
         f"derived: {derived}\n"
+        f"proposals: {len(review.proposals)}"
+    )
+
+
+async def handle_compile_md_llm(
+    root: Path,
+    source: str,
+    *,
+    config_path: str,
+    model: str,
+    review_id: str | None = None,
+    tags: list[str] | None = None,
+    namespace: str = "user",
+    max_tokens: int = 4096,
+    client: SemanticProposerClient | None = None,
+    gateway_fingerprint: str | None = None,
+) -> str:
+    """Explicitly invoke the optional semantic proposer and save its review."""
+
+    source_path = Path(source)
+    if review_id is None:
+        review_id = datetime.now(timezone.utc).strftime("compile-llm-%Y%m%d-%H%M%S")
+    path = review_path(root, review_id)
+    docs = scan_markdown_corpus(source_path)
+
+    if gateway_fingerprint is None:
+        config_file = Path(config_path)
+        if not config_file.is_file():
+            raise FileNotFoundError(f"LLM gateway config not found: {config_path}")
+        gateway_fingerprint = hashlib.sha256(config_file.read_bytes()).hexdigest()
+
+    input_digest = semantic_input_digest(
+        docs,
+        namespace=namespace,
+        tags=tags,
+        requested_model=model,
+        gateway_fingerprint=gateway_fingerprint,
+    )
+    if path.exists():
+        existing = load_review_set(root, review_id)
+        if (
+            existing.proposer is None
+            or existing.proposer.mode != "llm"
+            or existing.proposer.input_digest != input_digest
+        ):
+            raise ValueError(
+                f"review_id '{review_id}' already exists with different semantic compiler input"
+            )
+        register_source_docs(root, docs)
+        review = existing
+    else:
+        if client is None:
+            try:
+                from .compiler.gateway_adapter import LLMGatewaySemanticClient
+                client = LLMGatewaySemanticClient.from_config(
+                    config_path,
+                    model=model,
+                    max_tokens=max_tokens,
+                )
+            except ModuleNotFoundError as exc:
+                raise RuntimeError(
+                    "LLM importer dependencies are unavailable; install codememory[llm]"
+                ) from exc
+        review = await compile_markdown_corpus_with_client(
+            root,
+            source_path,
+            docs,
+            review_id=review_id,
+            client=client,
+            requested_model=model,
+            gateway_fingerprint=gateway_fingerprint,
+            tags=tags,
+            namespace=namespace,
+        )
+        path = save_review_set(root, review)
+
+    anchors = sum(proposal.role == "anchor" for proposal in review.proposals)
+    derived = sum(proposal.role == "derived" for proposal in review.proposals)
+    calls = len(review.proposer.calls) if review.proposer else 0
+    diagnostics = len(review.proposer.diagnostics) if review.proposer else 0
+    return (
+        f"Semantic review set saved: {path}\n"
+        f"registered sources: {len(review.sources)}\n"
+        f"anchors: {anchors}\n"
+        f"semantic derived: {derived}\n"
+        f"model calls: {calls}\n"
+        f"diagnostics: {diagnostics}\n"
         f"proposals: {len(review.proposals)}"
     )
 
