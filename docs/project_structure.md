@@ -15,14 +15,15 @@
 
 ## 1. 阅读顺序
 
-1. `docs/prd.md` — 产品模式：CodeMemory v1 是可靠的 work-memory substrate；Source Artifact + Atom Graph + ContextPack 是主线。
-2. `docs/architecture.md` — Source Artifact Registry / Atom Graph / Progressive ContextPack / Adapter 的正式边界。
-3. `docs/project_structure.md` — 当前仓库文件职责和落点规则。
-4. `docs/INTEGRATION.md` — CLI、Python、MCP、主流 agent harness 的接入方式。
-5. `docs/USER_GUIDE.md` — 面向使用者的日常操作手册。
-6. `docs/agent-memory-guide.md` — Work Layer 的 agent 使用规则草案。
-7. `docs/plan/` — 当前 sprint 和长期 backlog。
-8. `docs/reference/` — idea 来源、历史审计和非 v1 默认方向，仅作追溯。
+1. `docs/prd.md` — 产品公理、11 个 canonical 概念与 Personal Profile 产品边界。
+2. `docs/architecture.md` — Core / Adapters / Importer、两条读取路径、Personal Profile 机制与运行时边界。
+3. `docs/personal-memory-profile.md` — 外部个人实例的权威文件、provenance、维护状态与 Git 安全合同。
+4. `docs/project_structure.md` — 当前仓库文件职责和落点规则。
+5. `docs/INTEGRATION.md` — CLI、Python、MCP、主流 agent harness 的接入方式。
+6. `docs/USER_GUIDE.md` — 面向使用者的日常操作手册。
+7. `docs/agent-memory-guide.md` — canonical atom 的 agent 贡献规范。
+8. `docs/plan/` — 当前 sprint 和长期 backlog。
+9. `docs/reference/` — idea 来源、历史审计和非默认方向，仅作追溯。
 
 ---
 
@@ -86,6 +87,9 @@
 |---|---|
 | `src/codememory/__init__.py` | Python public API 聚合入口。新增公共函数时在这里显式导出。 |
 | `src/codememory/core.py` | frontmatter 解析、body hash、root 发现、检索概率/衰减基础函数。 |
+| `src/codememory/profile.py` | Personal Profile manifest、非覆盖初始化、独立 profile/Git capability validation。 |
+| `src/codememory/capture.py` | append-only Capture、ULID、独立 SHA-256、实例锁、fsync 与完整 block 解析。 |
+| `src/codememory/personal_index.py` | Capture / Incubator Topic typed index、词法筛选和稳定 ID read；Claim block 在 1A 仅保留。 |
 | `src/codememory/models.py` | Pydantic v2 数据模型：memory entry、index、imports、source_refs 等 contract。 |
 | `src/codememory/index.py` | `.codememory/index.json` 的加载、保存、重建。 |
 | `src/codememory/create.py` | 新 memory 文件模板生成和初始 metadata 写入。 |
@@ -306,7 +310,11 @@ Frontend 是本地操作台：查看 graph、resolve context、编辑 memory、�
 | 文件 | 职责 |
 |---|---|
 | `tests/integration_test.py` | CLI / core 集成流程测试。 |
+| `tests/integration_personal.py` | Phase 1A disposable external instance、root binding 与两条读取路径验收。 |
 | `tests/test_api.py` | FastAPI API 级测试。 |
+| `tests/personal/test_profile.py` | Personal Profile 与可选 Git capability 合同。 |
+| `tests/personal/test_capture.py` | Capture ID/hash/锁/完整块合同。 |
+| `tests/personal/test_discovery.py` | 三类对象、Topic/Claim 保留、typed search/read/build 边界。 |
 | `tests/unit/__init__.py` | unit test package marker。 |
 | `tests/unit/test_create_update.py` | create/update 行为测试。 |
 | `tests/unit/test_edge_cases.py` | 边界条件和异常路径测试。 |
@@ -323,6 +331,7 @@ Frontend 是本地操作台：查看 graph、resolve context、编辑 memory、�
 ```bash
 python -m pytest -q tests/unit tests/test_api.py
 python tests/integration_test.py
+python tests/integration_personal.py
 cd frontend && npm run build
 ```
 
@@ -334,12 +343,13 @@ cd frontend && npm run build
 
 | 文件 | 职责 |
 |---|---|
-| `docs/prd.md` | 产品定义：目标用户、v1 范围、非目标、Source Artifact / Atom / ContextPack 产品模型和优先级。 |
-| `docs/architecture.md` | 系统架构：Source Artifact Registry、Atom Graph、Progressive ContextPack、Compiler、Adapters。 |
+| `docs/prd.md` | 产品定义：memory-as-code 公理、11 个 canonical 概念、Personal Profile 三层模型与非目标。 |
+| `docs/architecture.md` | 系统架构：Core / Adapters / Importer、build/discovery、Personal runtime、状态机与职责边界。 |
+| `docs/personal-memory-profile.md` | Personal Profile 外部实例合同：Capture、Incubator Topic、Canonical Atom、provenance、maintenance、Git 安全。 |
 | `docs/project_structure.md` | 本文：仓库文件地图和落点规则。 |
 | `docs/INTEGRATION.md` | 外部接入指南：CLI、Python API、MCP、agent framework/harness。 |
 | `docs/USER_GUIDE.md` | 使用者指南：安装、创建、检索、维护、迁移。 |
-| `docs/agent-memory-guide.md` | Work Layer agent 操作指南草案。 |
+| `docs/agent-memory-guide.md` | canonical atom 的 Agent 贡献规范。 |
 | `docs/plan/FUTURE.md` | 长期 roadmap 和 backlog；不存放一次性执行日志。 |
 | `docs/plan/SPRINT.md` | 当前 active sprint；验收通过后移除已完成任务。 |
 | `docs/reference/` | 历史探索、审计报告、非 v1 默认方向。用于追溯 idea 来源，不作为当前实现依据。 |
@@ -359,6 +369,20 @@ cd frontend && npm run build
 
 这些内容不再作为当前判断依据；如果需要追溯，用 `docs/reference/` 或 Git history。
 
+### 13.1 Personal Profile 目标模块（Phase 1，尚未实现）
+
+Phase 0 只定义合同。下列落点在 `docs/plan/SPRINT.md` 获 owner 接受后才允许创建：
+
+| 目标路径 | 责任 |
+|---|---|
+| `src/codememory/profile.py` | Personal manifest 与目录/ignore 校验 |
+| `src/codememory/capture.py` | Capture ID/hash、锁、append + fsync、block parser |
+| `src/codememory/personal_index.py` | Capture / Topic / Atom typed discovery 与 read locator |
+| `src/codememory/maintenance.py` | Phase 1B changeset、run ledger 与幂等状态机 |
+| `.agents/skills/personal-memory/` | Phase 1B Codex 语义维护工作流；不属于 Core |
+
+外部 `MyMemory` 实例的目录结构不属于本程序仓库；权威定义只在 `docs/personal-memory-profile.md`。
+
 ---
 
 ## 14. 新代码落点规则
@@ -374,7 +398,7 @@ cd frontend && npm run build
 | 新可复用 UI 组件 | `frontend/src/components/` | `frontend/src/pages/` 中复制粘贴实现 |
 | 新 agent provider | `src/llm_gateway/providers/` | `src/codememory/` |
 | 新 harness tool | `src/harnesslib/tools/` 或 `src/codememory/tools.py` | 直接耦合到某个 LLM provider |
-| 新产品策略 | Layer profile / schema / docs | Core 函数里硬编码场景规则 |
+| 新产品策略 | PRD / profile contract / Codex Skill | Core 函数里硬编码语义判断 |
 
 ---
 

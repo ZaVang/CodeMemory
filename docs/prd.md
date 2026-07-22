@@ -4,7 +4,7 @@
 > 记忆按代码的方式组织——原子化、显式依赖、按需装配。
 > 一个记忆库就是一个仓库，agent 是它的运行时。
 
-**最后更新**：2026-06-10
+**最后更新**：2026-07-22
 **状态**：canonical
 **前身**：2026-05-19 版（Source Artifact / ContextPack 体系）。旧概念的去向见附录 A。
 
@@ -20,6 +20,8 @@ CodeMemory 的全部设计从一条公理推导：**记忆像代码一样组织*
 2. **显式依赖**——"理解这条记忆需要先理解什么"通过 imports 声明，不靠语义相似度猜测；
 3. **按需装配**——上下文是从入口解析依赖闭包、在预算内裁剪出的构建产物，不是检索结果的堆砌。
 
+这三条推论约束的是 **canonical memory**。Personal Profile 中的每日 Capture 和月度 Incubator 文档分别对应 append-only source log 与 working tree；它们不是 atom，不进入 imports DAG，也不要求“一条记录一个文件”。只有提升后的 Canonical Atom 承担可装配的正式认识。
+
 功能筛选标准（设计哲学）：**它在代码世界里的对应物是什么？**
 映射得出来的可以进入产品；映射不出来的拒绝，或放入 `docs/reference/` 作为探索记录。
 
@@ -31,22 +33,25 @@ CodeMemory 的全部设计从一条公理推导：**记忆像代码一样组织*
 - 决策只留下结论，没有留下前提、来源和依赖——三个月后没人知道"为什么当时这么定"；
 - 长文档存在，但无法稳定压缩成 agent 可直接消费的工作上下文；
 - 现有记忆方案要么是手工维护的平面文档（必然漂移、腐烂），要么是向量检索（高召回，但拿到结论时拿不到理解它的前提）。
+- 对个人使用者而言，若每次记录都必须分类、填写 frontmatter 或逐条审核 Agent 产物，捕获摩擦和维护负担会使系统失去持续使用价值；反过来，若 Agent 任意生成零碎文件，记忆库又会迅速膨胀和失真。
 
 "拿到结论时同时拿到前提"是因果完整性问题，本质是依赖解析——代码世界用 import 声明和构建系统解决了几十年的问题。CodeMemory 把这套被验证过的机制移植到记忆上。
 
 ## 3. 主场景
 
-**跨项目个人工作记忆。**
+**跨项目个人工作记忆，以及面向单一 owner 的 Personal Memory Profile。**
 
 - 库独立于任何代码 repo，存单一 owner 的判断、决策、偏好、流程、项目上下文入口；
 - 消费者是多个 agent（Claude Code、Codex、自建 harness、MCP client），跨本地/云端多环境；
 - owner 是唯一 reviewer；agent 是主要写入者，受写入纪律约束（第 6 章）。
+- Personal Profile 中，owner 通过低摩擦 Capture 记录工作、生活和想法；Agent 异步维护 Incubator Topic，并只在提升为 Canonical Atom 时请求 owner 确认。
+- 程序仓库与个人实例严格分离：CodeMemory 提供协议、Core 和 adapters；MyMemory 一类外部仓库存放 owner 数据。
 
 暂不服务：多人团队知识库、企业权限治理、面向大众的陪伴产品、通用向量数据库替代品。
 
 ## 4. 概念模型
 
-三组共 11 个概念。**实现状态如实标注**——"已定义未实现"是路线图承诺，不是已交付能力。
+Core 仍由三组共 11 个概念构成。Personal Profile 在这些概念之上定义 Capture 与 Incubator Topic 两类 profile 对象，不把它们伪装成 atom。**实现状态如实标注**——"已定义未实现"是路线图承诺，不是已交付能力。
 
 ### 4.1 静态结构（仓库里有什么）
 
@@ -64,7 +69,7 @@ CodeMemory 的全部设计从一条公理推导：**记忆像代码一样组织*
 |---|---|---|---|
 | **build**（装配） | 构建/链接 + tree-shaking | 入口 atom → imports 闭包 → 拓扑排序 → 预算内裁剪（超预算按 target > required > recommended > related 降级为 summary）→ 结构化上下文 | 已实现（CLI 主命令 `build`；`resolve` / `context-pack` 为兼容别名） |
 | **check**（校验） | 类型检查 + linter | 断链、循环、schema 违约、stale asset、孤儿 | 已实现（CLI 名 `validate`） |
-| **search**（检索） | 符号搜索 / LSP | **只负责找入口**；找到后一切走 build。词法排序，不做语义装配 | 已实现（词法排序：字段加权 + OR 语义） |
+| **search**（检索） | 符号搜索 / LSP | **只负责发现候选入口**；Canonical Atom 进入 build，Capture / Incubator Topic 走直接读取。词法、时间和标签是默认能力；语义检索只可用于 discovery | atom 词法排序已实现；Personal Profile 多类型检索未实现 |
 | **test**（验证） | 测试 / CI | 入口 atom 可附黄金问题：装配出的上下文应能让 agent 回答 X；最小形态 = 题集 + LLM judge | 已实现（题集导出 + report 回写 log；runner 是 agent） |
 
 ### 4.3 变更管理（仓库怎么演化）
@@ -74,35 +79,74 @@ CodeMemory 的全部设计从一条公理推导：**记忆像代码一样组织*
 | **proposal**（提案） | Pull Request | 高风险变更落为 `status: proposed`，不进默认 build，owner merge 后生效 | 已实现（新增类 = `status: proposed`；修改类 = patch 队列 `propose`/`merge`/`reject`） |
 | **log**（日志） | git log | 每次变更的审计轨迹（change_note / log.md） | 已实现 |
 
+### 4.4 Personal Profile 三层模型
+
+| 层级 | 代码对应物 | 写入与修改纪律 | 检索与装配 |
+|---|---|---|---|
+| **Capture** | append-only source log record | 一条输入一个稳定 ID 和独立内容 hash；Agent 只追加，不自动改写或删除；owner 可明确清理 | 可按全文、时间、标签和 provenance 发现并按 ID 读取；不进 build |
+| **Incubator Topic** | working tree 中的可演化模块草稿 | 月度文档内按稳定 topic ID 聚类；Agent 可自动补充、合并、纠正；未审阅不阻塞维护 | 可发现、直接读取、参与关联；不进 build |
+| **Canonical Atom** | 已合并模块 | 一个文件一个语义单元；由 topic 提升时默认需要 owner 确认；后续高风险修改继续走 proposal | search 找入口后只通过 imports DAG build |
+
+补充规则：
+
+- owner 明确说“新建正式 idea”或等价自然语言时，该指令本身就是本次提升确认；
+- Incubator Topic 可以长期未审阅、继续参与检索和关联，不是待办队列；
+- 集中审阅必须支持批量提升、合并和删除，不能退化为逐条 proposal 清单；
+- Agent 推断可以自动写入 Incubator，但不得无确认提升为 Canonical Atom；
+- 原始 Capture 是证据；Incubator 是低风险衍生工作区；Canonical Atom 是少量、长期维护的正式认识。
+
 ## 5. 核心循环
 
-### 5.1 读路径——agent 接活
+### 5.1 两条读路径——发现与装配分离
 
 ```text
-任务 → search 找入口（检索只到这一步）
-     → build：解析依赖闭包，预算内裁剪
-     → 需要原文细节时 asset 按需展开（不默认塞全文）
-     → 带着上下文干活
+Path A：canonical
+任务 → search 发现 Canonical Atom
+     → build：解析 imports 闭包，预算内裁剪
+     → 需要原文细节时按 provenance / source_refs 显式展开
+
+Path B：personal discovery
+任务 → 按全文 / 时间 / 标签搜索 Capture 与 Incubator Topic
+     → 按稳定 ID 读取命中记录或主题段落
+     → Agent 主动阅读、比较和综合
+     → 若需正式上下文，另选 Canonical Atom 走 Path A
 ```
+
+Phase 2 可增加本地语义索引，但只能给两条路径提供候选入口。外部 embedding 默认关闭，只能由 owner 显式启用。任何语义命中都不得直接成为 canonical build 的装配节点。
 
 ### 5.2 写路径——agent 沉淀
 
 ```text
-会话中形成新判断
-     → 按 guide 判断：值不值得记 / 记成什么 / 依赖谁
-     → 低风险：新增 atom（可声明自己的 imports），不修改任何已有文件 → 直写
-     → 高风险：修改已有 atom（正文或 imports）、或涉及 protected atom → proposal
-     → owner 异步 review → merge / reject / edit
-     → 任何写入后 check 守门
+owner 输入 → Capture 立即 append + fsync，返回稳定 ID
+          → 不等待分类、维护、Git 或网络
+
+Agent 维护 → 读取全部未消费 Capture
+          → 自动更新 / 合并 Incubator Topic
+          → 写明 origin、derived_from；独立推断写 claim block + claim_status
+          → 不自动提升 canonical
+
+topic 提升 → owner 明确指令或集中审阅确认
+          → 新 Canonical Atom
+          → check 守门
+
+已有 atom 修改 / protected 变更 → proposal → owner merge / reject
 ```
 
-### 5.3 维护循环——owner 周期性
+### 5.3 Personal Profile 维护循环
 
 ```text
-check    → stale asset（原文 hash 变了）→ 复核受影响 atom
-orphans  → 不可达 atom → 归档或重新挂依赖
-test     → 黄金问题回归 → 装配质量没有退化
+scan captures → 计算所有未被 applied run 消费的 Capture（包含 missed-run catch-up）
+              → 生成幂等 changeset
+              → apply：更新 incubator / 索引 / provenance
+              → sensitive scan
+              → commit（同一 run 不重复提交）
+              → push（失败留在本地，下次只重试未完成阶段）
+              → 简短通知
 ```
+
+maintenance run 的状态与日志只存放在 `.codememory/`，不得写入 journal 正文。Capture 落盘成功不依赖后续任何阶段；整理、commit 或 push 失败都不能造成原始记录丢失或重复消费。
+
+原有 canonical 维护循环继续保留：`check` 检查 stale / 断链 / schema，`orphans` 发现不可达 atom，`test` 验证黄金问题。
 
 ## 6. 写入纪律
 
@@ -110,6 +154,17 @@ test     → 黄金问题回归 → 装配质量没有退化
 |---|---|---|
 | 低风险 | 新增 atom（可声明自己的 imports），不修改任何已有文件 | 直写，写后 check |
 | 高风险 | 修改已有 atom 的正文或 imports；或变更涉及 protected atom | proposal，owner merge 后生效 |
+
+Personal Profile 对此作更严格覆盖：
+
+| 操作 | 默认权限 |
+|---|---|
+| append Capture | 自动执行 |
+| 新建、补充、聚类、合并 Incubator Topic | 自动执行，完整记录 provenance |
+| Agent 新建 Canonical Atom | 必须由 owner 确认提升；默认 proposed |
+| owner 明确要求“新建正式 idea” | 该指令视为确认，可直接创建 active atom并记录确认来源 |
+| 修改已有 atom / imports、删除或修改 protected 内容 | proposal / owner 确认 |
+| owner 集中审阅 incubator | 可批量提升、合并、删除 |
 
 **protected 的语义**：标记"动它必须走 proposal"的 atom（核心原则、硬约束类记忆）。它是写入纪律的判据，由 owner 拍板设置，不与任何重要性评分挂钩。
 
@@ -122,6 +177,11 @@ test     → 黄金问题回归 → 装配质量没有退化
 - 一个全新 agent 通过 search → build 重建某项目的关键上下文，并通过该入口的黄金问题测试；
 - 高风险变更 100% 经过 proposal（可由 check 验证）；
 - 任何重要结论可追溯：经 imports 到前提，经 asset 引用到原文，经 log 到变更历史。
+- owner 可不填表单地追加记录；Capture 即使维护、commit 或 push 失败也不丢失；
+- 大量日常输入只产生每日 journal 与月度 incubator，不按想法数量生成 Markdown 文件；
+- Incubator 可长期自动演化并参与检索，而 Canonical Atom 的新增仍由 owner 确认；
+- 可按时间、标签、主题和显式关系回看想法演化，Agent 推断不会伪装成 owner 原话；
+- missed-run catch-up、重复维护、重复 commit 和 push 重试均幂等。
 
 **工程侧：**
 
@@ -137,6 +197,11 @@ test     → 黄金问题回归 → 装配质量没有退化
 4. 把长文档塞进 atom body（那是 asset 的职责）；
 5. LLM 直写高风险路径；
 6. 图的分支管理（proposal 是状态，不是分支）。
+7. 把 Capture 或 Incubator Topic 自动塞入 canonical build；
+8. Phase 1 引入语义向量索引，或默认调用外部 embedding 服务；
+9. 完整笔记编辑器、插件生态、每条记录强制原子化；
+10. 自动删除或无痕改写 owner 原始 Capture；
+11. 把 private GitHub remote 当作正文加密；Git 历史中的敏感内容不能因工作树删除而视为已清除。
 
 ## 附录 A：旧概念对照表（2026-05-19 体系 → 现行）
 
@@ -172,3 +237,11 @@ test     → 黄金问题回归 → 装配质量没有退化
 | log | 变更审计轨迹 |
 | protected | "修改必须走 proposal"的 atom 标记，由 owner 设置 |
 | owner | 库的唯一所有者与 reviewer |
+| Personal Profile | 面向单一 owner 的低摩擦捕获与异步维护实例规范 |
+| Capture | journal 中带稳定 ID 与独立内容 hash 的 append-only 原始记录 |
+| Incubator Topic | 月度 incubator 文档中的段落级、可演化衍生主题，不进入 build |
+| Canonical Atom | 经 owner 确认提升、可通过 imports DAG 装配的正式认识 |
+| origin | 内容来源类别：human_explicit / agent_synthesis / agent_inference；混合来源 Topic 可为 mixed |
+| claim | Topic 内带稳定 claim_id 的段落级独立主张；不单独创建 Markdown 文件 |
+| claim_status | 具体 claim 或单一主张型 Atom 的认识状态：unassessed / supported / contested / refuted；不属于整个 Topic，不代替生命周期 status |
+| maintenance run | 一次可恢复、可重试、幂等的整理—扫描—commit—push 批次 |

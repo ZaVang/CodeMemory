@@ -6,11 +6,14 @@ from typing import Any
 
 from .core import get_root_dir
 from .handlers import (
+    handle_build,
+    handle_capture,
     handle_changelog,
     handle_create,
     handle_import,
     handle_log,
     handle_orphans,
+    handle_read,
     handle_resolve,
     handle_search,
     handle_update,
@@ -68,6 +71,14 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
                 "semantic_type": {"type": "string", "description": "Filter by semantic type tag"},
                 "has_imports": {"type": "boolean", "description": "Only show memories with non-empty imports"},
                 "has_schema": {"type": "boolean", "description": "Only show memories with a schema reference"},
+                "kinds": {"type": "array", "items": {"type": "string", "enum": ["capture", "incubator_topic", "atom"]}},
+                "date_from": {"type": "string", "description": "Earliest date (YYYY-MM-DD)"},
+                "date_to": {"type": "string", "description": "Latest date (YYYY-MM-DD)"},
+                "topic": {"type": "string"},
+                "project": {"type": "string"},
+                "person": {"type": "string"},
+                "origin": {"type": "string"},
+                "claim_status": {"type": "string", "description": "Canonical atom claim status only"},
                 "root": {"type": "string", "description": "Root directory for memory data"},
             },
         },
@@ -161,6 +172,48 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
             "required": ["text"],
         },
     },
+    {
+        "name": "build_memory",
+        "description": "Build canonical context through the imports DAG. Captures and Topics are rejected.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "id": {"type": "string"},
+                "depth": {"type": "string", "enum": ["required", "recommended", "full"], "default": "recommended"},
+                "budget": {"type": "integer"},
+                "focus": {"type": "string"},
+                "task_goal": {"type": "string"},
+                "format": {"type": "string", "enum": ["xml-markdown", "markdown", "plain-markdown", "json"]},
+                "root": {"type": "string", "description": "Root directory for memory data"},
+            },
+            "required": ["id"],
+        },
+    },
+    {
+        "name": "capture_memory",
+        "description": "Append an immutable Capture to the bound Personal Profile instance.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "text": {"type": "string", "description": "Capture payload"},
+                "actor": {"type": "string"},
+                "root": {"type": "string", "description": "Root directory for memory data"},
+            },
+            "required": ["text"],
+        },
+    },
+    {
+        "name": "read_memory",
+        "description": "Read a Capture or Topic revision by stable ID.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "id": {"type": "string"},
+                "root": {"type": "string", "description": "Root directory for memory data"},
+            },
+            "required": ["id"],
+        },
+    },
 ]
 
 
@@ -190,7 +243,11 @@ async def _search_handler(payload: dict[str, Any]) -> dict[str, Any]:
                             maturity=payload.get("maturity"),
                             semantic_type=payload.get("semantic_type"),
                             has_imports=payload.get("has_imports", False),
-                            has_schema=payload.get("has_schema", False))
+                            has_schema=payload.get("has_schema", False),
+                            kinds=payload.get("kinds"), date_from=payload.get("date_from"),
+                            date_to=payload.get("date_to"), topic=payload.get("topic"),
+                            project=payload.get("project"), person=payload.get("person"),
+                            origin=payload.get("origin"), claim_status=payload.get("claim_status"))
     return {"result": results}
 
 
@@ -243,6 +300,30 @@ async def _import_handler(payload: dict[str, Any]) -> dict[str, Any]:
     return {"result": result}
 
 
+async def _build_handler(payload: dict[str, Any]) -> dict[str, Any]:
+    root = get_root_dir(payload.get("root"))
+    result = handle_build(
+        root,
+        payload["id"],
+        depth=payload.get("depth", "recommended"),
+        budget=payload.get("budget"),
+        focus=payload.get("focus"),
+        task_goal=payload.get("task_goal"),
+        output_format=payload.get("format", "xml-markdown"),
+    )
+    return {"result": result}
+
+
+async def _capture_handler(payload: dict[str, Any]) -> dict[str, Any]:
+    root = get_root_dir(payload.get("root"))
+    return {"result": handle_capture(root, payload["text"], actor=payload.get("actor"))}
+
+
+async def _read_handler(payload: dict[str, Any]) -> dict[str, Any]:
+    root = get_root_dir(payload.get("root"))
+    return {"result": handle_read(root, payload["id"])}
+
+
 _HANDLER_MAP = {
     "resolve_context": _resolve_handler,
     "create_memory": _create_handler,
@@ -254,22 +335,41 @@ _HANDLER_MAP = {
     "changelog": _changelog_handler,
     "log": _log_handler,
     "import_memories": _import_handler,
+    "build_memory": _build_handler,
+    "capture_memory": _capture_handler,
+    "read_memory": _read_handler,
 }
 
 
 # ── Registration ──────────────────────────────────────────────────────────────
 
 
-async def register_all(sandbox) -> None:
+async def register_all(sandbox, bound_root: str | None = None) -> None:
     """Register all codememory tools with a Sandbox instance."""
     from harnesslib.sandbox import ToolDefinition
 
     for td in TOOL_DEFINITIONS:
         name = td["name"]
+        schema = td.get("input_schema")
+        if bound_root is not None and schema:
+            schema = {
+                **schema,
+                "properties": {
+                    key: value for key, value in schema.get("properties", {}).items()
+                    if key != "root"
+                },
+            }
         definition = ToolDefinition(
             name=name,
             description=td["description"],
-            input_schema=td.get("input_schema"),
+            input_schema=schema,
         )
         handler = _HANDLER_MAP[name]
-        await sandbox.register(definition, handler)
+        if bound_root is not None:
+            async def bound_handler(payload, _handler=handler, _root=bound_root):
+                clean = dict(payload)
+                clean["root"] = _root
+                return await _handler(clean)
+            await sandbox.register(definition, bound_handler)
+        else:
+            await sandbox.register(definition, handler)

@@ -35,3 +35,29 @@ If those files change only because tests reindexed or logged operations, restore
 实现 asset 相关功能时，不要让 build 产物（resolve / context-pack 输出）自动内联 asset 的原文正文。
 
 build 产物默认只携带 asset 引用（source_refs）；原文获取必须走显式的 `source expand`。这保证长文档不会未经请求就进入 agent 的 handoff 上下文。（概念边界见 `docs/architecture.md` §3.5。）
+
+---
+
+## Personal Profile capability 与 validity 分离
+
+普通目录和缺少 remote 的 Git repo 都是合法 Personal Profile。`profile_valid` 只判断实例合同；Git/remote 只产生独立 capability 状态。Capture 不得因为 `git_delivery=unavailable` 失败，也不要在 init 中隐式执行 `git init` 或创建 remote。
+
+凡是 Profile 允许配置的路径，ignore、tracked 检查、安全提示和扫描都必须从实际 Profile 值派生；不能用默认目录名代替合同值。
+
+---
+
+## Dedicated adapter 必须绑定 root
+
+`CodememoryToolkit` 与 MCP 是实例边界，不是任意文件浏览器。导出给模型的 schema 不包含 `root`；Sandbox 即使收到调用方伪造的 `root` 也必须用构造时绑定的 root。CLI 的 operator `--root` 仍是可信本地入口。
+
+---
+
+## Topic 内 Claim 的 Phase 1A 解析边界
+
+月度 incubator 文件按 `##` Topic section 解析；`###` Claim block 属于 Topic body，Phase 1A 原样保留但不拆文件、不独立索引。Topic 可以 `origin: mixed`，但不能继承其中各 Claim 的 `claim_status`。
+
+---
+
+## 扫描 warning 不等于记录仍然有效
+
+Capture 出现不完整 block 或 payload hash mismatch 时，validate 必须报告；扫描器不能在 warning 后继续把该记录加入有效结果。typed index、stable-ID read 和未来 maintenance 必须共享同一个“只返回完整且 hash 有效记录”的边界。

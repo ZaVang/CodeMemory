@@ -7,11 +7,13 @@ from pathlib import Path
 from .core import configure_logging, get_root_dir
 from .handlers import (
     handle_build,
+    handle_capture,
     handle_changelog,
     handle_compile_md,
     handle_context_pack,
     handle_create,
     handle_import,
+    handle_init_personal,
     handle_log,
     handle_materialize_review,
     handle_merge,
@@ -19,6 +21,7 @@ from .handlers import (
     handle_propose,
     handle_proposals,
     handle_reindex,
+    handle_read,
     handle_reject,
     handle_resolve,
     handle_search,
@@ -48,6 +51,29 @@ def main(argv: list[str] | None = None):
     parser = argparse.ArgumentParser(description="CodeMemory — memory atomization protocol")
     parser.add_argument("--root", help="Root directory for memory data")
     subparsers = parser.add_subparsers(dest="command", required=True)
+
+    # Personal Profile init (Git remains optional and is never initialized here)
+    p = subparsers.add_parser("init", help="Initialize or validate a memory profile")
+    _add_logging_flags(p)
+    p.add_argument("path", help="Instance directory")
+    p.add_argument("--profile", choices=["personal"], required=True)
+    p.add_argument("--owner", default="owner")
+    p.add_argument("--timezone", default="Asia/Hong_Kong")
+    p.add_argument("--auto-commit", action="store_true")
+    p.add_argument("--auto-push", action="store_true")
+    p.add_argument("--remote", default="origin")
+    p.add_argument("--branch", default="main")
+
+    # append-only Personal Profile Capture
+    p = subparsers.add_parser("capture", help="Append a Capture to a Personal Profile journal")
+    _add_logging_flags(p)
+    p.add_argument("text", nargs="?", help="Capture payload")
+    p.add_argument("--stdin", action="store_true", help="Read the Capture payload from stdin")
+    p.add_argument("--actor", help="Capture actor (defaults to profile owner)")
+
+    p = subparsers.add_parser("read", help="Read a Capture or Topic revision by stable ID")
+    _add_logging_flags(p)
+    p.add_argument("id", help="Capture ID or Topic revision ID")
 
     # create
     p = subparsers.add_parser("create", help="Create a new memory")
@@ -167,6 +193,16 @@ def main(argv: list[str] | None = None):
     p.add_argument("--semantic-type", dest="semantic_type", help="Filter by semantic type tag (e.g. decision, model, guideline)")
     p.add_argument("--has-imports", action="store_true", help="Filter to memories with non-empty imports")
     p.add_argument("--has-schema", action="store_true", help="Filter to memories with a schema reference")
+    p.add_argument("--kind", dest="kinds", nargs="+",
+                   choices=["capture", "incubator_topic", "atom"],
+                   help="Filter by typed object kind")
+    p.add_argument("--from", dest="date_from", help="Earliest date (YYYY-MM-DD)")
+    p.add_argument("--to", dest="date_to", help="Latest date (YYYY-MM-DD)")
+    p.add_argument("--topic")
+    p.add_argument("--project")
+    p.add_argument("--person")
+    p.add_argument("--origin")
+    p.add_argument("--claim-status", dest="claim_status")
 
     # source
     p = subparsers.add_parser("source", help="Manage Source Artifact registry")
@@ -277,7 +313,29 @@ def main(argv: list[str] | None = None):
     root = get_root_dir(args.root)
     cmd = args.command
 
-    if cmd == "create":
+    if cmd == "init":
+        print(handle_init_personal(
+            Path(args.path),
+            owner=args.owner,
+            timezone_name=args.timezone,
+            auto_commit=args.auto_commit,
+            auto_push=args.auto_push,
+            remote=args.remote,
+            branch=args.branch,
+        ))
+    elif cmd == "capture":
+        if args.stdin and args.text is not None:
+            parser.error("capture accepts either text or --stdin, not both")
+        if args.stdin:
+            payload = sys.stdin.read()
+        elif args.text is not None:
+            payload = args.text
+        else:
+            parser.error("capture requires text or --stdin")
+        print(handle_capture(root, payload, actor=args.actor))
+    elif cmd == "read":
+        print(handle_read(root, args.id))
+    elif cmd == "create":
         tags_list = None
         if args.tags:
             tags_list = [t.strip() for t in args.tags.split(",") if t.strip()]
@@ -346,7 +404,10 @@ def main(argv: list[str] | None = None):
         print(handle_search(root, query=args.query, tags=args.tags, type_=args.type_,
                             status=args.status, maturity=args.maturity,
                             semantic_type=args.semantic_type,
-                            has_imports=args.has_imports, has_schema=args.has_schema))
+                            has_imports=args.has_imports, has_schema=args.has_schema,
+                            kinds=args.kinds, date_from=args.date_from, date_to=args.date_to,
+                            topic=args.topic, project=args.project, person=args.person,
+                            origin=args.origin, claim_status=args.claim_status))
     elif cmd == "source":
         if args.source_command == "add":
             print(handle_source_add(

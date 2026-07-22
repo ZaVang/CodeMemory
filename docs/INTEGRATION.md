@@ -500,7 +500,7 @@ GET /api/sources/expand?artifact_id=src/design-md&max_chars=2000
 
 ## Sandbox Integration
 
-Register all 12 codememory tools into a `harnesslib.Sandbox` with a single call:
+Register all 13 codememory tools into a `harnesslib.Sandbox` with a single call. A toolkit is bound to one root; exported schemas omit `root`, and a caller-supplied root is ignored during Sandbox execution.
 
 ```python
 import asyncio
@@ -514,14 +514,13 @@ async def main():
     # One-line registration
     await toolkit.register_to_sandbox(sandbox)
 
-    # All 10 tools are now available
+    # All 13 tools are now available and bound to examples/investment
     for tool_def in sandbox.list_tools():
         print(f"  {tool_def.name}: {tool_def.description}")
 
     # Execute a tool via the sandbox
     result = await sandbox.execute("search_memories", {
         "query": "risk",
-        "root": "examples/investment",
     })
     print(result)
 
@@ -534,16 +533,19 @@ asyncio.run(main())
 |---|-----------|-------------|
 | 1 | `resolve_context` | Resolve and assemble memory context via DAG |
 | 2 | `create_memory` | Create a new memory with frontmatter template |
-| 3 | `search_memories` | Search by query, tags, type, and status |
+| 3 | `search_memories` | Typed lexical search across Capture, Topic, and Atom |
 | 4 | `validate_memories` | Run integrity checks on all indexed memories |
-| 5 | `focus_memory` | Focus on a memory with adjustable resolution |
-| 6 | `update_memory` | Update with version control and change tracking |
-| 7 | `snapshot` | Persist a TransientDAG as atom .md |
-| 8 | `find_orphans` | Find memories with zero in-degree |
-| 9 | `overview` | Top memories with heat scores, stale detection |
-| 10 | `changelog` | Show change_log history for a memory |
-| 11 | `log` | Show global audit log timeline |
-| 12 | `import_memories` | Import draft memories from text |
+| 5 | `update_memory` | Update with version control and change tracking |
+| 6 | `snapshot` | Persist a TransientDAG as atom .md |
+| 7 | `find_orphans` | Find memories with zero in-degree |
+| 8 | `changelog` | Show change_log history for a memory |
+| 9 | `log` | Show global audit log timeline |
+| 10 | `import_memories` | Import draft memories from text |
+| 11 | `build_memory` | Assemble canonical Atom context through imports DAG |
+| 12 | `capture_memory` | Append an immutable Capture to a Personal Profile |
+| 13 | `read_memory` | Read a Capture or Topic revision by stable ID |
+
+For a Personal Profile, initialize the external instance first with `codememory init <path> --profile personal`. `capture_memory` never performs maintenance, Git commit/push, semantic indexing, or Web work. MCP is process-bound through a required explicit `CODEMEMORY_ROOT`; it has no example fallback and exposes `capture_memory`, `search_memories`, `read_memory`, and `build_memory` without a per-call root parameter.
 
 ### OpenAI format export
 

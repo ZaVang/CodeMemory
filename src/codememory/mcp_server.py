@@ -36,8 +36,12 @@ if str(_SRC) not in sys.path:
     sys.path.insert(0, str(_SRC))
 
 from codememory.handlers import (  # noqa: E402 - sys.path is adjusted above for module execution
+    handle_build,
+    handle_capture,
     handle_create,
+    handle_read,
     handle_resolve,
+    handle_search,
     handle_snapshot,
     handle_update,
 )
@@ -53,6 +57,63 @@ SERVER_NAME = "codememory-mcp"
 SERVER_VERSION = "0.1.0"
 
 TOOLS = [
+    {
+        "name": "build_memory",
+        "description": "Build canonical context from an atom through the imports DAG.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "id": {"type": "string"},
+                "depth": {"type": "string", "enum": ["required", "recommended", "full"], "default": "recommended"},
+                "budget": {"type": "integer"},
+            },
+            "required": ["id"],
+        },
+        "readOnlyHint": True,
+    },
+    {
+        "name": "capture_memory",
+        "description": "Append an immutable Capture to this server's bound Personal Profile.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "text": {"type": "string"},
+                "actor": {"type": "string"},
+            },
+            "required": ["text"],
+        },
+        "readOnlyHint": False,
+    },
+    {
+        "name": "search_memories",
+        "description": "Lexically discover Captures, Topic revisions, and canonical atoms.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string"},
+                "kinds": {"type": "array", "items": {"type": "string", "enum": ["capture", "incubator_topic", "atom"]}},
+                "tags": {"type": "array", "items": {"type": "string"}},
+                "date_from": {"type": "string"},
+                "date_to": {"type": "string"},
+                "topic": {"type": "string"},
+                "project": {"type": "string"},
+                "person": {"type": "string"},
+                "origin": {"type": "string"},
+                "claim_status": {"type": "string"},
+            },
+        },
+        "readOnlyHint": True,
+    },
+    {
+        "name": "read_memory",
+        "description": "Read a Capture or Topic revision by stable ID.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"id": {"type": "string"}},
+            "required": ["id"],
+        },
+        "readOnlyHint": True,
+    },
     {
         "name": "resolve_memory",
         "description": (
@@ -194,7 +255,56 @@ def _call_tool(name: str, arguments: dict) -> list[dict]:
     """Dispatch a tool call to the appropriate handler. Returns MCP content blocks."""
     root = _get_root_from_env()
 
-    if name == "resolve_memory":
+    if name == "build_memory":
+        memory_id = arguments.get("id", "")
+        if not memory_id:
+            return [{"type": "text", "text": "Error: 'id' parameter is required for build_memory"}]
+        try:
+            result = handle_build(
+                root,
+                memory_id,
+                depth=arguments.get("depth", "recommended"),
+                budget=arguments.get("budget"),
+            )
+            return [{"type": "text", "text": result}]
+        except Exception as exc:
+            return [{"type": "text", "text": f"Error building '{memory_id}': {exc}"}]
+
+    elif name == "capture_memory":
+        text = arguments.get("text")
+        if text is None:
+            return [{"type": "text", "text": "Error: 'text' parameter is required for capture_memory"}]
+        try:
+            return [{"type": "text", "text": handle_capture(root, text, actor=arguments.get("actor"))}]
+        except Exception as exc:
+            return [{"type": "text", "text": f"Error capturing memory: {exc}"}]
+
+    elif name == "search_memories":
+        result = handle_search(
+            root,
+            query=arguments.get("query"),
+            tags=arguments.get("tags"),
+            kinds=arguments.get("kinds"),
+            date_from=arguments.get("date_from"),
+            date_to=arguments.get("date_to"),
+            topic=arguments.get("topic"),
+            project=arguments.get("project"),
+            person=arguments.get("person"),
+            origin=arguments.get("origin"),
+            claim_status=arguments.get("claim_status"),
+        )
+        return [{"type": "text", "text": result}]
+
+    elif name == "read_memory":
+        memory_id = arguments.get("id", "")
+        if not memory_id:
+            return [{"type": "text", "text": "Error: 'id' parameter is required for read_memory"}]
+        try:
+            return [{"type": "text", "text": handle_read(root, memory_id)}]
+        except Exception as exc:
+            return [{"type": "text", "text": f"Error reading '{memory_id}': {exc}"}]
+
+    elif name == "resolve_memory":
         memory_id = arguments.get("id", "")
         if not memory_id:
             return [{"type": "text", "text": "Error: 'id' parameter is required for resolve_memory"}]
@@ -235,10 +345,8 @@ def _call_tool(name: str, arguments: dict) -> list[dict]:
                 change_note="proposed via MCP",
             )
             return [{"type": "text", "text": (
-                f"Memory proposed: {memory_id}
-"
-                f"Status: proposed (excluded from default build/search)
-"
+                f"Memory proposed: {memory_id}\n"
+                f"Status: proposed (excluded from default build/search)\n"
                 f"Owner review: codememory merge {memory_id} (or reject)."
             )}]
         except Exception as exc:
@@ -285,17 +393,14 @@ def _get_root_from_env() -> Path:
     """Resolve the memory root from CODEMEMORY_ROOT environment variable."""
     root = os.environ.get("CODEMEMORY_ROOT", "")
     if not root:
-        # Try default relative to the project root
-        default = Path(__file__).resolve().parent.parent.parent / "examples" / "companion"
-        if default.exists():
-            return default
         raise RuntimeError(
-            "CODEMEMORY_ROOT environment variable is required. "
-            "Set it to a dataset path, e.g. 'examples/companion'"
+            "CODEMEMORY_ROOT environment variable is required for explicit MCP instance binding."
         )
     p = Path(root)
     if not p.exists():
         raise RuntimeError(f"CODEMEMORY_ROOT path does not exist: {root}")
+    if not p.is_dir():
+        raise RuntimeError(f"CODEMEMORY_ROOT must be a directory: {root}")
     return p
 
 

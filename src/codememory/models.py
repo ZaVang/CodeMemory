@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import warnings
 from datetime import date, datetime
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -111,6 +111,14 @@ class MemoryEntry(BaseModel):
     maturity: str = Field(default="draft", description="draft | verified | proven | superseded")
     evidence: dict[str, Any] | None = None
 
+    # Personal Profile discovery/provenance metadata.  claim_status applies to
+    # a canonical atom (or an inline claim block), never to a whole Topic.
+    origin: str | None = None
+    claim_status: str | None = None
+    topic: str | None = None
+    project: str | None = None
+    people: list[str] = Field(default_factory=list)
+
     # Golden-question test contract (architecture §3.4). Stored raw so a
     # malformed atom cannot break reindex; shape is reported by validate.
     golden_questions: list[Any] = Field(default_factory=list)
@@ -147,3 +155,23 @@ class IndexData(BaseModel):
     version: int = 1
     updated: str = Field(default_factory=lambda: datetime.now().isoformat())
     memories: dict[str, MemoryEntry] = Field(default_factory=dict)
+    personal_objects: dict[str, "PersonalIndexEntry"] = Field(default_factory=dict)
+
+
+class PersonalIndexEntry(BaseModel):
+    """A non-canonical Personal Profile object stored in the unified index."""
+
+    kind: Literal["capture", "incubator_topic"]
+    id: str
+    path: str
+    display_locator: str
+    summary: str = ""
+    content: str = ""
+    timestamp: str = ""
+    tags: list[str] = Field(default_factory=list)
+    origin: str | None = None
+    topic: str | None = None
+    project: str | None = None
+    people: list[str] = Field(default_factory=list)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    read_action: Literal["read"] = "read"

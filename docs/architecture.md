@@ -2,13 +2,13 @@
 
 > **Architecture thesis**
 > 三层结构：**Adapters 接入，Core 实现机制，Importer 负责迁移**。
-> Core 实现 PRD 的 11 概念；agent 不在系统内——agent 是运行时，经 adapter 调用系统。
+> Core 实现 PRD 的 11 个 canonical 概念和确定性的 Personal Profile 机制；agent 不在系统内——agent 是运行时，经 adapter 调用系统。
 > 本文档是契约级参考：字段表、状态机、管线分解、收敛路径是后续 sprint 的直接依据，sprint 不再做架构决策。
 > 冲突裁决顺序：`docs/prd.md`（概念）> 本文档（结构与契约）> 代码现状。
 
-**最后更新**：2026-06-10
+**最后更新**：2026-07-22
 **状态**：canonical / 契约级
-**上游**：`docs/prd.md`（memory-as-code，11 概念）；设计依据 `docs/superpowers/specs/2026-06-10-architecture-rebuild-design.md`
+**上游**：`docs/prd.md`（memory-as-code + Personal Profile）、`docs/personal-memory-profile.md`（实例文件合同）；设计依据 `docs/superpowers/specs/2026-06-10-architecture-rebuild-design.md`
 
 ---
 
@@ -25,6 +25,7 @@
 │  表示：models.py  core.py  index.py               │
 │  操作：build  search  check  test(仅契约)          │
 │  变更：create  update  merge  log  changelog      │
+│  Profile：capture  personal_index  maintenance    │
 │  资产：sources.py    维护：orphans suggest_deps    │
 ├──────────────────────────────────────────────────┤
 │               Importer（迁移层）                   │
@@ -33,7 +34,7 @@
 └──────────────────────────────────────────────────┘
 ```
 
-旧体系的 Layer Profiles 层已删除："什么值得记"是 `docs/agent-memory-guide.md`（CONTRIBUTING）的职责，不是代码层。
+旧体系的 Layer Profiles 层仍保持删除：Personal Profile 是**实例文件与操作纪律**，不是召回概率、性格或“什么值得记”的算法层。语义判断属于 Codex Skill；Core 只实现可验证机制。
 
 ### 1.1 Adapters（接入层）
 
@@ -47,6 +48,7 @@
 - 操作：build（装配）、search（入口检索）、check（校验，CLI 名 `validate`）、test（仅契约，零 LLM 依赖）。
 - 变更：`create.py`、`update.py`（含 merge/reject 操作）、`log.py`、`changelog.py`。
 - 资产：`sources.py`。维护：`orphans.py`、`suggest_deps.py`、`diff.py`。
+- Personal Profile 目标模块：`profile.py`（manifest）、`capture.py`（原子追加）、`personal_index.py`（Capture / Topic 索引）、`maintenance.py`（changeset 与 run 状态）。
 - **`handlers.py` 是 Core 的唯一门面**，所有 adapter 经它调用。
 - 禁区：不依赖任何 LLM provider；不依赖 harnesslib / llm_gateway；不决定"什么值得记"。
 
@@ -59,6 +61,17 @@
 ### 1.4 agent 在哪里
 
 agent 不是系统组件。agent 是消费 build 产物、按写入纪律提交变更的运行时，永远经 adapter（CLI bash 命令 / MCP / toolkit）调用系统，不 import codememory、不直接读写记忆库的 .md 文件。
+
+### 1.5 Personal Profile 的四方职责
+
+| 责任方 | 负责 | 不负责 |
+|---|---|---|
+| **Core** | profile 校验、Capture 原子追加、稳定 ID/hash、对象解析与索引、词法/时间/标签过滤、provenance 校验、幂等 changeset、maintenance 状态、敏感扫描结果合同 | 内容分类、追问、聚类判断、生成综合、调用 embedding、Git 网络操作 |
+| **Codex Skill** | 判断是否只记录或追问、主动阅读历史、聚类/upsert Topic、综合与推断、生成带 provenance 的 changeset、形成临时回答 | 直接绕过 Core 改 journal、无确认提升 canonical、commit/push |
+| **Automation** | 定时唤醒、missed-run 启动、调用 Skill、驱动 scan/commit/push、按 run 状态重试、发送摘要通知 | 改写内容语义、把失败当作 Capture 失败、重新生成已 applied 的 changeset |
+| **MyMemory 实例** | owner 数据、profile、journal、incubator、canonical atoms、运行 ledger；可选 Git history/remote 目标 | CodeMemory 程序实现、跨实例全局状态、凭据 |
+
+Git credential、GitHub 访问控制和通知通道属于运行环境，不写入 profile 或仓库正文。
 
 ---
 
@@ -75,6 +88,7 @@ agent 不是系统组件。agent 是消费 build 产物、按写入纪律提交�
 | test | **`test_contract.py`** | 已完成：导出题集 + 装配上下文；report 写回 log | C ✅ |
 | proposal | `models.py`（status）+ `proposals.py`（patch 队列）+ `update.py`（merge/reject 分发） | 已完成（修改类落为独立小模块 `proposals.py`，复用 update 应用 patch） | A ✅ / C ✅ |
 | log | `log.py` / `changelog.py` | 不变 | — |
+| Personal Profile | `profile.py` / `capture.py` / `personal_index.py` / `maintenance.py` | Phase 0 合同已定义，尚未实现 | 1A / 1B |
 
 ### 2.1 保留与定位说明
 
@@ -172,6 +186,48 @@ status: active                  # active | archived | missing | stale
 | imports.related | 弱关联 | depth=full 时 |
 | source_refs（asset 引用） | 出处 / 可展开原文 | **否** |
 
+### 3.6 Personal Profile 对象边界
+
+权威文件合同见 `docs/personal-memory-profile.md`。Core 必须把三类对象作为判别联合处理：
+
+| kind | 身份 | 可变性 | 默认读取动作 | 进入 build |
+|---|---|---|---|---:|
+| `capture` | `capture.id` | Agent append-only | `read_object(id)` | 否 |
+| `incubator_topic` | `topic_id + revision_id` | Agent 可 upsert / merge | `read_object(revision_id)` | 否 |
+| `atom` | frontmatter `id` | 受 proposal 纪律约束 | `build(id)` | 是 |
+
+索引结果必须返回 `kind` 和 `read_action`；调用方不能仅凭路径猜测是否可 build。Capture / Topic 的 locator 由稳定 block ID 解析，行号只能作为展示提示，不能作为引用身份。
+
+### 3.7 provenance 合同
+
+Personal Profile 对象使用：
+
+- 作者字段：`created_by`、`last_edited_by`、`reviewed_by`、`owner_confirmed`；
+- 来源字段：`origin = human_explicit | agent_synthesis | agent_inference`；
+- 内部衍生：`derived_from[] = {kind, id, content_hash}`；
+- 外部材料：继续使用 `source_refs` / asset registry；
+- 显式关系：`supports / contradicts / corrects / evolves_from / merged_from / related`；
+- 认识状态：`claim_status = unassessed | supported | contested | refuted`。
+
+Topic 可以包含多种来源，Topic 级 `origin` 因而允许 `mixed`。Topic 本身不带 `claim_status`；独立可反驳的 Agent inference 使用 Topic 内嵌 `codememory:claim` block、稳定 `claim_id` 和自己的 claim_status。Phase 1A 只解析 Topic 边界并保留 claim block；claim 索引属于 Phase 1B。
+
+`status`、`claim_status`、`freshness` 是三个正交维度：
+
+- `status` 决定生命周期和 build 可见性；
+- `claim_status` 表达具体 claim block 或单一主张型 Atom 的认识支持度；
+- `freshness` 由引用 hash 计算，不作为 owner 真相持久化。
+
+### 3.8 Canonical 提升门
+
+```text
+Incubator Topic
+  ├─ Agent 自主认为成熟 → create proposed atom → owner merge
+  ├─ owner 明确“新建正式 idea / 提升” → create active atom + confirmation provenance
+  └─ 集中审阅批次 → owner 一次确认 → batch promote / merge / delete
+```
+
+Skill 必须把 owner 原始指令或 review batch ID 写入确认 provenance。日常整理结果不走逐条 proposal；确认门只位于 canonical 提升和既有高风险变更。
+
 ---
 
 ## 4. 操作管线契约
@@ -217,6 +273,85 @@ entry → closure → order → trim → render
 | `merge <id>` | 新增类：proposed → active；修改类：应用 patch + version++ | 已实现 |
 | `reject <id>` | 新增类归档；修改类丢弃 patch；均留 log | 已实现 |
 
+### 4.5 Personal Discovery 管线
+
+```text
+parse query → filter kinds/time/tags/metadata → lexical rank → return typed candidates
+                                                    ├─ capture/topic → read_object
+                                                    └─ atom → build
+```
+
+Phase 1 排序只能使用确定性的词法、时间、标签和 metadata。Agent 可在候选结果上主动继续读取。Phase 2 的 semantic provider 是可选 discovery adapter：本地默认、外部默认关闭；其输出只参与候选排序，不可生成 imports 或向 build 注入正文。
+
+### 4.6 Maintenance changeset 与状态机
+
+一次 run 的权威输入是排序后的 `(capture_id, content_hash)` 集合；input digest 相同且已有 run 达到 `applied` 时，Core 必须返回既有 run，不生成新 changeset。
+
+`pending/<run_id>.json` 至少包含：
+
+```json
+{
+  "run_id": "run_...",
+  "input_digest": "sha256:...",
+  "captures": [{"id": "cap_...", "content_hash": "sha256:..."}],
+  "operations": [
+    {
+      "op": "upsert_topic",
+      "topic_id": "topic/...",
+      "revision_id": "topic/...@2026-07",
+      "path": "incubator/2026-07.md",
+      "before_hash": "sha256:...",
+      "after_hash": "sha256:..."
+    }
+  ]
+}
+```
+
+Core apply 规则：
+
+1. 目标为 `after_hash`：视为已应用并跳过；
+2. 目标为 `before_hash`：执行该操作；
+3. 两者都不是：进入 conflict / `apply_failed`，禁止覆盖；
+4. 所有操作达到 after hash 后才记 `applied`，此时输入 Capture 才算已消费；
+5. interrupted `applying` run 在下次从同一 changeset 恢复，不重新调用 Skill；
+6. 未消费集合由完整 Capture 扫描减去所有 reached-applied run 的输入集合得到，不依赖日期、mtime 或 last-run time。
+
+并发规则：一个实例最多一个 active maintenance run；plan 在 maintenance lock 下冻结输入集合。plan 后到达的新 Capture 由独立 append lock 写入，并留给下一次 catch-up，不能改变当前 run 的 input digest。
+
+状态机与 Git 语义：
+
+```text
+planned → applying → applied → scanning → scan_passed → committed → pushed
+              │          │          │          └→ push_failed
+              │          │          └→ scan_blocked
+              │          └→ commit_failed
+              └→ apply_failed
+```
+
+Tracked / local 边界：
+
+- `runs.jsonl` 受 Git 跟踪，每行一个不可变 run event，只记录内容阶段到 `scan_passed`；
+- `state.json` 与 `pending/` 默认 Git ignore，是可重建的本机 runtime/delivery 状态；
+- `committed` 由唯一 `CodeMemory-Run: <run_id>` commit trailer 证明；
+- `pushed` 由目标 remote ref 包含该 commit 证明；
+- commit/push 后不得再写受跟踪状态来“记录已 push”，避免产生新的脏工作树。
+
+Automation 执行 Git：commit 必须带 `CodeMemory-Run: <run_id>` trailer，并在创建前查重；push 失败只更新本机 delivery state，下次推同一 commit，不能回到 maintenance 或重新消费 Capture。commit 必须包含本 run 的 journal/incubator 变更与 tracked ledger events；push 成功后工作树应为 clean。
+
+Automation 只允许 stage profile 声明的受跟踪路径；`private-local/`、ignored runtime state 和 profile 路径外未知改动不得进入自动 commit。遇到未知改动时进入 `commit_failed` 并报告，而不是扩大范围。
+
+`scan_blocked` 是单 active run 安全门：Capture 继续 append，但 plan/apply 新 run 与所有 Git delivery 均停止；owner 修复后恢复同一 run。阻塞期间新增 Capture 留给该 run 完成后的 catch-up。通知按安全事件发送，不进入普通审核积压。
+
+### 4.7 敏感扫描守门
+
+敏感扫描发生在 `applied` 之后、commit 之前，输入是待提交 diff。Core 提供结构化 scanner/result contract，Automation 负责调用和状态推进。
+
+- 命中时进入 `scan_blocked`，不得 commit/push；
+- 输出不得包含完整秘密，只含 rule、path、对象 ID 和位置提示；
+- 不自动修改 Capture，也不自动搬入 `private-local/`；
+- validate 必须检查 `paths.private_local` 指向的实际目录已 ignore 且未被跟踪；
+- private remote 不是加密边界，相关警告属于 init 生成的实例文档合同。
+
 ---
 
 ## 5. Adapter Contracts
@@ -230,12 +365,35 @@ entry → closure → order → trim → render
 | 变更 | `handle_create` / `handle_update` / `handle_merge` / `handle_reject` | `create` / `update` / `merge` / `reject` | `create`、`propose` |
 | asset | `handle_source_*` | `source add/list/get/check/expand` | `expand_source` |
 | importer | `handle_import` / `handle_skeletonize` / `handle_compile_md` / `handle_materialize_review` | `import` / `skeletonize` / `compile-md` / `materialize-review` | — |
+| profile | `handle_profile_init` / `handle_profile_validate` | `init --profile personal` / `validate` | — |
+| capture | `handle_capture` | `capture` | `capture` |
+| typed discovery | `handle_search` / `handle_read_object` | `search` / `read` | `search` / `read` |
+| maintenance | `handle_maintenance_plan/apply/status` | `maintenance plan/apply/status/retry` | `maintenance_status`（只读） |
+| promotion review | `handle_promote` / batch review handlers | `promote` / `review-incubator` | `propose`（canonical 写门） |
 
 规则：
 
 1. 每个概念操作一个 handler，CLI / REST / MCP / tools 全部委托同一 handler；
 2. REST 路由随收敛阶段对齐，禁止在 backend router 或 frontend 内实现任何装配、过滤、排序逻辑；
 3. MCP / toolkit 只暴露最小工具集（build / search / expand_source / create / propose），其余操作属于 owner 的 CLI 工作面。
+
+Personal Profile 补充：
+
+4. Codex Skill 使用 capture / typed search / read / maintenance changeset handler，不得直接编辑 journal 或 run ledger；
+5. `maintain --daily` 若未来作为便利命令出现，只能编排确定性 run 阶段或启动外部 Skill，不能把 LLM provider 引入 Core；
+6. CLI 继续使用 `--root` / `CODEMEMORY_ROOT`；MCP 每个进程绑定一个显式 root；toolkit 每个实例绑定一个 root；
+7. Web 通过服务端 allowlist registry 将实例别名映射为绝对 root。请求只传别名；禁止把任意绝对路径或 `..` 交给 backend 解析；现有 `examples/` 自动发现只保留为开发/demo 兼容路径。
+
+实例 registry 目标格式：
+
+```yaml
+instances:
+  mymemory: D:\\work\\MyMemory
+```
+
+registry 路径由服务端环境配置提供；它不属于 MyMemory 仓库，也不得包含 Git 凭据。
+
+Git delivery 是可选 adapter 能力：profile init 不隐式创建 Git repo/remote，`auto_commit` / `auto_push` 默认 false。非 Git root 或 remote 缺失只产生结构化 unavailable 状态，不得阻止 init、validate profile core contract 或 Capture；显式启用但不可用时 adapter 单独报告 delivery validation。
 
 ---
 
@@ -264,6 +422,10 @@ entry → closure → order → trim → render
 5. 它让 LLM 绕过 proposal 直写 canonical 了吗？
 6. 它需要新依赖吗？理由写在哪？
 7. 另一个 adapter 能通过同一个 handler 调到它吗？
+8. 它是否把 Capture / Incubator 偷渡进 canonical build？
+9. 它的重试是否会重复消费 Capture、重复生成 Topic、重复 commit？
+10. 它是否在 owner 未确认时创建 active Canonical Atom？
+11. 它是否会把正文发送给默认关闭的外部 embedding 服务？
 
 任何一问答案不清楚：**先改架构文档，再写代码。**
 

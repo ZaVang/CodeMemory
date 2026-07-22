@@ -26,6 +26,7 @@ Usage::
 
 from __future__ import annotations
 
+from copy import deepcopy
 from typing import Any
 
 
@@ -50,21 +51,31 @@ class CodememoryToolkit:
     >>> # OpenAI format
     >>> openai_tools = toolkit.get_tools_for_openai()
     >>> len(openai_tools)
-    10
+        13
     >>>
     >>> # Anthropic format
     >>> anthropic_tools = toolkit.get_tools_for_anthropic()
     >>> len(anthropic_tools)
-    10
+        13
     >>>
     >>> # Gemini format
     >>> gemini_tools = toolkit.get_tools_for_gemini()
     >>> len(gemini_tools)
-    10
+        13
     """
 
     def __init__(self, root: str | None = None) -> None:
         self._root = root
+
+    def _bound_definitions(self) -> list[dict[str, Any]]:
+        """Export schemas without a caller-controlled root parameter."""
+        from .tools import TOOL_DEFINITIONS
+
+        definitions = deepcopy(TOOL_DEFINITIONS)
+        for definition in definitions:
+            properties = definition.get("input_schema", {}).get("properties", {})
+            properties.pop("root", None)
+        return definitions
 
     # ------------------------------------------------------------------
     # OpenAI format
@@ -93,10 +104,8 @@ class CodememoryToolkit:
         list[dict]
             List of tool definitions, one per codememory operation.
         """
-        from .tools import TOOL_DEFINITIONS
-
         tools: list[dict[str, Any]] = []
-        for td in TOOL_DEFINITIONS:
+        for td in self._bound_definitions():
             tools.append({
                 "type": "function",
                 "function": {
@@ -131,10 +140,8 @@ class CodememoryToolkit:
         list[dict]
             List of tool definitions, one per codememory operation.
         """
-        from .tools import TOOL_DEFINITIONS
-
         tools: list[dict[str, Any]] = []
-        for td in TOOL_DEFINITIONS:
+        for td in self._bound_definitions():
             tools.append({
                 "name": td["name"],
                 "description": td["description"],
@@ -167,10 +174,8 @@ class CodememoryToolkit:
         list[dict]
             List of tool definitions, one per codememory operation.
         """
-        from .tools import TOOL_DEFINITIONS
-
         tools: list[dict[str, Any]] = []
-        for td in TOOL_DEFINITIONS:
+        for td in self._bound_definitions():
             tools.append({
                 "name": td["name"],
                 "description": td["description"],
@@ -183,7 +188,7 @@ class CodememoryToolkit:
     # ------------------------------------------------------------------
 
     async def register_to_sandbox(self, sandbox) -> None:
-        """Register all 10 codememory tools with a harnesslib Sandbox.
+        """Register all codememory tools with a harnesslib Sandbox.
 
         Parameters
         ----------
@@ -205,6 +210,7 @@ class CodememoryToolkit:
         >>>
         >>> asyncio.run(main())
         """
+        from .core import get_root_dir
         from .tools import register_all
 
-        await register_all(sandbox)
+        await register_all(sandbox, str(get_root_dir(self._root)))

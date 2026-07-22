@@ -189,7 +189,31 @@ L3 full source artifact
 
 ---
 
-## 7. 常用 CLI
+## 7. Personal Profile（Phase 1A）
+
+Personal Profile 可以初始化在普通目录、没有 remote 的 Git repo 或完整 Git repo 中。Git delivery 默认关闭；缺少 Git/remote 只显示为 `unavailable`，不会让 init 或 Capture 失败。
+
+```powershell
+# 初始化；不会隐式 git init，也不会创建 remote
+codememory init D:\memory\MyMemory --profile personal
+
+# Capture 可从参数或 stdin 输入，返回稳定 cap_<ULID>、SHA-256 和文件位置
+codememory --root D:\memory\MyMemory capture "今天重新确认了 canonical 边界"
+Get-Content note.md | codememory --root D:\memory\MyMemory capture --stdin
+
+# Capture 不等待 reindex；需要检索时显式重建索引
+codememory --root D:\memory\MyMemory reindex
+codememory --root D:\memory\MyMemory search --kind capture incubator_topic atom --query "canonical"
+codememory --root D:\memory\MyMemory read cap_01...
+```
+
+读取边界固定为：Capture / Incubator Topic 使用 `read`；Canonical Atom 使用 `build`。对 Capture 或 Topic 执行 `build` 会明确拒绝。Topic 内的 `codememory:claim` block 在 Phase 1A 会原样保留，但不会被拆文件或独立索引。
+
+安全边界：`private-local/` 和本机 runtime 状态默认忽略；private GitHub 不等于加密存储，原始记录一旦进入 Git 历史，即使从工作区删除也可能仍然存在。Phase 1A 不包含 maintenance、Git delivery、Codex Skill、Web 或 semantic discovery。
+
+---
+
+## 8. 常用 CLI
 
 ```powershell
 # 创建 / 更新
@@ -227,7 +251,7 @@ codememory --help
 
 ---
 
-## 8. Web UI
+## 9. Web UI
 
 Web UI 是 operator console，不定义 canonical memory contract。
 

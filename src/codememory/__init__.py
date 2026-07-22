@@ -16,11 +16,14 @@ from .compiler import (
     save_review_set,
 )
 from .core import compute_body_hash, get_root_dir, parse_frontmatter
+from .capture import CaptureRecord, append_capture, capture_content_hash, scan_all_captures
 from .build import ContextPack, ContextPackNode, ContextPackNotice, build_context_pack, render_context_pack
 from .create import create
 from .index import load_index, reindex, save_index
 from .integrations import CodememoryToolkit
-from .models import ChangeLogEntry, ImportRef, IndexData, MemoryEntry, SourceRef
+from .models import ChangeLogEntry, ImportRef, IndexData, MemoryEntry, PersonalIndexEntry, SourceRef
+from .personal_index import read_personal_object, typed_search
+from .profile import PersonalProfile, init_personal_profile, validate_personal_profile
 from .orphans import find_orphans
 from .resolve import build_dag, find_cycle_participants, resolve, topological_sort
 from .search import search
@@ -47,8 +50,14 @@ __all__ = [
     "parse_frontmatter",
     "compute_body_hash",
     "get_root_dir",
+    "append_capture",
+    "capture_content_hash",
+    "scan_all_captures",
     # Data Models
     "MemoryEntry",
+    "PersonalIndexEntry",
+    "PersonalProfile",
+    "CaptureRecord",
     "IndexData",
     "ImportRef",
     "SourceRef",
@@ -87,6 +96,10 @@ __all__ = [
     "TransientNode",
     # Search
     "search",
+    "typed_search",
+    "read_personal_object",
+    "init_personal_profile",
+    "validate_personal_profile",
     # Sources
     "add_source_artifact",
     "check_source_artifact",

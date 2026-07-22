@@ -4,6 +4,36 @@ This file records accepted sprint outcomes. Current work belongs in `docs/plan/S
 
 ---
 
+## 2026-07-22 — Personal Memory Phase 1A
+
+**Status:** Accepted by owner.
+
+**Delivered:**
+
+- Added a Personal Profile contract and non-overwriting initialization for ordinary directories, Git repositories without remotes, and fully configured Git repositories; Git delivery remains optional and disabled by default.
+- Added append-only Capture storage with stable `cap_<ULID>` IDs, payload-only SHA-256, instance locking, flush + fsync, and complete-block parsing.
+- Added typed indexing and lexical discovery across Capture, Incubator Topic, and Canonical Atom, with stable-ID `read` for non-canonical objects and imports-DAG `build` for Atoms only.
+- Preserved inline claim blocks inside Topics without prematurely adding claim indexing, maintenance, promotion, Web, semantic discovery, or Git delivery.
+- Bound toolkit and MCP adapters to explicit instance roots and exposed the Phase 1A capture/search/read/build surface.
+- Closed four owner-review findings: validate now reports malformed Captures; hash-invalid Captures are excluded from scan/index/read; MCP has no writable example fallback; and custom `paths.private_local` drives ignore/tracked validation.
+
+**Acceptance evidence:**
+
+- Owner independently reproduced all four focused fixes and accepted Phase 1A.
+- `python -m pytest tests/unit tests/test_api.py -q` → `197 passed`
+- Personal Profile suite → `17 passed`
+- `python tests/integration_personal.py` → `10 passed, 0 failed`
+- existing `python tests/integration_test.py` → `21/21 passed`
+- hard-coded production MyMemory path and enabled external embedding searches → no matches
+- `git diff --check` → passed; generated example test differences restored
+
+**Deferred / gate state:**
+
+- Phase 1B remains closed pending a separate explicit owner authorization.
+- Codex Skill, maintenance, Git delivery, promotion, Web, and semantic discovery were not started.
+
+---
+
 ## 2026-06-10 — 阶段 C：清理与 test
 
 **Status:** Accepted and merged.

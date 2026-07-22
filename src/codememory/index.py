@@ -7,6 +7,7 @@ from pathlib import Path
 
 from .core import compute_body_hash, parse_frontmatter
 from .models import IndexData, MemoryEntry, SourceRef
+from .personal_index import build_personal_index
 
 _logger = logging.getLogger("codememory")
 
@@ -60,7 +61,7 @@ def reindex(root_dir: Path) -> int:
     old_memories = old_index.memories
 
     index_data = IndexData()
-    search_dirs = ["user", "self", "schemas", "api"]
+    search_dirs = ["user", "self", "schemas", "api", "memory"]
     count = 0
 
     for d in search_dirs:
@@ -145,12 +146,29 @@ def reindex(root_dir: Path) -> int:
                     entry.maturity = str(meta["maturity"])
                 if "evidence" in meta:
                     entry.evidence = meta["evidence"]
+                if "origin" in meta:
+                    entry.origin = str(meta["origin"])
+                if "claim_status" in meta:
+                    entry.claim_status = str(meta["claim_status"])
+                if "topic" in meta:
+                    entry.topic = str(meta["topic"])
+                if "project" in meta:
+                    entry.project = str(meta["project"])
+                if "people" in meta:
+                    value = meta["people"]
+                    entry.people = [str(item) for item in value] if isinstance(value, list) else [str(value)]
 
                 index_data.memories[actual_id] = entry
                 count += 1
             except Exception as e:
                 _logger.error("Error indexing %s: %s", filepath, e)
 
+    index_data.personal_objects, warnings = build_personal_index(root_dir)
+    for warning in warnings:
+        _logger.warning("Personal index: %s", warning)
     save_index(root_dir, index_data)
-    print(f"Reindexed {count} memories successfully.")
+    print(
+        f"Reindexed {count} memories and "
+        f"{len(index_data.personal_objects)} personal objects successfully."
+    )
     return count

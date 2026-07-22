@@ -210,6 +210,19 @@ def validate(root_dir: Path) -> tuple[int, int]:
             )
             warnings += 1
 
+    # Personal Profile source diagnostics belong to validate, not only reindex.
+    # Invalid/corrupt Captures are reported here and excluded by their scanners.
+    if (root_dir / ".codememory" / "profile.yaml").exists():
+        from .capture import scan_all_captures
+        from .personal_index import scan_all_topics
+
+        for message in scan_all_captures(root_dir).warnings:
+            print(f"[CAPTURE-WARN] {message}")
+            warnings += 1
+        for message in scan_all_topics(root_dir).warnings:
+            print(f"[TOPIC-WARN] {message}")
+            warnings += 1
+
     print(f"\nValidation complete. {len(memories)} memories checked.")
     print(f"Errors: {errors}, Warnings: {warnings}")
     return errors, warnings

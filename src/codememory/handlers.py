@@ -20,11 +20,14 @@ from .build import build_context_pack, render_context_pack
 from .core import compute_body_hash as _cbh
 from .core import get_memory_path, parse_frontmatter as _pfm
 from .create import create
+from .capture import append_capture
 from .import_cmd import import_text
 from .index import load_index, reindex
 from .log import show_log
 from .orphans import find_orphans
 from .resolve import resolve
+from .personal_index import read_personal_object, typed_search
+from .profile import init_personal_profile, validate_personal_profile
 from .search import search
 from .snapshot import snapshot_dag
 from .skeletonize.markdown import skeletonize_markdown
@@ -227,6 +230,15 @@ def handle_proposals(root: Path) -> str:
     return "\n".join(lines)
 
 
+def _ensure_buildable(root: Path, memory_id: str) -> None:
+    personal = load_index(root).personal_objects.get(memory_id)
+    if personal is not None:
+        raise ValueError(
+            f"Object '{memory_id}' is {personal.kind} and is not buildable; "
+            "use read. Only canonical atoms enter imports DAG assembly."
+        )
+
+
 def handle_resolve(
     root: Path,
     memory_id: str,
@@ -235,6 +247,7 @@ def handle_resolve(
     focus: str | None = None,
 ) -> str:
     """Resolve a memory context via DAG. Returns assembled text."""
+    _ensure_buildable(root, memory_id)
     return resolve(root, memory_id, depth=depth, budget=budget, focus=focus)
 
 
@@ -248,6 +261,7 @@ def handle_build(
     output_format: str = "xml-markdown",
 ) -> str:
     """Run the unified assembly pipeline and render it (primary verb)."""
+    _ensure_buildable(root, memory_id)
     pack = build_context_pack(
         root,
         memory_id,
@@ -289,7 +303,52 @@ def handle_reindex(root: Path) -> str:
 def handle_validate(root: Path) -> int:
     """Run integrity checks. Prints report, returns error count for exit code."""
     errors, _warnings = validate(root)
+    if (root / ".codememory" / "profile.yaml").exists():
+        result = validate_personal_profile(root)
+        print(f"Personal Profile valid: {str(result.profile_valid).lower()}")
+        print(
+            "Git delivery: "
+            + result.git_delivery.status
+            + (f":{result.git_delivery.reason}" if result.git_delivery.reason else "")
+        )
+        for message in result.errors:
+            print(f"[PROFILE-ERROR] {message}")
+        for message in result.warnings:
+            print(f"[PROFILE-WARN] {message}")
+        errors += len(result.errors)
     return errors
+
+
+def handle_init_personal(
+    root: Path,
+    *,
+    owner: str = "owner",
+    timezone_name: str = "Asia/Hong_Kong",
+    auto_commit: bool = False,
+    auto_push: bool = False,
+    remote: str = "origin",
+    branch: str = "main",
+) -> str:
+    result = init_personal_profile(
+        root,
+        owner=owner,
+        timezone=timezone_name,
+        auto_commit=auto_commit,
+        auto_push=auto_push,
+        remote=remote,
+        branch=branch,
+    )
+    return json.dumps(result.model_dump(mode="json"), indent=2, ensure_ascii=False)
+
+
+def handle_capture(root: Path, payload: str, *, actor: str | None = None) -> str:
+    record = append_capture(root, payload, actor=actor)
+    return json.dumps(record.model_dump(mode="json"), indent=2, ensure_ascii=False)
+
+
+def handle_read(root: Path, object_id: str) -> str:
+    result = read_personal_object(root, object_id)
+    return json.dumps(result.model_dump(mode="json"), indent=2, ensure_ascii=False)
 
 
 def handle_source_add(
@@ -385,20 +444,56 @@ def handle_search(
     semantic_type: str | None = None,
     has_imports: bool = False,
     has_schema: bool = False,
+    kinds: list[str] | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+    topic: str | None = None,
+    project: str | None = None,
+    person: str | None = None,
+    origin: str | None = None,
+    claim_status: str | None = None,
 ) -> str:
     """Search memories. Returns formatted result lines."""
-    results = search(root, query=query, tags=tags, type_=type_, status=status,
-                     maturity=maturity, semantic_type=semantic_type,
-                     has_imports=has_imports, has_schema=has_schema)
+    if (root / ".codememory" / "profile.yaml").exists() or kinds:
+        results = typed_search(
+            root,
+            query=query,
+            tags=tags,
+            kinds=kinds,
+            date_from=date_from,
+            date_to=date_to,
+            topic=topic,
+            project=project,
+            person=person,
+            origin=origin,
+            claim_status=claim_status,
+            type_=type_,
+            status=status,
+            maturity=maturity,
+            semantic_type=semantic_type,
+            has_imports=has_imports,
+            has_schema=has_schema,
+        )
+    else:
+        results = search(root, query=query, tags=tags, type_=type_, status=status,
+                         maturity=maturity, semantic_type=semantic_type,
+                         has_imports=has_imports, has_schema=has_schema)
     if not results:
         return "(no results)"
     lines: list[str] = []
     for r in results:
         tags_str = _fmt_tags(r)
-        lines.append(
-            f"{r['id']:40s}  {r['type']:9s}  "
-            f"deps:{r['dependents']:3d}  [{tags_str}]"
-        )
+        if r.get("kind") in ("capture", "incubator_topic"):
+            lines.append(
+                f"{r['id']:40s}  {r['kind']:17s}  "
+                f"[{tags_str}]  -> {r['read_action']}"
+            )
+            lines.append(f"    {r['display_locator']}")
+        else:
+            lines.append(
+                f"{r['id']:40s}  {r['type']:9s}  "
+                f"deps:{r['dependents']:3d}  [{tags_str}]  -> {r.get('read_action', 'build')}"
+            )
         if r.get("summary"):
             lines.append(f"    {r['summary']}")
     return "\n".join(lines)
