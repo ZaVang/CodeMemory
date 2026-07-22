@@ -61,3 +61,12 @@ build 产物默认只携带 asset 引用（source_refs）；原文获取必须�
 ## 扫描 warning 不等于记录仍然有效
 
 Capture 出现不完整 block 或 payload hash mismatch 时，validate 必须报告；扫描器不能在 warning 后继续把该记录加入有效结果。typed index、stable-ID read 和未来 maintenance 必须共享同一个“只返回完整且 hash 有效记录”的边界。
+
+---
+
+## Git delivery 恢复与安全输入边界
+
+- `scan_passed` 不等于 delivery 已完成。公开 `maintenance resume` 必须重新进入 delivery，并从 `CodeMemory-Run` trailer 找回“commit 已创建但本机 state 未落盘”的 commit；push 失败只重试同一 commit。
+- 不要解析 Git 面向人的 quoted porcelain 输出并把显示字符串传回 pathspec。涉及任意 Unicode 文件名时使用 `-z` 的 NUL-delimited 输出；diff locator 使用未 quote 的 UTF-8 path。
+- 敏感扫描不能只依赖已知 token 前缀。还要检测可疑高熵候选，同时排除普通 hex content hash；finding 只能暴露 rule/path/locator。
+- merge/delete 等复合写操作必须在第一次写入前完成自引用、目标存在性和路径约束校验。尤其 self-merge 必须无副作用失败，不能写后再依赖旧 revision 查找。

@@ -4,6 +4,37 @@ This file records accepted sprint outcomes. Current work belongs in `docs/plan/S
 
 ---
 
+## 2026-07-22 — Personal Memory Phase 1B
+
+**Status:** Accepted by owner.
+
+**Delivered:**
+
+- Added the repository Personal Memory Skill with low-friction record-only behavior, explicit interview-mode gating, active reading, Topic synthesis, paragraph provenance, inline Claim handling, and owner-facing batch review discipline.
+- Added a single-active-run maintenance ledger, stable input digest, missed-run catch-up, pending changesets with before/after hashes, idempotent Topic upsert, and interrupted-apply recovery.
+- Added monthly Incubator Topic maintenance with stable Topic/revision/Claim IDs, `origin: mixed`, paragraph-level Capture ID/hash provenance, and typed inline Claim search/read without separate Claim files.
+- Added owner-gated canonical promotion: Agent-created Atoms default to proposed, explicit owner confirmation activates them, and batch review supports promote/merge/delete while preserving provenance.
+- Added optional Git delivery with Profile path allowlisting, staged-diff fixed-pattern and high-entropy scanning, single-run `scan_blocked` recovery, unique `CodeMemory-Run` commit trailers, and same-commit push retry.
+- Added CLI and root-bound Toolkit maintenance/status/resume/review adapters, Automation invocation/notification contracts, documentation, and disposable integration coverage.
+- Closed four final owner-review findings: public resume now retries `scan_passed` delivery and reconstructs commits from trailers; high-entropy values are blocked without disclosure; NUL-delimited Git parsing supports Chinese paths; self-merge is rejected before mutation.
+
+**Acceptance evidence:**
+
+- Owner independently reproduced all four focused failure windows and accepted Phase 1B with no remaining actionable findings.
+- `python -m pytest tests/unit tests/test_api.py -q` → `197 passed`
+- Personal Profile suite → `38 passed`
+- `python tests/integration_personal.py` → `15 passed, 0 failed`
+- existing `python tests/integration_test.py` → `21/21 passed`
+- enabled external embedding search → no matches
+- `git diff --check` → passed; generated example test differences restored
+
+**Deferred:**
+
+- Personal Memory Phase 2 local semantic discovery and explicitly enabled external embeddings.
+- Personal Memory Web UI and arbitrary external-instance browsing.
+
+---
+
 ## 2026-07-22 — Personal Memory Phase 1A
 
 **Status:** Accepted by owner.

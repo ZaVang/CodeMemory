@@ -21,13 +21,22 @@ from .core import compute_body_hash as _cbh
 from .core import get_memory_path, parse_frontmatter as _pfm
 from .create import create
 from .capture import append_capture
+from .git_delivery import deliver_maintenance
 from .import_cmd import import_text
 from .index import load_index, reindex
 from .log import show_log
 from .orphans import find_orphans
 from .resolve import resolve
 from .personal_index import read_personal_object, typed_search
-from .profile import init_personal_profile, validate_personal_profile
+from .profile import init_personal_profile, load_personal_profile, validate_personal_profile
+from .maintenance import (
+    TopicDraft,
+    load_maintenance_state,
+    maintenance_status,
+    prepare_maintenance,
+    resume_maintenance,
+)
+from .promotion import ReviewAction, apply_review_batch
 from .search import search
 from .snapshot import snapshot_dag
 from .skeletonize.markdown import skeletonize_markdown
@@ -351,6 +360,51 @@ def handle_read(root: Path, object_id: str) -> str:
     return json.dumps(result.model_dump(mode="json"), indent=2, ensure_ascii=False)
 
 
+def handle_maintenance_status(root: Path) -> str:
+    return json.dumps(maintenance_status(root), indent=2, ensure_ascii=False)
+
+
+def handle_maintenance_run(root: Path, changeset: dict | list | None = None) -> str:
+    drafts = None
+    if changeset is not None:
+        raw = changeset.get("topics", changeset) if isinstance(changeset, dict) else changeset
+        if not isinstance(raw, list):
+            raise ValueError("maintenance changeset must be a Topic list or {'topics': [...]}")
+        drafts = [TopicDraft.model_validate(item) for item in raw]
+    result = prepare_maintenance(root, drafts=drafts)
+    payload = result.model_dump(mode="json")
+    if result.stage in {"applied", "scan_passed"} and result.run_id:
+        profile = load_personal_profile(root)
+        if profile.maintenance.auto_commit:
+            delivery = deliver_maintenance(root, result.run_id)
+            if result.stage == "scan_passed":
+                return json.dumps(delivery.model_dump(mode="json"), indent=2, ensure_ascii=False)
+            payload["delivery"] = delivery.model_dump(mode="json")
+    return json.dumps(payload, indent=2, ensure_ascii=False)
+
+
+def handle_maintenance_resume(root: Path) -> str:
+    state = load_maintenance_state(root)
+    if state.active_stage == "scan_blocked" and state.active_run_id:
+        result = deliver_maintenance(root, state.active_run_id)
+        return json.dumps(result.model_dump(mode="json"), indent=2, ensure_ascii=False)
+    result = resume_maintenance(root)
+    payload = result.model_dump(mode="json")
+    if result.stage in {"applied", "scan_passed"} and result.run_id:
+        profile = load_personal_profile(root)
+        if profile.maintenance.auto_commit:
+            delivery = deliver_maintenance(root, result.run_id)
+            if result.stage == "scan_passed":
+                return json.dumps(delivery.model_dump(mode="json"), indent=2, ensure_ascii=False)
+            payload["delivery"] = delivery.model_dump(mode="json")
+    return json.dumps(payload, indent=2, ensure_ascii=False)
+
+
+def handle_review_batch(root: Path, decisions: list[dict]) -> str:
+    result = apply_review_batch(root, [ReviewAction.model_validate(item) for item in decisions])
+    return json.dumps(result.model_dump(mode="json"), indent=2, ensure_ascii=False)
+
+
 def handle_source_add(
     root: Path,
     uri: str,
@@ -483,7 +537,7 @@ def handle_search(
     lines: list[str] = []
     for r in results:
         tags_str = _fmt_tags(r)
-        if r.get("kind") in ("capture", "incubator_topic"):
+        if r.get("kind") in ("capture", "incubator_topic", "incubator_claim"):
             lines.append(
                 f"{r['id']:40s}  {r['kind']:17s}  "
                 f"[{tags_str}]  -> {r['read_action']}"

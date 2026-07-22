@@ -233,7 +233,7 @@ derived_from:
 - `claim_id` 在实例内稳定且唯一；标题、位置或 claim_status 改变不生成新 ID。
 - claim block 至少包含 `claim_id`、`origin: agent_inference`、`claim_status`、`created_by` 与 `derived_from`；可选 `confidence`。
 - synthesis 正文不因包含多条来源而自动变成 claim；只有独立可反驳的主张才需要 claim block。
-- Phase 1A 只要求 Topic parser 能完整保留/跳过嵌套 claim block而不误切 Topic；claim block 的独立索引、筛选和关系演化属于 Phase 1B。
+- Phase 1A 只要求 Topic parser 能完整保留/跳过嵌套 claim block 而不误切 Topic；Phase 1B 将 claim block 作为 `incubator_claim` typed object 独立索引、按 claim_status 筛选和稳定 ID 读取，但仍不拆文件。更复杂的 claim 关系演化可在后续阶段扩展。
 
 ### 5.4 自动写入边界
 
@@ -324,7 +324,7 @@ query + filters
   → 临时综合回答（默认不保存 report）
 ```
 
-Phase 1 filters：时间范围、全文词法、标签、对象类型、topic/project/person、origin，以及 Atom 级 claim_status。claim block 独立过滤在 Phase 1B。
+Phase 1 filters：时间范围、全文词法、标签、对象类型、topic/project/person、origin，以及 Atom/inline Claim 级 claim_status。Topic 自身永远不使用 claim_status。
 
 Phase 2 可增加本地 semantic discovery。外部 embeddings 必须显式启用；语义结果只改变候选排序，不产生 imports 边，也不直接进入 build。
 
@@ -346,7 +346,7 @@ Capture / Topic 只能作为 provenance 被显式读取；build 不得自动内�
 
 ### 9.1 权威状态与 tracked 边界
 
-- `.codememory/maintenance/runs.jsonl`：受 Git 跟踪的 append-only 内容处理 ledger；每行是一个不可变 run event。它记录 `planned / applying / applied / scan_passed`，同一 run 的最新 event 决定其 tracked 状态。
+- `.codememory/maintenance/runs.jsonl`：受 Git 跟踪的 append-only 内容处理 ledger；每行是一个不可变 run event。它记录 `prepared / applying / applied / scan_blocked / scan_passed / conflict`，同一 run 的最新 event 决定其 tracked 状态。
 - `.codememory/maintenance/state.json`：被 Git ignore 的本机 delivery/status cache，可从 journal + runs ledger + Git commit trailer + remote refs 重建。
 - `.codememory/maintenance/pending/<run_id>.json`：被 Git ignore 的幂等 changeset，包含输入 Capture IDs/hashes、目标文件 before/after hashes 与操作列表；达到 pushed 或明确终止后可清理。
 

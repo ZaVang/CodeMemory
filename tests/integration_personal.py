@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Phase 1A end-to-end acceptance against disposable external instances."""
+"""Phase 1A/1B end-to-end acceptance against disposable external instances."""
 
 from __future__ import annotations
 
@@ -17,6 +17,7 @@ if str(_SRC) not in sys.path:
 from codememory.capture import append_capture  # noqa: E402
 from codememory.index import reindex  # noqa: E402
 from codememory.integrations import CodememoryToolkit  # noqa: E402
+from codememory.personal_index import scan_all_topics  # noqa: E402
 from codememory.profile import init_personal_profile  # noqa: E402
 from harnesslib.sandbox import Sandbox  # noqa: E402
 
@@ -91,8 +92,10 @@ The parser preserves this block without indexing it independently.
         sandbox = Sandbox()
         await toolkit.register_to_sandbox(sandbox)
         schemas = {tool.name: tool.input_schema for tool in sandbox.list_tools()}
-        check("toolkit exposes capture/search/read/build", {
-            "capture_memory", "search_memories", "read_memory", "build_memory"
+        check("toolkit exposes capture/search/read/build/maintenance/review", {
+            "capture_memory", "search_memories", "read_memory", "build_memory",
+            "maintenance_status", "maintain_memory", "resume_memory_maintenance",
+            "review_personal_memory",
         }.issubset(schemas))
         check("bound tool schemas omit root", all("root" not in (schema or {}).get("properties", {}) for schema in schemas.values()))
 
@@ -116,7 +119,40 @@ The parser preserves this block without indexing it independently.
         else:
             check("build rejects Capture with read route", False, "build unexpectedly succeeded")
 
-    print(f"\nPhase 1A integration: {passed} passed, {failed} failed")
+        status = await sandbox.execute("maintenance_status", {"root": str(other)})
+        check("maintenance status remains bound to toolkit root", capture.id in status["result"])
+        status_payload = json.loads(status["result"])
+        changeset = {"topics": [{
+            "title": "Integration catch-up",
+            "month": "2026-07",
+            "origin": "mixed",
+            "paragraphs": [
+                {
+                    "text": json.loads((await sandbox.execute("read_memory", {"id": item["id"]}))["result"])["content"],
+                    "origin": "human_explicit",
+                    "derived_from": [{"capture_id": item["id"], "content_hash": item["content_hash"]}],
+                }
+                for item in status_payload["unconsumed_captures"]
+            ],
+        }]}
+        maintained = await sandbox.execute("maintain_memory", {"root": str(other), "changeset": changeset})
+        check("maintenance applies missed captures", '"stage": "applied"' in maintained["result"])
+        generated = scan_all_topics(root).topics
+        check("maintenance creates monthly stable Topics", bool(generated) and (root / "incubator/2026-07.md").exists())
+        reviewed = await sandbox.execute("review_personal_memory", {
+            "root": str(other),
+            "decisions": [{
+                "action": "promote",
+                "revision_id": generated[0].revision_id,
+                "atom_id": "memory/integration-formal",
+                "owner_confirmed": True,
+            }],
+        })
+        check("owner batch activates canonical Atom", '"promoted"' in reviewed["result"] and (root / "memory/integration-formal.md").exists())
+        built = await sandbox.execute("build_memory", {"id": "memory/integration-formal"})
+        check("promoted Atom uses canonical build path", "memory/integration-formal" in built["result"])
+
+    print(f"\nPersonal Profile integration: {passed} passed, {failed} failed")
     return 1 if failed else 0
 
 

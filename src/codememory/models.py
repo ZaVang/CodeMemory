@@ -161,7 +161,7 @@ class IndexData(BaseModel):
 class PersonalIndexEntry(BaseModel):
     """A non-canonical Personal Profile object stored in the unified index."""
 
-    kind: Literal["capture", "incubator_topic"]
+    kind: Literal["capture", "incubator_topic", "incubator_claim"]
     id: str
     path: str
     display_locator: str

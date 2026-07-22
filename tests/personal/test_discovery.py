@@ -92,7 +92,7 @@ def _instance(tmp_path: Path):
     return capture
 
 
-def test_reindex_distinguishes_three_object_kinds_and_preserves_claim(tmp_path: Path):
+def test_reindex_distinguishes_personal_object_kinds_and_indexes_inline_claim(tmp_path: Path):
     capture = _instance(tmp_path)
     index = load_index(tmp_path)
 
@@ -100,18 +100,20 @@ def test_reindex_distinguishes_three_object_kinds_and_preserves_claim(tmp_path: 
     topic_id = "topic/personal-memory/decisions@2026-07"
     assert index.personal_objects[topic_id].kind == "incubator_topic"
     assert "codememory:claim" in index.personal_objects[topic_id].content
-    assert "claim/personal-memory/imports-canonical" not in index.personal_objects
+    claim_id = "claim/personal-memory/imports-canonical"
+    assert index.personal_objects[claim_id].kind == "incubator_claim"
+    assert index.personal_objects[claim_id].metadata["claim_status"] == "unassessed"
     assert index.personal_objects["topic/long-lived-notes@2026-07"].kind == "incubator_topic"
     assert "ideas/canonical-boundary" in index.memories
     reindex(tmp_path)
-    assert len(load_index(tmp_path).personal_objects) == 3
+    assert len(load_index(tmp_path).personal_objects) == 4
 
 
 def test_typed_search_filters_and_routes_actions(tmp_path: Path):
     _instance(tmp_path)
 
     all_results = typed_search(tmp_path, query="canonical")
-    assert {result["kind"] for result in all_results} == {"capture", "incubator_topic", "atom"}
+    assert {result["kind"] for result in all_results} == {"capture", "incubator_topic", "incubator_claim", "atom"}
     assert all({"id", "path", "display_locator", "summary", "metadata", "read_action"}.issubset(result) for result in all_results)
     assert {result["read_action"] for result in all_results if result["kind"] != "atom"} == {"read"}
     assert next(result for result in all_results if result["kind"] == "atom")["read_action"] == "build"
@@ -119,6 +121,8 @@ def test_typed_search_filters_and_routes_actions(tmp_path: Path):
     atoms = typed_search(tmp_path, kinds=["atom"], claim_status="supported")
     assert [result["id"] for result in atoms] == ["ideas/canonical-boundary"]
     assert typed_search(tmp_path, kinds=["incubator_topic"], claim_status="supported") == []
+    claims = typed_search(tmp_path, kinds=["incubator_claim"], claim_status="unassessed")
+    assert [result["id"] for result in claims] == ["claim/personal-memory/imports-canonical"]
     assert len(typed_search(tmp_path, project="CodeMemory", person="owner", origin="mixed")) == 1
     tagged = typed_search(
         tmp_path,
@@ -140,9 +144,11 @@ def test_read_uses_stable_id_after_display_line_changes(tmp_path: Path):
 
     capture_read = read_personal_object(tmp_path, capture.id)
     topic_read = read_personal_object(tmp_path, "topic/personal-memory/decisions@2026-07")
+    claim_read = read_personal_object(tmp_path, "claim/personal-memory/imports-canonical")
 
     assert capture_read.content == "Raw motivation for canonical decisions"
     assert "This inference stays inside" in topic_read.content
+    assert claim_read.content == "This inference stays inside the Topic file."
     assert capture_read.display_locator.endswith(":4")
 
 
@@ -153,6 +159,8 @@ def test_build_rejects_noncanonical_objects_with_read_instruction(tmp_path: Path
         handle_build(tmp_path, capture.id)
     with pytest.raises(ValueError, match="not buildable; use read"):
         handle_build(tmp_path, "topic/personal-memory/decisions@2026-07")
+    with pytest.raises(ValueError, match="not buildable; use read"):
+        handle_build(tmp_path, "claim/personal-memory/imports-canonical")
     assert "ideas/canonical-boundary" in handle_build(tmp_path, "ideas/canonical-boundary")
 
 

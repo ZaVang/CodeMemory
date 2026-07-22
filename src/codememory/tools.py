@@ -12,8 +12,12 @@ from .handlers import (
     handle_create,
     handle_import,
     handle_log,
+    handle_maintenance_resume,
+    handle_maintenance_run,
+    handle_maintenance_status,
     handle_orphans,
     handle_read,
+    handle_review_batch,
     handle_resolve,
     handle_search,
     handle_update,
@@ -71,7 +75,7 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
                 "semantic_type": {"type": "string", "description": "Filter by semantic type tag"},
                 "has_imports": {"type": "boolean", "description": "Only show memories with non-empty imports"},
                 "has_schema": {"type": "boolean", "description": "Only show memories with a schema reference"},
-                "kinds": {"type": "array", "items": {"type": "string", "enum": ["capture", "incubator_topic", "atom"]}},
+                "kinds": {"type": "array", "items": {"type": "string", "enum": ["capture", "incubator_topic", "incubator_claim", "atom"]}},
                 "date_from": {"type": "string", "description": "Earliest date (YYYY-MM-DD)"},
                 "date_to": {"type": "string", "description": "Latest date (YYYY-MM-DD)"},
                 "topic": {"type": "string"},
@@ -214,6 +218,46 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
             "required": ["id"],
         },
     },
+    {
+        "name": "maintenance_status",
+        "description": "Inspect the bound Personal Profile active run and unconsumed valid Captures.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"root": {"type": "string", "description": "Root directory for memory data"}},
+        },
+    },
+    {
+        "name": "maintain_memory",
+        "description": "Apply one provenance-rich Topic changeset to the bound Personal Profile.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "changeset": {"type": "object", "description": "Object with a topics array following the Personal Memory Skill contract"},
+                "root": {"type": "string", "description": "Root directory for memory data"},
+            },
+            "required": ["changeset"],
+        },
+    },
+    {
+        "name": "resume_memory_maintenance",
+        "description": "Resume the same pending or sensitive-scan-blocked maintenance run.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"root": {"type": "string", "description": "Root directory for memory data"}},
+        },
+    },
+    {
+        "name": "review_personal_memory",
+        "description": "Apply an owner batch of promote, merge, and delete decisions.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "decisions": {"type": "array", "items": {"type": "object"}},
+                "root": {"type": "string", "description": "Root directory for memory data"},
+            },
+            "required": ["decisions"],
+        },
+    },
 ]
 
 
@@ -324,6 +368,22 @@ async def _read_handler(payload: dict[str, Any]) -> dict[str, Any]:
     return {"result": handle_read(root, payload["id"])}
 
 
+async def _maintenance_status_handler(payload: dict[str, Any]) -> dict[str, Any]:
+    return {"result": handle_maintenance_status(get_root_dir(payload.get("root")))}
+
+
+async def _maintenance_run_handler(payload: dict[str, Any]) -> dict[str, Any]:
+    return {"result": handle_maintenance_run(get_root_dir(payload.get("root")), payload.get("changeset"))}
+
+
+async def _maintenance_resume_handler(payload: dict[str, Any]) -> dict[str, Any]:
+    return {"result": handle_maintenance_resume(get_root_dir(payload.get("root")))}
+
+
+async def _review_handler(payload: dict[str, Any]) -> dict[str, Any]:
+    return {"result": handle_review_batch(get_root_dir(payload.get("root")), payload["decisions"])}
+
+
 _HANDLER_MAP = {
     "resolve_context": _resolve_handler,
     "create_memory": _create_handler,
@@ -338,6 +398,10 @@ _HANDLER_MAP = {
     "build_memory": _build_handler,
     "capture_memory": _capture_handler,
     "read_memory": _read_handler,
+    "maintenance_status": _maintenance_status_handler,
+    "maintain_memory": _maintenance_run_handler,
+    "resume_memory_maintenance": _maintenance_resume_handler,
+    "review_personal_memory": _review_handler,
 }
 
 

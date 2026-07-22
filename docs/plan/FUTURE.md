@@ -16,7 +16,7 @@
 
 ## Roadmap Priority
 
-**Personal Memory Phase 0 与 Phase 1A 已于 2026-07-22 经 owner 接受。Phase 1B start gate 继续关闭，只有 owner 再次明确授权后才可启动。**
+**Personal Memory Phase 0、Phase 1A 与 Phase 1B 已于 2026-07-22 经 owner 接受。最终实施与验收合同见 `docs/plan/SPRINT.md`，acceptance 记录见 `docs/plan/HISTORY.md`。**
 
 ### 1. Personal Memory Phase 1A — Instance + Capture + Typed Discovery（已完成并验收）
 
@@ -29,9 +29,9 @@
 - typed search result 明确 `kind` / `read_action`；Capture / Topic 不可 build；
 - CLI + toolkit/MCP 的 capture/search/read 最小面；Web 与语义索引不在 1A。
 
-### 2. Personal Memory Phase 1B — Codex Maintenance + Git Delivery
+### 2. Personal Memory Phase 1B — Codex Maintenance + Git Delivery（已完成并验收）
 
-**前置条件**：Phase 1A 已验收；owner 再次确认启动 1B。
+**状态**：Phase 1A 已验收；owner 已完成 Phase 1B 最终复审并接受。
 
 交付范围：
 

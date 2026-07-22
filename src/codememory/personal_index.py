@@ -21,6 +21,11 @@ _TOPIC_META_RE = re.compile(
     r"<!--\s*codememory:topic\s*\n(?P<meta>.*?)\n-->\n?",
     re.DOTALL,
 )
+_CLAIM_HEADING_RE = re.compile(r"^### Claim:\s*(?P<title>.+?)\s*$", re.MULTILINE)
+_CLAIM_META_RE = re.compile(
+    r"<!--\s*codememory:claim\s*\n(?P<meta>.*?)\n-->\n?",
+    re.DOTALL,
+)
 _TOKEN_RE = re.compile(r"[^\W_]+", re.UNICODE)
 
 
@@ -37,6 +42,23 @@ class TopicRecord(BaseModel):
 
 class TopicScan(BaseModel):
     topics: list[TopicRecord] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+
+
+class ClaimRecord(BaseModel):
+    claim_id: str
+    topic_id: str
+    revision_id: str
+    title: str
+    content: str
+    path: str
+    display_locator: str
+    line: int
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class ClaimScan(BaseModel):
+    claims: list[ClaimRecord] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
 
 
@@ -122,6 +144,65 @@ def scan_all_topics(root: Path) -> TopicScan:
     return result
 
 
+def scan_claims_in_topic(root: Path, topic: TopicRecord) -> ClaimScan:
+    result = ClaimScan()
+    headings = list(_CLAIM_HEADING_RE.finditer(topic.content))
+    all_level_three = list(re.finditer(r"^### .+?$", topic.content, re.MULTILINE))
+    for heading in headings:
+        end = next(
+            (candidate.start() for candidate in all_level_three if candidate.start() > heading.start()),
+            len(topic.content),
+        )
+        segment = topic.content[heading.end():end]
+        meta_match = _CLAIM_META_RE.search(segment)
+        line = topic.line + topic.content.count("\n", 0, heading.start()) + 1
+        if meta_match is None:
+            result.warnings.append(f"incomplete Claim ignored: {topic.path}:{line}")
+            continue
+        try:
+            metadata = yaml.safe_load(meta_match.group("meta")) or {}
+            claim_id = str(metadata["claim_id"])
+            claim_status = str(metadata["claim_status"])
+            if claim_status not in {"unassessed", "supported", "contested", "refuted"}:
+                result.warnings.append(f"invalid claim_status ignored: {claim_id}")
+                continue
+            content = segment[meta_match.end():].strip()
+            result.claims.append(ClaimRecord(
+                claim_id=claim_id,
+                topic_id=topic.topic_id,
+                revision_id=topic.revision_id,
+                title=heading.group("title").strip(),
+                content=content,
+                path=topic.path,
+                display_locator=f"{topic.path}:{line}",
+                line=line,
+                metadata={
+                    **metadata,
+                    "topic_id": topic.topic_id,
+                    "revision_id": topic.revision_id,
+                    "updated_at": topic.metadata.get("updated_at"),
+                },
+            ))
+        except (KeyError, TypeError, ValueError, yaml.YAMLError) as exc:
+            result.warnings.append(f"invalid Claim ignored: {topic.path}:{line}: {exc}")
+    return result
+
+
+def scan_all_claims(root: Path, topics: list[TopicRecord] | None = None) -> ClaimScan:
+    result = ClaimScan()
+    seen: set[str] = set()
+    for topic in topics if topics is not None else scan_all_topics(root).topics:
+        scanned = scan_claims_in_topic(root, topic)
+        for claim in scanned.claims:
+            if claim.claim_id in seen:
+                result.warnings.append(f"duplicate claim_id: {claim.claim_id}")
+                continue
+            seen.add(claim.claim_id)
+            result.claims.append(claim)
+        result.warnings.extend(scanned.warnings)
+    return result
+
+
 def build_personal_index(root: Path) -> tuple[dict[str, PersonalIndexEntry], list[str]]:
     profile_path = root / ".codememory" / "profile.yaml"
     if not profile_path.exists():
@@ -163,6 +244,22 @@ def build_personal_index(root: Path) -> tuple[dict[str, PersonalIndexEntry], lis
             topic=topic.topic_id,
             project=str(meta.get("project")) if meta.get("project") is not None else None,
             people=_string_list(meta.get("people") or meta.get("person")),
+            metadata=meta,
+        )
+    claims = scan_all_claims(root, topics.topics)
+    warnings.extend(claims.warnings)
+    for claim in claims.claims:
+        meta = claim.metadata
+        objects[claim.claim_id] = PersonalIndexEntry(
+            kind="incubator_claim",
+            id=claim.claim_id,
+            path=claim.path,
+            display_locator=claim.display_locator,
+            summary=claim.title,
+            content=claim.content,
+            timestamp=str(meta.get("updated_at") or ""),
+            origin=str(meta.get("origin") or "agent_inference"),
+            topic=claim.topic_id,
             metadata=meta,
         )
     return objects, warnings
@@ -231,14 +328,15 @@ def typed_search(
     from .index import load_index
     from .search import search
 
-    requested = set(kinds or ("capture", "incubator_topic", "atom"))
+    requested = set(kinds or ("capture", "incubator_topic", "incubator_claim", "atom"))
     index = load_index(root)
     results: list[dict[str, Any]] = []
     for entry in index.personal_objects.values():
         if entry.kind not in requested:
             continue
         if claim_status:
-            continue  # claim_status never applies to a whole Capture or Topic
+            if entry.kind != "incubator_claim" or entry.metadata.get("claim_status") != claim_status:
+                continue
         if tags and not all(tag in entry.tags for tag in tags):
             continue
         if topic and entry.topic != topic:
@@ -334,6 +432,27 @@ def read_personal_object(root: Path, object_id: str) -> ObjectReadResult:
                 "actor": record.actor,
                 "content_hash": record.content_hash,
             },
+        )
+    if entry.kind == "incubator_claim":
+        topics = scan_topic_file(root, path).topics
+        claim = next(
+            (
+                item
+                for topic_item in topics
+                for item in scan_claims_in_topic(root, topic_item).claims
+                if item.claim_id == object_id
+            ),
+            None,
+        )
+        if claim is None:
+            raise KeyError(f"Claim no longer resolves by stable ID: {object_id}")
+        return ObjectReadResult(
+            kind="incubator_claim",
+            id=claim.claim_id,
+            path=claim.path,
+            display_locator=claim.display_locator,
+            content=claim.content,
+            metadata=claim.metadata,
         )
     topic = next((item for item in scan_topic_file(root, path).topics if item.revision_id == object_id), None)
     if topic is None:

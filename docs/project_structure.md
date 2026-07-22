@@ -89,7 +89,10 @@
 | `src/codememory/core.py` | frontmatter 解析、body hash、root 发现、检索概率/衰减基础函数。 |
 | `src/codememory/profile.py` | Personal Profile manifest、非覆盖初始化、独立 profile/Git capability validation。 |
 | `src/codememory/capture.py` | append-only Capture、ULID、独立 SHA-256、实例锁、fsync 与完整 block 解析。 |
-| `src/codememory/personal_index.py` | Capture / Incubator Topic typed index、词法筛选和稳定 ID read；Claim block 在 1A 仅保留。 |
+| `src/codememory/personal_index.py` | Capture / Incubator Topic / inline Claim typed index、词法筛选和稳定 ID read；Claim 保持在 Topic 文件内。 |
+| `src/codememory/maintenance.py` | Personal maintenance run ledger、稳定 input digest、pending changeset、Topic/Claim 渲染、幂等 apply 与恢复。 |
+| `src/codememory/promotion.py` | owner-gated Topic promotion 与 promote/merge/delete batch review。 |
+| `src/codememory/git_delivery.py` | Profile 路径白名单、staged diff 敏感扫描、run trailer commit 与同 commit push retry。 |
 | `src/codememory/models.py` | Pydantic v2 数据模型：memory entry、index、imports、source_refs 等 contract。 |
 | `src/codememory/index.py` | `.codememory/index.json` 的加载、保存、重建。 |
 | `src/codememory/create.py` | 新 memory 文件模板生成和初始 metadata 写入。 |
@@ -315,6 +318,9 @@ Frontend 是本地操作台：查看 graph、resolve context、编辑 memory、�
 | `tests/personal/test_profile.py` | Personal Profile 与可选 Git capability 合同。 |
 | `tests/personal/test_capture.py` | Capture ID/hash/锁/完整块合同。 |
 | `tests/personal/test_discovery.py` | 三类对象、Topic/Claim 保留、typed search/read/build 边界。 |
+| `tests/personal/test_maintenance.py` | missed-run、input digest、pending changeset、interrupted apply、Topic/Claim 与 Skill 交互合同。 |
+| `tests/personal/test_promotion.py` | proposed/active promotion provenance 与 batch promote/merge/delete。 |
+| `tests/personal/test_git_delivery.py` | staged scan、单 run block、路径白名单、commit trailer 与同 commit push retry。 |
 | `tests/unit/__init__.py` | unit test package marker。 |
 | `tests/unit/test_create_update.py` | create/update 行为测试。 |
 | `tests/unit/test_edge_cases.py` | 边界条件和异常路径测试。 |
@@ -369,7 +375,7 @@ cd frontend && npm run build
 
 这些内容不再作为当前判断依据；如果需要追溯，用 `docs/reference/` 或 Git history。
 
-### 13.1 Personal Profile 目标模块（Phase 1，尚未实现）
+### 13.1 Personal Profile 模块（Phase 1A / 1B）
 
 Phase 0 只定义合同。下列落点在 `docs/plan/SPRINT.md` 获 owner 接受后才允许创建：
 
@@ -379,6 +385,8 @@ Phase 0 只定义合同。下列落点在 `docs/plan/SPRINT.md` 获 owner 接受
 | `src/codememory/capture.py` | Capture ID/hash、锁、append + fsync、block parser |
 | `src/codememory/personal_index.py` | Capture / Topic / Atom typed discovery 与 read locator |
 | `src/codememory/maintenance.py` | Phase 1B changeset、run ledger 与幂等状态机 |
+| `src/codememory/promotion.py` | canonical promotion 与 batch review |
+| `src/codememory/git_delivery.py` | 敏感扫描和可选 Git delivery adapter |
 | `.agents/skills/personal-memory/` | Phase 1B Codex 语义维护工作流；不属于 Core |
 
 外部 `MyMemory` 实例的目录结构不属于本程序仓库；权威定义只在 `docs/personal-memory-profile.md`。

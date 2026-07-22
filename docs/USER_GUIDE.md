@@ -189,7 +189,7 @@ L3 full source artifact
 
 ---
 
-## 7. Personal Profile（Phase 1A）
+## 7. Personal Profile（Phase 1A + 1B）
 
 Personal Profile 可以初始化在普通目录、没有 remote 的 Git repo 或完整 Git repo 中。Git delivery 默认关闭；缺少 Git/remote 只显示为 `unavailable`，不会让 init 或 Capture 失败。
 
@@ -207,9 +207,39 @@ codememory --root D:\memory\MyMemory search --kind capture incubator_topic atom 
 codememory --root D:\memory\MyMemory read cap_01...
 ```
 
-读取边界固定为：Capture / Incubator Topic 使用 `read`；Canonical Atom 使用 `build`。对 Capture 或 Topic 执行 `build` 会明确拒绝。Topic 内的 `codememory:claim` block 在 Phase 1A 会原样保留，但不会被拆文件或独立索引。
+读取边界固定为：Capture / Incubator Topic / inline Claim 使用 `read`；Canonical Atom 使用 `build`。对前三者执行 `build` 会明确拒绝。Topic 内的 `codememory:claim` block 不拆文件；Phase 1B 将它作为 `incubator_claim` typed object 按稳定 `claim_id` 索引、读取和按 claim_status 过滤。
 
-安全边界：`private-local/` 和本机 runtime 状态默认忽略；private GitHub 不等于加密存储，原始记录一旦进入 Git 历史，即使从工作区删除也可能仍然存在。Phase 1A 不包含 maintenance、Git delivery、Codex Skill、Web 或 semantic discovery。
+安全边界：`private-local/` 和本机 runtime 状态默认忽略；private GitHub 不等于加密存储，原始记录一旦进入 Git 历史，即使从工作区删除也可能仍然存在。
+
+### 7.1 日常维护
+
+```powershell
+# 查看 active run 和所有未消费的完整 Capture
+codememory --root D:\work\MyMemory maintenance status
+
+# 由 Personal Memory Skill 生成 changeset 后执行
+codememory --root D:\work\MyMemory maintenance run --changeset changeset.json
+
+# 进程中断或 owner 修复敏感扫描问题后，恢复同一 run
+codememory --root D:\work\MyMemory maintenance resume
+
+# 集中处理 promote / merge / delete
+codememory --root D:\work\MyMemory review-batch --file decisions.json
+```
+
+`maintenance run` 必须接收 Personal Memory Skill 生成的 changeset；Core 不会按标题替 Agent 猜测主题。它会按时间和稳定 ID 消费全部未处理且 hash-valid 的 Capture，因此电脑关机或漏跑某日任务后不需要补造日期任务。相同输入返回已有 applied run；pending changeset 保存目标文件 before/after hash，进程中断后不会重新生成 Topic。
+
+仓库内 `.agents/skills/personal-memory/SKILL.md` 定义语义工作流：纯记录不追问；只有 owner 明确要求继续提问，或关键歧义阻塞结果时才进入访谈。Topic 可以长期留在 incubator；日常更新不产生逐条审核任务。
+
+### 7.2 Git delivery 与安全阻塞
+
+`auto_commit` / `auto_push` 默认都是 `false`，只通过 Profile 显式启用。delivery 只暂存 Profile 声明的 journal、incubator、canonical、reviews 和 tracked ledger；未知目录改动会阻塞自动提交，`private_local`、index、pending、state 和 lock 永不暂存。
+
+提交前扫描 staged diff。命中时进入单一 `scan_blocked` run，只返回 rule、path 和 locator，不回显匹配值，也不 commit/push。Capture 仍可追加；owner 清理后执行 `maintenance resume` 恢复同一 run，阻塞期新增 Capture 在下一 run 自动 catch up。每个 delivery commit 恰有一个 `CodeMemory-Run: <run_id>` trailer；push 失败重试同一个 commit。
+
+Automation 每次只调用以下流程：`maintenance status` → 用 Skill 读取候选并生成 changeset → `maintenance run`；若存在 active run 则改为 `maintenance resume`。成功通知只包含 run ID、消费数量、Topic 变更数量和 commit/push 状态；失败通知包含 stage 与可执行修复；`scan_blocked` 使用安全通知，不计入普通审核积压。
+
+Phase 1B 仍不包含 Web 或 semantic discovery，external embeddings 保持关闭。
 
 ---
 

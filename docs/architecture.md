@@ -88,7 +88,7 @@ Git credential、GitHub 访问控制和通知通道属于运行环境，不写�
 | test | **`test_contract.py`** | 已完成：导出题集 + 装配上下文；report 写回 log | C ✅ |
 | proposal | `models.py`（status）+ `proposals.py`（patch 队列）+ `update.py`（merge/reject 分发） | 已完成（修改类落为独立小模块 `proposals.py`，复用 update 应用 patch） | A ✅ / C ✅ |
 | log | `log.py` / `changelog.py` | 不变 | — |
-| Personal Profile | `profile.py` / `capture.py` / `personal_index.py` / `maintenance.py` | Phase 0 合同已定义，尚未实现 | 1A / 1B |
+| Personal Profile | `profile.py` / `capture.py` / `personal_index.py` / `maintenance.py` / `promotion.py` / `git_delivery.py` | 1A substrate complete；1B implementation pending owner acceptance | 1A / 1B |
 
 ### 2.1 保留与定位说明
 
@@ -209,7 +209,7 @@ Personal Profile 对象使用：
 - 显式关系：`supports / contradicts / corrects / evolves_from / merged_from / related`；
 - 认识状态：`claim_status = unassessed | supported | contested | refuted`。
 
-Topic 可以包含多种来源，Topic 级 `origin` 因而允许 `mixed`。Topic 本身不带 `claim_status`；独立可反驳的 Agent inference 使用 Topic 内嵌 `codememory:claim` block、稳定 `claim_id` 和自己的 claim_status。Phase 1A 只解析 Topic 边界并保留 claim block；claim 索引属于 Phase 1B。
+Topic 可以包含多种来源，Topic 级 `origin` 因而允许 `mixed`。Topic 本身不带 `claim_status`；独立可反驳的 Agent inference 使用 Topic 内嵌 `codememory:claim` block、稳定 `claim_id` 和自己的 claim_status。Phase 1A 只解析 Topic 边界并保留 claim block；Phase 1B 将内嵌 block 作为 `incubator_claim` typed object 索引和读取，但仍不拆分 Markdown 文件。
 
 `status`、`claim_status`、`freshness` 是三个正交维度：
 
@@ -368,7 +368,8 @@ Automation 只允许 stage profile 声明的受跟踪路径；`private-local/`�
 | profile | `handle_profile_init` / `handle_profile_validate` | `init --profile personal` / `validate` | — |
 | capture | `handle_capture` | `capture` | `capture` |
 | typed discovery | `handle_search` / `handle_read_object` | `search` / `read` | `search` / `read` |
-| maintenance | `handle_maintenance_plan/apply/status` | `maintenance plan/apply/status/retry` | `maintenance_status`（只读） |
+| maintenance | `handle_maintenance_run/resume/status` | `maintenance run/resume/status` | `maintenance_status` / `maintain_memory` / `resume_memory_maintenance` |
+| batch review | `handle_review_batch` | `review-batch --file` | `review_personal_memory` |
 | promotion review | `handle_promote` / batch review handlers | `promote` / `review-incubator` | `propose`（canonical 写门） |
 
 规则：

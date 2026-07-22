@@ -18,6 +18,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 PROFILE_RELATIVE_PATH = Path(".codememory/profile.yaml")
 RUNTIME_IGNORE_RULES = (
     ".codememory/capture.lock",
+    ".codememory/maintenance/maintenance.lock",
     ".codememory/maintenance/state.json",
     ".codememory/maintenance/pending/",
 )

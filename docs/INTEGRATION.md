@@ -514,7 +514,7 @@ async def main():
     # One-line registration
     await toolkit.register_to_sandbox(sandbox)
 
-    # All 13 tools are now available and bound to examples/investment
+    # All 17 tools are now available and bound to examples/investment
     for tool_def in sandbox.list_tools():
         print(f"  {tool_def.name}: {tool_def.description}")
 
@@ -544,8 +544,16 @@ asyncio.run(main())
 | 11 | `build_memory` | Assemble canonical Atom context through imports DAG |
 | 12 | `capture_memory` | Append an immutable Capture to a Personal Profile |
 | 13 | `read_memory` | Read a Capture or Topic revision by stable ID |
+| 14 | `maintenance_status` | Inspect the active run and unconsumed valid Captures |
+| 15 | `maintain_memory` | Apply a provenance-rich Topic changeset idempotently |
+| 16 | `resume_memory_maintenance` | Resume the same pending or scan-blocked run |
+| 17 | `review_personal_memory` | Apply a batch of promote / merge / delete decisions |
 
-For a Personal Profile, initialize the external instance first with `codememory init <path> --profile personal`. `capture_memory` never performs maintenance, Git commit/push, semantic indexing, or Web work. MCP is process-bound through a required explicit `CODEMEMORY_ROOT`; it has no example fallback and exposes `capture_memory`, `search_memories`, `read_memory`, and `build_memory` without a per-call root parameter.
+For a Personal Profile, initialize the external instance first with `codememory init <path> --profile personal`. `capture_memory` never performs maintenance, Git commit/push, semantic indexing, or Web work. Toolkit registrations bind all four maintenance/review tools to the constructor root and remove the caller-controlled `root` property. A maintenance changeset uses `{"topics": [...]}` where every paragraph/claim carries `derived_from` entries containing both `capture_id` and `content_hash`.
+
+MCP remains process-bound through a required explicit `CODEMEMORY_ROOT`; it has no example fallback. Phase 1B maintenance is intentionally exposed through the repository Skill, CLI, and bound Toolkit rather than adding an arbitrary-instance MCP maintenance surface.
+
+Automation contract: inspect status first; call `maintain_memory` only when there is no active run; call `resume_memory_maintenance` for an existing pending or blocked run. Treat `scan_blocked` as a safety event, never as a review queue item. Retry a failed push through resume and do not submit another changeset.
 
 ### OpenAI format export
 

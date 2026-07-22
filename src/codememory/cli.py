@@ -16,12 +16,16 @@ from .handlers import (
     handle_init_personal,
     handle_log,
     handle_materialize_review,
+    handle_maintenance_resume,
+    handle_maintenance_run,
+    handle_maintenance_status,
     handle_merge,
     handle_orphans,
     handle_propose,
     handle_proposals,
     handle_reindex,
     handle_read,
+    handle_review_batch,
     handle_reject,
     handle_resolve,
     handle_search,
@@ -74,6 +78,18 @@ def main(argv: list[str] | None = None):
     p = subparsers.add_parser("read", help="Read a Capture or Topic revision by stable ID")
     _add_logging_flags(p)
     p.add_argument("id", help="Capture ID or Topic revision ID")
+
+    p = subparsers.add_parser("maintenance", help="Run or inspect Personal Profile maintenance")
+    _add_logging_flags(p)
+    maintenance_subparsers = p.add_subparsers(dest="maintenance_command", required=True)
+    maintenance_subparsers.add_parser("status", help="Show active run and unconsumed Captures")
+    mp = maintenance_subparsers.add_parser("run", help="Apply a deterministic Topic changeset")
+    mp.add_argument("--changeset", required=True, help="JSON changeset generated through the Personal Memory Skill")
+    maintenance_subparsers.add_parser("resume", help="Resume the same pending or blocked run")
+
+    p = subparsers.add_parser("review-batch", help="Apply promote/merge/delete Topic decisions")
+    _add_logging_flags(p)
+    p.add_argument("--file", required=True, help="JSON list of review decisions")
 
     # create
     p = subparsers.add_parser("create", help="Create a new memory")
@@ -194,7 +210,7 @@ def main(argv: list[str] | None = None):
     p.add_argument("--has-imports", action="store_true", help="Filter to memories with non-empty imports")
     p.add_argument("--has-schema", action="store_true", help="Filter to memories with a schema reference")
     p.add_argument("--kind", dest="kinds", nargs="+",
-                   choices=["capture", "incubator_topic", "atom"],
+                   choices=["capture", "incubator_topic", "incubator_claim", "atom"],
                    help="Filter by typed object kind")
     p.add_argument("--from", dest="date_from", help="Earliest date (YYYY-MM-DD)")
     p.add_argument("--to", dest="date_to", help="Latest date (YYYY-MM-DD)")
@@ -335,6 +351,23 @@ def main(argv: list[str] | None = None):
         print(handle_capture(root, payload, actor=args.actor))
     elif cmd == "read":
         print(handle_read(root, args.id))
+    elif cmd == "maintenance":
+        if args.maintenance_command == "status":
+            print(handle_maintenance_status(root))
+        elif args.maintenance_command == "run":
+            changeset = None
+            if args.changeset:
+                import json
+                changeset = json.loads(Path(args.changeset).read_text(encoding="utf-8"))
+            print(handle_maintenance_run(root, changeset))
+        else:
+            print(handle_maintenance_resume(root))
+    elif cmd == "review-batch":
+        import json
+        decisions = json.loads(Path(args.file).read_text(encoding="utf-8"))
+        if not isinstance(decisions, list):
+            parser.error("review-batch file must contain a JSON list")
+        print(handle_review_batch(root, decisions))
     elif cmd == "create":
         tags_list = None
         if args.tags:

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Personal Memory"
+  short_description: "Maintain a Personal Profile safely"
+  default_prompt: "Use $personal-memory to capture or maintain this Personal Profile."
