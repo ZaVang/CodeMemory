@@ -4,6 +4,37 @@ This file records accepted sprint outcomes. Current work belongs in `docs/plan/S
 
 ---
 
+## 2026-07-22 — Importer v2A: Deterministic Source-Aware Markdown Compiler
+
+**Status:** Accepted by owner.
+
+**Delivered:**
+
+- Upgraded `compile-md` to register each Markdown document as a stable URI-derived Source Artifact before generating its review set; unchanged upserts do not rewrite registry state.
+- Added one compact anchor proposal per document and one deterministic derived proposal per non-empty paragraph, with artifact reference, stable paragraph ID, content hash, heading context, and exact line range.
+- Kept review acceptance separate from canonical acceptance: compiler v2 materialization requires registered `source_refs` and always writes `status: proposed`, so default search/build excludes the result until owner merge.
+- Added same-review idempotency that preserves decisions and file bytes, rejects conflicting `review_id` reuse before registry/review mutation, and allows a new review to update the same artifact ID/hash.
+- Kept the deterministic path free of generated imports and all LLM/provider dependencies; source documents remain byte-identical through compile and materialize.
+- Updated PRD, architecture, integration/user guides, agent import guidance, project structure, CLI help, and regression coverage.
+
+**Acceptance evidence:**
+
+- Owner independently cross-validated CRLF input, repeated heading/body text, stable source IDs, paragraph locators, same-review idempotency, conflict rejection, artifact hash refresh, and proposed search/build exclusion with no actionable findings.
+- `python -m pytest tests/unit/test_memory_compiler.py tests/unit/test_sources.py -q` → `23 passed`
+- `python -m pytest tests/unit tests/test_api.py -q` → `203 passed`
+- Personal Profile suite → `38 passed`
+- `python tests/integration_test.py` → `21/21 passed`
+- `python tests/integration_personal.py` → `15 passed, 0 failed`
+- optional provider dependency grep → no matches (exit code 1 as expected)
+- `git diff --check` → passed; generated example test differences restored
+
+**Deferred:**
+
+- Optional LLM proposer for semantic extraction, classification, deduplication, and imports suggestions; it must remain in the Importer layer and only emit reviewable proposals.
+- MCP/toolkit importer surface, Operator UI review, Web/PDF/non-Markdown ingestion, and Personal Memory semantic discovery.
+
+---
+
 ## 2026-07-22 — Personal Memory Phase 1B
 
 **Status:** Accepted by owner.

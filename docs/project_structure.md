@@ -35,7 +35,7 @@
 | Layer Profile 才定义场景策略 | Work / Companion / Team 这类策略应表现为目录、schema、tags、召回规则和写入规则。 |
 | Source Artifact 不是 Atom | 长文档、代码、PDF、URL 等原始材料应进入 source registry；atom 只表达可复用语义或 anchor。 |
 | ContextPack 是 agent handoff 单元 | `resolve` 保留兼容价值，但新的主输出应围绕结构化 ContextPack 和 progressive disclosure。 |
-| Memory Compiler 不直接污染 canonical memory | Markdown 迁移必须先生成 review set，再由 `materialize-review` 写入正式 memory root。 |
+| Memory Compiler 不直接污染 canonical memory | Markdown 迁移先登记 asset、生成 review set；`materialize-review` 只写 proposed atom，owner merge 后才 canonical。 |
 | Backend 是 adapter | `backend/` 可以做 API 编排和序列化，但不应重新实现 core 语义。 |
 | Frontend 是 operator UI | `frontend/src/` 展示、编辑、resolve、graph，不应定义 canonical memory contract。 |
 | Harness / LLM Gateway 是可选接入层 | `src/harnesslib/` 和 `src/llm_gateway/` 支撑 agent 编排，但 CodeMemory core 不能依赖某个 provider。 |
@@ -118,17 +118,17 @@
 
 ### 5.1 `src/codememory/compiler/` — Markdown Memory Compiler
 
-该目录负责“把已有 Markdown 记忆迁移成 CodeMemory graph”。核心约束：先 proposal，后 review，再 materialize。
+该目录负责“把已有 Markdown 记忆迁移成 CodeMemory graph”。核心约束：先登记 asset，再生成 anchor / paragraph-derived proposal，经 review 选择后只 materialize 为 proposed atom，最后由 owner merge。
 
 | 文件 | 职责 |
 |---|---|
 | `src/codememory/compiler/__init__.py` | compiler package marker。 |
-| `src/codememory/compiler/models.py` | ingest source、segment、proposal、review set、materialization result 的 Pydantic contract。 |
-| `src/codememory/compiler/ingest.py` | 扫描 Markdown corpus，生成稳定 source id，并保留 provenance。 |
-| `src/codememory/compiler/segment.py` | 将 Markdown 切成可评审的语义片段。 |
-| `src/codememory/compiler/propose.py` | 根据片段生成 draft memory proposals，包括 id、summary、body、tags、imports 候选。 |
-| `src/codememory/compiler/review.py` | 写入 review set，供人或 agent 逐项 accept/reject/edit。 |
-| `src/codememory/compiler/materialize.py` | 只将 accepted proposals 写入 canonical memory root，并做路径安全校验。 |
+| `src/codememory/compiler/models.py` | source、segment、paragraph、anchor/derived proposal、review set、materialization result 的 Pydantic contract。 |
+| `src/codememory/compiler/ingest.py` | 只读扫描 Markdown corpus，以 resolved URI 生成稳定 artifact id，并保留 hash/provenance。 |
+| `src/codememory/compiler/segment.py` | 保留 heading context，将正文切成带稳定 ID、hash 和行范围的非空段落。 |
+| `src/codememory/compiler/propose.py` | 幂等登记 Source Artifacts，生成每文档一个 anchor 与每段一个 derived proposal；确定性路径不建议 imports。 |
+| `src/codememory/compiler/review.py` | 写入 review set，保留相同输入重试的 decisions，拒绝冲突 review ID。 |
+| `src/codememory/compiler/materialize.py` | 只将 accepted candidates 写为 `status: proposed` atom，保留 source_refs 并做路径安全校验。 |
 
 ### 5.2 `src/codememory/skeletonize/` — 旧版结构化导入
 

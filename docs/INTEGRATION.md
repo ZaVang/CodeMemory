@@ -29,7 +29,7 @@ codememory --root examples/investment resolve user/investment/context
 
 ## Markdown Migration: Memory Compiler
 
-CodeMemory can migrate an existing Markdown corpus without rewriting the source files. The compiler creates a PR-style review set first; only accepted proposals are materialized as canonical memory atoms.
+CodeMemory can migrate an existing Markdown corpus without rewriting the source files. `compile-md` first registers every document as a Source Artifact, then creates a PR-style review set with one anchor candidate per document and one derived candidate per non-empty paragraph. Accepted review items materialize as `status: proposed` atom files; owner merge is still required before they become canonical.
 
 ```bash
 # 1. Compile existing Markdown into a review set
@@ -48,8 +48,10 @@ codememory --root examples/work validate
 Compiler guarantees:
 
 - Original Markdown files are not modified.
-- Generated memories start as `maturity: draft`.
-- Each generated memory stores `source.original_file`, `source.original_sha256`, and `source.segment_id`.
+- Source Artifact IDs are derived from resolved URIs and remain stable when content changes; repeating an unchanged compile does not rewrite registry state.
+- Generated memories start as `maturity: draft` and `status: proposed`.
+- Every generated memory carries `source_refs`; derived candidates also store paragraph ID/hash and exact line provenance.
+- The deterministic path emits no imports suggestions and has no LLM/provider dependency.
 - The review JSON can be edited before materialization.
 - Existing memory files are not overwritten.
 
@@ -60,12 +62,12 @@ The migration path is intentionally split into small modules so each stage can b
 | Stage | Module | Responsibility |
 |---|---|---|
 | Source manifest | `codememory.compiler.ingest` | Discover Markdown files, skip `.codememory`, compute SHA-256, and never mutate source files. |
-| Segmentation | `codememory.compiler.segment` | Split Markdown by headings and attach source path + line provenance. |
-| Proposal graph | `codememory.compiler.propose` | Generate deterministic draft `MemoryProposal` objects with stable IDs and provenance. |
-| Review persistence | `codememory.compiler.review` | Store/load `.codememory/reviews/{review_id}.json` for human review. |
-| Materialization | `codememory.compiler.materialize` | Write only accepted proposals to canonical atom files, avoid overwrites, and reindex. |
+| Segmentation | `codememory.compiler.segment` | Preserve heading context, split non-empty paragraphs, and attach exact line provenance. |
+| Proposal graph | `codememory.compiler.propose` | Idempotently register assets and generate deterministic anchor/derived proposals with `source_refs`. |
+| Review persistence | `codememory.compiler.review` | Store/load `.codememory/reviews/{review_id}.json`; identical retries preserve decisions and conflicting reuse is rejected. |
+| Materialization | `codememory.compiler.materialize` | Write only accepted candidates as proposed atom files, avoid overwrites, and reindex. |
 
-Operational rule of thumb: use `compile-md` as a read-only planning step, edit the review JSON until it looks right, then run `materialize-review` only when you are ready to write canonical atom files.
+Operational rule of thumb: `compile-md` never edits the source corpus, but it does update the memory root's Source Artifact registry and review JSON. Inspect/edit that review, run `materialize-review` for selected candidates, validate, then use the normal owner merge path to activate them.
 
 ## Memory Library Configuration
 

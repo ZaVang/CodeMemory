@@ -2,20 +2,11 @@
 
 from __future__ import annotations
 
-import hashlib
 from pathlib import Path
 
+from codememory.sources import compute_file_sha256, default_source_id
+
 from .models import SourceDoc
-
-
-def _sha256_text(text: str) -> str:
-    return hashlib.sha256(text.encode("utf-8")).hexdigest()
-
-
-def _source_id(rel_path: str, content_sha256: str) -> str:
-    """Build a source id that stays unique for identical files at different paths."""
-    stable_key = f"{rel_path}\0{content_sha256}"
-    return f"src-{hashlib.sha256(stable_key.encode('utf-8')).hexdigest()[:12]}"
 
 
 def scan_markdown_corpus(source_root: Path) -> list[SourceDoc]:
@@ -39,11 +30,14 @@ def scan_markdown_corpus(source_root: Path) -> list[SourceDoc]:
     for path in files:
         text = path.read_text(encoding="utf-8")
         rel_path = path.relative_to(rel_base).as_posix()
-        sha = _sha256_text(text)
+        resolved_path = path.resolve()
+        uri = str(resolved_path)
+        sha = compute_file_sha256(resolved_path)
         docs.append(
             SourceDoc(
-                source_id=_source_id(rel_path, sha),
-                path=str(path),
+                source_id=default_source_id(uri),
+                path=str(resolved_path),
+                uri=uri,
                 rel_path=rel_path,
                 sha256=sha,
                 chars=len(text),

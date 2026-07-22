@@ -312,7 +312,7 @@ codememory materialize-review docs-review --accept-all
 codememory validate
 ```
 
-当前 compiler 已经支持 proposal / review / materialize 的基本链路。下一阶段会升级为：
+当前 deterministic compiler 已实现 source-aware proposal / review / materialize 链路：
 
 ```text
 Markdown corpus
@@ -325,15 +325,21 @@ Derived Atom proposals
   ↓
 review set
   ↓
+selected status: proposed atom files
+  ↓ owner merge
 canonical graph
 ```
 
 迁移原则：
 
 1. 原文不被静默改写；
-2. LLM 只生成 proposal；
-3. review 后才进入 canonical memory；
-4. 每条正式记忆应能追溯到 source。
+2. 每份文档只有一个稳定 Source Artifact 和一个轻量 anchor；每个非空段落是 derived candidate；
+3. review 只选择要落盘的候选，materialize 后仍是 `status: proposed`；
+4. owner merge 后才进入 canonical memory；
+5. 每条候选通过 `source_refs` 追溯到 artifact 和行范围；
+6. 确定性路径不生成 imports，也不调用 LLM。
+
+重复使用同一 `review-id` 编译相同输入会保留已有 decisions，且不会重写未变化的 registry / review 文件。若输入、tags 或 namespace 已变化，应使用新的 review ID；旧 ID 会安全拒绝覆盖。
 
 ---
 

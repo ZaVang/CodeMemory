@@ -45,6 +45,18 @@ def load_review_set(root: Path, review_id: str) -> ReviewSet:
     return ReviewSet.model_validate(raw)
 
 
+def equivalent_compiler_input(existing: ReviewSet, candidate: ReviewSet) -> bool:
+    """Compare deterministic compiler output while ignoring time and decisions."""
+
+    def normalized(review: ReviewSet) -> dict:
+        payload = review.model_dump(mode="json", exclude={"created_at"})
+        for proposal in payload["proposals"]:
+            proposal["decision"] = "pending"
+        return payload
+
+    return normalized(existing) == normalized(candidate)
+
+
 def set_all_decisions(review: ReviewSet, decision: Decision) -> ReviewSet:
     """Return a copy with every proposal decision set to ``decision``."""
     return review.model_copy(

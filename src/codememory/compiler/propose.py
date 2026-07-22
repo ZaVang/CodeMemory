@@ -1,15 +1,18 @@
-"""Draft memory proposal generation for Markdown corpus migration."""
+"""Deterministic source-aware proposals for Markdown corpus migration."""
 
 from __future__ import annotations
 
+import hashlib
 import re
 from pathlib import Path
 
+from codememory.models import SourceRef
 from codememory.skeletonize.common import extract_first_sentence, slugify
+from codememory.sources import add_source_artifact
 
 from .ingest import scan_markdown_corpus
-from .models import MemoryProposal, ReviewSet, SourceSegment
-from .segment import segment_markdown_doc
+from .models import MemoryProposal, ReviewSet, SourceDoc, SourceParagraph, SourceSegment
+from .segment import paragraphs_from_segments, segment_markdown_doc
 
 
 def _clean_slug(value: str) -> str:
@@ -39,64 +42,161 @@ def _unique_memory_id(base_id: str, used: set[str]) -> str:
     return unique
 
 
-def proposal_from_segment(
-    segment: SourceSegment,
-    source_sha256: str,
+def _source_summary(doc: SourceDoc) -> str:
+    return f"Markdown source: {doc.rel_path}"
+
+
+def _source_ref(
+    doc: SourceDoc,
+    *,
+    section_id: str | None = None,
+    line_range: str | None = None,
+    disclosure_hint: str = "anchor",
+) -> SourceRef:
+    return SourceRef(
+        artifact_id=doc.source_id,
+        section_id=section_id,
+        range=line_range,
+        summary=_source_summary(doc),
+        disclosure_hint=disclosure_hint,
+    )
+
+
+def register_source_docs(memory_root: Path, docs: list[SourceDoc]) -> None:
+    """Idempotently upsert compiler-discovered documents in the registry."""
+
+    for doc in docs:
+        add_source_artifact(
+            memory_root,
+            uri=doc.uri or doc.path,
+            source_id=doc.source_id,
+            kind="markdown",
+            summary=_source_summary(doc),
+        )
+
+
+def anchor_proposal(
+    doc: SourceDoc,
     tags: list[str] | None = None,
     namespace: str = "user/imports",
     used_ids: set[str] | None = None,
 ) -> MemoryProposal:
-    """Create one deterministic draft proposal from a Markdown segment."""
-    used_ids = used_ids if used_ids is not None else set()
-    prefix = _path_prefix(segment.rel_path)
-    heading_slug = _clean_slug(segment.heading)
-    memory_id = _unique_memory_id(f"{namespace}/{prefix}/{heading_slug}", used_ids)
-    title = segment.heading or Path(segment.rel_path).stem
-    body = f"# {title}\n\n{segment.body}".strip()
-    summary = extract_first_sentence(segment.body, max_chars=120) or title
-    proposal_tags = list(dict.fromkeys([*(tags or []), "compiled", "markdown"]))
+    """Create the one lightweight Source Artifact anchor for a document."""
 
+    used_ids = used_ids if used_ids is not None else set()
+    prefix = _path_prefix(doc.rel_path)
+    memory_id = _unique_memory_id(f"{namespace}/{prefix}/anchor", used_ids)
+    title = Path(doc.rel_path).stem
+    summary = _source_summary(doc)
+    body = (
+        f"# {title}\n\n"
+        f"Source Artifact `{doc.source_id}` anchors `{doc.rel_path}`. "
+        f"Use `codememory source expand {doc.source_id}` to read the original."
+    )
+    proposal_tags = list(dict.fromkeys([*(tags or []), "compiled", "markdown", "source-anchor"]))
     return MemoryProposal(
-        proposal_id=f"prop-{segment.segment_id}",
+        proposal_id=f"prop-{doc.source_id.replace('/', '-')}-anchor",
+        role="anchor",
         memory_id=memory_id,
         summary=summary,
         body=body,
         tags=proposal_tags,
-        maturity="draft",
+        source_refs=[_source_ref(doc)],
         source={
-            "platform": "memory-compiler",
+            "platform": "memory-compiler-v2",
             "created_by": "codememory compile-md",
-            "original_file": segment.rel_path,
-            "original_sha256": source_sha256,
-            "segment_id": segment.segment_id,
-            "heading": segment.heading,
-            "line_start": segment.start_line,
-            "line_end": segment.end_line,
+            "original_file": doc.rel_path,
+            "original_sha256": doc.sha256,
+            "artifact_id": doc.source_id,
+            "proposal_role": "anchor",
+        },
+    )
+
+
+def proposal_from_paragraph(
+    paragraph: SourceParagraph,
+    doc: SourceDoc,
+    tags: list[str] | None = None,
+    namespace: str = "user/imports",
+    used_ids: set[str] | None = None,
+) -> MemoryProposal:
+    """Create one deterministic derived proposal from a Markdown paragraph."""
+
+    used_ids = used_ids if used_ids is not None else set()
+    prefix = _path_prefix(paragraph.rel_path)
+    heading = paragraph.heading or Path(paragraph.rel_path).stem
+    heading_slug = _clean_slug(heading)
+    base_id = f"{namespace}/{prefix}/{heading_slug}-p{paragraph.section_ordinal + 1}"
+    memory_id = _unique_memory_id(base_id, used_ids)
+    summary = extract_first_sentence(paragraph.body, max_chars=120) or heading
+    body = f"# {heading}\n\n{paragraph.body}".strip()
+    proposal_tags = list(dict.fromkeys([*(tags or []), "compiled", "markdown", "derived"]))
+    line_range = f"L{paragraph.start_line}-L{paragraph.end_line}"
+
+    return MemoryProposal(
+        proposal_id=f"prop-{paragraph.paragraph_id}",
+        role="derived",
+        memory_id=memory_id,
+        summary=summary,
+        body=body,
+        tags=proposal_tags,
+        source_refs=[
+            _source_ref(
+                doc,
+                section_id=paragraph.paragraph_id,
+                line_range=line_range,
+                disclosure_hint="excerpt",
+            )
+        ],
+        source={
+            "platform": "memory-compiler-v2",
+            "created_by": "codememory compile-md",
+            "original_file": paragraph.rel_path,
+            "original_sha256": doc.sha256,
+            "artifact_id": doc.source_id,
+            "segment_id": paragraph.segment_id,
+            "paragraph_id": paragraph.paragraph_id,
+            "paragraph_sha256": paragraph.sha256,
+            "heading": paragraph.heading,
+            "line_start": paragraph.start_line,
+            "line_end": paragraph.end_line,
+            "proposal_role": "derived",
         },
     )
 
 
 def compile_markdown_corpus(
+    memory_root: Path,
     source_root: Path,
     review_id: str,
     tags: list[str] | None = None,
     namespace: str = "user/imports",
+    *,
+    register_sources: bool = True,
 ) -> ReviewSet:
-    """Compile a Markdown corpus into a draft review set."""
+    """Register a Markdown corpus and return its deterministic draft review set."""
+
     docs = scan_markdown_corpus(source_root)
     segments = []
+    paragraphs = []
     proposals = []
     used_ids: set[str] = set()
-    source_sha_by_id = {doc.source_id: doc.sha256 for doc in docs}
+
+    if register_sources:
+        register_source_docs(memory_root, docs)
 
     for doc in docs:
+        proposals.append(anchor_proposal(doc, tags=tags, namespace=namespace, used_ids=used_ids))
+
         doc_segments = segment_markdown_doc(doc)
+        doc_paragraphs = paragraphs_from_segments(doc_segments)
         segments.extend(doc_segments)
-        for segment in doc_segments:
+        paragraphs.extend(doc_paragraphs)
+        for paragraph in doc_paragraphs:
             proposals.append(
-                proposal_from_segment(
-                    segment,
-                    source_sha256=source_sha_by_id[segment.source_id],
+                proposal_from_paragraph(
+                    paragraph,
+                    doc=doc,
                     tags=tags,
                     namespace=namespace,
                     used_ids=used_ids,
@@ -106,7 +206,51 @@ def compile_markdown_corpus(
     return ReviewSet(
         review_id=review_id,
         source_root=str(source_root.resolve()),
+        namespace=namespace,
+        tags=list(tags or []),
+        compiler_version=2,
         sources=docs,
         segments=segments,
+        paragraphs=paragraphs,
         proposals=proposals,
+    )
+
+
+def proposal_from_segment(
+    segment: SourceSegment,
+    source_sha256: str,
+    tags: list[str] | None = None,
+    namespace: str = "user/imports",
+    used_ids: set[str] | None = None,
+) -> MemoryProposal:
+    """Compatibility wrapper treating the whole legacy segment as one paragraph."""
+
+    body = segment.body.strip()
+    paragraph = SourceParagraph(
+        paragraph_id=f"{segment.source_id}-para-{segment.ordinal}",
+        source_id=segment.source_id,
+        segment_id=segment.segment_id,
+        rel_path=segment.rel_path,
+        heading=segment.heading,
+        ordinal=segment.ordinal,
+        section_ordinal=0,
+        body=body,
+        sha256=hashlib.sha256(body.encode("utf-8")).hexdigest(),
+        start_line=segment.body_start_line,
+        end_line=segment.end_line,
+    )
+    doc = SourceDoc(
+        source_id=segment.source_id,
+        path=segment.rel_path,
+        uri=segment.rel_path,
+        rel_path=segment.rel_path,
+        sha256=source_sha256,
+        chars=len(body),
+    )
+    return proposal_from_paragraph(
+        paragraph,
+        doc=doc,
+        tags=tags,
+        namespace=namespace,
+        used_ids=used_ids,
     )

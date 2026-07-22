@@ -188,7 +188,9 @@ def infer_source_kind(uri: str) -> SourceKind:
     return "external"
 
 
-def _default_source_id(uri: str) -> str:
+def default_source_id(uri: str) -> str:
+    """Return the stable registry id derived from a source URI."""
+
     digest = hashlib.sha1(uri.encode("utf-8")).hexdigest()[:12]
     stem = Path(uri).stem.lower() or "source"
     safe_stem = "".join(ch if ch.isalnum() else "-" for ch in stem).strip("-")
@@ -209,7 +211,7 @@ def add_source_artifact(
     local_path = resolve_source_uri(root_dir, uri)
     sha256 = compute_file_sha256(local_path) if local_path is not None and local_path.exists() else ""
     artifact = SourceArtifact(
-        id=source_id or _default_source_id(uri),
+        id=source_id or default_source_id(uri),
         kind=kind or infer_source_kind(uri),
         uri=uri,
         sha256=sha256,
@@ -217,8 +219,9 @@ def add_source_artifact(
         status=status,
     )
     registry = load_source_registry(root_dir)
-    registry.sources[artifact.id] = artifact
-    save_source_registry(root_dir, registry)
+    if registry.sources.get(artifact.id) != artifact:
+        registry.sources[artifact.id] = artifact
+        save_source_registry(root_dir, registry)
     return artifact
 
 

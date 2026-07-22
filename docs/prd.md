@@ -148,6 +148,19 @@ maintenance run 的状态与日志只存放在 `.codememory/`，不得写入 jou
 
 原有 canonical 维护循环继续保留：`check` 检查 stale / 断链 / schema，`orphans` 发现不可达 atom，`test` 验证黄金问题。
 
+### 5.4 导入路径——原文、候选与 canonical 分离
+
+```text
+Markdown corpus → 登记 Source Artifacts（稳定 URI-derived ID + hash）
+                → 每份文档生成一个轻量 anchor proposal
+                → 每个非空段落生成一个带精确 locator 的 derived proposal
+                → review 选择需要 materialize 的候选
+                → 写入 status: proposed 的 atom 文件
+                → owner merge 后才进入 canonical graph
+```
+
+确定性 importer 只做可复现的结构转换，不声称已经完成语义提炼，也不自动发明 imports。未来可选 LLM proposer 仍只能提出候选与依赖建议，不能跳过 review / owner merge。原文保持不变，anchor 与 derived 都通过 `source_refs` 回指 asset；`source_refs` 永不进入 imports DAG。
+
 ## 6. 写入纪律
 
 | 等级 | 判据 | 路径 |

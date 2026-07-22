@@ -14,8 +14,14 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from .compiler.materialize import materialize_review_set
-from .compiler.propose import compile_markdown_corpus
-from .compiler.review import load_review_set, save_review_set, set_all_decisions
+from .compiler.propose import compile_markdown_corpus, register_source_docs
+from .compiler.review import (
+    equivalent_compiler_input,
+    load_review_set,
+    review_path,
+    save_review_set,
+    set_all_decisions,
+)
 from .build import build_context_pack, render_context_pack
 from .core import compute_body_hash as _cbh
 from .core import get_memory_path, parse_frontmatter as _pfm
@@ -713,17 +719,34 @@ def handle_compile_md(
     if review_id is None:
         review_id = datetime.now(timezone.utc).strftime("compile-%Y%m%d-%H%M%S")
 
+    path = review_path(root, review_id)
+    existing = load_review_set(root, review_id) if path.exists() else None
     review = compile_markdown_corpus(
+        memory_root=root,
         source_root=source_path,
         review_id=review_id,
         tags=tags,
         namespace=namespace,
+        register_sources=existing is None,
     )
-    path = save_review_set(root, review)
+    if existing is not None:
+        if not equivalent_compiler_input(existing, review):
+            raise ValueError(
+                f"review_id '{review_id}' already exists with different compiler input"
+            )
+        register_source_docs(root, review.sources)
+        review = existing
+    else:
+        path = save_review_set(root, review)
+    anchors = sum(proposal.role == "anchor" for proposal in review.proposals)
+    derived = sum(proposal.role == "derived" for proposal in review.proposals)
     return (
         f"Review set saved: {path}\n"
-        f"sources: {len(review.sources)}\n"
+        f"registered sources: {len(review.sources)}\n"
         f"segments: {len(review.segments)}\n"
+        f"paragraphs: {len(review.paragraphs)}\n"
+        f"anchors: {anchors}\n"
+        f"derived: {derived}\n"
         f"proposals: {len(review.proposals)}"
     )
 

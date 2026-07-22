@@ -1,117 +1,110 @@
 # CodeMemory Current Sprint
 
 > **Status:** SPRINT COMPLETE — accepted by owner.
-> **Sprint:** Personal Memory Phase 1B — Codex Maintenance + Git Delivery.
-> **Depends on:** accepted Phase 1A commit `136c78c`.
-> **Upstream contracts:** `docs/prd.md`, `docs/architecture.md`, `docs/personal-memory-profile.md`.
+> **Sprint:** Importer v2A — Deterministic Source-Aware Markdown Compiler.
+> **Branch:** `codex/importer-v2`.
+> **Upstream contracts:** `docs/prd.md`, `docs/architecture.md`, `docs/plan/FUTURE.md`.
 
 ---
 
-## Start Gate — Open
+## Start Gate — Completed
 
-The owner accepted Phase 1A and explicitly authorized Phase 1B after the accepted branch was committed and pushed. Phase 1B begins on its own branch.
+The owner instructed CodeMemory to continue in roadmap order. The next roadmap item is Importer v2; this sprint implements only its minimal deterministic, zero-LLM subitem.
 
-Web UI and semantic discovery remain out of scope. External embeddings remain disabled.
+The optional LLM proposer, semantic refinement, Web, MCP/toolkit expansion, Operator UI work, and Personal Memory Phase 2 remain closed.
 
 ---
 
 ## Objective
 
-Add an idempotent Codex-driven maintenance workflow on top of the deterministic Phase 1A substrate: consume every valid unprocessed Capture, upsert provenance-rich Incubator Topics, gate canonical promotion through owner confirmation, and safely deliver accepted local changes through Git without ever blocking Capture.
+Upgrade `compile-md` from heading-only atom splitting into a source-aware migration plan: register every Markdown document as a Source Artifact, generate one lightweight anchor proposal per document, generate paragraph-level derived proposals with exact provenance, and keep every materialized result proposed until the owner merges it.
+
+---
+
+## Contracts
+
+1. `compile-md` may write only Source Artifact registry metadata and its review-set JSON. It never changes source documents or directly creates canonical atom files.
+2. A source document has one stable artifact ID derived from its resolved URI, independent of content changes. Recompiling the same URI updates that registry entry instead of adding another one.
+3. Each document produces exactly one anchor proposal. The anchor carries a `source_refs` entry for the registered artifact and contains only a compact source description, not a copy of the document body.
+4. Each non-empty Markdown paragraph produces one deterministic derived proposal. It carries the same artifact reference plus a paragraph locator and exact line range.
+5. Review decisions select which candidates may be materialized. Materialized compiler atoms remain `status: proposed`; review acceptance is not canonical owner merge.
+6. `source_refs` express provenance only. Deterministic Importer v2A does not invent `imports` edges; imports suggestions belong to the deferred semantic proposer.
+7. Re-running the same source with the same review ID is idempotent: it preserves existing review decisions and does not rewrite unchanged registry/review files. Reusing a review ID for different compiler input fails before replacing the existing review.
 
 ---
 
 ## Deliverables
 
-### 1. Maintenance run ledger and recovery
+### 1. Source-aware compiler contracts
 
-- [x] Add maintenance run models, append-only `runs.jsonl`, local state, pending changeset, stage transitions, and stable input digest.
-- [x] Discover all complete hash-valid Captures not consumed by an `applied` run, including missed-run catch-up across dates.
-- [x] Ensure the same input digest returns the existing applied run and never duplicates Topic changes, consumption, or commits.
-- [x] Persist before/after hashes and resume an interrupted apply from the same pending changeset without regenerating it.
-- [x] Enforce one active run; `scan_blocked` blocks new maintenance and Git delivery while Capture remains available.
-- [x] Resume the same blocked run after owner repair, then catch up Captures added during the block in a later run.
-- [x] Keep all maintenance state out of journal Markdown.
+- [x] Extend compiler models with registered artifact IDs, paragraph records, proposal role, and structured `source_refs`.
+- [x] Use stable URI-derived Source Artifact IDs and idempotent registry upsert.
+- [x] Preserve exact source path, SHA-256, paragraph identity, heading context, and line range in the review set.
 
-### 2. Personal Memory Codex Skill and Topic upsert
+### 2. Anchor and derived proposals
 
-- [x] Add a repository Personal Memory Codex Skill covering capture judgment, optional follow-up, active reading, synthesis, provenance, claim blocks, and owner-facing review behavior.
-- [x] Keep “record only” low-friction; only enter interview mode when the owner explicitly requests continued questioning or a critical ambiguity blocks the requested result.
-- [x] Generate one monthly incubator Markdown and deterministically upsert one section per `topic_id + revision_id`.
-- [x] Preserve stable Topic/revision IDs, paragraph-level `derived_from`, `origin: mixed`, and stable inline `claim_id` blocks without creating claim Markdown files.
-- [x] Repeated maintenance over equivalent input must update the existing Topic section rather than duplicate it.
+- [x] Generate exactly one compact anchor proposal per Markdown document.
+- [x] Split section bodies into non-empty paragraphs and generate deterministic derived proposals.
+- [x] Keep all proposals pending in review and all materialized atoms `status: proposed`.
+- [x] Never create automatic imports edges in the deterministic path.
 
-### 3. Canonical promotion and batch review
+### 3. Review and materialization safety
 
-- [x] Default Agent-created canonical Atoms to proposed and exclude them from default search/build.
-- [x] Treat an explicit owner instruction to create a formal idea as confirmation.
-- [x] Support batch promote, merge, and delete decisions for Incubator review.
-- [x] Preserve Capture/Topic revision hashes and owner confirmation in Atom provenance.
-- [x] Activate promoted Atoms only after owner confirmation; existing imports DAG remains the only canonical build path.
+- [x] Persist `source_refs` into materialized atom frontmatter.
+- [x] Preserve prior decisions on an identical compile retry.
+- [x] Reject a conflicting reuse of `review_id` without changing the prior review.
+- [x] Keep path traversal protection, no-overwrite behavior, and reindex behavior intact.
 
-### 4. Sensitive scan and Git delivery
+### 4. Adapters, docs, and tests
 
-- [x] Scan the staged delivery diff for sensitive values before commit without echoing secret contents.
-- [x] On a hit, enter `scan_blocked`, notify the owner with rule/path/object locator only, and create no commit or push.
-- [x] Stage only Profile-declared tracked paths; reject unknown changes outside those paths and never stage `paths.private_local` or ignored runtime state.
-- [x] Auto-commit only when explicitly enabled, with one unique `CodeMemory-Run: <run_id>` trailer.
-- [x] Auto-push only when explicitly enabled; failed push preserves the same commit and retries without creating another commit.
-- [x] Avoid a second dirty commit caused only by updating committed/pushed runtime state.
-- [x] Document that private GitHub is not encrypted storage and deleted raw records may remain in Git history.
-
-### 5. Automation, adapters, documentation, and tests
-
-- [x] Add shared handlers and CLI/toolkit entry points for maintenance status/run/resume and review decisions without exposing arbitrary roots.
-- [x] Define the Automation invocation contract and concise success/failure/blocked owner notifications.
-- [x] Update USER_GUIDE, INTEGRATION, architecture, profile contract, and project structure.
-- [x] Add unit coverage for maintenance, promotion, Git delivery, Skill behavior, and every idempotency/recovery boundary.
-- [x] Extend disposable integration coverage; never touch production MyMemory and restore all checked-in example side effects.
+- [x] Keep CLI behavior behind the shared `handle_compile_md` / `handle_materialize_review` facade.
+- [x] Report registered sources, anchors, derived candidates, and total proposals in compile output.
+- [x] Update PRD/architecture, USER_GUIDE, INTEGRATION, and project structure to the delivered contract.
+- [x] Add unit and CLI regression coverage for source registration, provenance, proposal status, idempotency, and source immutability.
 
 ---
 
 ## Executable Acceptance Criteria
 
-1. Construct three days of Captures, skip two scheduled runs, then maintain: every unconsumed valid Capture is consumed exactly once in deterministic order.
-2. Run the same input twice: the second call returns the existing applied run; incubator diff, Topic count, and Git commit count remain unchanged.
-3. Simulate process exit during apply; restart uses the same pending changeset and reaches identical after hashes without regenerating the changeset.
-4. Equivalent input maps to the same `topic_id + revision_id` and updates one section; a month still has one incubator Markdown.
-5. Agent promotion creates a proposed Atom invisible to default build; explicit owner confirmation activates it with complete provenance.
-6. One review batch can promote, merge, and delete multiple Topics; routine Topic updates do not create per-item proposals.
-7. Inject a test token: sensitive scan enters `scan_blocked`, does not reveal the token, and performs no commit/push. Capture continues; the same run resumes after repair; later maintenance catches up blocked-period Captures.
-8. A temporary bare remote proves auto commit/push; an intentionally failed first push retries the same commit without increasing commit count.
-9. Every delivery commit has exactly one `CodeMemory-Run: <run_id>` trailer; repeated runner calls do not duplicate commits.
-10. The configured `paths.private_local` is ignored; a pre-tracked configured private path fails validation.
-11. Skill tests prove record-only does not question, explicit “continue asking” enters interview mode, and no critical gap means no interruption.
-12. Updating committed/pushed state does not create a second dirty commit; delivery status is reconstructible from trailers and the remote ref.
-13. Unknown changes outside Profile-declared paths block auto commit; private/runtime paths are never staged.
-14. Topic may be `origin: mixed`; inference uses a stable inline claim block and does not create another Markdown file.
-15. All unit/API/integration acceptance passes with no example or temporary repository residue.
+1. Compile a two-file Markdown corpus: the registry contains exactly two stable artifacts; the review contains two anchors and one derived proposal per non-empty paragraph.
+2. Every anchor and derived proposal references the correct artifact; each derived locator resolves to the recorded source lines.
+3. Source files are byte-identical before and after compile and materialization.
+4. Compile identical input twice with the same review ID: registry bytes and review bytes are unchanged, decisions are preserved, and no duplicate artifacts/proposals appear.
+5. Change source content and reuse the same review ID: compilation fails without replacing the prior review; using a new review ID updates the existing artifact hash without changing its ID.
+6. Accept and materialize selected anchor/derived candidates: only selected files are written, each has `status: proposed` and valid `source_refs`, and default search/build cannot treat it as active canonical truth.
+7. The deterministic compiler emits no imports suggestions and introduces no LLM/provider dependency into `src/codememory`.
+8. Unsafe review IDs and memory IDs remain rejected; existing files are never overwritten.
+9. All unit/API and existing integration suites pass; `git diff --check` passes; checked-in examples have no test residue.
 
 ---
 
 ## Acceptance Commands
 
 ```powershell
+python -m pytest tests/unit/test_memory_compiler.py tests/unit/test_sources.py -q
 python -m pytest tests/unit tests/test_api.py -q
-python -m pytest tests/personal/test_maintenance.py tests/personal/test_promotion.py tests/personal/test_git_delivery.py -q
+python tests/integration_test.py
 python tests/integration_personal.py
-rg -n -i "openai.*embedding|external_embeddings.*true" src/codememory
+rg -n "llm_gateway|openai|anthropic|gemini|embedding" src/codememory/compiler
 git diff --check
 git status --short --branch -uall
 ```
 
-Expected embedding grep result: no matches (exit code 1 is success).
+Expected dependency grep result: no matches (exit code 1 is success).
 
 ---
 
 ## Explicit Deferrals
 
-- Local semantic index and all external embedding integrations.
-- Personal Memory Web UI and arbitrary external-instance browsing.
-- Full Markdown editor or Obsidian replacement behavior.
+- LLM-based semantic extraction, classification, deduplication, or imports suggestions.
+- MCP/toolkit importer tools and Operator UI review surfaces.
+- Web ingestion, URL fetching, PDF parsing, and non-Markdown corpus support.
+- Personal Memory semantic discovery.
 
 ---
 
-## Completion Signal
+## Completion Gate
+
+Owner independently reproduced the contract and failure-window checks, accepted Importer v2A with no remaining blockers, and authorized commit/push of `codex/importer-v2`.
 
 `SPRINT COMPLETE`

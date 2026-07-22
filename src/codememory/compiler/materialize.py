@@ -9,6 +9,7 @@ import yaml
 
 from codememory.core import compute_body_hash
 from codememory.index import reindex
+from codememory.sources import get_source_artifact
 
 from .models import MaterializeResult, MemoryProposal, ReviewSet
 
@@ -31,13 +32,17 @@ def _safe_memory_path(root: Path, memory_id: str) -> Path:
     return target
 
 
-def _frontmatter_for_proposal(proposal: MemoryProposal) -> dict:
+def _frontmatter_for_proposal(
+    proposal: MemoryProposal,
+    *,
+    force_proposed: bool = False,
+) -> dict:
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     frontmatter = {
         "type": proposal.type,
         "id": proposal.memory_id,
         "summary": proposal.summary,
-        "status": proposal.status,
+        "status": "proposed" if force_proposed else proposal.status,
         "created": today,
         "updated": today,
         "version": 1,
@@ -50,6 +55,10 @@ def _frontmatter_for_proposal(proposal: MemoryProposal) -> dict:
         },
         "summary_hash": compute_body_hash(proposal.body.strip()),
     }
+    if proposal.source_refs:
+        frontmatter["source_refs"] = [
+            ref.model_dump(mode="json", exclude_none=True) for ref in proposal.source_refs
+        ]
     if proposal.imports:
         frontmatter["imports"] = proposal.imports
     return frontmatter
@@ -75,13 +84,32 @@ def materialize_review_set(
             result.errors.append(str(exc))
             continue
 
+        if review.compiler_version >= 2:
+            if not proposal.source_refs:
+                result.errors.append(f"missing source_refs: {proposal.proposal_id}")
+                continue
+            missing_artifacts = [
+                ref.artifact_id
+                for ref in proposal.source_refs
+                if get_source_artifact(root, ref.artifact_id) is None
+            ]
+            if missing_artifacts:
+                result.errors.append(
+                    f"unregistered source_refs: {proposal.proposal_id}: "
+                    + ", ".join(sorted(set(missing_artifacts)))
+                )
+                continue
+
         if file_path.exists():
             result.errors.append(f"exists: {proposal.memory_id}")
             continue
 
         file_path.parent.mkdir(parents=True, exist_ok=True)
         yaml_str = yaml.dump(
-            _frontmatter_for_proposal(proposal),
+            _frontmatter_for_proposal(
+                proposal,
+                force_proposed=review.compiler_version >= 2,
+            ),
             allow_unicode=True,
             sort_keys=False,
         )

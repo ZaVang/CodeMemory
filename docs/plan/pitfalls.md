@@ -38,6 +38,14 @@ build 产物默认只携带 asset 引用（source_refs）；原文获取必须�
 
 ---
 
+## Importer provenance 必须锚定原始字节和真实正文位置
+
+- Source Artifact registry 使用文件字节 SHA-256；compiler review 也必须复用同一字节 hash。不要对 `read_text()` 的换行归一化结果再 hash，否则 Windows CRLF 文件会在 registry 与 proposal provenance 之间产生两个 hash。
+- Markdown section 的正文定位必须从 heading 行之后开始。直接对整个 raw section 使用 `find(section.body)`，在 heading 文本与正文首段相同时会误命中 heading，产生错误行号。
+- 同一 `review_id` 重试只可忽略 `created_at` 与 decision 差异；相同输入保留已有 review 字节和 decisions，不同输入必须在 registry/review 写入前拒绝。
+
+---
+
 ## Personal Profile capability 与 validity 分离
 
 普通目录和缺少 remote 的 Git repo 都是合法 Personal Profile。`profile_valid` 只判断实例合同；Git/remote 只产生独立 capability 状态。Capture 不得因为 `git_delivery=unavailable` 失败，也不要在 init 中隐式执行 `git init` 或创建 remote。

@@ -447,7 +447,7 @@ Phase 1 必须硬性执行：
 5. 临时检索和周期综合默认只回答，不保存 report。
 6. promotion 只发生于 owner 明确指令或集中审阅。
 7. 合并保留 `merged_from`，refuted 保留来源，不靠复制文件保存历史。
-8. importer / compile-md 的“按标题一段一 proposal”策略不得直接用于 daily maintenance。
+8. importer / compile-md 的“asset + anchor + 每段一个 derived proposal”机械策略不得直接用于 daily maintenance。
 
 ---
 

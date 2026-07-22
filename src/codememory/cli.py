@@ -309,7 +309,7 @@ def main(argv: list[str] | None = None):
     p.add_argument("--config", help="Path to .codememory/skeletonize.yaml (auto-detected from cwd by default)")
 
     # compile-md
-    p = subparsers.add_parser("compile-md", help="Compile Markdown corpus into a review set")
+    p = subparsers.add_parser("compile-md", help="Register Markdown sources and build an anchor/derived review set")
     _add_logging_flags(p)
     p.add_argument("source", help="Markdown file or directory to compile")
     p.add_argument("--review-id", help="Stable review ID; defaults to timestamp")
@@ -317,7 +317,7 @@ def main(argv: list[str] | None = None):
     p.add_argument("--namespace", default="user/imports", help="Memory ID namespace for proposals")
 
     # materialize-review
-    p = subparsers.add_parser("materialize-review", help="Materialize accepted compiler proposals")
+    p = subparsers.add_parser("materialize-review", help="Materialize accepted compiler candidates as proposed atoms")
     _add_logging_flags(p)
     p.add_argument("review_id", help="Review ID from compile-md")
     p.add_argument("--accept-all", action="store_true", help="Accept all pending proposals before materializing")

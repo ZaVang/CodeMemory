@@ -226,7 +226,7 @@ codememory validate
 
 ## 9. 导入工作流：agent 即 importer
 
-存量文档、笔记、聊天记录的高质量导入靠 **agent 提炼**，不靠机械切分。机械路径（`compile-md` 按标题切、`import` 按段落切、`skeletonize` 骨架化）只适合结构本来就规整、内容本来就一节一条的材料；其余情况按本节流程走——你的价值是**判断与取舍**，不是搬运。
+存量文档、笔记、聊天记录的高质量导入靠 **agent 提炼**，不靠机械切分。机械路径（`compile-md` 登记 asset 并生成 anchor + paragraph-derived proposals、`import` 按段落切、`skeletonize` 骨架化）只适合结构本来就规整、内容本来就一段一条的材料；其余情况按本节流程走——你的价值是**判断与取舍**，不是搬运。
 
 ### 六步流程（每批材料）
 

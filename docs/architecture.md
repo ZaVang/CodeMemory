@@ -58,6 +58,14 @@
 - 职责：外部材料 → asset 登记 + atom proposals。
 - 铁律：产出一律是 proposal，经 review 晋升；LLM 只 propose，不写 canonical truth；原始材料默认保留。
 
+确定性 Markdown compiler 的阶段边界：
+
+1. ingest 只读扫描原文，以 resolved URI 生成不随正文变化的 artifact ID，并记录当前 hash；
+2. compiler 幂等 upsert Source Artifact，随后为每份文档生成一个 anchor、为每个非空段落生成一个 derived candidate；
+3. anchor / derived 都携带 `source_refs`；derived 另带 paragraph ID、hash 与精确行范围；
+4. review 的 accept/reject 只决定是否 materialize，写出的 atom 仍为 `status: proposed`；只有 owner merge 后才进入 canonical graph；
+5. 确定性路径不生成 imports。语义提炼和 imports 建议属于未来可选 proposer，依赖只能进入 Importer 层，Core 继续零 LLM provider 依赖。
+
 ### 1.4 agent 在哪里
 
 agent 不是系统组件。agent 是消费 build 产物、按写入纪律提交变更的运行时，永远经 adapter（CLI bash 命令 / MCP / toolkit）调用系统，不 import codememory、不直接读写记忆库的 .md 文件。
@@ -88,12 +96,13 @@ Git credential、GitHub 访问控制和通知通道属于运行环境，不写�
 | test | **`test_contract.py`** | 已完成：导出题集 + 装配上下文；report 写回 log | C ✅ |
 | proposal | `models.py`（status）+ `proposals.py`（patch 队列）+ `update.py`（merge/reject 分发） | 已完成（修改类落为独立小模块 `proposals.py`，复用 update 应用 patch） | A ✅ / C ✅ |
 | log | `log.py` / `changelog.py` | 不变 | — |
-| Personal Profile | `profile.py` / `capture.py` / `personal_index.py` / `maintenance.py` / `promotion.py` / `git_delivery.py` | 1A substrate complete；1B implementation pending owner acceptance | 1A / 1B |
+| importer | `compiler/` + `sources.py` | v2A：asset + anchor + paragraph-derived proposals；可选语义 proposer延期 | Importer v2A |
+| Personal Profile | `profile.py` / `capture.py` / `personal_index.py` / `maintenance.py` / `promotion.py` / `git_delivery.py` | 1A / 1B 已完成并经 owner 接受 | 1A / 1B ✅ |
 
 ### 2.1 保留与定位说明
 
 - `snapshot.py` / `transient.py`：保留，定位为 REPL 草稿辅助工具（会话级推理链与持久化），不属于 11 概念。
-- `compiler/` 的 review/materialize 机制：保留；阶段 C 实现修改类 proposal 前，先评审复用其底层，避免两套同构机制。
+- `compiler/` 的 review/materialize 机制：保留；review acceptance 与 canonical merge 是两个门，materialize 只写 proposed atom。
 
 ### 2.2 删除清单（阶段 C 已执行，汇总见附录）
 
