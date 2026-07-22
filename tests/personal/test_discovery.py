@@ -173,7 +173,7 @@ def test_mcp_exposes_bound_phase_1a_reading_paths(tmp_path: Path, monkeypatch):
         mcp_server._get_root_from_env()
 
     monkeypatch.setenv("CODEMEMORY_ROOT", str(tmp_path))
-    tools = {tool["name"]: tool for tool in mcp_server.TOOLS}
+    tools = {tool["name"]: tool for tool in mcp_server._mcp_tools_for_root(tmp_path)}
     assert {"capture_memory", "search_memories", "read_memory", "build_memory"}.issubset(tools)
     assert all("root" not in tool["inputSchema"].get("properties", {}) for tool in tools.values())
 

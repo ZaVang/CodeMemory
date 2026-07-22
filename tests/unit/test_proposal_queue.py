@@ -118,6 +118,14 @@ def test_reject_discards_patch_leaving_target_intact(tmp_path: Path):
     assert meta["version"] == 1
 
 
+@pytest.mark.parametrize("proposal_id", ["../escape", r"..\escape", "C:/escape", "/escape"])
+def test_proposal_record_lookup_rejects_path_escape(tmp_path: Path, proposal_id: str):
+    from codememory.proposals import load_proposal
+
+    with pytest.raises(ValueError, match="unsafe proposal_id"):
+        load_proposal(tmp_path, proposal_id)
+
+
 def test_validate_warns_on_stale_and_orphaned_proposals(tmp_path: Path, capsys):
     """check reports patch backlog (>14 days) and proposals whose target vanished."""
     from codememory.proposals import create_proposal, proposals_dir

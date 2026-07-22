@@ -58,6 +58,17 @@ build 产物默认只携带 asset 引用（source_refs）；原文获取必须�
 
 `CodememoryToolkit` 与 MCP 是实例边界，不是任意文件浏览器。导出给模型的 schema 不包含 `root`；Sandbox 即使收到调用方伪造的 `root` 也必须用构造时绑定的 root。CLI 的 operator `--root` 仍是可信本地入口。
 
+root 绑定还必须覆盖 caller-controlled ID。不能用 `replace("..", "")` 之类字符串清洗代替路径验证；memory/proposal ID 应拒绝绝对路径、反斜杠、盘符、空段和 `.` / `..`，并在写入前对 resolve 后的目标执行相对于 bound root 的 containment 检查。create、propose、update、merge/reject 和 promotion 必须复用同一边界。
+
+---
+
+## MCP 与 Toolkit 不能各自维护工具合同
+
+- agent tool 的名称、JSON Schema、read-only hint 和 dispatcher 必须来自一个共享 catalog；MCP / OpenAI / Anthropic / Gemini 只做机械格式转换。
+- tool profile 由绑定 root 决定：普通实例是精确最小集，Personal Profile 只追加已定义扩展。不要用 import-time cwd 推断运行时 profile。
+- `propose` 的判据是 owner merge 前 target bytes 不变。写入 canonical Atom 后再加 `[PROPOSED]` 日志不构成 proposal；修改类必须进入 patch queue。
+- agent create 若需要完整 summary/body/imports，应在一次 Core create 中落盘，不能由 adapter 先建半成品再 direct update；Personal Profile agent create 必须强制 proposed。
+
 ---
 
 ## Topic 内 Claim 的 Phase 1A 解析边界

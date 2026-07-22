@@ -119,6 +119,12 @@ def handle_create(
     cache_stable: bool = False,
     lifecycle: str = "permanent",
     propose: bool = False,
+    summary: str | None = None,
+    body: str | None = None,
+    import_required: list[str] | None = None,
+    import_recommended: list[str] | None = None,
+    import_related: list[str] | None = None,
+    created_by: str = "user",
 ) -> str:
     """Create a new memory.  Returns path string or dry-run preview."""
     file_path = create(
@@ -132,6 +138,12 @@ def handle_create(
         cache_stable=cache_stable,
         lifecycle=lifecycle,
         propose=propose,
+        summary=summary,
+        body=body,
+        import_required=import_required,
+        import_recommended=import_recommended,
+        import_related=import_related,
+        created_by=created_by,
     )
     if file_path is None:
         return "dry-run: no file created"

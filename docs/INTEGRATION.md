@@ -521,7 +521,7 @@ GET /api/sources/expand?artifact_id=src/design-md&max_chars=2000
 
 ## Sandbox Integration
 
-Register all 13 codememory tools into a `harnesslib.Sandbox` with a single call. A toolkit is bound to one root; exported schemas omit `root`, and a caller-supplied root is ignored during Sandbox execution.
+Register the root-appropriate CodeMemory agent surface into a `harnesslib.Sandbox` with one call. A standard root gets exactly five tools; a Personal Profile gets those five plus six Personal extensions. Toolkit and MCP consume the same catalog and dispatcher. Exported schemas omit `root`, and a caller-supplied root cannot redirect execution.
 
 ```python
 import asyncio
@@ -535,7 +535,7 @@ async def main():
     # One-line registration
     await toolkit.register_to_sandbox(sandbox)
 
-    # All 17 tools are now available and bound to examples/investment
+    # A standard root exposes exactly 5 tools, bound to examples/investment
     for tool_def in sandbox.list_tools():
         print(f"  {tool_def.name}: {tool_def.description}")
 
@@ -548,31 +548,30 @@ async def main():
 asyncio.run(main())
 ```
 
-### Registered tools
+### Standard root tools
 
-| # | Tool Name | Description |
-|---|-----------|-------------|
-| 1 | `resolve_context` | Resolve and assemble memory context via DAG |
-| 2 | `create_memory` | Create a new memory with frontmatter template |
-| 3 | `search_memories` | Typed lexical search across Capture, Topic, and Atom |
-| 4 | `validate_memories` | Run integrity checks on all indexed memories |
-| 5 | `update_memory` | Update with version control and change tracking |
-| 6 | `snapshot` | Persist a TransientDAG as atom .md |
-| 7 | `find_orphans` | Find memories with zero in-degree |
-| 8 | `changelog` | Show change_log history for a memory |
-| 9 | `log` | Show global audit log timeline |
-| 10 | `import_memories` | Import draft memories from text |
-| 11 | `build_memory` | Assemble canonical Atom context through imports DAG |
-| 12 | `capture_memory` | Append an immutable Capture to a Personal Profile |
-| 13 | `read_memory` | Read a Capture or Topic revision by stable ID |
-| 14 | `maintenance_status` | Inspect the active run and unconsumed valid Captures |
-| 15 | `maintain_memory` | Apply a provenance-rich Topic changeset idempotently |
-| 16 | `resume_memory_maintenance` | Resume the same pending or scan-blocked run |
-| 17 | `review_personal_memory` | Apply a batch of promote / merge / delete decisions |
+| Tool | Contract |
+|---|---|
+| `build_memory` | Assemble canonical Atom context through the explicit imports DAG. |
+| `search_memories` | Lexical discovery; a Personal root also returns Capture/Topic routes. |
+| `expand_source` | Explicit structured Source Artifact expansion with fresh/stale/missing state. |
+| `create_memory` | Create a complete summary/body/imports Atom in one write; standard roots may request active or proposed. |
+| `propose_memory` | Queue a modification patch against an existing Atom; target bytes do not change before owner merge. |
 
-For a Personal Profile, initialize the external instance first with `codememory init <path> --profile personal`. `capture_memory` never performs maintenance, Git commit/push, semantic indexing, or Web work. Toolkit registrations bind all four maintenance/review tools to the constructor root and remove the caller-controlled `root` property. A maintenance changeset uses `{"topics": [...]}` where every paragraph/claim carries `derived_from` entries containing both `capture_id` and `content_hash`.
+### Personal Profile extension
 
-MCP remains process-bound through a required explicit `CODEMEMORY_ROOT`; it has no example fallback. Phase 1B maintenance is intentionally exposed through the repository Skill, CLI, and bound Toolkit rather than adding an arbitrary-instance MCP maintenance surface.
+| Tool | Contract |
+|---|---|
+| `capture_memory` | Append one immutable Capture. |
+| `read_memory` | Read Capture/Topic/Claim content by stable ID. |
+| `maintenance_status` | Inspect the active run and unconsumed valid Captures. |
+| `maintain_memory` | Apply one provenance-rich Topic changeset idempotently. |
+| `resume_memory_maintenance` | Resume the same pending or scan-blocked run/delivery. |
+| `review_personal_memory` | Apply an owner-provided promote/merge/delete batch. |
+
+Initialize a Personal instance with `codememory init <path> --profile personal`. Its agent `create_memory` is always forced to `status: proposed`, even if a caller submits `propose: false`; only the trusted owner CLI confirmation path can create an active canonical Atom directly. `capture_memory` never performs maintenance, Git delivery, semantic indexing, or Web work. A maintenance changeset uses `{"topics": [...]}` where every paragraph/claim carries `derived_from` entries containing both `capture_id` and `content_hash`.
+
+MCP is process-bound through a required explicit `CODEMEMORY_ROOT` and has no example fallback. `tools/list` selects the same standard/Personal profile as Toolkit, and `tools/call` uses the same shared dispatcher. Historical agent aliases such as `resolve_context`, `update_memory`, `propose_update`, `snapshot`, `validate_memories`, and `import_memories` are no longer exported; their trusted CLI/Core operations remain available where applicable.
 
 Automation contract: inspect status first; call `maintain_memory` only when there is no active run; call `resume_memory_maintenance` for an existing pending or blocked run. Treat `scan_blocked` as a safety event, never as a review queue item. Retry a failed push through resume and do not submit another changeset.
 

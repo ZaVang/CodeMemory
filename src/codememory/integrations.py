@@ -1,7 +1,7 @@
 """CodememoryToolkit — one-line integration facade for Agent harnesses.
 
-Provides a single entry-point for registering all codememory tools with
-harnesslib Sandbox or exporting them in OpenAI function-calling format.
+Provides a single entry-point for registering the root-appropriate shared
+agent surface with harnesslib Sandbox or exporting it in provider formats.
 
 Usage::
 
@@ -19,14 +19,13 @@ Usage::
     async def main():
         sandbox = Sandbox()
         await toolkit.register_to_sandbox(sandbox)
-        # sandbox.list_tools() now includes 9 codememory tools
+        # Standard root: 5 tools. Personal Profile: 11 tools.
 
     asyncio.run(main())
 """
 
 from __future__ import annotations
 
-from copy import deepcopy
 from typing import Any
 
 
@@ -51,17 +50,17 @@ class CodememoryToolkit:
     >>> # OpenAI format
     >>> openai_tools = toolkit.get_tools_for_openai()
     >>> len(openai_tools)
-        13
+        5
     >>>
     >>> # Anthropic format
     >>> anthropic_tools = toolkit.get_tools_for_anthropic()
     >>> len(anthropic_tools)
-        13
+        5
     >>>
     >>> # Gemini format
     >>> gemini_tools = toolkit.get_tools_for_gemini()
     >>> len(gemini_tools)
-        13
+        5
     """
 
     def __init__(self, root: str | None = None) -> None:
@@ -69,20 +68,17 @@ class CodememoryToolkit:
 
     def _bound_definitions(self) -> list[dict[str, Any]]:
         """Export schemas without a caller-controlled root parameter."""
-        from .tools import TOOL_DEFINITIONS
+        from .core import get_root_dir
+        from .tools import get_tool_definitions
 
-        definitions = deepcopy(TOOL_DEFINITIONS)
-        for definition in definitions:
-            properties = definition.get("input_schema", {}).get("properties", {})
-            properties.pop("root", None)
-        return definitions
+        return get_tool_definitions(get_root_dir(self._root))
 
     # ------------------------------------------------------------------
     # OpenAI format
     # ------------------------------------------------------------------
 
     def get_tools_for_openai(self) -> list[dict[str, Any]]:
-        """Return all codememory tools in OpenAI function-calling format.
+        """Return the bound root's tools in OpenAI function-calling format.
 
         Each tool is represented as::
 
@@ -121,7 +117,7 @@ class CodememoryToolkit:
     # ------------------------------------------------------------------
 
     def get_tools_for_anthropic(self) -> list[dict[str, Any]]:
-        """Return all codememory tools in Anthropic tool_use format.
+        """Return the bound root's tools in Anthropic tool_use format.
 
         Each tool is represented as::
 
@@ -154,7 +150,7 @@ class CodememoryToolkit:
     # ------------------------------------------------------------------
 
     def get_tools_for_gemini(self) -> list[dict[str, Any]]:
-        """Return all codememory tools in Google Gemini function_declarations format.
+        """Return the bound root's tools in Google Gemini function_declarations format.
 
         Each tool is represented as::
 
@@ -188,7 +184,7 @@ class CodememoryToolkit:
     # ------------------------------------------------------------------
 
     async def register_to_sandbox(self, sandbox) -> None:
-        """Register all codememory tools with a harnesslib Sandbox.
+        """Register the bound root's shared agent tools with a Sandbox.
 
         Parameters
         ----------

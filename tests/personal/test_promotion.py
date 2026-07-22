@@ -46,6 +46,16 @@ def test_agent_promotion_is_proposed_and_hidden(tmp_path: Path) -> None:
         build_context_pack(tmp_path, "memory/candidate")
 
 
+@pytest.mark.parametrize(
+    "atom_id",
+    ["../memory/escape", r"memory\backslash-escape", "C:/memory/drive-escape", "/memory/absolute"],
+)
+def test_promotion_rejects_escaped_atom_id_before_write(tmp_path: Path, atom_id: str) -> None:
+    topic = _topic(tmp_path)
+    with pytest.raises(ValueError, match="unsafe memory_id"):
+        promote_topic(tmp_path, topic.revision_id, atom_id)
+
+
 def test_explicit_owner_confirmation_activates_with_provenance(tmp_path: Path) -> None:
     topic = _topic(tmp_path)
     path = promote_topic(tmp_path, topic.revision_id, "memory/formal", owner_confirmed=True)

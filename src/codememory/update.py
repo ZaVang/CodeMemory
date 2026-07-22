@@ -82,8 +82,9 @@ def merge(root_dir: Path, memory_id: str) -> Path:
     """Merge a proposal: patch-queue id first, else proposed atom -> active."""
     from .proposals import load_proposal, merge_proposal
 
-    if load_proposal(root_dir, memory_id) is not None:
-        return merge_proposal(root_dir, memory_id)
+    if _is_patch_proposal_id(memory_id):
+        if load_proposal(root_dir, memory_id) is not None:
+            return merge_proposal(root_dir, memory_id)
     return _transition_proposed(root_dir, memory_id, "active", "merge")
 
 
@@ -91,10 +92,18 @@ def reject(root_dir: Path, memory_id: str) -> Path | None:
     """Reject a proposal: patch-queue id first, else proposed atom -> archived."""
     from .proposals import load_proposal, reject_proposal
 
-    if load_proposal(root_dir, memory_id) is not None:
-        reject_proposal(root_dir, memory_id)
-        return None
+    if _is_patch_proposal_id(memory_id):
+        if load_proposal(root_dir, memory_id) is not None:
+            reject_proposal(root_dir, memory_id)
+            return None
     return _transition_proposed(root_dir, memory_id, "archived", "reject")
+
+
+def _is_patch_proposal_id(identifier: str) -> bool:
+    """Return whether an identifier can be one of our generated queue IDs."""
+
+    head, separator, slug = identifier.partition("-")
+    return separator == "-" and len(head) >= 4 and head.isdigit() and bool(slug)
 
 
 def update(

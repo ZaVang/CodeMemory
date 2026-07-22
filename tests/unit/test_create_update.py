@@ -15,7 +15,7 @@ if str(_SRC) not in sys.path:
     sys.path.insert(0, str(_SRC))
 
 from codememory.create import create
-from codememory.update import update
+from codememory.update import merge, update
 from codememory.core import compute_body_hash, parse_frontmatter
 from codememory.index import load_index
 
@@ -64,6 +64,19 @@ def test_create_dry_run_no_file(tmp_path: Path):
 
     expected = tmp_path / "user" / "test" / "dry-run.md"
     assert not expected.exists()
+
+
+def test_owner_create_rejects_memory_id_escape(tmp_path: Path):
+    with pytest.raises(ValueError, match="unsafe memory_id"):
+        create(tmp_path / "bound", "atom", "../outside")
+
+
+def test_owner_update_and_merge_reject_memory_id_escape(tmp_path: Path):
+    root = tmp_path / "bound"
+    with pytest.raises(ValueError, match="unsafe memory_id"):
+        update(root, "../outside", change_note="must remain contained")
+    with pytest.raises(ValueError, match="unsafe memory_id"):
+        merge(root, "../outside")
 
 
 # ==================================================================

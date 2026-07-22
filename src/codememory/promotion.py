@@ -11,7 +11,7 @@ from typing import Literal
 import yaml
 from pydantic import BaseModel, Field, model_validator
 
-from .core import compute_body_hash
+from .core import compute_body_hash, get_memory_path
 from .index import reindex
 from .personal_index import TopicRecord, scan_all_topics
 from .profile import load_personal_profile
@@ -49,10 +49,10 @@ def _topic(root: Path, revision_id: str) -> TopicRecord:
 def _safe_atom_id(root: Path, atom_id: str) -> Path:
     profile = load_personal_profile(root)
     prefix = Path(profile.paths.canonical).as_posix().rstrip("/") + "/"
-    normalized = Path(atom_id).as_posix().lstrip("/")
-    if not normalized.startswith(prefix) or ".." in Path(normalized).parts:
+    path = get_memory_path(root, atom_id)
+    if not atom_id.startswith(prefix):
         raise ValueError(f"canonical atom id must start with {prefix}")
-    return root / f"{normalized}.md"
+    return path
 
 
 def promote_topic(

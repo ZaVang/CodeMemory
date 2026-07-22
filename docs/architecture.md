@@ -99,7 +99,7 @@ Git credential、GitHub 访问控制和通知通道属于运行环境，不写�
 | test | **`test_contract.py`** | 已完成：导出题集 + 装配上下文；report 写回 log | C ✅ |
 | proposal | `models.py`（status）+ `proposals.py`（patch 队列）+ `update.py`（merge/reject 分发） | 已完成（修改类落为独立小模块 `proposals.py`，复用 update 应用 patch） | A ✅ / C ✅ |
 | log | `log.py` / `changelog.py` | 不变 | — |
-| importer | `compiler/` + `sources.py` | v2A：确定性 asset + anchor + paragraph-derived；v2B：显式可选 semantic proposer + imports 建议，仍只产 proposed | Importer v2A ✅ / v2B active |
+| importer | `compiler/` + `sources.py` | v2A：确定性 asset + anchor + paragraph-derived；v2B：显式可选 semantic proposer + imports 建议，仍只产 proposed | Importer v2A / v2B ✅ |
 | Personal Profile | `profile.py` / `capture.py` / `personal_index.py` / `maintenance.py` / `promotion.py` / `git_delivery.py` | 1A / 1B 已完成并经 owner 接受 | 1A / 1B ✅ |
 
 ### 2.1 保留与定位说明
@@ -374,7 +374,7 @@ Automation 只允许 stage profile 声明的受跟踪路径；`private-local/`�
 | search | `handle_search` | `search` | `search` |
 | check | `handle_validate` | `validate` | — |
 | test | `handle_test` / `handle_test_report` | `test` / `test report` | — |
-| 变更 | `handle_create` / `handle_update` / `handle_merge` / `handle_reject` | `create` / `update` / `merge` / `reject` | `create`、`propose` |
+| 变更 | `handle_create` / `handle_propose` / `handle_update` / `handle_merge` / `handle_reject` | `create` / `propose` / `update` / `merge` / `reject` | `create_memory`、`propose_memory` |
 | asset | `handle_source_*` | `source add/list/get/check/expand` | `expand_source` |
 | importer | `handle_import` / `handle_skeletonize` / `handle_compile_md` / `handle_materialize_review` | `import` / `skeletonize` / `compile-md` / `materialize-review` | — |
 | profile | `handle_profile_init` / `handle_profile_validate` | `init --profile personal` / `validate` | — |
@@ -388,14 +388,16 @@ Automation 只允许 stage profile 声明的受跟踪路径；`private-local/`�
 
 1. 每个概念操作一个 handler，CLI / REST / MCP / tools 全部委托同一 handler；
 2. REST 路由随收敛阶段对齐，禁止在 backend router 或 frontend 内实现任何装配、过滤、排序逻辑；
-3. MCP / toolkit 只暴露最小工具集（build / search / expand_source / create / propose），其余操作属于 owner 的 CLI 工作面。
+3. MCP / toolkit 从 `agent_tools.py` 读取同一 catalog 并走同一 root-bound dispatcher；普通实例精确暴露 `build_memory / search_memories / expand_source / create_memory / propose_memory`，其余 owner 操作只在 CLI；
 
 Personal Profile 补充：
 
-4. Codex Skill 使用 capture / typed search / read / maintenance changeset handler，不得直接编辑 journal 或 run ledger；
+4. Personal Profile 在上述五项之上只追加 `capture_memory / read_memory / maintenance_status / maintain_memory / resume_memory_maintenance / review_personal_memory`；Codex Skill 不得直接编辑 journal 或 run ledger；
 5. `maintain --daily` 若未来作为便利命令出现，只能编排确定性 run 阶段或启动外部 Skill，不能把 LLM provider 引入 Core；
 6. CLI 继续使用 `--root` / `CODEMEMORY_ROOT`；MCP 每个进程绑定一个显式 root；toolkit 每个实例绑定一个 root；
 7. Web 通过服务端 allowlist registry 将实例别名映射为绝对 root。请求只传别名；禁止把任意绝对路径或 `..` 交给 backend 解析；现有 `examples/` 自动发现只保留为开发/demo 兼容路径。
+
+Agent 写入补充：`create_memory` 一次写入完整 summary/body/imports；普通实例可显式选择 active 或 proposed，Personal Profile 强制 proposed。`propose_memory` 只表示针对已有 Atom 的 modification patch，委托 `handle_propose` 且 owner merge 前目标字节不变。历史 `update_memory / propose_update / resolve_context / resolve_memory` 等 adapter alias 不再导出，但 CLI/Core 能力不删除。
 
 实例 registry 目标格式：
 

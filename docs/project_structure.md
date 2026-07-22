@@ -112,9 +112,10 @@
 | `src/codememory/import_cmd.py` | 旧版冷启动文本导入入口；更复杂迁移应走 compiler。 |
 | `src/codememory/handlers.py` | CLI、Sandbox tools、backend 共享的命令处理 facade；包含 source add/list/get/check/expand handlers，防止 adapter 重复实现 core。 |
 | `src/codememory/cli.py` | `codememory` argparse CLI 壳，参数解析后委托 handlers / compiler；包含 `source add/list/get/check/expand`。 |
-| `src/codememory/tools.py` | Sandbox tool 注册，把 core 能力暴露给 agent harness。 |
-| `src/codememory/integrations.py` | `CodememoryToolkit`，生成 OpenAI / Anthropic / Gemini 风格 tool definition。 |
-| `src/codememory/mcp_server.py` | MCP server entry point，让外部 MCP client 访问 CodeMemory 工具。 |
+| `src/codememory/agent_tools.py` | MCP / Toolkit 共用的 root-aware tool catalog 与 dispatcher；只委托 handlers，并固化 create/propose 写门。 |
+| `src/codememory/tools.py` | 将共享 catalog 绑定到一个 root 后注册进 Sandbox，不再维护独立 schema/业务分发。 |
+| `src/codememory/integrations.py` | `CodememoryToolkit`，把 root 对应的共享 catalog 机械转换为 OpenAI / Anthropic / Gemini 格式。 |
+| `src/codememory/mcp_server.py` | 显式 `CODEMEMORY_ROOT` 绑定的 MCP stdio adapter；tools/list 与 tools/call 复用共享 catalog/dispatcher。 |
 
 ### 5.1 `src/codememory/compiler/` — Markdown Memory Compiler
 
@@ -328,6 +329,7 @@ Frontend 是本地操作台：查看 graph、resolve context、编辑 memory、�
 | `tests/unit/test_edge_cases.py` | 边界条件和异常路径测试。 |
 | `tests/unit/test_memory_compiler.py` | Markdown compiler ingest/propose/review/materialize 测试。 |
 | `tests/unit/test_importer_llm.py` | 显式 semantic proposer、lazy gateway、provenance/imports、幂等与零写入 preflight 测试（fake bridge，无真实网络）。 |
+| `tests/unit/test_agent_tool_alignment.py` | 标准/Personal tool profile parity、root binding、complete create、proposal no-mutation、expand_source 与 MCP error 合同。 |
 | `tests/unit/test_resolve.py` | DAG resolve、预算裁剪、拓扑顺序测试。 |
 | `tests/unit/test_context_pack.py` | 结构化 ContextPack 和 renderer 测试。 |
 | `tests/unit/test_source_refs.py` | source_refs metadata、reindex、validate、ContextPack 关联测试。 |

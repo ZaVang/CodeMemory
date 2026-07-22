@@ -200,6 +200,8 @@ Personal Profile 对此作更严格覆盖：
 **工程侧：**
 
 - 所有 adapter（CLI / MCP / REST / SDK）调用同一 core handler；
+- MCP 与 Toolkit 共享同一 agent-tool catalog / dispatcher：普通实例只暴露 build、search、expand_source、create、propose；Personal Profile 只追加已定义的 capture/read/maintenance/review 扩展；
+- agent 的 modification proposal 只能写 patch queue，不得用伪 proposal 直接修改 canonical Atom；Personal Profile 的 agent create 永远先落为 proposed；
 - prd / architecture / CLAUDE.md 三处术语一致；
 - check 全绿是任何 merge 的前置条件。
 

@@ -16,7 +16,7 @@
 
 ## Roadmap Priority
 
-**Personal Memory Phase 0 / 1A / 1B 与 Importer v2A / v2B 已于 2026-07-22 经 owner 接受。最终合同见 `docs/plan/SPRINT.md`，acceptance 记录见 `docs/plan/HISTORY.md`。下一优先项为 MCP / toolkit 对齐。**
+**Personal Memory Phase 0 / 1A / 1B、Importer v2A / v2B 与 MCP / toolkit 对齐均已于 2026-07-22 经 owner 接受。当前合同见 `docs/plan/SPRINT.md`，已接受历史见 `docs/plan/HISTORY.md`。下一项为 Operator UI 对齐。**
 
 ### 1. Personal Memory Phase 1A — Instance + Capture + Typed Discovery（已完成并验收）
 
@@ -81,7 +81,7 @@ git status --short --branch -uall
 1. **导入链路升级（importer v2）✅**：确定性 v2A 与可选语义 proposer v2B 均已完成并经 owner 验收。
    - 最小版（零 LLM，确定性）✅：`compile-md` 先登记稳定 Source Artifact，再生成每文档一个 anchor 和每非空段落一个 derived candidate；全部经 review 选择并 materialize 为 proposed，source_refs / 精确 locator / review 幂等已固化。
    - 完整版（可选 LLM proposer）✅：显式配置的 compiler LLM 路径提炼 Derived Atoms 与 imports 建议；LLM 只 propose，产出仍走 review（架构 §1.3 铁律不变；LLM 依赖只进 Importer 层的惰性可选路径，Core 不碰）。
-2. **MCP / toolkit 对齐**：暴露 build / search / expand_source / create / propose 最小工具集，全部走共享 handler。
+2. **MCP / toolkit 对齐 ✅**：普通实例暴露 build / search / expand_source / create / propose 精确最小集，Personal Profile 追加已接受的 capture/read/maintenance/review 扩展；两种 adapter 共用 catalog、root-bound dispatcher 和 shared handlers。
 3. **Operator UI 对齐**：UI 跟随新契约（proposed / patch 队列展示、golden_questions、build 产物；wander 面板已随后端删除）。
 4. **文档与示例**：USER_GUIDE / INTEGRATION / project_structure / `examples/` 随新术语更新。
 5. **eval harness**：ContextPack vs 原文全文 vs 无记忆的对照实验，把 PRD 产品成功标准变成可测数字。

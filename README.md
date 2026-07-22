@@ -180,8 +180,10 @@ from codememory import (
 # One-line Agent integration
 from codememory.integrations import CodememoryToolkit
 toolkit = CodememoryToolkit(root="examples/investment")
-tools = toolkit.get_tools_for_openai()  # -> OpenAI format tool list
+tools = toolkit.get_tools_for_openai()  # standard root: exact 5-tool agent surface
 ```
+
+Toolkit 与 MCP 共用同一 root-bound catalog：普通实例提供 `build_memory`、`search_memories`、`expand_source`、`create_memory`、`propose_memory`；Personal Profile 只追加 capture/read/maintenance/review 扩展。所有 schema 都不接受调用方传入 `root`，修改类 `propose_memory` 只写 proposal queue。
 
 ## 文档
 

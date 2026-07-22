@@ -1,117 +1,110 @@
 # CodeMemory Current Sprint
 
 > **Status:** SPRINT COMPLETE — accepted by owner.
-> **Sprint:** Importer v2B — Optional LLM Semantic Proposer.
-> **Branch:** `codex/importer-v2-llm-proposer`.
-> **Depends on:** accepted Importer v2A commit `9193c7f`.
+> **Sprint:** Adapter Alignment — Shared MCP / Toolkit Agent Surface.
+> **Branch:** `codex/mcp-toolkit-alignment`.
+> **Depends on:** accepted Importer v2B commit `b1744b3`.
 > **Upstream contracts:** `docs/prd.md`, `docs/architecture.md`, `docs/plan/FUTURE.md`.
 
 ---
 
 ## Start Gate — Open
 
-The owner accepted Importer v2A, authorized its merge/cleanup, and instructed CodeMemory to continue with the next roadmap subitem.
+The owner accepted Importer v2B, authorized its completion commit/push, and instructed CodeMemory to continue with the next roadmap item. Roadmap priority 2 is MCP / toolkit alignment.
 
-This sprint adds only an explicitly enabled LLM proposer inside the Importer layer. Deterministic `compile-md` remains the default. Core, canonical build, Web, MCP/toolkit expansion, Operator UI, and Personal Memory semantic discovery remain unchanged.
+This sprint only aligns agent adapters with existing shared handlers. It does not expose importer/owner operations, add Web/UI work, change canonical build semantics, or start Personal Memory semantic discovery.
 
 ---
 
 ## Objective
 
-Allow an owner to explicitly send a registered Markdown corpus to a configured `llm_gateway` model for semantic extraction. The model may propose fewer, reusable Derived Atoms and imports suggestions, but every output remains provenance-bound, reviewable, `status: proposed`, and unable to enter canonical search/build until normal owner merge.
+Give MCP and `CodememoryToolkit` one shared, root-bound agent-tool contract. A standard instance exposes the five canonical agent operations `build / search / expand_source / create / propose`; a Personal Profile adds only the already-accepted capture/read/maintenance/review extension. All calls delegate to shared handlers and preserve canonical proposal gates.
 
 ---
 
 ## Contracts
 
-1. LLM mode is opt-in only: `compile-md --proposer llm` also requires explicit gateway config and model arguments. No flag, config discovery, environment heuristic, or fallback may enable it.
-2. Provider SDKs and `llm_gateway` are imported lazily only on the LLM path. A normal `import codememory` and deterministic compile work without optional provider packages.
-3. Source text is sent only to the explicitly configured model. Prompts treat source documents as untrusted data, expose no secrets/config contents, enable no tools/Web, and request typed structured output.
-4. The LLM proposes semantic drafts; CodeMemory owns stable paths, proposal IDs, status, provenance, and validation. Model-supplied absolute paths, statuses, source refs, or arbitrary frontmatter are never trusted.
-5. Every semantic draft must cite at least one paragraph ID from the current document. Unknown/cross-document provenance drops the draft with a non-sensitive diagnostic.
-6. Imports suggestions may target only an explicitly supplied same-document draft key or an indexed existing Atom ID included in the prompt inventory. Unknown targets are dropped and diagnosed; deterministic v2A still emits no imports.
-7. Same `review_id` + same source/options returns the existing review without another model call and preserves decisions. Changed source/options conflict before any model call or registry/review replacement.
-8. Semantic materialization preflights all accepted proposals before writing: registered source refs, safe/non-existing paths, resolvable imports, and same-batch cycle freedom. Any preflight error writes nothing.
-9. Review/materialize acceptance remains separate from canonical acceptance. LLM proposals always materialize as `status: proposed`; owner `merge` remains the only activation path.
-10. Review metadata records proposer mode, prompt contract version, requested model, provider/model response identity, and aggregate token usage, but never credentials, gateway config contents/path, raw thinking, or source text beyond the existing review proposal bodies/provenance.
+1. Tool definitions and dispatch live in one provider-neutral module consumed by both Sandbox/Toolkit and MCP; neither adapter may reimplement operation logic.
+2. A standard root exposes exactly: `build_memory`, `search_memories`, `expand_source`, `create_memory`, and `propose_memory`.
+3. A Personal Profile adds exactly: `capture_memory`, `read_memory`, `maintenance_status`, `maintain_memory`, `resume_memory_maintenance`, and `review_personal_memory`.
+4. Toolkit instances and MCP processes bind one explicit resolved root. Exported schemas never contain `root`; caller-supplied root values are ignored/rejected and cannot redirect a write.
+5. `build_memory`, `search_memories`, and `expand_source` delegate to `handle_build`, `handle_search`, and `handle_source_expand` with equivalent arguments and machine-readable results.
+6. `create_memory` creates a complete new Atom in one Core write. Standard roots may create active low-risk Atoms or explicitly proposed Atoms; Personal Profile agent creation is always forced to proposed unless an owner uses the trusted CLI confirmation path.
+7. `propose_memory` means a modification proposal against an existing Atom and delegates to `handle_propose`; it must never update target bytes before owner merge.
+8. Legacy agent aliases (`resolve_context`, `update_memory`, `validate_memories`, `snapshot`, `find_orphans`, `changelog`, `log`, `import_memories`, MCP `resolve_memory`, `propose_update`) are removed from exported agent surfaces. Their owner CLI/Core capabilities remain unchanged.
+9. Personal maintenance/review tools retain Phase 1B single-run, provenance, scan-blocked, and root-binding contracts; this sprint only shares their adapter definitions/dispatch.
+10. MCP JSON-RPC errors remain bounded and tool calls never expose Python tracebacks, filesystem rerouting, or hidden owner operations.
 
 ---
 
 ## Deliverables
 
-### 1. Provider-neutral semantic proposer
+### 1. Shared agent-tool contract
 
-- [x] Add typed semantic draft/import models, prompt construction, stable ID/path mapping, provenance validation, and diagnostics under `src/codememory/compiler/`.
-- [x] Generate deterministic anchors plus LLM-derived semantic proposals; do not emit the v2A paragraph-copy derived set in LLM mode.
-- [x] Resolve validated same-document and existing-Atom imports suggestions into reviewable proposal imports.
-- [x] Record safe proposer/call/usage metadata and a stable source/options digest.
+- [x] Add one typed/shared tool-definition catalog with standard and Personal extension profiles.
+- [x] Add one root-bound dispatcher that delegates every tool to the existing handler facade.
+- [x] Include read-only annotations and provider-neutral JSON Schema once, then adapt it mechanically for MCP/OpenAI/Anthropic/Gemini.
 
-### 2. Optional gateway adapter and CLI
+### 2. Safe create / propose semantics
 
-- [x] Add a lazy `llm_gateway` adapter that requests structured output with low-temperature bounded generation and no tools.
-- [x] Extend `compile-md` with explicit `--proposer llm --llm-config PATH --llm-model MODEL`; reject incomplete/mixed flag combinations.
-- [x] Keep deterministic CLI/API output and imports unchanged when LLM mode is absent.
-- [x] Return a clear install/config error when optional provider dependencies are unavailable.
+- [x] Extend Core creation to accept complete summary/body content atomically while preserving existing CLI defaults.
+- [x] Force Personal Profile agent-created Atoms to proposed; keep trusted CLI owner-confirmation paths unchanged.
+- [x] Route modification proposals through `handle_propose` and prove target bytes remain unchanged until merge.
 
-### 3. Idempotency and materialization safety
+### 3. Toolkit and MCP convergence
 
-- [x] Return an existing semantic review without calling the model when source/options match.
-- [x] Reject changed source/options under an existing review ID before model invocation or registry/review mutation.
-- [x] Preflight all accepted semantic proposals and make validation failure zero-write.
-- [x] Reject unknown import targets and same-batch cycles; preserve no-overwrite and `status: proposed` guarantees.
+- [x] Make `CodememoryToolkit` export/register only the root-appropriate shared definitions.
+- [x] Make MCP `tools/list` and `tools/call` use the same root-appropriate catalog and dispatcher.
+- [x] Remove duplicated/unsafe legacy adapter implementations and add `expand_source` to both surfaces.
 
 ### 4. Documentation and tests
 
-- [x] Update PRD/architecture, USER_GUIDE, INTEGRATION, project structure, and roadmap wording for the delivered opt-in boundary.
-- [x] Add fake-bridge tests for prompt safety, semantic quality contract, provenance, imports, usage metadata, retries, and zero-write failure.
-- [x] Add CLI tests proving deterministic default, explicit opt-in, missing optional dependency errors, and no live provider/network calls.
-- [x] Run all existing Core/API/Personal/integration suites and restore checked-in example side effects.
+- [x] Update architecture/PRD, INTEGRATION, README, project structure, and roadmap wording for exact standard/Personal surfaces.
+- [x] Add parity, root-binding, complete-create, proposal-no-mutation, source expansion, and MCP JSON-RPC tests.
+- [x] Update integration tests to the aligned names without weakening existing Core behavior coverage.
+- [x] Run all Core/API/Personal/integration suites and restore checked-in example side effects.
 
 ---
 
 ## Executable Acceptance Criteria
 
-1. Deterministic `compile-md` without proposer flags produces byte-equivalent v2A review semantics and makes zero `llm_gateway` imports/calls.
-2. LLM mode with a fake bridge receives untrusted-source/system instructions, paragraph IDs/bodies, and a bounded existing-Atom inventory; it receives no credential/config contents and no tools.
-3. A five-paragraph document can yield two semantic Derived proposals rather than five paragraph copies; both cite valid source paragraph IDs/ranges and remain pending/proposed.
-4. Valid suggestions resolve one same-document dependency and one existing Atom dependency at the declared strength; unknown targets are absent and diagnosed.
-5. A draft with missing/foreign paragraph IDs is excluded and cannot reach review materialization.
-6. Repeating the same semantic review ID makes no second bridge call and leaves registry/review bytes and decisions unchanged.
-7. Source/options changes under the same review ID fail before bridge call and leave registry/review unchanged; a new review ID may call the model and refresh the stable artifact hash.
-8. Tampered source refs, unsafe/existing paths, unresolved imports, or same-batch cycles cause semantic materialization to write zero files.
-9. Even if review JSON is tampered to `status: active`, accepted semantic proposals materialize as proposed; default search/build excludes them.
-10. LLM review metadata contains mode/prompt/model/provider/usage but no API key, config path/body, raw thinking, or unredacted secrets.
-11. Missing `--llm-config`/`--llm-model`, missing provider packages, invalid structured output, and gateway failures create no review file and never fall back to deterministic semantic claims.
-12. All unit/API/Personal/integration suites pass, optional-dependency boundary grep/import tests pass, `git diff --check` passes, and examples have no residue.
+1. Standard Toolkit exports and MCP `tools/list` contain the same exact five names and equivalent schemas/read-only annotations.
+2. A Personal root exports the same five plus the same exact six Personal extension names in Toolkit and MCP.
+3. OpenAI, Anthropic, Gemini, Sandbox, and MCP schemas contain no `root`; forged `root` values and escaped IDs (`..`, backslash, drive, or absolute forms) cannot redirect create/capture/propose writes.
+4. `expand_source` returns the same structured payload through shared dispatch, Toolkit Sandbox, and MCP for fresh/stale/missing sources.
+5. Standard `create_memory` writes supplied summary/body/imports in one creation, reindexes once, and honors explicit active/proposed status.
+6. Personal `create_memory` cannot create an active Atom through any agent adapter; the created Atom is proposed and excluded from default search/build.
+7. `propose_memory` creates a patch-queue record for an existing Atom; target bytes/index semantics are unchanged until owner `merge`.
+8. No exported adapter contains legacy direct-update/import/validation/snapshot/log tools, while the corresponding CLI commands still work.
+9. MCP without `CODEMEMORY_ROOT` fails before serving; invalid roots and unknown tools return bounded errors.
+10. Existing Personal capture/read/maintenance/review integration behavior remains green through the shared dispatcher.
+11. All unit/API/Personal/integration suites pass, `git diff --check` passes, and example fixtures have no residue.
 
 ---
 
 ## Acceptance Commands
 
 ```powershell
-python -m pytest tests/unit/test_memory_compiler.py tests/unit/test_importer_llm.py tests/unit/test_sources.py -q
+python -m pytest tests/unit/test_agent_tool_alignment.py tests/unit/test_source_expand.py tests/unit/test_create_update.py -q
 python -m pytest tests/unit tests/test_api.py -q
 python -m pytest tests/personal -q
 python tests/integration_test.py
 python tests/integration_personal.py
-python -c "import codememory; print('core import ok')"
 git diff --check
 git status --short --branch -uall
 ```
-
-No acceptance command may require a real API key or network provider call.
 
 ---
 
 ## Explicit Deferrals
 
-- Automatic proposer enablement, config discovery, background/network ingestion, or provider selection.
-- Cross-document semantic deduplication and modification proposals for existing Atoms.
-- MCP/toolkit importer tools and Operator UI review surfaces.
-- Web/PDF/non-Markdown ingestion and Personal Memory semantic discovery.
+- Importer/compiler tools in MCP or Toolkit.
+- Owner-only validate/test/merge/reject/source-registry administration tools.
+- Operator UI, instance allowlist registry, Web/PDF ingestion, or semantic discovery.
+- Backward-compatible aliases for the removed legacy agent-tool names.
 
 ---
 
 ## Completion Gate
 
-Owner review completed on 2026-07-22 with no blocking or actionable findings. The owner independently reproduced the high-risk opt-in, idempotency, provenance/import validation, zero-write materialization, forced-proposed, and Core dependency boundaries and authorized `SPRINT COMPLETE`, acceptance history, commit, and push.
+Owner review completed on 2026-07-22 with no remaining blocking or actionable findings. The owner independently reproduced the adapter surface, root binding, proposal gates, and all reported path-escape forms, confirmed valid nested Chinese IDs remain contained, and authorized `SPRINT COMPLETE`, accepted HISTORY, commit, and push.

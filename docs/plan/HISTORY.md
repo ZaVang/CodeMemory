@@ -4,6 +4,37 @@ This file records accepted sprint outcomes. Current work belongs in `docs/plan/S
 
 ---
 
+## 2026-07-22 — Adapter Alignment: Shared MCP / Toolkit Agent Surface
+
+**Status:** Accepted by owner.
+
+**Delivered:**
+
+- Added one provider-neutral, root-bound agent-tool catalog and dispatcher shared mechanically by MCP, Sandbox/Toolkit, OpenAI, Anthropic, and Gemini exports.
+- Defined the exact five-tool standard surface (`build_memory`, `search_memories`, `expand_source`, `create_memory`, `propose_memory`) and the exact six-tool Personal Profile extension for capture/read/maintenance/review.
+- Added complete one-write agent creation, forced proposed status for Personal Profile agent-created Atoms, and modification proposals that preserve target bytes until owner merge.
+- Removed legacy direct-update/import/validation/snapshot/log tools from agent surfaces while retaining trusted owner CLI/Core operations.
+- Required explicit MCP root binding, ignored caller-forged root values, preserved bounded JSON-RPC errors, and kept source expansion payloads consistent across adapters.
+- Closed the final owner-review blocker by centralizing strict slash-delimited ID validation and resolved root containment across create/propose/update/merge/reject/promotion paths; dot segments, empty segments, backslashes, drive paths, and absolute paths are rejected while valid nested Chinese IDs remain supported.
+- Updated PRD, architecture, integration guidance, README, project structure, roadmap, sprint pitfalls, and regression/integration coverage.
+
+**Acceptance evidence:**
+
+- Owner independently reproduced `../other/escape`, backslash traversal, absolute drive, root-absolute, dot-segment, and whitespace-segment rejection; confirmed valid nested Chinese creation remains inside the bound root and both external escape artifacts were removed.
+- Focused path/adapter/proposal/promotion suite → `63 passed` with one existing Pydantic deprecation warning
+- `python -m pytest tests/unit tests/test_api.py -q` → `248 passed` with one existing warning
+- Personal Profile suite → `42 passed`
+- `python tests/integration_test.py` → `21/21 passed`
+- `python tests/integration_personal.py` → `15 passed, 0 failed`
+- `git diff --check` → passed; generated example test differences restored
+
+**Deferred:**
+
+- Importer/compiler tools in MCP or Toolkit and owner-only administration tools.
+- Operator UI alignment, eval harness, Web/PDF ingestion, and Personal Memory semantic discovery.
+
+---
+
 ## 2026-07-22 — Importer v2B: Optional LLM Semantic Proposer
 
 **Status:** Accepted by owner.

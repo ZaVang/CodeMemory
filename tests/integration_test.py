@@ -1,36 +1,27 @@
 #!/usr/bin/env python3
-"""integration_test.py — 5-scenario end-to-end test for codememory.
+"""End-to-end integration test for the aligned standard agent surface.
 
-Covers: create+search, resolve context, update+stale,
-snapshot persistence.  Uses the Python API and Sandbox interface.
-
-Usage::
-
-    PYTHONPATH=src python tests/integration_test.py
+Covers exact Toolkit registration, complete create/search, canonical build,
+non-mutating modification proposals, owner merge, and proposed visibility.
 """
 
 from __future__ import annotations
 
 import asyncio
 import sys
-from datetime import datetime
 from pathlib import Path
 
-# Ensure src/ is on the path
 _SRC = Path(__file__).resolve().parent.parent / "src"
 if str(_SRC) not in sys.path:
     sys.path.insert(0, str(_SRC))
 
-_ROOT = "examples/investment"
-_ROOT_PATH = Path(_ROOT).resolve()
-
-# ---------- test state ----------
+_ROOT_PATH = Path("examples/investment").resolve()
+_created_files: list[Path] = []
 passed = 0
 failed = 0
-_created_files: list[Path] = []
 
 
-def _check(name: str, condition: bool, detail: str = ""):
+def _check(name: str, condition: bool, detail: str = "") -> None:
     global passed, failed
     if condition:
         passed += 1
@@ -40,55 +31,72 @@ def _check(name: str, condition: bool, detail: str = ""):
         print(f"  FAIL  {name}  {detail}")
 
 
-# ===================================================================
-# Scenario A — Create + Search
-# ===================================================================
+async def main() -> None:
+    global passed, failed
 
-async def test_a_create_and_search(sandbox):
-    """Create an atom, then search for it by tags and verify it appears."""
-    print("\n-- A. Create + Search --")
+    from harnesslib.sandbox import Sandbox
+    from codememory.core import parse_frontmatter
+    from codememory.handlers import handle_merge
+    from codememory.index import load_index, reindex
+    from codememory.integrations import CodememoryToolkit
+    from codememory.proposals import list_proposals
 
-    # Create
-    res = await sandbox.execute("create_memory", {
-        "type": "atom",
-        "id": "user/test/sprint5-a-test",
-        "tags": ["test", "sprint5", "scenario-a"],
-        "root": _ROOT,
-    })
-    create_result = res.get("result", str(res))
-    _check("A1: create returns path", ".md" in str(create_result))
+    print("=" * 62)
+    print("  CodeMemory Integration Test -- Aligned Agent Surface")
+    print("=" * 62)
 
-    test_file = _ROOT_PATH / "user" / "test" / "sprint5-a-test.md"
-    _created_files.append(test_file)
-    _check("A2: file exists on disk", test_file.exists())
+    sandbox = Sandbox()
+    await CodememoryToolkit(root=str(_ROOT_PATH)).register_to_sandbox(sandbox)
+    definitions = sandbox.list_tools()
+    names = {tool.name for tool in definitions}
+    expected = {
+        "build_memory",
+        "search_memories",
+        "expand_source",
+        "create_memory",
+        "propose_memory",
+    }
+    _check("INIT1: exact five standard tools", names == expected, f"got {sorted(names)}")
+    _check(
+        "INIT2: schemas omit root",
+        all("root" not in (tool.input_schema or {}).get("properties", {}) for tool in definitions),
+    )
+    _check(
+        "INIT3: legacy direct-update tools absent",
+        not ({"resolve_context", "update_memory", "snapshot", "import_memories"} & names),
+    )
 
-    # Search by tags — search handler now returns {"result": <formatted string>}
-    res = await sandbox.execute("search_memories", {
-        "tags": ["sprint5", "scenario-a"],
-        "root": _ROOT,
-    })
-    result_text = res.get("result", str(res))
-    _check("A3: search by tags finds created memory", "sprint5-a-test" in result_text)
-    _check("A4: search result matches created id", "sprint5-a-test" in result_text)
+    print("\n-- A. Complete create + search --")
+    created_id = "user/test/adapter-create"
+    created_path = _ROOT_PATH / f"{created_id}.md"
+    _created_files.append(created_path)
+    created = await sandbox.execute(
+        "create_memory",
+        {
+            "id": created_id,
+            "summary": "Adapter complete creation",
+            "body": "# Adapter Create\n\nComplete body written atomically.",
+            "tags": ["adapter-alignment", "integration"],
+        },
+    )
+    _check("A1: create returns path", ".md" in created["result"])
+    _check("A2: complete file exists", created_path.exists())
+    meta, body = parse_frontmatter(created_path)
+    _check(
+        "A3: summary/body written in initial version",
+        meta["version"] == 1
+        and meta["summary"] == "Adapter complete creation"
+        and "Complete body written atomically" in body,
+    )
+    searched = await sandbox.execute("search_memories", {"tags": ["adapter-alignment"]})
+    _check("A4: active creation is searchable", created_id in searched["result"])
 
-
-# ===================================================================
-# Scenario B — Resolve Context
-# ===================================================================
-
-async def test_b_resolve_context(sandbox):
-    """Resolve user/investment/context and verify topological order."""
-    print("\n-- B. Resolve Context --")
-
-    res = await sandbox.execute("resolve_context", {
-        "id": "user/investment/context",
-        "depth": "required",
-        "root": _ROOT,
-    })
-    text = res.get("result", str(res))
-    _check("B1: resolve returns text", len(text) > 100)
-
-    # Actual memory IDs as they exist in examples/investment (6 required nodes)
+    print("\n-- B. Canonical build --")
+    built = await sandbox.execute(
+        "build_memory",
+        {"id": "user/investment/context", "depth": "required", "format": "plain-markdown"},
+    )
+    text = built["result"]
     expected_ids = [
         "user/investment/risk-tolerance",
         "user/investment/semiconductor-thesis",
@@ -97,262 +105,92 @@ async def test_b_resolve_context(sandbox):
         "user/preferences/no-leverage",
         "user/investment/context",
     ]
-    # Find node positions by the heading pattern "### [N/6] <id>"
-    positions: dict[str, int] = {}
-    all_found = True
-    for eid in expected_ids:
-        # Unified pipeline heading format: "### [N/6] <id>"
-        marker = f"] {eid}"
-        idx = text.find(marker)
-        if idx >= 0:
-            prefix_start = max(0, idx - 10)
-            if "### [" in text[prefix_start:idx]:
-                positions[eid] = idx
-            else:
-                positions[eid] = -1
-                all_found = False
-        else:
-            positions[eid] = -1
-            all_found = False
-    _check("B2: all 6 expected nodes found in resolve output", all_found)
+    positions = [text.find(f"] {memory_id}") for memory_id in expected_ids]
+    _check("B1: build returns context", len(text) > 100)
+    _check("B2: all required nodes present", all(position >= 0 for position in positions))
+    _check("B3: dependencies precede target", all(position < positions[-1] for position in positions[:-1]))
 
-    # Topological order: composite should be last (all deps before it)
-    composite_pos = positions.get("user/investment/context", -1)
-    deps_before = True
-    for eid in expected_ids[:-1]:
-        dep_pos = positions.get(eid, -1)
-        if dep_pos < 0 or dep_pos >= composite_pos:
-            deps_before = False
-            break
-    _check("B3: all deps appear before context (topo order)", deps_before)
-
-
-# ===================================================================
-# Scenario C — Update + Stale Detection
-# ===================================================================
-
-async def test_c_update_and_stale(sandbox):
-    """Update body without summary -> stale detected. Fix summary -> stale gone."""
-    print("\n-- C. Update + Stale Detection --")
-
-    # Create a test memory
-    res = await sandbox.execute("create_memory", {
-        "type": "atom",
-        "id": "user/test/sprint5-c-stale",
-        "tags": ["test", "sprint5", "scenario-c"],
-        "root": _ROOT,
-    })
-    test_file = _ROOT_PATH / "user" / "test" / "sprint5-c-stale.md"
-    _created_files.append(test_file)
-    _check("C1: create returns path", test_file.exists())
-
-    # Step 1: Set body + summary together (summary_hash will match body)
-    test_body = "## Test Body\n\nInitial content for stale test."
-    test_summary = "Stale test initial summary."
-
-    res = await sandbox.execute("update_memory", {
-        "id": "user/test/sprint5-c-stale",
-        "change_note": "Set initial body and summary",
-        "body": test_body,
-        "summary": test_summary,
-        "root": _ROOT,
-    })
-    _check("C2: initial update succeeds", ".md" in res.get("result", ""))
-
-    # Step 2: Resolve fresh memory — pipeline should NOT emit a stale notice
-    res = await sandbox.execute("resolve_context", {
-        "id": "user/test/sprint5-c-stale",
-        "depth": "required",
-        "root": _ROOT,
-    })
-    resolve_text = res.get("result", str(res))
-    no_stale = "stale_summary" not in resolve_text
-    _check("C3: freshly updated memory is NOT stale", no_stale)
-
-    # Step 3: Update body alone (NOT summary) — triggers stale
-    new_body = test_body + "\n\nExtra line added to make body differ."
-    res = await sandbox.execute("update_memory", {
-        "id": "user/test/sprint5-c-stale",
-        "change_note": "Change body without updating summary",
-        "body": new_body,
-        "root": _ROOT,
-    })
-    _check("C4: body-only update succeeds", ".md" in res.get("result", ""))
-
-    # Step 4: Resolve should now emit a stale_summary notice
-    res = await sandbox.execute("resolve_context", {
-        "id": "user/test/sprint5-c-stale",
-        "depth": "required",
-        "root": _ROOT,
-    })
-    resolve_text = res.get("result", str(res))
-    is_stale = "stale_summary" in resolve_text
-    _check("C5: stale detected after body-only update", is_stale)
-
-    # Step 5: Update summary to fix stale
-    res = await sandbox.execute("update_memory", {
-        "id": "user/test/sprint5-c-stale",
-        "change_note": "Fix summary to match new body",
-        "summary": "Fixed summary matching updated body.",
-        "root": _ROOT,
-    })
-    _check("C6: summary update succeeds", ".md" in res.get("result", ""))
-
-    # Step 6: Verify the stale notice is gone
-    res = await sandbox.execute("resolve_context", {
-        "id": "user/test/sprint5-c-stale",
-        "depth": "required",
-        "root": _ROOT,
-    })
-    resolve_text = res.get("result", str(res))
-    stale_gone = "stale_summary" not in resolve_text
-    _check("C7: stale disappears after summary update", stale_gone)
-
-
-# ===================================================================
-
-async def test_d_wander_cold_memory(sandbox):
-    """Wander/recall returns a low-access-count memory with relevant metadata."""
-    print("\n-- D. Wander Cold Memory --")
-
-    # Use overview --with-recall to get a recall line
-    res = await sandbox.execute("overview", {
-        "limit": 20,
-        "with_recall": True,
-        "format": "inject",
-        "root": _ROOT,
-    })
-    text = res.get("result", str(res))
-    recall_found = "[recall]" in text
-    _check("D1: wander/recall returns a [recall] line", recall_found)
-
-    # The recall line should contain a memory id and summary
-    if recall_found:
-        for line in text.split("\n"):
-            if "[recall]" in line:
-                # Format: [recall] <id> -- <summary>（tags: ...）
-                _check("D2: recall line has memory id", " — " in line or "--" in line)
-                _check("D3: recall line has tags", "tags:" in line.lower() or "（" in line)
-                break
-
-
-# ===================================================================
-# Scenario E — Snapshot Persistence
-# ===================================================================
-
-async def test_e_snapshot_persistence(sandbox):
-    """Create a TransientDAG, snapshot it, verify the .md can be resolved."""
-    print("\n-- E. Snapshot Persistence --")
-
-    from codememory.transient import TransientDAG
-
-    # Build a transient DAG with two transient nodes
-    dag = TransientDAG()
-    dag.add(
-        "s/step-data",
-        type="atom",
-        summary="Raw data collected during session",
-        body="## Session Data\n\nCollected Q1 earnings data: revenue +15%, profit +8%.\n",
+    print("\n-- C. Proposal queue does not mutate target --")
+    target_id = "user/test/adapter-proposal"
+    target_path = _ROOT_PATH / f"{target_id}.md"
+    _created_files.append(target_path)
+    await sandbox.execute(
+        "create_memory",
+        {
+            "id": target_id,
+            "summary": "Before proposal",
+            "body": "# Before\n\nOriginal canonical bytes.",
+            "tags": ["adapter-alignment"],
+        },
     )
-    dag.add(
-        "s/step-analysis",
-        type="atom",
-        summary="Analysis derived from session data",
-        body="## Session Analysis\n\nBased on Q1 data: growth is accelerating, "
-             "sector rotation toward tech continues.\n",
-        imports={"required": ["s/step-data"]},
+    _check("C1: proposal target exists", target_path.exists())
+    before = target_path.read_bytes()
+    proposed = await sandbox.execute(
+        "propose_memory",
+        {
+            "id": target_id,
+            "reason": "Integration proposal",
+            "summary": "After proposal",
+            "body": "# After\n\nOwner-approved replacement.",
+        },
     )
+    proposal_id = proposed["result"].split(":", 1)[-1].strip()
+    _check("C2: proposal queued", proposal_id.startswith("0"))
+    _check("C3: target bytes unchanged before merge", target_path.read_bytes() == before)
+    _check("C4: patch queue contains proposal", any(item.proposal_id == proposal_id for item in list_proposals(_ROOT_PATH)))
+    handle_merge(_ROOT_PATH, proposal_id)
+    merged_meta, merged_body = parse_frontmatter(target_path)
+    _check(
+        "C5: owner merge applies patch",
+        merged_meta["version"] == 2
+        and merged_meta["summary"] == "After proposal"
+        and "Owner-approved replacement" in merged_body,
+    )
+    _check("C6: merged proposal leaves queue", all(item.proposal_id != proposal_id for item in list_proposals(_ROOT_PATH)))
 
-    dag_dict = dag.to_dict()
-    snapshot_id = f"sprint5-e-{datetime.now().strftime('%H%M%S')}"
+    print("\n-- D. Proposed creation visibility --")
+    pending_id = "user/test/adapter-pending"
+    pending_path = _ROOT_PATH / f"{pending_id}.md"
+    _created_files.append(pending_path)
+    pending = await sandbox.execute(
+        "create_memory",
+        {
+            "id": pending_id,
+            "summary": "Pending owner review",
+            "body": "# Pending\n\nNot canonical yet.",
+            "tags": ["adapter-pending"],
+            "propose": True,
+        },
+    )
+    _check("D1: proposed creation succeeds", pending_path.exists() and "Status: proposed" in pending["result"])
+    pending_meta, _ = parse_frontmatter(pending_path)
+    _check("D2: proposed status persisted", pending_meta["status"] == "proposed")
+    pending_search = await sandbox.execute("search_memories", {"query": "Pending owner review"})
+    _check("D3: default search excludes proposed", pending_id not in pending_search["result"])
+    try:
+        await sandbox.execute("build_memory", {"id": pending_id})
+    except ValueError as exc:
+        _check("D4: build rejects proposed", "not assemblable" in str(exc))
+    else:
+        _check("D4: build rejects proposed", False, "build unexpectedly succeeded")
 
-    res = await sandbox.execute("snapshot", {
-        "id": snapshot_id,
-        "dag_data": dag_dict,
-        "root": _ROOT,
-    })
-    snap_result = res.get("result", str(res))
-    _check("E1: snapshot returns path", ".md" in snap_result)
-
-    # Find the snapshot file
-    snap_dir = _ROOT_PATH / "user" / "snapshots"
-    candidates = sorted(snap_dir.glob(f"*-{snapshot_id}.md"))
-    _check("E2: snapshot file created on disk", len(candidates) > 0)
-    if candidates:
-        snap_file = candidates[0]
-        _created_files.append(snap_file)
-
-        # Verify the file has expected frontmatter and body content
-        raw = snap_file.read_text(encoding="utf-8")
-        _check("E3: snapshot has frontmatter", raw.startswith("---"))
-        _check("E4: snapshot contains session data", "Q1 earnings" in raw)
-        _check("E5: snapshot contains analysis", "growth is accelerating" in raw)
-
-
-# ===================================================================
-# Main
-# ===================================================================
-
-async def main():
-    global passed, failed
-
-    from harnesslib.sandbox import Sandbox
-    from codememory.integrations import CodememoryToolkit
-
-    print("=" * 62)
-    print("  CodeMemory Integration Test -- Sprint 5")
-    print("=" * 62)
-
-    # Initialize sandbox with codememory tools
-    toolkit = CodememoryToolkit(root=_ROOT)
-    sandbox = Sandbox()
-    await toolkit.register_to_sandbox(sandbox)
-
-    names = [t.name for t in sandbox.list_tools()]
-    _check("INIT: 17 tools registered", len(names) == 17, f"got {len(names)}")
-
-    # Run all scenarios
-    await test_a_create_and_search(sandbox)
-    await test_b_resolve_context(sandbox)
-    await test_c_update_and_stale(sandbox)
-    await test_e_snapshot_persistence(sandbox)
-
-    # ── Cleanup ──────────────────────────────────────────────────────
     print("\n-- Cleanup --")
-    for f in _created_files:
-        if f.exists():
-            f.unlink()
-            print(f"  deleted {f}")
-
-    # Remove empty directories
-    for subdir in ["test", "snapshots"]:
-        d = _ROOT_PATH / "user" / subdir
-        if d.exists():
-            for leftover in d.glob("*.md"):
-                leftover.unlink()
-                print(f"  deleted leftover {leftover}")
-            try:
-                next(d.iterdir())
-            except StopIteration:
-                d.rmdir()
-                print(f"  removed empty dir {d}")
-
-    # Reindex to clean state
-    from codememory.index import reindex, load_index
+    for path in _created_files:
+        if path.exists():
+            path.unlink()
+            print(f"  deleted {path}")
+    test_dir = _ROOT_PATH / "user/test"
+    if test_dir.exists() and not any(test_dir.iterdir()):
+        test_dir.rmdir()
     reindex(_ROOT_PATH)
-    idx = load_index(_ROOT_PATH)
-    count = len(idx.memories)
-    _check("CLEANUP: reindex back to 10 memories", count == 10, f"got {count}")
+    _check("CLEANUP: reindex back to 10 memories", len(load_index(_ROOT_PATH).memories) == 10)
 
-    # ── Summary ──────────────────────────────────────────────────────
     print("\n" + "=" * 62)
     total = passed + failed
     print(f"  Results: {passed}/{total} passed")
-    if failed > 0:
-        print(f"  {failed} FAILURES")
-        sys.exit(1)
-    else:
-        print("  All tests PASSED")
+    if failed:
+        raise SystemExit(1)
+    print("  All tests PASSED")
     print("=" * 62)
 
 

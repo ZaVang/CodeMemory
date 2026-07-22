@@ -18,7 +18,7 @@ from pathlib import Path
 
 from pydantic import BaseModel, Field
 
-from .core import get_memory_path
+from .core import get_memory_path, resolve_safe_relative_path
 
 _logger = logging.getLogger("codememory")
 
@@ -57,7 +57,13 @@ def proposals_dir(root_dir: Path) -> Path:
 
 
 def _proposal_path(root_dir: Path, proposal_id: str) -> Path:
-    return proposals_dir(root_dir) / f"{proposal_id}.json"
+    return resolve_safe_relative_path(
+        proposals_dir(root_dir),
+        proposal_id,
+        suffix=".json",
+        label="proposal_id",
+        allow_nested=False,
+    )
 
 
 def _next_seq(root_dir: Path) -> int:
