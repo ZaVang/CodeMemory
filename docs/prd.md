@@ -4,7 +4,7 @@
 > 记忆按代码的方式组织——原子化、显式依赖、按需装配。
 > 一个记忆库就是一个仓库，agent 是它的运行时。
 
-**最后更新**：2026-07-22
+**最后更新**：2026-07-23
 **状态**：canonical
 **前身**：2026-05-19 版（Source Artifact / ContextPack 体系）。旧概念的去向见附录 A。
 
@@ -70,7 +70,7 @@ Core 仍由三组共 11 个概念构成。Personal Profile 在这些概念之上
 | **build**（装配） | 构建/链接 + tree-shaking | 入口 atom → imports 闭包 → 拓扑排序 → 预算内裁剪（超预算按 target > required > recommended > related 降级为 summary）→ 结构化上下文 | 已实现（CLI 主命令 `build`；`resolve` / `context-pack` 为兼容别名） |
 | **check**（校验） | 类型检查 + linter | 断链、循环、schema 违约、stale asset、孤儿 | 已实现（CLI 名 `validate`） |
 | **search**（检索） | 符号搜索 / LSP | **只负责发现候选入口**；Canonical Atom 进入 build，Capture / Incubator Topic 走直接读取。词法、时间和标签是默认能力；语义检索只可用于 discovery | atom 词法排序已实现；Personal Profile 多类型检索未实现 |
-| **test**（验证） | 测试 / CI | 入口 atom 可附黄金问题：装配出的上下文应能让 agent 回答 X；最小形态 = 题集 + LLM judge | 已实现（题集导出 + report 回写 log；runner 是 agent） |
+| **test**（验证） | 测试 / CI | 入口 atom 可附黄金问题：装配出的上下文应能让 agent 回答 X；eval harness 以同一模型对比 ContextPack、full-memory 与 no-memory，再由盲判 judge 评分 | 已实现（题集导出/report + 显式三臂 eval harness） |
 
 ### 4.3 变更管理（仓库怎么演化）
 
@@ -205,6 +205,26 @@ Personal Profile 对此作更严格覆盖：
 - Operator UI 以 Build 为唯一装配主路径，分开显示 proposed Atom 与 modification patch 两条 owner review 队列，并只读呈现 golden questions；
 - prd / architecture / CLAUDE.md 三处术语一致；
 - check 全绿是任何 merge 的前置条件。
+
+### 7.1 Eval harness 产品信号
+
+Eval harness 是 `test` 的显式 provider-backed runner，不改变 build 或 golden-question 的 Core 契约。每个带非空 `expect` 的问题在冻结输入上运行三条互相独立的答题路径：
+
+1. **ContextPack**：入口经 canonical imports DAG 和指定 budget/depth 装配；
+2. **full-memory**：当前 index 中所有可装配 Atom/Schema 的 summary + authored body，按 ID 稳定排序；
+3. **no-memory**：不给答题模型任何 memory context。
+
+三条路径使用同一 answer model、prompt 和解码参数；answer model 永远看不到 `expect`。judge 只看到 question、expect 和 candidate answer，不看到 arm 或 context。full-memory 不包含 frontmatter 中的 golden questions，避免标准答案泄漏。
+
+首版把成功标准变成以下可审计数字：
+
+- 三个 arm 各自的 eligible-question pass rate；
+- ContextPack 相对 full-memory 的 pass-rate delta / retention；
+- ContextPack 与 full-memory 相对 no-memory 的 uplift；
+- ContextPack 相对 full-memory 的 context chars、估算 tokens 和实际 answer input-token savings；
+- 每题 verdict、短理由、provider/model、usage 和 latency。
+
+执行必须由 owner/CI 显式提供 provider config、answer model 与 judge model。默认命令、Core import、MCP、Agent tools 和 Web 均不触发 provider。报告只保留复核需要的 answer / expect / verdict 与安全调用 metadata；不保存 context、prompt、config 路径、credential、raw response 或 raw thinking。
 
 ## 8. 非目标
 

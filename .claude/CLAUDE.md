@@ -24,6 +24,7 @@ CodeMemory/
 │       ├── git_delivery.py      # staged scan + commit / push recovery
 │       ├── proposals.py         # 修改类提案 patch 队列（propose / merge / reject）
 │       ├── test_contract.py     # 黄金问题导出与 report（agent 是 runner）
+│       ├── evaluation/          # 显式三臂 eval；provider-neutral runner + lazy adapter
 │       ├── index.py             # Index 加载/保存/reindex
 │       ├── build.py             # 统一装配管线：DAG/拓扑/两遍式裁剪/渲染
 │       ├── resolve.py           # build 的 plain-markdown 薄别名（兼容）
@@ -66,7 +67,7 @@ CodeMemory/
 
 Personal Profile 不增加第二套 canonical 核心：Capture 是 append-only 原始记录，Incubator Topic 是可演化 working tree，Canonical Atom 才进入 imports/build。Capture / Topic 只能被 typed discovery 找到并按稳定 ID 读取，不能参与 build。
 
-概念 ↔ 当前 CLI 对照：build = `build`（主命令；`resolve` / `context-pack` 为同管线别名）；check = `validate`；asset = `source` 命令组；proposal 新增类 = `create --propose`，修改类 = `propose` / `proposals`，统一 `merge` / `reject`；test = `test` / `test report`。
+概念 ↔ 当前 CLI 对照：build = `build`（主命令；`resolve` / `context-pack` 为同管线别名）；check = `validate`；asset = `source` 命令组；proposal 新增类 = `create --propose`，修改类 = `propose` / `proposals`，统一 `merge` / `reject`；test = provider-free `test` / `test report`，显式 provider 三臂 runner = `eval`。
 
 ## 关键设计决策
 
@@ -122,7 +123,7 @@ data = entry.model_dump(mode="json")
 ### 技术栈
 
 - Python 3.13+，核心依赖：`pyyaml`、`pydantic>=2.0`；可选依赖 `tree-sitter`（`pip install codememory[code]`）
-- CodeMemory Core 不依赖 harnesslib；`llm_gateway` 只在显式 Importer LLM proposer 中 lazy import
+- CodeMemory Core 不依赖 harnesslib；`llm_gateway` 只在显式 Importer LLM proposer 或 owner/CI eval 路径中 lazy import
 - token 估算用 `len(text)` 近似
 
 ### 编码约定
@@ -157,6 +158,7 @@ codememory propose <id> --reason "..." [--summary ...] [--body ...]   # 修改�
 codememory proposals                        # 待审队列
 codememory merge <id|proposal_id> | reject <id|proposal_id>   # owner 审阅
 codememory test <entry> [--budget N]        # 导出题集+上下文；test report <entry> --results f.json
+codememory eval <entry> --llm-config c.yaml --answer-model m --judge-model j [--budget N] [--output r.json]
 codememory source add <uri> [--id ID] [--kind markdown|code|text|pdf|url|external] [--summary "..."]
 
 # 校验与维护

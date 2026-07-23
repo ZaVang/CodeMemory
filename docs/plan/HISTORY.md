@@ -4,6 +4,39 @@ This file records accepted sprint outcomes. Current work belongs in `docs/plan/S
 
 ---
 
+## 2026-07-23 — Eval Harness: ContextPack vs Full Memory vs No Memory
+
+**Status:** Accepted by owner.
+
+**Delivered:**
+
+- Added a versioned `memory-eval/v1` three-arm experiment comparing canonical ContextPack, all assemblable full-memory bodies, and no memory under one frozen answer/judge configuration.
+- Prevented answer-key leakage by excluding raw frontmatter and `golden_questions.expect` from answer contexts; answer receives only question/context and the blind judge receives only question/expect/answer.
+- Added stable context/dataset hashes, conservative partial-failure metrics, pass-rate deltas/retention/uplift, context size, usage, latency, and token-savings comparisons.
+- Added an explicit `codememory eval` owner/CI command with complete provider/model gates, lazy `llm_gateway` loading, structured tool-free calls, and no REST/MCP/Toolkit/Agent exposure.
+- Added privacy-bounded reports that retain only audit-required question/expect/answer/reason and safe metadata, with stdout default plus no-clobber atomic file output.
+- Updated PRD, architecture, README, USER_GUIDE, integration guidance, project structure, roadmap, sprint pitfalls, and focused regression coverage.
+
+**Acceptance evidence:**
+
+- Owner independently verified full-memory answer-key isolation, answer/judge blindness, lazy provider boundaries, absence from every public Agent/Web surface, report privacy, and no-clobber/atomic output.
+- Eval/Golden Questions → `17 passed`
+- Core/API → `290 passed` with one existing Pydantic warning
+- Personal Profile → `42 passed`
+- Existing integration → `21/21 passed`
+- Personal integration → `15/15 passed`
+- Core import and Agent catalog boundaries passed; fake-client privacy probe had no forbidden hits.
+- REST/MCP/Toolkit/Agent eval-surface grep returned no matches.
+- `git diff --check` passed; generated example runtime differences were restored.
+
+**Deferred:**
+
+- Repeated trials, confidence intervals, benchmark scheduling, CI provider secrets, dashboards, and remote report storage.
+- REST/UI/MCP/Toolkit/Agent evaluation execution.
+- Personal Memory semantic discovery, Personal Memory Web, Web/PDF ingestion, and importer review UI.
+
+---
+
 ## 2026-07-23 — Documentation and Examples Alignment
 
 **Status:** Accepted by owner.

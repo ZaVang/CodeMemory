@@ -6,7 +6,7 @@
 > 本文档是契约级参考：字段表、状态机、管线分解、收敛路径是后续 sprint 的直接依据，sprint 不再做架构决策。
 > 冲突裁决顺序：`docs/prd.md`（概念）> 本文档（结构与契约）> 代码现状。
 
-**最后更新**：2026-07-22
+**最后更新**：2026-07-23
 **状态**：canonical / 契约级
 **上游**：`docs/prd.md`（memory-as-code + Personal Profile）、`docs/personal-memory-profile.md`（实例文件合同）；设计依据 `docs/superpowers/specs/2026-06-10-architecture-rebuild-design.md`
 
@@ -18,7 +18,7 @@
 ┌──────────────────────────────────────────────────┐
 │                    Adapters                       │
 │  cli.py / tools.py / mcp_server.py /              │
-│  integrations.py / backend(REST) / frontend(UI)   │
+│  integrations.py / evaluation/ / backend / UI     │
 │  只做参数解析与传输格式，零业务逻辑                  │
 ├──────────────────────────────────────────────────┤
 │                 Core（机制层）                     │
@@ -38,9 +38,9 @@
 
 ### 1.1 Adapters（接入层）
 
-- 成员：`cli.py`、`tools.py`、`mcp_server.py`、`integrations.py`、`backend/`（REST）、`frontend/`（Operator UI）。
-- 职责：参数解析、传输格式、呈现。
-- 禁区：零业务逻辑；不得私自实现装配、过滤或排序；不得扩展记忆语义。
+- 成员：`cli.py`、`tools.py`、`mcp_server.py`、`integrations.py`、`evaluation/`（显式 eval runner）、`backend/`（REST）、`frontend/`（Operator UI）。
+- 职责：参数解析、传输格式、呈现，以及显式外部 runner 的调用编排与安全报告。
+- 禁区：不得私自实现 canonical 装配、过滤或排序；不得扩展记忆语义。eval runner 可以组合既有 build/test 契约与 provider client，但不能改变任何 Atom、index 或 imports 规则。
 
 ### 1.2 Core（机制层）
 
@@ -96,7 +96,7 @@ Git credential、GitHub 访问控制和通知通道属于运行环境，不写�
 | asset | `sources.py` | 已完成：`update --source-ref` 写入路径 | A ✅ |
 | check | `validate.py` | 已完成：proposed/queue 校验、golden_questions 格式校验 | A ✅ / C ✅ |
 | search | `search.py` | 已完成：词法排序（字段加权 + OR 语义），零新依赖 | B ✅ |
-| test | **`test_contract.py`** | 已完成：导出题集 + 装配上下文；report 写回 log | C ✅ |
+| test | **`test_contract.py`** + `evaluation/` | 题集导出/report + 三臂显式 provider eval 已完成，Core 仍零 LLM | C ✅ / Eval ✅ |
 | proposal | `models.py`（status）+ `proposals.py`（patch 队列）+ `update.py`（merge/reject 分发） | 已完成（修改类落为独立小模块 `proposals.py`，复用 update 应用 patch） | A ✅ / C ✅ |
 | log | `log.py` / `changelog.py` | 不变 | — |
 | importer | `compiler/` + `sources.py` | v2A：确定性 asset + anchor + paragraph-derived；v2B：显式可选 semantic proposer + imports 建议，仍只产 proposed | Importer v2A / v2B ✅ |
@@ -175,7 +175,43 @@ golden_questions:
 
 - `codememory test <entry>`：输出 `{ format_version, entry, context: <build 产物>, questions: [...] }` 结构化 JSON，由 agent / CI 答题判分；题集为空时退出码 0 + notice（无题不是错误）。
 - `codememory test report <entry> --results <file>`：校验 `{q, answer, pass}` 格式后写回 log。
-- Core 全程零 LLM 依赖——代码类比：pytest 独立于编译器，runner 是 agent。
+- Core 全程零 LLM 依赖——代码类比：pytest 独立于编译器。`test` 的 runner 可以是外部 agent/CI；内置 `eval` 也只在显式 Adapter 路径调用 provider。
+
+#### 3.4.1 三臂 eval harness
+
+Eval harness 属于显式接入层，不属于 canonical build Core。`test_contract.py` 继续只负责题集和 ContextPack；`evaluation/` 负责冻结实验输入、调用可选 provider adapter、盲判和生成报告。
+
+**冻结输入：**
+
+| arm | context 定义 |
+|---|---|
+| `context_pack` | `build_context_pack(..., track_access=False)` 的同次 canonical XML-Markdown render |
+| `full_memory` | index 中所有 status 不属于 `proposed / archived / superseded` 的 Atom/Schema；每项只渲染稳定 ID、summary、authored body，按 ID 排序 |
+| `no_memory` | 空字符串 |
+
+`full_memory` 不读取 Source Artifact body、Capture、Incubator、`.codememory/` runtime 文件，也不复制原始 frontmatter。特别是 `golden_questions` 与 `expect` 不得进入 answer context。索引中的每个 path 在读取前必须 resolve 并验证仍位于 bound root 内。
+
+三条 context 在第一次 provider call 前同时生成并计算 SHA-256。full-memory dataset digest 覆盖每个 included ID、summary 和 body；相同输入的顺序和 digest 必须稳定，任一 included summary/body 变化都会改变 digest。
+
+**答题与盲判：**
+
+1. 只选择 `expect` 为非空字符串的问题；缺失 expect 的问题保留为 skipped notice，若没有可评分问题则在 client 构造/provider call 前失败；
+2. 每个 `arm × question` 是独立 answer call，使用同一 requested answer model、system prompt、temperature 0 和 token 上限；answer prompt 只有 question + 当前 arm context；
+3. judge call 使用固定 requested judge model，只接收 question + expect + candidate answer，不接收 arm、context 或其他 verdict；
+4. answer/judge 都请求 typed structured output，不启用 tools/Web，不保留 raw response/thinking；
+5. 单次失败只记录 `phase + exception type` 并继续。eligible denominator 不变，失败保守地不计 passed。
+
+**报告 `memory-eval/v1`：**
+
+- run/entry/settings、dataset/context hashes、context chars/estimated tokens；
+- safe requested/response provider-model metadata、usage、latency；
+- question/expect/answer、judge pass 与短 reason；
+- 每 arm eligible/judged/passed/errors/pass rate；
+- ContextPack-vs-full pass delta/retention、两条 memory arm 对 no-memory uplift、context 与 answer-input token savings。
+
+报告禁止写入 root/config 绝对路径、context、prompt、credentials、raw provider payload 或 raw thinking。默认 stdout；显式 `--output` 才在最终完成后 atomic write，已有路径须 `--overwrite`，且不会隐式写入 memory root。首版只开放 trusted owner/CI CLI 与 Python handler；REST/UI、MCP/Toolkit/Agent tool、调度与远端存储均不开放。
+
+`evaluation/gateway_adapter.py` 只能在显式 eval handler 内惰性 import `llm_gateway`。普通 `import codememory`、test export、build、search、Agent catalog 和 Web read-only golden-question endpoint 不得加载 provider dependency。
 
 ### 3.5 asset 契约（沿用现实现）
 

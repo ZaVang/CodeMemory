@@ -91,3 +91,12 @@ Capture 出现不完整 block 或 payload hash mismatch 时，validate 必须报
 - 不要解析 Git 面向人的 quoted porcelain 输出并把显示字符串传回 pathspec。涉及任意 Unicode 文件名时使用 `-z` 的 NUL-delimited 输出；diff locator 使用未 quote 的 UTF-8 path。
 - 敏感扫描不能只依赖已知 token 前缀。还要检测可疑高熵候选，同时排除普通 hex content hash；finding 只能暴露 rule/path/locator。
 - merge/delete 等复合写操作必须在第一次写入前完成自引用、目标存在性和路径约束校验。尤其 self-merge 必须无副作用失败，不能写后再依赖旧 revision 查找。
+
+---
+
+## Eval baseline 不能泄漏标准答案或动态 metadata
+
+- full-memory 对照不能直接拼接原始 Atom 文件。frontmatter 内含 `golden_questions.expect`，原样发送会把标准答案泄漏给 answer model。只渲染可装配 Atom/Schema 的稳定 ID、summary 和 authored body。
+- ContextPack render 含动态 `generated_at`。评测冻结时必须替换为固定值，否则相同 dataset/options 的 context hash 和实际 prompt 每次都变化。
+- answer model 只看 question + arm context；judge 只看 question + expect + answer。arm/context 不能进入 judge，expect 不能进入 answer。
+- 报告可保留 answer / expect / verdict 供审计，但不得复制 context、prompt、config path、credential、raw provider response 或 thinking。

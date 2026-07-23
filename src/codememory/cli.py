@@ -41,6 +41,7 @@ from .handlers import (
     handle_test_report,
     handle_snapshot,
     handle_diff,
+    handle_eval,
     handle_suggest_deps,
     handle_update,
     handle_validate,
@@ -134,6 +135,23 @@ def main(argv: list[str] | None = None):
     p.add_argument("--results", help="Path to results JSON file (report mode)")
     p.add_argument("--depth", choices=["required", "recommended", "full"], default="recommended")
     p.add_argument("--budget", type=int)
+
+    # eval (explicit provider-backed three-arm golden-question experiment)
+    p = subparsers.add_parser(
+        "eval",
+        help="Compare ContextPack, full-memory and no-memory with a blind LLM judge",
+    )
+    _add_logging_flags(p)
+    p.add_argument("id", help="Entry memory ID with scored golden questions")
+    p.add_argument("--llm-config", required=True, help="Explicit llm_gateway YAML config path")
+    p.add_argument("--answer-model", required=True, help="Answer model alias or provider/model")
+    p.add_argument("--judge-model", required=True, help="Blind judge model alias or provider/model")
+    p.add_argument("--depth", choices=["required", "recommended", "full"], default="recommended")
+    p.add_argument("--budget", type=int)
+    p.add_argument("--answer-max-tokens", type=int, default=1024)
+    p.add_argument("--judge-max-tokens", type=int, default=512)
+    p.add_argument("--output", help="Optional JSON report path; stdout when omitted")
+    p.add_argument("--overwrite", action="store_true", help="Replace the exact --output path")
 
     # merge
     p = subparsers.add_parser("merge", help="Merge a proposal (patch-queue id or proposed memory id)")
@@ -399,6 +417,22 @@ def main(argv: list[str] | None = None):
             print(handle_test_report(root, args.subtarget, args.results))
         else:
             print(handle_test(root, args.target, depth=args.depth, budget=args.budget))
+    elif cmd == "eval":
+        if args.overwrite and not args.output:
+            parser.error("eval --overwrite requires --output")
+        print(asyncio.run(handle_eval(
+            root,
+            args.id,
+            config_path=args.llm_config,
+            answer_model=args.answer_model,
+            judge_model=args.judge_model,
+            depth=args.depth,
+            budget=args.budget,
+            answer_max_tokens=args.answer_max_tokens,
+            judge_max_tokens=args.judge_max_tokens,
+            output=args.output,
+            overwrite=args.overwrite,
+        )))
     elif cmd == "merge":
         print(handle_merge(root, args.id))
     elif cmd == "reject":

@@ -102,7 +102,7 @@ Vite 开发服务器默认监听 `127.0.0.1:5300`，并将 `/api` 代理到本�
 
 | 层 | 组件 | 职责 |
 |----|------|------|
-| **Adapters** | `cli.py` / `tools.py` / `mcp_server.py` / `integrations.py` / `backend/` / `frontend/` | 参数解析与传输格式，零业务逻辑 |
+| **Adapters** | `cli.py` / `evaluation/` / `tools.py` / `mcp_server.py` / `integrations.py` / `backend/` / `frontend/` | 参数/传输/呈现；显式 eval runner 只编排既有 build/test 契约 |
 | **Core** | `build.py`（统一管线）、`models.py`、`search.py`、`validate.py`、`proposals.py`、`test_contract.py` 等 | 表示、装配、校验、变更管理 |
 | **Importer** | `import_cmd.py` / `skeletonize/` / `compiler/` | 外部材料 → asset + atom proposals（一律经 review 晋升） |
 
@@ -112,6 +112,7 @@ agent 不在系统内——agent 是消费 build 产物、按写入纪律提交�
 CodeMemory/
 ├── src/
 │   ├── codememory/              # 记忆管理核心（结构详见 .claude/CLAUDE.md 文件架构）
+│   │   └── evaluation/          # 显式三臂 eval runner；provider adapter 惰性加载
 │   ├── harnesslib/              # 通用 Agent 编排（跨项目复用）
 │   └── llm_gateway/             # 多 provider LLM 接入（跨项目复用）
 ├── backend/                     # REST adapter（FastAPI）
@@ -143,6 +144,7 @@ codememory reindex
 codememory validate
 codememory test <entry> [--budget N]                        # 导出黄金问题 + 装配上下文
 codememory test report <entry> --results results.json      # 回写判分结果
+codememory eval <entry> --llm-config gateway.yaml --answer-model smart --judge-model smart [--budget N] [--output report.json]
 codememory orphans [--type <t>]
 codememory changelog <id> | log [--limit N] | diff [--since "2 days ago"]
 codememory suggest-deps <id> [--min-score N]

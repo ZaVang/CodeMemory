@@ -1,8 +1,9 @@
 """Golden-question test contract (architecture.md §3.4).
 
 Core only exports the question set with assembled context and records
-reported results; running and judging belong to the agent / CI runner.
-Zero LLM dependency by design — pytest is independent of the compiler.
+reported results. The optional three-arm runner lives in ``evaluation/``;
+this module stays provider-free by design — pytest is independent of the
+compiler and test contract.
 """
 
 from __future__ import annotations

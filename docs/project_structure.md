@@ -47,6 +47,7 @@
 | 改 create / update / build 行为 | `src/codememory/create.py`, `src/codememory/update.py`, `src/codememory/build.py`, `src/codememory/resolve.py`, `src/codememory/handlers.py` | `tests/unit/test_create_update.py`, `tests/unit/test_build_pipeline.py`, `tests/unit/test_context_pack.py` |
 | 新增 Source Artifact / source_refs | `src/codememory/sources.py`, `src/codememory/models.py`, `src/codememory/build.py` | `tests/unit/test_sources.py`, `tests/unit/test_source_refs.py`, `tests/unit/test_source_expand.py` |
 | 改 Markdown 迁移流程 | `src/codememory/compiler/` | `tests/unit/test_memory_compiler.py` |
+| 改 golden-question 三臂评测 | `src/codememory/evaluation/`, `src/codememory/test_contract.py` | `tests/unit/test_eval_harness.py`, `tests/unit/test_golden_questions.py` |
 | 改 REST API | `backend/server.py`, `backend/routers/*.py`, `backend/shared.py` | `tests/test_api.py` |
 | 改可视化 UI | `frontend/src/pages/`, `frontend/src/components/`, `frontend/src/App.tsx` | `frontend/tests/smoke.spec.ts`, `npm run build` |
 | 改 Agent tool 接入 | `src/codememory/agent_tools.py`, `src/codememory/tools.py`, `src/codememory/integrations.py`, `src/codememory/mcp_server.py` | `tests/unit/test_agent_tool_alignment.py` |
@@ -95,6 +96,7 @@
 | `src/codememory/update.py` | 已有 memory 的正文、summary、tags、imports、maturity 等更新。 |
 | `src/codememory/build.py` | 唯一 canonical build 管线：imports DAG、拓扑顺序、两遍式 budget trim、ContextPack 模型与全部 renderer。 |
 | `src/codememory/resolve.py` | `build.py` 的 plain-Markdown 兼容薄别名与 DAG helper 导出。 |
+| `src/codememory/test_contract.py` | provider-free golden-question/TestBundle 导出与外部结果日志合同。 |
 | `src/codememory/sources.py` | Source Artifact Registry：`.codememory/sources/index.json` 的模型、load/save、add/list/get、stale/missing 检查、explicit source expansion。 |
 | `src/codememory/validate.py` | 完整性检查：断链、循环、schema 合规、hash stale、source stale/missing、source_refs 与 proposal/status 边界。 |
 | `src/codememory/search.py` | CLI / library 搜索逻辑。 |
@@ -106,14 +108,26 @@
 | `src/codememory/transient.py` | 会话内临时推理 DAG，不直接持久化为 canonical memory。 |
 | `src/codememory/snapshot.py` | 将 transient context 固化为 `.md` memory。 |
 | `src/codememory/import_cmd.py` | 旧版冷启动文本导入入口；更复杂迁移应走 compiler。 |
-| `src/codememory/handlers.py` | CLI、Sandbox tools、backend 共享的命令处理 facade；包含 source add/list/get/check/expand handlers，防止 adapter 重复实现 core。 |
-| `src/codememory/cli.py` | `codememory` argparse CLI 壳，参数解析后委托 handlers / compiler；包含 `source add/list/get/check/expand`。 |
+| `src/codememory/handlers.py` | CLI、Sandbox tools、backend 共享的命令处理 facade；显式 eval 在这里完成冻结输入后才惰性构造 provider client。 |
+| `src/codememory/cli.py` | `codememory` argparse CLI 壳，参数解析后委托 handlers / compiler；`eval` 是 trusted owner/CI 命令，不进入 Agent catalog。 |
 | `src/codememory/agent_tools.py` | MCP / Toolkit 共用的 root-aware tool catalog 与 dispatcher；只委托 handlers，并固化 create/propose 写门。 |
 | `src/codememory/tools.py` | 将共享 catalog 绑定到一个 root 后注册进 Sandbox，不再维护独立 schema/业务分发。 |
 | `src/codememory/integrations.py` | `CodememoryToolkit`，把 root 对应的共享 catalog 机械转换为 OpenAI / Anthropic / Gemini 格式。 |
 | `src/codememory/mcp_server.py` | 显式 `CODEMEMORY_ROOT` 绑定的 MCP stdio adapter；tools/list 与 tools/call 复用共享 catalog/dispatcher。 |
 
-### 5.1 `src/codememory/compiler/` — Markdown Memory Compiler
+### 5.1 `src/codememory/evaluation/` — Explicit Eval Harness
+
+该目录负责 golden-question 三臂实验。provider-neutral runner 先冻结 ContextPack、full-memory、no-memory 与 hashes，再通过显式惰性 adapter 答题/盲判；报告不复制 context、prompt、config path 或 raw thinking。
+
+| 文件 | 职责 |
+|---|---|
+| `src/codememory/evaluation/models.py` | `memory-eval/v1` report、arm/sample/call/metric/comparison typed contract。 |
+| `src/codememory/evaluation/runner.py` | full-memory 安全构造、三臂冻结、盲判调用、保守失败统计与对比指标；不 import provider。 |
+| `src/codememory/evaluation/gateway_adapter.py` | 仅在显式 eval handler 中惰性加载 `llm_gateway`；answer/judge structured output、无 tools/Web。 |
+| `src/codememory/evaluation/report_io.py` | 显式 output 的 no-clobber preflight 与完整报告 atomic publish。 |
+| `src/codememory/evaluation/__init__.py` | provider-neutral public exports；不导入 gateway adapter。 |
+
+### 5.2 `src/codememory/compiler/` — Markdown Memory Compiler
 
 该目录负责“把已有 Markdown 记忆迁移成 CodeMemory graph”。核心约束：先登记 asset；默认生成 anchor / paragraph-derived proposal，或由显式可选 LLM proposer 生成 anchor / semantic-derived proposal；两条路径都经 review 选择、只 materialize 为 proposed atom，最后由 owner merge。
 
@@ -129,7 +143,7 @@
 | `src/codememory/compiler/review.py` | 写入 review set，保留相同输入重试的 decisions，拒绝冲突 review ID。 |
 | `src/codememory/compiler/materialize.py` | 只将 accepted candidates 写为 `status: proposed` atom；semantic batch 写前整体校验 source refs/path/imports/cycle，失败零写入。 |
 
-### 5.2 `src/codememory/skeletonize/` — 旧版结构化导入
+### 5.3 `src/codememory/skeletonize/` — 旧版结构化导入
 
 这是 compiler 之前的批量导入能力。仍可用于轻量 markdown/code 骨架化，但不应承担正式迁移审阅流程。
 

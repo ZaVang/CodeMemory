@@ -104,7 +104,28 @@ python -m codememory.cli --root D:\memory\work validate
 python -m codememory.cli --root D:\memory\work test user/project/context --budget 2000
 ```
 
-`test` exports declared golden questions plus assembled context. CodeMemory does not call or judge an LLM. An external runner may record results with `test report`.
+`test` exports declared golden questions plus assembled context and remains provider-free. An external runner may record results with `test report`.
+
+The explicit eval harness runs the same scored questions against three frozen conditions:
+
+```powershell
+python -m codememory.cli --root D:\memory\work eval user/project/context `
+  --llm-config D:\config\llm_gateway.yaml `
+  --answer-model smart `
+  --judge-model smart `
+  --budget 2000 `
+  --output D:\reports\context-eval.json
+```
+
+- `context_pack` uses the canonical build output.
+- `full_memory` uses every assemblable Atom/Schema summary and authored body in stable ID order.
+- `no_memory` sends no memory context.
+
+Only questions with a non-empty `expect` are scored. The answer model never receives `expect`; the blind judge receives only the question, expected points, and candidate answer. Calls use structured output, temperature 0, and no tools/Web.
+
+This is an explicit provider path: the two memory arms send memory text to the configured provider, and `full_memory` may send the entire canonical library. Review provider privacy and cost before running it. The report stores answers/verdicts and safe usage/latency/hash metadata, but not prompts, memory contexts, config paths, credentials, raw responses, or thinking. Without `--output`, JSON is printed to stdout; an existing output file is rejected unless `--overwrite` is explicit.
+
+Eval remains a trusted owner/CI CLI/Python handler. It is intentionally absent from MCP, Toolkit, REST, and the Operator UI.
 
 ---
 

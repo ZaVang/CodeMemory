@@ -209,6 +209,89 @@ def handle_test_report(root: Path, memory_id: str, results_path: str) -> str:
     return record_test_report(root, memory_id, results)
 
 
+async def handle_eval(
+    root: Path,
+    memory_id: str,
+    *,
+    config_path: str,
+    answer_model: str,
+    judge_model: str,
+    depth: str = "recommended",
+    budget: int | None = None,
+    answer_max_tokens: int = 1024,
+    judge_max_tokens: int = 512,
+    output: str | None = None,
+    overwrite: bool = False,
+    client: object | None = None,
+) -> str:
+    """Run the explicit three-arm golden-question evaluation harness."""
+
+    from .evaluation.models import EvalSettings
+    from .evaluation.report_io import preflight_output_path, write_report_atomic
+    from .evaluation.runner import freeze_evaluation_input, run_evaluation
+
+    if not config_path or not answer_model or not judge_model:
+        raise ValueError(
+            "eval requires explicit config_path, answer_model and judge_model"
+        )
+
+    output_target = (
+        preflight_output_path(output, overwrite=overwrite)
+        if output is not None
+        else None
+    )
+    # Freeze and validate the scored input before importing or constructing a
+    # provider client. This includes the no-scorable-question gate.
+    frozen = freeze_evaluation_input(
+        root,
+        memory_id,
+        depth=depth,
+        budget=budget,
+    )
+    settings = EvalSettings(
+        depth=depth,
+        budget=budget,
+        answer_model=answer_model,
+        judge_model=judge_model,
+        answer_max_tokens=answer_max_tokens,
+        judge_max_tokens=judge_max_tokens,
+    )
+
+    if client is None:
+        config_file = Path(config_path)
+        if not config_file.is_file():
+            raise FileNotFoundError(f"LLM gateway config not found: {config_path}")
+        try:
+            from .evaluation.gateway_adapter import LLMGatewayEvaluationClient
+
+            client = LLMGatewayEvaluationClient.from_config(
+                config_file,
+                answer_model=answer_model,
+                judge_model=judge_model,
+                answer_max_tokens=answer_max_tokens,
+                judge_max_tokens=judge_max_tokens,
+            )
+        except ModuleNotFoundError as exc:
+            raise RuntimeError(
+                "Eval dependencies are unavailable; install codememory[llm]"
+            ) from exc
+
+    report = await run_evaluation(frozen, client, settings=settings)  # type: ignore[arg-type]
+    report_text = json.dumps(
+        report.model_dump(mode="json"),
+        ensure_ascii=False,
+        indent=2,
+    ) + "\n"
+    if output_target is not None:
+        write_report_atomic(output_target, report_text, overwrite=overwrite)
+        return (
+            f"Evaluation report written: {output_target}\n"
+            f"run_id: {report.run_id}\n"
+            f"entry: {report.entry}"
+        )
+    return report_text
+
+
 def handle_merge(root: Path, memory_id: str) -> str:
     """Merge a proposed memory into the canonical graph. Returns path string."""
     from .update import merge

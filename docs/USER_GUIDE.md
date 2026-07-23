@@ -16,7 +16,7 @@ CodeMemory 是一个给单 owner 和多个 agent 共享的工作记忆底座。
 - 用 canonical build 生成 ContextPack，把上下文稳定交给 agent；
 - 用 Source Artifact / source_refs 追溯长文档和原始资料。
 
-当前主线包括 atom graph、canonical build、proposal review、golden questions、source-aware compiler、Source Artifact 显式展开、Personal Profile，以及本地 Operator UI。
+当前主线包括 atom graph、canonical build、proposal review、golden questions、显式三臂 eval harness、source-aware compiler、Source Artifact 显式展开、Personal Profile，以及本地 Operator UI。
 
 ---
 
@@ -274,6 +274,32 @@ codememory materialize-review docs-review --accept-all
 ```powershell
 codememory --help
 ```
+
+### 8.1 三臂 Eval Harness
+
+带非空 `expect` 的 golden questions 可以通过显式 provider runner 做对照实验：
+
+```powershell
+codememory --root D:\memory\work eval user/project/context `
+  --llm-config D:\config\llm_gateway.yaml `
+  --answer-model smart `
+  --judge-model smart `
+  --depth recommended `
+  --budget 2000 `
+  --output D:\reports\context-eval.json
+```
+
+一次 run 冻结三个条件：
+
+- `context_pack`：入口经过 imports DAG 与 budget 裁剪后的 canonical build；
+- `full_memory`：所有可装配 Atom/Schema 的 summary + 正文，按 ID 排序；
+- `no_memory`：不给模型任何记忆上下文。
+
+答题模型三路完全相同且看不到 `expect`；judge 只看到问题、期望要点和候选答案，不知道答案来自哪一路。报告给出每路 pass rate、ContextPack 相对 full-memory 的质量保留/差值、两条 memory 路径相对 no-memory 的提升，以及 context/实际输入 token 差异。
+
+这是显式外部调用。`context_pack` 会发送装配内容，`full_memory` 可能发送整个 canonical memory；运行前应确认这些内容适合交给该 provider。报告不保存 memory context、prompt、config 路径、credential、raw response 或 thinking，但会保留问题、expect、答案和判分理由供复核。默认输出 JSON 到 stdout；`--output` 不覆盖已有文件，除非同时明确 `--overwrite`。
+
+没有 `expect` 的问题会被跳过；若一个可评分问题都没有，命令会在加载 provider 前失败。Web、MCP 和 Agent tools 都不会触发 eval。
 
 ---
 
