@@ -1,4 +1,4 @@
-import type { MemorySummary, PaginatedMemoriesResponse, MemoryDetail, GraphData, ResolveRequest, ResolveResponse, StatsResponse, WanderResponse, ValidateResponse, CreateMemoryRequest, UpdateMemoryRequest } from './types'
+import type { MemorySummary, PaginatedMemoriesResponse, MemoryDetail, GraphData, ResolveRequest, ResolveResponse, StatsResponse, ValidateResponse, CreateMemoryRequest, UpdateMemoryRequest, ReviewQueueResponse, TestBundle } from './types'
 
 const BASE = '/api'
 
@@ -96,40 +96,51 @@ export async function fetchGraph(): Promise<GraphData> {
   return fetcher<GraphData>(`${BASE}/graph`)
 }
 
-export async function fetchResolve(req: ResolveRequest): Promise<ResolveResponse> {
-  return fetcher<ResolveResponse>(`${BASE}/resolve`, {
+interface BuildApiResponse {
+  target: string
+  format: string
+  pack: {
+    depth: string
+    budget: number
+    nodes: Array<{
+      id: string
+      type: string
+      trim: 'full' | 'summary' | 'skipped'
+      index: number
+      total: number
+      content?: string | null
+      summary?: string
+      maturity?: string
+      status?: string
+      tags?: string[]
+    }>
+    notices: Array<{ type: string; message: string }>
+  }
+  rendered: string
+}
+
+export async function fetchBuild(req: ResolveRequest): Promise<ResolveResponse> {
+  const response = await fetcher<BuildApiResponse>(`${BASE}/build`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(req),
+    body: JSON.stringify({ ...req, format: 'plain-markdown' }),
   })
+  return {
+    target: response.target,
+    depth: response.pack.depth,
+    budget: response.pack.budget,
+    nodes: response.pack.nodes.map((node) => ({
+      ...node,
+      body: node.content ?? '',
+      tags: node.tags ?? [],
+    })),
+    full_text: response.rendered,
+    notices: response.pack.notices.map((notice) => `${notice.type}: ${notice.message}`),
+  }
 }
 
 export async function fetchStats(): Promise<StatsResponse> {
   return fetcher<StatsResponse>(`${BASE}/stats`)
-}
-
-export async function fetchWander(mode: 'cool' | 'random' = 'cool'): Promise<WanderResponse> {
-  const raw = await fetcher<unknown>(`${BASE}/wander`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ mode }),
-  })
-  if (raw && typeof raw === 'object' && 'result' in raw && typeof (raw as { result?: unknown }).result === 'string') {
-    return {
-      id: '',
-      type: 'atom',
-      summary: (raw as { result: string }).result,
-      tags: [],
-      intensity: 0,
-      access_count: 0,
-      last_access: null,
-      status: 'active',
-      maturity: 'draft',
-      days_since_last_access: null,
-      stability: undefined,
-    }
-  }
-  return raw as WanderResponse
 }
 
 export async function fetchValidate(): Promise<ValidateResponse> {
@@ -174,13 +185,6 @@ export async function updateMemory(id: string, req: UpdateMemoryRequest): Promis
   })
 }
 
-// R16-S1: lightweight decay refresh
-export async function touchMemory(id: string): Promise<Record<string, unknown>> {
-  return fetcher(`${BASE}/memories/${encodePathId(id)}/touch`, {
-    method: 'POST',
-  })
-}
-
 export async function rehashMemory(id: string): Promise<{ id: string; summary_hash: string; stale: boolean }> {
   return fetcher(`${BASE}/memories/${encodePathId(id)}/rehash`, {
     method: 'POST',
@@ -220,7 +224,6 @@ export interface SearchResultItem {
   summary: string
   type: string
   tags: string[]
-  intensity: number
   maturity: string
   status: string
   snippet: string
@@ -228,8 +231,6 @@ export interface SearchResultItem {
   match_score?: number
   match_fields?: string[]
   access_count?: number
-  days_since_last_access?: number | null
-  stability?: number
 }
 
 export interface SearchResultsResponse {
@@ -246,6 +247,26 @@ export async function fetchSearch(query: string, limit = 20): Promise<SearchResu
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ query, limit }),
   })
+}
+
+export async function fetchReviews(): Promise<ReviewQueueResponse> {
+  return fetcher<ReviewQueueResponse>(`${BASE}/reviews`)
+}
+
+export async function applyReview(
+  kind: 'atoms' | 'patches',
+  action: 'merge' | 'reject',
+  id: string,
+): Promise<Record<string, unknown>> {
+  return fetcher(`${BASE}/reviews/${kind}/${action}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id }),
+  })
+}
+
+export async function fetchTestBundle(id: string): Promise<TestBundle> {
+  return fetcher<TestBundle>(`${BASE}/tests/${encodePathId(id)}`)
 }
 
 /** Trigger a download of the memory .zip export. */

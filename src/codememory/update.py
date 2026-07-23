@@ -111,6 +111,8 @@ def update(
     memory_id: str,
     body: str | None = None,
     summary: str | None = None,
+    tags: list[str] | None = None,
+    maturity: str | None = None,
     change_note: str | None = None,
     status: str | None = None,
     import_required: list[str] | None = None,
@@ -126,6 +128,8 @@ def update(
         memory_id: The memory identifier to update.
         body: New body text (optional).
         summary: New summary (optional).
+        tags: New tags list (optional).
+        maturity: New maturity value (optional).
         change_note: Required explanation of what changed and why.
         status: New status: active, archived, superseded, or draft.
         import_required: New required imports list (replaces existing).
@@ -215,6 +219,19 @@ def update(
     # Update summary if provided
     if summary is not None:
         meta["summary"] = summary
+
+    if tags is not None:
+        meta["tags"] = tags
+
+    if maturity is not None:
+        valid_maturities = {"draft", "verified", "proven", "superseded"}
+        if maturity not in valid_maturities:
+            _logger.error(
+                "Invalid maturity '%s'. Must be one of: %s",
+                maturity, ", ".join(sorted(valid_maturities)),
+            )
+            sys.exit(1)
+        meta["maturity"] = maturity
 
     # Update status if provided
     if status is not None:

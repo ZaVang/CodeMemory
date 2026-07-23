@@ -24,10 +24,10 @@ export default function MemoryForm({ datasetReady = true, show, memoryId, onClos
   const [id, setId] = useState('')
   const [summary, setSummary] = useState('')
   const [tags, setTags] = useState('')
-  const [intensity, setIntensity] = useState(5)
   const [body, setBody] = useState('')
   const [status, setStatus] = useState('active')
   const [maturity, setMaturity] = useState('draft')
+  const [propose, setPropose] = useState(false)
   const [changeNote, setChangeNote] = useState('')
   // Imports (PL1-9): comma-separated IDs with strength selection
   const [importsText, setImportsText] = useState('')
@@ -42,7 +42,7 @@ export default function MemoryForm({ datasetReady = true, show, memoryId, onClos
   const [showUnsavedWarning, setShowUnsavedWarning] = useState(false)
   const previousStateRef = useRef<Record<string, unknown> | null>(null)
   // Track initial values to detect unsaved changes
-  const initialValuesRef = useRef<{ summary: string; tags: string; intensity: number; body: string; status: string; maturity: string; importsText: string } | null>(null)
+  const initialValuesRef = useRef<{ summary: string; tags: string; body: string; status: string; maturity: string; importsText: string; propose: boolean } | null>(null)
   const pendingCloseRef = useRef<(() => void) | null>(null)
 
   // Template support (R5-template-create)
@@ -58,18 +58,19 @@ export default function MemoryForm({ datasetReady = true, show, memoryId, onClos
   // Load existing data in edit mode
   useEffect(() => {
     if (!memoryId) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setId('')
       setSummary('')
       setTags('')
-      setIntensity(5)
       setBody('')
       setStatus('active')
       setMaturity('draft')
+      setPropose(false)
       setChangeNote('')
       setImportsText('')
       setImportStrengths({})
       initialValuesRef.current = {
-        summary: '', tags: '', intensity: 5, body: '', status: 'active', maturity: 'draft', importsText: '',
+        summary: '', tags: '', body: '', status: 'active', maturity: 'draft', importsText: '', propose: false,
       }
       return
     }
@@ -86,14 +87,12 @@ export default function MemoryForm({ datasetReady = true, show, memoryId, onClos
           body: mem.body ?? '',
           summary: mem.summary ?? '',
           tags: mem.tags ?? [],
-          intensity: mem.intensity ?? 5,
           status: mem.status ?? 'active',
           maturity: mem.maturity ?? 'draft',
         }
         setId(mem.id)
         setSummary(mem.summary || '')
         setTags((mem.tags || []).join(', '))
-        setIntensity(mem.intensity || 5)
         setBody(mem.body || '')
         setStatus(mem.status || 'active')
         setMaturity(mem.maturity || 'draft')
@@ -123,11 +122,11 @@ export default function MemoryForm({ datasetReady = true, show, memoryId, onClos
         initialValuesRef.current = {
           summary: mem.summary || '',
           tags: (mem.tags || []).join(', '),
-          intensity: mem.intensity || 5,
           body: mem.body || '',
           status: mem.status || 'active',
           maturity: mem.maturity || 'draft',
           importsText: allIds.join(', '),
+          propose: false,
         }
       })
       .catch((err) => {
@@ -168,7 +167,7 @@ export default function MemoryForm({ datasetReady = true, show, memoryId, onClos
         if (mem.body) {
           setBody(`<!-- Template from ${templateId} -->\n${mem.body}`)
         }
-        // Don't override ID or intensity — user controls those
+        // Do not override ID or review choice — the owner controls those.
       })
       .catch((err) => console.error('Failed to load template:', err))
   }, [])
@@ -195,16 +194,13 @@ export default function MemoryForm({ datasetReady = true, show, memoryId, onClos
     if (!isEdit && id.trim() && !id.includes('/')) {
       return 'ID must contain at least one "/" (e.g. "user/ideas/my-thesis")'
     }
-    if (intensity < 1 || intensity > 10) {
-      return 'Intensity must be between 1 and 10'
-    }
     return null
-  }, [id, intensity, isEdit])
+  }, [id, isEdit])
 
   // Clear error when user modifies any input (R11-UX5)
   const clearValidationError = useCallback(() => {
     setError((prev) => {
-      if (prev && (prev === 'ID is required' || prev.startsWith('ID must contain') || prev.startsWith('Intensity must be'))) {
+      if (prev && (prev === 'ID is required' || prev.startsWith('ID must contain'))) {
         return null
       }
       return prev
@@ -218,13 +214,13 @@ export default function MemoryForm({ datasetReady = true, show, memoryId, onClos
     return (
       summary !== init.summary ||
       tags !== init.tags ||
-      intensity !== init.intensity ||
       body !== init.body ||
       (isEdit && status !== init.status) ||
       maturity !== init.maturity ||
-      importsText !== init.importsText
+      importsText !== init.importsText ||
+      (!isEdit && propose !== init.propose)
     )
-  }, [summary, tags, intensity, body, status, maturity, importsText, isEdit])
+  }, [summary, tags, body, status, maturity, importsText, propose, isEdit])
 
   // Safe close with dirty check
   const requestClose = useCallback((action?: () => void) => {
@@ -286,9 +282,9 @@ export default function MemoryForm({ datasetReady = true, show, memoryId, onClos
         id: id.trim(),
         summary: summary.trim() || undefined,
         tags: tagList.length > 0 ? tagList : undefined,
-        intensity,
-        body: body || undefined,
+        body,
         maturity: maturity || undefined,
+        propose,
         ...(hasImports ? { imports } : {}),
       })
 
@@ -301,7 +297,7 @@ export default function MemoryForm({ datasetReady = true, show, memoryId, onClos
     } finally {
       setSaving(false)
     }
-  }, [id, summary, tags, intensity, body, maturity, importsText, importStrengths, validate, onChange, onClose, onUndoEntry])
+  }, [id, summary, tags, body, maturity, propose, importsText, importStrengths, validate, onChange, onClose, onUndoEntry])
 
   // Handle update
   const handleUpdate = useCallback(async () => {
@@ -332,17 +328,14 @@ export default function MemoryForm({ datasetReady = true, show, memoryId, onClos
         const strength = (importStrengths[impId] || 'required') as 'required' | 'recommended' | 'related'
         imports[strength].push(impId)
       }
-      const hasImports = imports.required.length > 0 || imports.recommended.length > 0 || imports.related.length > 0
-
       await updateMemory(memoryId, {
-        body: body || undefined,
-        summary: summary.trim() || undefined,
-        tags: tagList.length > 0 ? tagList : undefined,
-        intensity,
-        status: status || undefined,
+        body,
+        summary: summary.trim(),
+        tags: tagList,
+        status: status !== previousStateRef.current?.status ? status : undefined,
         maturity: maturity || undefined,
         change_note: changeNote.trim() || 'UI update',
-        ...(hasImports ? { imports } : {}),
+        imports,
       })
 
       onChange()
@@ -360,7 +353,7 @@ export default function MemoryForm({ datasetReady = true, show, memoryId, onClos
     } finally {
       setSaving(false)
     }
-  }, [memoryId, body, summary, tags, intensity, status, maturity, changeNote, importsText, importStrengths, validate, onChange, onClose, onUndoEntry])
+  }, [memoryId, body, summary, tags, status, maturity, changeNote, importsText, importStrengths, validate, onChange, onClose, onUndoEntry])
 
   // Handle delete
   const handleDelete = useCallback(async () => {
@@ -393,7 +386,7 @@ export default function MemoryForm({ datasetReady = true, show, memoryId, onClos
       setDeleting(false)
       setShowDeleteConfirm(false)
     }
-  }, [memoryId, onChange, onClose])
+  }, [memoryId, onChange, onClose, onUndoEntry, status])
 
   // Close on Escape (with dirty check)
   useEffect(() => {
@@ -728,31 +721,6 @@ export default function MemoryForm({ datasetReady = true, show, memoryId, onClos
               </div>
             </Field>
 
-            {/* Intensity */}
-            <Field label="Intensity (1-10)">
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <input
-                  type="range"
-                  min={1}
-                  max={10}
-                  value={intensity}
-                  onChange={(e) => { setIntensity(Number(e.target.value)); clearValidationError() }}
-                  style={{ flex: 1, accentColor: 'var(--cm-accent)', cursor: 'pointer' }}
-                />
-                <span
-                  style={{
-                    fontSize: 14,
-                    fontFamily: 'JetBrains Mono, monospace',
-                    color: 'var(--cm-text-primary)',
-                    minWidth: 20,
-                    textAlign: 'center',
-                  }}
-                >
-                  {intensity}
-                </span>
-              </div>
-            </Field>
-
             {/* Maturity (PL3-7: exposed in both create and edit) */}
             <Field label="Maturity">
               <select
@@ -767,14 +735,32 @@ export default function MemoryForm({ datasetReady = true, show, memoryId, onClos
               </select>
             </Field>
 
+            {!isEdit && (
+              <Field label="Review Gate">
+                <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={propose}
+                    onChange={(event) => setPropose(event.target.checked)}
+                    style={{ marginTop: 3, accentColor: 'var(--cm-accent)' }}
+                  />
+                  <span style={{ fontSize: 13, lineHeight: 1.5, color: 'var(--cm-text-secondary)' }}>
+                    Create as proposed. It stays out of canonical Build until explicitly merged in Review.
+                  </span>
+                </label>
+              </Field>
+            )}
+
             {/* Status (edit only) */}
             {isEdit && (
               <Field label="Status">
                 <select
                   value={status}
                   onChange={(e) => { setStatus(e.target.value); clearValidationError() }}
+                  disabled={status === 'proposed'}
                   style={inputStyle}
                 >
+                  {status === 'proposed' && <option value="proposed">Proposed — use Review to decide</option>}
                   <option value="active">Active</option>
                   <option value="draft">Draft</option>
                   <option value="archived">Archived</option>
@@ -871,7 +857,7 @@ export default function MemoryForm({ datasetReady = true, show, memoryId, onClos
 
           <button
             onClick={isEdit ? handleUpdate : handleCreate}
-            disabled={saving || loading || (error !== null && (error === 'ID is required' || error.startsWith('ID must contain') || error.startsWith('Intensity must be')))}
+            disabled={saving || loading || (error !== null && (error === 'ID is required' || error.startsWith('ID must contain')))}
             style={{
               padding: '10px 24px',
               backgroundColor: 'var(--cm-text-primary)',
@@ -884,7 +870,7 @@ export default function MemoryForm({ datasetReady = true, show, memoryId, onClos
               textTransform: 'uppercase',
               letterSpacing: '0.08em',
               borderRadius: 2,
-              opacity: (saving || loading || (error !== null && (error === 'ID is required' || error.startsWith('ID must contain') || error.startsWith('Intensity must be')))) ? 0.5 : 1,
+              opacity: (saving || loading || (error !== null && (error === 'ID is required' || error.startsWith('ID must contain')))) ? 0.5 : 1,
             }}
           >
             {saving ? 'Saving...' : isEdit ? 'Save Changes' : 'Create'}

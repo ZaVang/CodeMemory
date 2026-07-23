@@ -15,6 +15,26 @@ async function dismissOnboarding(page: Page) {
 }
 
 test.describe('CodeMemory Smoke Tests', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.route('**/api/**', async (route) => {
+      const request = route.request()
+      const url = new URL(request.url())
+      const json = (body: unknown) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) })
+      const memory = { id: 'memory/alpha', type: 'atom', summary: 'Alpha memory', tags: ['test'], maturity: 'verified', directory: 'memory', status: 'active', version: 1 }
+
+      if (url.pathname === '/api/datasets') return json({ datasets: [{ name: 'test', path: '', memory_count: 1 }, { name: 'alternate', path: '', memory_count: 1 }], current: 'test', current_name: 'test' })
+      if (url.pathname === '/api/datasets/switch') return json({ current: request.postDataJSON()?.name ?? 'test' })
+      if (url.pathname === '/api/memories' && request.method() === 'GET') return json({ memories: [memory], total: 1, offset: 0, limit: 10000 })
+      if (url.pathname === '/api/memories/memory/alpha') return json({ ...memory, body: '# Alpha', created: '2026-07-22', imports: {} })
+      if (url.pathname === '/api/graph') return json({ nodes: [{ data: { ...memory, label: 'alpha', group: 'memory', dependents: 0 } }], edges: [] })
+      if (url.pathname === '/api/stats') return json({ total: 1, maturity: { verified: 1 }, type: { atom: 1 }, status: { active: 1 }, stale_count: 0, stale_ids: [], tags: [{ tag: 'test', count: 1 }] })
+      if (url.pathname === '/api/search') return json({ results: [memory], count: 1, total: 1, query: '', limit: 20 })
+      if (url.pathname === '/api/reviews') return json({ proposed_atoms: [], patch_proposals: [], total: 0 })
+      if (url.pathname === '/api/tests/memory/alpha') return json({ format_version: 'memory-test/v1', entry: 'memory/alpha', context: '', questions: [], notices: ['No golden questions declared.'] })
+      return json({})
+    })
+  })
+
   test('1. Page loads — title and key elements are present', async ({ page }) => {
     await page.goto('/')
 
@@ -158,5 +178,52 @@ test.describe('CodeMemory Smoke Tests', () => {
     // View switchers still work
     const graphBtn = page.locator('button').filter({ hasText: 'Graph' }).first()
     await expect(graphBtn).toBeVisible({ timeout: 10000 })
+  })
+
+  test('6. Build, golden questions, and owner review use current contracts', async ({ page }) => {
+    await page.addInitScript(() => localStorage.setItem('codememory-onboarded', '1'))
+    let buildCalls = 0
+    let reviewCalls = 0
+
+    await page.route('**/api/**', async (route) => {
+      const request = route.request()
+      const url = new URL(request.url())
+      const json = (body: unknown) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) })
+
+      if (url.pathname === '/api/datasets') return json({ datasets: [{ name: 'test', path: '', memory_count: 1 }], current: 'test', current_name: 'test' })
+      if (url.pathname === '/api/memories' && request.method() === 'GET') return json({ memories: [{ id: 'memory/alpha', type: 'atom', summary: 'Alpha', tags: ['test'], maturity: 'verified', directory: 'memory', status: 'active', version: 1 }], total: 1, offset: 0, limit: 10000 })
+      if (url.pathname === '/api/memories/memory/alpha') return json({ id: 'memory/alpha', type: 'atom', summary: 'Alpha', body: '# Alpha', tags: ['test'], maturity: 'verified', status: 'active', version: 1, created: '2026-07-22', imports: {}, golden_questions: [{ q: 'What is canonical?', expect: 'The built context.' }] })
+      if (url.pathname === '/api/tests/memory/alpha') return json({ format_version: 'memory-test/v1', entry: 'memory/alpha', context: '<context>Alpha</context>', questions: [{ q: 'What is canonical?', expect: 'The built context.' }], notices: [] })
+      if (url.pathname === '/api/build') {
+        buildCalls += 1
+        return json({ target: 'memory/alpha', format: 'plain-markdown', pack: { depth: 'recommended', budget: 2000, nodes: [{ id: 'memory/alpha', type: 'atom', trim: 'full', index: 0, total: 1, content: '# Alpha', summary: 'Alpha', maturity: 'verified', status: 'active', tags: ['test'] }], notices: [] }, rendered: '# Alpha' })
+      }
+      if (url.pathname === '/api/reviews' && request.method() === 'GET') return json({ proposed_atoms: [{ kind: 'proposed_atom', id: 'memory/proposed', target_id: 'memory/proposed', summary: 'Candidate', created_at: '2026-07-22', created_by: 'agent', tags: ['review'], version: 1 }], patch_proposals: [{ kind: 'patch_proposal', id: 'proposal-1', target_id: 'memory/alpha', reason: 'Clarify', created_at: '2026-07-22', created_by: 'agent', patch: { summary: 'Clearer' }, patch_fields: ['summary'] }], total: 2 })
+      if (url.pathname === '/api/reviews/patches/reject') {
+        reviewCalls += 1
+        return json({ status: 'rejected', id: 'proposal-1' })
+      }
+      if (url.pathname === '/api/graph') return json({ nodes: [], edges: [] })
+      return json({})
+    })
+
+    await page.goto('/')
+    await page.getByRole('button', { name: /list/i }).click()
+    await page.getByText('memory/alpha').click()
+    await expect(page.getByText('Golden Questions')).toBeVisible()
+    await expect(page.getByText('What is canonical?')).toBeVisible()
+    await page.getByRole('button', { name: 'Build', exact: true }).click()
+    await expect(page.getByText('Build — 1 nodes')).toBeVisible()
+    expect(buildCalls).toBe(1)
+
+    await page.getByRole('button', { name: /review/i }).click()
+    await expect(page.getByText('Proposed Atoms (1)')).toBeVisible()
+    await expect(page.getByText('Patch Proposals (1)')).toBeVisible()
+    page.once('dialog', (dialog) => dialog.accept())
+    await page.getByRole('button', { name: 'Reject' }).last().click()
+    await expect.poll(() => reviewCalls).toBe(1)
+
+    await expect(page.getByText('Wander', { exact: true })).toHaveCount(0)
+    await expect(page.locator('input[name="intensity"]')).toHaveCount(0)
   })
 })

@@ -10,6 +10,7 @@ export interface UserSettings {
   theme: 'light' | 'dark' | 'system'
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function loadSettings(): UserSettings {
   try {
     const raw = localStorage.getItem(SETTINGS_KEY)
@@ -25,6 +26,7 @@ export function loadSettings(): UserSettings {
   return { defaultDataset: '', defaultBudget: 2000, theme: 'system' }
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function saveSettings(settings: UserSettings): void {
   localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings))
 }
@@ -51,6 +53,7 @@ export default function Settings({
   const [saved, setSaved] = useState(false)
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setBudgetValue(currentBudget)
     setDatasetValue(currentDataset)
     setThemeValue(currentTheme)

@@ -4,15 +4,12 @@ export interface MemorySummary {
   type: string
   summary: string
   tags: string[]
-  intensity: number
   maturity: string
   directory: string
   status: string
   version: number
   access_count?: number
   last_access?: string | null
-  days_since_last_access?: number | null
-  stability?: number
 }
 
 /** Paginated response from GET /api/memories */
@@ -34,17 +31,14 @@ export interface MemoryDetail {
   updated?: string
   version: number
   tags: string[]
-  intensity: number
   protected?: boolean
   imports?: Record<string, string[]>
   schema?: string
   maturity?: string
   evidence?: Record<string, unknown>
   source?: Record<string, unknown>
-  days_since_last_access?: number | null
-  stability?: number
-  stability_source?: string | null  // R16-C2: "manual" if user-set, null/undefined = adaptive
   access_count?: number
+  golden_questions?: GoldenQuestion[]
   [key: string]: unknown
 }
 
@@ -54,7 +48,6 @@ export interface GraphNode {
     id: string
     label: string
     type: string
-    intensity: number
     maturity: string
     group: string
     directory: string
@@ -62,8 +55,6 @@ export interface GraphNode {
     status: string
     summary?: string
     dependents?: number
-    days_since_last_access?: number | null
-    stability?: number
   }
 }
 
@@ -83,14 +74,14 @@ export interface GraphData {
   edges: GraphEdge[]
 }
 
-/** Request body for POST /api/resolve */
+/** Request body for the primary POST /api/build endpoint. */
 export interface ResolveRequest {
   id: string
   depth?: 'required' | 'recommended' | 'full'
   budget?: number
 }
 
-/** A single node in the resolve result */
+/** A single node in the normalized build result used by the graph UI. */
 export interface ResolveNode {
   id: string
   type: string
@@ -104,7 +95,7 @@ export interface ResolveNode {
   tags?: string[]
 }
 
-/** Response from POST /api/resolve */
+/** Normalized response derived from the structured POST /api/build payload. */
 export interface ResolveResponse {
   target: string
   depth: string
@@ -112,15 +103,6 @@ export interface ResolveResponse {
   nodes: ResolveNode[]
   full_text: string
   notices: string[]
-}
-
-/** A decay risk entry */
-export interface DecayRiskEntry {
-  id: string
-  decay: number
-  days_since_last_access: number
-  stability: number
-  access_count: number
 }
 
 /** Stats endpoint response */
@@ -132,22 +114,6 @@ export interface StatsResponse {
   stale_count: number
   stale_ids: string[]
   tags: { tag: string; count: number }[]
-  decay_risk?: DecayRiskEntry[]
-}
-
-/** Wander endpoint response */
-export interface WanderResponse {
-  id: string
-  type: string
-  summary: string
-  tags: string[]
-  intensity: number
-  access_count: number
-  last_access: string | null
-  status: string
-  maturity: string
-  days_since_last_access?: number | null
-  stability?: number
 }
 
 /** Validate endpoint response */
@@ -175,12 +141,12 @@ export interface CreateMemoryRequest {
   id: string
   summary?: string
   tags?: string[]
-  intensity?: number
   body?: string
   type?: string
   schema?: string | null
   maturity?: string
   imports?: Record<string, string[]>
+  propose?: boolean
 }
 
 /** Update memory request */
@@ -188,10 +154,49 @@ export interface UpdateMemoryRequest {
   body?: string | null
   summary?: string | null
   tags?: string[] | null
-  intensity?: number | null
   status?: string | null
   maturity?: string | null
   change_note?: string | null
   imports?: Record<string, string[]> | null
-  stability?: number | null  // R16-C2: per-memory half-life slider
+}
+
+export interface GoldenQuestion {
+  q: string
+  expect?: string | null
+}
+
+export interface TestBundle {
+  format_version: string
+  entry: string
+  context: string
+  questions: GoldenQuestion[]
+  notices: string[]
+}
+
+export interface ProposedAtomReview {
+  kind: 'proposed_atom'
+  id: string
+  target_id: string
+  summary: string
+  created_at: string
+  created_by: string
+  tags: string[]
+  version: number
+}
+
+export interface PatchProposalReview {
+  kind: 'patch_proposal'
+  id: string
+  target_id: string
+  reason: string
+  created_at: string
+  created_by: string
+  patch: Record<string, unknown>
+  patch_fields: string[]
+}
+
+export interface ReviewQueueResponse {
+  proposed_atoms: ProposedAtomReview[]
+  patch_proposals: PatchProposalReview[]
+  total: number
 }

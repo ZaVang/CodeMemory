@@ -1,16 +1,12 @@
-"""Memory CRUD router — create, read, update, delete, touch, import, export."""
+"""Memory CRUD router — create, read, update, delete, import, and export."""
 
 from __future__ import annotations
 
 import io
 import logging
-import math
-import os
 import re
 import zipfile
-from datetime import date, datetime
 from pathlib import Path
-from typing import Any
 from urllib.parse import unquote
 
 import yaml
@@ -22,20 +18,15 @@ from shared import (
     ImportRequest,
     UpdateMemoryRequest,
     compute_body_hash,
-    current_dataset,
-    extract_snippet,
     get_root,
     load_cm_index,
     parse_frontmatter,
     reindex,
-    resolve_root,
     save_index,
     serialize,
     stale_check,
-    update_frontmatter_fields,
 )
 from codememory.handlers import handle_create, handle_update
-from codememory.index import load_index
 
 _logger = logging.getLogger("codememory.router.memories")
 
@@ -191,6 +182,7 @@ def delete_memory(memory_id: str):
 
 @router.post("/memories")
 def post_create_memory(req: CreateMemoryRequest):
+    imports = req.imports or {}
     file_path_str = handle_create(
         root=get_root(),
         memory_type=req.type,
@@ -199,28 +191,18 @@ def post_create_memory(req: CreateMemoryRequest):
         tags=req.tags,
         dry_run=False,
         maturity=req.maturity,
+        propose=req.propose,
+        summary=req.summary,
+        body=req.body,
+        import_required=imports.get("required"),
+        import_recommended=imports.get("recommended"),
+        import_related=imports.get("related"),
+        created_by="owner-ui",
     )
 
     filepath = Path(file_path_str)
     if not filepath.exists():
         raise HTTPException(status_code=500, detail="Memory file was not created")
-
-    meta, _ = parse_frontmatter(filepath)
-    needs_summary_update = req.summary and req.summary != "TODO: fill in summary"
-    if needs_summary_update:
-        meta["summary"] = req.summary
-
-    if req.imports:
-        meta["imports"] = req.imports
-
-    body_to_write = req.body
-    meta["summary_hash"] = compute_body_hash(body_to_write.strip())
-
-    yaml_str = yaml.dump(meta, allow_unicode=True, sort_keys=False)
-    new_content = f"---\n{yaml_str}---\n{body_to_write}"
-    filepath.write_text(new_content, encoding="utf-8")
-
-    reindex(get_root())
 
     meta, body = parse_frontmatter(filepath)
     index = load_cm_index()
@@ -249,53 +231,37 @@ def put_update_memory(memory_id: str, req: UpdateMemoryRequest):
     if not entry:
         raise HTTPException(status_code=404, detail=f"Memory '{memory_id}' not found")
 
-    if hasattr(entry, "path"):
-        filepath = get_root() / entry.path
-    elif isinstance(entry, dict):
-        filepath = get_root() / entry.get("path", f"{memory_id}.md")
-    else:
-        filepath = get_root() / f"{memory_id}.md"
-
-    if not filepath.exists():
-        raise HTTPException(status_code=404, detail="Memory file not found on disk")
-
-    has_core_update = any([
+    has_update = any([
         req.body is not None,
         req.summary is not None,
         req.status is not None,
-    ])
-
-    has_metadata_update = any([
         req.tags is not None,
         req.imports is not None,
         req.maturity is not None,
     ])
 
-    if has_core_update:
+    if has_update:
+        imports = req.imports or {}
         change_note = req.change_note or "API update"
-        handle_update(
+        filepath = Path(handle_update(
             root=get_root(),
             memory_id=memory_id,
             body=req.body,
             summary=req.summary,
+            tags=req.tags,
+            maturity=req.maturity,
             change_note=change_note,
             status=req.status,
-        )
-
-    if has_metadata_update:
-        meta_updates: dict[str, Any] = {}
-        if req.tags is not None:
-            meta_updates["tags"] = req.tags
-        if req.imports is not None:
-            meta_updates["imports"] = req.imports
-        if req.maturity is not None:
-            meta_updates["maturity"] = req.maturity
-    reindex(get_root())
+            import_required=imports.get("required", []) if req.imports is not None else None,
+            import_recommended=imports.get("recommended", []) if req.imports is not None else None,
+            import_related=imports.get("related", []) if req.imports is not None else None,
+        ))
+    else:
+        filepath = get_root() / entry.path
 
     meta, body = parse_frontmatter(filepath)
     updated_index = load_cm_index()
     updated_entry = updated_index.memories.get(memory_id)
-    days_since = getattr(updated_entry, "days_since_last_access", None) if updated_entry else None
     access_count_val = getattr(updated_entry, "access_count", 0) if updated_entry else 0
 
     result = {
@@ -303,37 +269,6 @@ def put_update_memory(memory_id: str, req: UpdateMemoryRequest):
         "id": memory_id,
         "body": body,
         "access_count": access_count_val,
-    }
-    return serialize(result)
-
-
-# ---------------------------------------------------------------------------
-# Touch (lightweight decay refresh)
-# ---------------------------------------------------------------------------
-
-@router.post("/memories/{memory_id:path}/touch")
-def post_touch(memory_id: str):
-    memory_id = unquote(memory_id)
-    index = load_cm_index()
-    memories = index.memories
-    entry = memories.get(memory_id)
-    if not entry:
-        raise HTTPException(status_code=404, detail=f"Memory '{memory_id}' not found")
-
-    now_iso = datetime.now().isoformat()
-
-    entry.access_count += 1
-    entry.last_access = now_iso
-    entry.days_since_last_access = 0
-
-    save_index(get_root(), index)
-
-    meta, body = parse_frontmatter(get_root() / entry.path)
-    result = {
-        **{k: v for k, v in meta.items()},
-        "id": memory_id,
-        "body": body,
-        "access_count": entry.access_count,
     }
     return serialize(result)
 

@@ -395,7 +395,9 @@ Personal Profile 补充：
 4. Personal Profile 在上述五项之上只追加 `capture_memory / read_memory / maintenance_status / maintain_memory / resume_memory_maintenance / review_personal_memory`；Codex Skill 不得直接编辑 journal 或 run ledger；
 5. `maintain --daily` 若未来作为便利命令出现，只能编排确定性 run 阶段或启动外部 Skill，不能把 LLM provider 引入 Core；
 6. CLI 继续使用 `--root` / `CODEMEMORY_ROOT`；MCP 每个进程绑定一个显式 root；toolkit 每个实例绑定一个 root；
-7. Web 通过服务端 allowlist registry 将实例别名映射为绝对 root。请求只传别名；禁止把任意绝对路径或 `..` 交给 backend 解析；现有 `examples/` 自动发现只保留为开发/demo 兼容路径。
+7. Web 通过服务端 allowlist registry 将实例别名映射为绝对 root。请求只传精确命中的已知别名；middleware 在写入 request ContextVar 前校验，root resolver 再做 registry 命中与 containment 防线。禁止把任意绝对路径、未知 alias、首尾空白、路径分隔符或 `..` 交给 backend 解析；现有 `examples/` 自动发现只保留为开发/demo 兼容路径。
+
+Operator UI 的 REST 对齐：`POST /api/build` 是主装配入口并同时返回结构化 ContextPack 与同次 build 的 rendered output；`GET /api/reviews` 分开返回 proposed Atom 与 modification patch，kind-specific merge/reject 继续委托 Core；`GET /api/tests/{memory_id}` 只读导出 TestBundle，不在 Web 内执行模型或判分。兼容路由可以保留，但不得形成第二套装配实现。
 
 Agent 写入补充：`create_memory` 一次写入完整 summary/body/imports；普通实例可显式选择 active 或 proposed，Personal Profile 强制 proposed。`propose_memory` 只表示针对已有 Atom 的 modification patch，委托 `handle_propose` 且 owner merge 前目标字节不变。历史 `update_memory / propose_update / resolve_context / resolve_memory` 等 adapter alias 不再导出，但 CLI/Core 能力不删除。
 

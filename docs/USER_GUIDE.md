@@ -291,12 +291,13 @@ Web UI 是 operator console，不定义 canonical memory contract。
 - Graph：查看 imports DAG；
 - List：浏览和筛选 memories；
 - Dashboard：运行 validate / reindex 等维护操作；
-- Create / Edit：维护 atom；
-- Resolve / Copy Context：把上下文交给 agent。
+- Review：分开审阅 proposed Atoms 与 modification patches，确认后 merge / reject；
+- Create / Edit：一次提交完整 summary、body、tags、maturity 与 imports；新建时可明确选择 proposed；
+- Build / Copy Build：通过 Core 的 imports DAG 装配 canonical context，并直接复制同次 build 的 rendered output；
+- Golden Questions：在详情面板只读查看题目、可选期望和 notices；Web 不运行模型或判分。
 
-下一阶段 UI 应跟随后端契约增加：
+当前仍未进入 Operator UI 的能力：
 
-- ContextPack 面板；
 - source_refs 展示；
 - expand source；
 - migration review。

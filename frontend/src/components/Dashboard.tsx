@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { fetchStats, fetchWander, fetchValidate, fetchReindex } from '../api'
-import type { StatsResponse, WanderResponse, ValidateResponse } from '../types'
+import { fetchStats, fetchValidate, fetchReindex } from '../api'
+import type { StatsResponse, ValidateResponse } from '../types'
 import { useExitAnimation } from '../useExitAnimation'
 import EmptyState from './EmptyState'
 
@@ -15,15 +15,10 @@ interface Props {
 
 export default function Dashboard({ onSelectMemory, onNavigateToFilter, refreshTrigger, onCreateMemory, onError }: Props) {
   const [stats, setStats] = useState<StatsResponse | null>(null)
-  const [wanderResult, setWanderResult] = useState<WanderResponse | null>(null)
   const [validateResult, setValidateResult] = useState<ValidateResponse | null>(null)
   const [loading, setLoading] = useState(true)
-  const [wanderOpen, setWanderOpen] = useState(false)
   const [validateOpen, setValidateOpen] = useState(false)
-  const [wandering, setWandering] = useState(false)
   const [validating, setValidating] = useState(false)
-  // I1: exit animations for wander/validate modals
-  const { visible: wanderVisible, closing: wanderClosing } = useExitAnimation(!!wanderOpen)
   const { visible: validateVisible, closing: validateClosing } = useExitAnimation(!!validateOpen)
   const [reindexing, setReindexing] = useState(false)
   const [reindexMessage, setReindexMessage] = useState<string | null>(null)
@@ -38,6 +33,7 @@ export default function Dashboard({ onSelectMemory, onNavigateToFilter, refreshT
   }, [onError])
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadData()
   }, [loadData, refreshTrigger])
 
@@ -45,25 +41,8 @@ export default function Dashboard({ onSelectMemory, onNavigateToFilter, refreshT
   // We use stale_ids from the stats response (PL1-1 fix).
   const staleIds = stats?.stale_ids ?? []
 
-  const handleWander = useCallback(() => {
-    setWandering(true)
-    setValidateOpen(false)  // R11-B2: prevent modal stacking
-    setWanderOpen(true)     // R12-B1: open modal immediately, decouple from fetch promise
-    setWanderResult(null)   // clear previous result to show loading state
-    fetchWander('cool')
-      .then((result) => {
-        setWanderResult(result)
-      })
-      .catch((err) => {
-        onError?.(err instanceof Error ? err.message : 'Wander failed')
-        setWanderOpen(false)  // close modal on error since we have nothing to show
-      })
-      .finally(() => setWandering(false))
-  }, [onError])
-
   const handleValidate = useCallback(() => {
     setValidating(true)
-    setWanderOpen(false)     // R11-B2: prevent modal stacking
     setValidateOpen(true)    // R12-B1: open modal immediately, decouple from fetch promise
     setValidateResult(null)  // clear previous result to show loading state
     fetchValidate()
@@ -178,26 +157,6 @@ export default function Dashboard({ onSelectMemory, onNavigateToFilter, refreshT
           Dashboard
         </h1>
         <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-          <button
-            onClick={handleWander}
-            disabled={wandering}
-            title="Surfaces a memory you haven't revisited recently"
-            style={{
-              padding: '10px 24px',
-              border: '1px solid var(--cm-accent)',
-              background: 'transparent',
-              color: 'var(--cm-accent)',
-              cursor: 'pointer',
-              fontSize: 12,
-              fontWeight: 600,
-              fontFamily: 'Raleway, sans-serif',
-              textTransform: 'uppercase',
-              letterSpacing: '0.08em',
-              borderRadius: 2,
-            }}
-          >
-            {wandering ? 'Wandering...' : 'Wander'}
-          </button>
           <button
             onClick={handleValidate}
             disabled={validating}
@@ -462,74 +421,6 @@ export default function Dashboard({ onSelectMemory, onNavigateToFilter, refreshT
             </SectionCard>
           )}
 
-          {/* N1: Decay risk section — memories approaching decay threshold */}
-          {stats.decay_risk && stats.decay_risk.length > 0 && (
-            <div style={{ marginBottom: 24 }}>
-              <SectionCard title={`Decay Risk (${stats.decay_risk.length})`}>
-                <p style={{
-                  fontSize: 12,
-                  fontFamily: 'Raleway, sans-serif',
-                  color: 'var(--cm-text-tertiary)',
-                  marginBottom: 12,
-                  lineHeight: 1.5,
-                }}>
-                  Memories with decay multiplier below 0.1. These have not been accessed recently relative
-                  to their stability half-life and may be at risk of knowledge loss.
-                </p>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                  {stats.decay_risk.slice(0, 3).map((risk) => (
-                    <div
-                      key={risk.id}
-                      onClick={() => onSelectMemory(risk.id)}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        padding: '8px 12px',
-                        borderRadius: 2,
-                        cursor: 'pointer',
-                        backgroundColor: 'var(--cm-bg-warning-subtle)',
-                        borderLeft: '3px solid var(--cm-warning)',
-                      }}
-                    >
-                      <div>
-                        <div style={{
-                          fontSize: 13,
-                          fontFamily: 'Raleway, sans-serif',
-                          fontWeight: 600,
-                          color: 'var(--cm-text-primary)',
-                        }}>
-                          {risk.id}
-                        </div>
-                        <div style={{ fontSize: 12, fontFamily: 'Raleway, sans-serif', color: 'var(--cm-text-secondary)', marginTop: 2 }}>
-                          {risk.days_since_last_access}d since last access &middot; stability {risk.stability}d
-                        </div>
-                      </div>
-                      <span
-                        style={{
-                          padding: '2px 8px',
-                          borderRadius: 2,
-                          backgroundColor: 'var(--cm-bg-warning-subtle)',
-                          color: 'var(--cm-warning)',
-                          fontSize: 12,
-                          fontWeight: 600,
-                          fontFamily: 'JetBrains Mono, monospace',
-                        }}
-                      >
-                        R:{(risk.decay * 100).toFixed(1)}%
-                      </span>
-                    </div>
-                  ))}
-                  {stats.decay_risk.length > 3 && (
-                    <div style={{ fontSize: 12, fontFamily: 'Raleway, sans-serif', color: 'var(--cm-text-tertiary)', padding: '4px 12px' }}>
-                      +{stats.decay_risk.length - 3} more at risk
-                    </div>
-                  )}
-                </div>
-              </SectionCard>
-            </div>
-          )}
-
           {/* Status distribution */}
           <SectionCard title="Status Distribution">
             <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
@@ -569,203 +460,6 @@ export default function Dashboard({ onSelectMemory, onNavigateToFilter, refreshT
             </div>
           </SectionCard>
         </>
-      )}
-
-      {/* Wander modal — R12-B1: opens immediately with loading state */}
-      {wanderVisible && (
-        <Modal onClose={() => setWanderOpen(false)} closing={wanderClosing}>
-          <h2
-            style={{
-              fontSize: 20,
-              fontFamily: "'Cormorant Garamond', serif",
-              fontWeight: 500,
-              color: 'var(--cm-text-primary)',
-              margin: '0 0 4px 0',
-            }}
-          >
-            Wander Recall
-          </h2>
-          <p style={{
-            fontSize: 12,
-            fontFamily: 'Raleway, sans-serif',
-            color: 'var(--cm-text-tertiary)',
-            margin: '0 0 20px 0',
-            fontStyle: 'italic',
-            lineHeight: 1.5,
-          }}>
-            Surfaces a memory you haven&rsquo;t revisited recently.
-          </p>
-
-          {/* R12-B1: Loading state while fetching */}
-          {wandering && !wanderResult && (
-            <div style={{ padding: '24px 0', textAlign: 'center' }}>
-              <div className="skeleton-shimmer" style={{ width: '60%', height: 14, borderRadius: 2, margin: '0 auto 8px' }} />
-              <div className="skeleton-shimmer" style={{ width: '80%', height: 14, borderRadius: 2, margin: '0 auto 8px' }} />
-              <div className="skeleton-shimmer" style={{ width: '40%', height: 14, borderRadius: 2, margin: '0 auto' }} />
-              <p style={{ marginTop: 12, fontSize: 12, color: 'var(--cm-text-tertiary)', fontFamily: 'Raleway, sans-serif' }}>
-                Surfacing a cold memory...
-              </p>
-            </div>
-          )}
-
-          {/* Data state */}
-          {wanderResult && (
-          <>
-          {/* Why this memory? */}
-          <div style={{
-            marginBottom: 16,
-            padding: '12px 16px',
-            backgroundColor: 'var(--cm-bg-surface)',
-            borderRadius: 2,
-            border: '1px solid var(--cm-bg-subtle)',
-          }}>
-            <div style={{
-              fontSize: 12,
-              fontWeight: 600,
-              fontFamily: 'Raleway, sans-serif',
-              textTransform: 'uppercase',
-              letterSpacing: '0.08em',
-              color: 'var(--cm-text-secondary)',
-              marginBottom: 10,
-            }}>
-              Why this memory?
-            </div>
-            <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 8 }}>
-              <div>
-                <span style={{ fontSize: 12, color: 'var(--cm-text-tertiary)', fontFamily: 'Raleway, sans-serif' }}>Access Count: </span>
-                <span style={{ fontSize: 13, fontFamily: 'JetBrains Mono, monospace', color: 'var(--cm-text-primary)', fontWeight: 600 }}>
-                  {wanderResult.access_count}
-                  {wanderResult.access_count === 0 && (
-                    <span style={{ fontSize: 12, fontWeight: 400, color: 'var(--cm-text-tertiary)', marginLeft: 4 }}>(never accessed)</span>
-                  )}
-                </span>
-              </div>
-              <div>
-                <span style={{ fontSize: 12, color: 'var(--cm-text-tertiary)', fontFamily: 'Raleway, sans-serif' }}>Intensity: </span>
-                <span style={{ fontSize: 13, fontFamily: 'JetBrains Mono, monospace', color: 'var(--cm-text-primary)', fontWeight: 600 }}>
-                  {wanderResult.intensity}/10
-                  {wanderResult.intensity >= 8 && (
-                    <span style={{ fontSize: 12, fontWeight: 400, color: 'var(--cm-info)', marginLeft: 4 }}>(protected)</span>
-                  )}
-                </span>
-              </div>
-              <div>
-                <span style={{ fontSize: 12, color: 'var(--cm-text-tertiary)', fontFamily: 'Raleway, sans-serif' }}>Last Access: </span>
-                <span style={{ fontSize: 13, fontFamily: 'JetBrains Mono, monospace', color: 'var(--cm-text-primary)', fontWeight: 600 }}>
-                  {wanderResult.last_access ? new Date(wanderResult.last_access).toLocaleDateString() : 'never'}
-                </span>
-              </div>
-            </div>
-            <p style={{
-              fontSize: 12,
-              fontFamily: 'Raleway, sans-serif',
-              color: 'var(--cm-text-tertiary)',
-              margin: '4px 0 0 0',
-              lineHeight: 1.4,
-            }}>
-              {wanderResult.access_count === 0
-                ? 'This memory has never been accessed — it may contain overlooked insights.'
-                : wanderResult.last_access
-                  ? `Last accessed ${_daysAgo(wanderResult.last_access)} days ago. Revisiting cold memories prevents knowledge decay.`
-                  : 'Low-access memories are surfaced to prevent knowledge silos.'}
-            </p>
-          </div>
-
-          <div style={{ marginBottom: 12 }}>
-            <div style={{ fontSize: 12, color: 'var(--cm-text-tertiary)', fontFamily: 'Raleway, sans-serif', marginBottom: 4 }}>
-              Memory ID
-            </div>
-            <div
-              style={{
-                fontSize: 13,
-                fontFamily: 'JetBrains Mono, monospace',
-                color: 'var(--cm-text-primary)',
-                padding: '8px 12px',
-                backgroundColor: 'var(--cm-bg-subtle)',
-                borderRadius: 2,
-                wordBreak: 'break-all',
-              }}
-            >
-              {wanderResult.id || 'No memory id returned'}
-            </div>
-          </div>
-          <div style={{ marginBottom: 16 }}>
-            <div style={{ fontSize: 12, color: 'var(--cm-text-tertiary)', fontFamily: 'Raleway, sans-serif', marginBottom: 4 }}>
-              Summary
-            </div>
-            <p style={{ fontSize: 14, color: 'var(--cm-text-primary)', fontFamily: 'Raleway, sans-serif', lineHeight: 1.6, margin: 0 }}>
-              {wanderResult.summary}
-            </p>
-          </div>
-          </>)}
-          <div style={{ display: 'flex', gap: 8 }}>
-            {wanderResult?.id && (
-            <button
-              onClick={() => onSelectMemory(wanderResult.id)}
-              style={{
-                padding: '8px 20px',
-                backgroundColor: 'var(--cm-text-primary)',
-                color: 'var(--cm-bg-primary)',
-                border: 'none',
-                cursor: 'pointer',
-                fontSize: 12,
-                fontWeight: 600,
-                fontFamily: 'Raleway, sans-serif',
-                textTransform: 'uppercase',
-                letterSpacing: '0.08em',
-                borderRadius: 2,
-              }}
-            >
-              View Details
-            </button>
-            )}
-            <button
-              onClick={() => {
-                setWandering(true)
-                setWanderResult(null)
-                fetchWander('cool')
-                  .then((result) => {
-                    setWanderResult(result)
-                  })
-                  .catch((err) => onError?.(err instanceof Error ? err.message : 'Wander failed'))
-                  .finally(() => setWandering(false))
-              }}
-              style={{
-                padding: '8px 20px',
-                border: '1px solid var(--cm-accent)',
-                background: 'transparent',
-                color: 'var(--cm-accent)',
-                cursor: 'pointer',
-                fontSize: 12,
-                fontWeight: 600,
-                fontFamily: 'Raleway, sans-serif',
-                textTransform: 'uppercase',
-                letterSpacing: '0.08em',
-                borderRadius: 2,
-              }}
-            >
-              Wander Again
-            </button>
-            <button
-              onClick={() => setWanderOpen(false)}
-              style={{
-                padding: '8px 20px',
-                border: '1px solid var(--cm-border-cool)',
-                background: 'transparent',
-                color: 'var(--cm-text-secondary)',
-                cursor: 'pointer',
-                fontSize: 12,
-                fontWeight: 600,
-                fontFamily: 'Raleway, sans-serif',
-                textTransform: 'uppercase',
-                letterSpacing: '0.08em',
-                borderRadius: 2,
-              }}
-            >
-              Close
-            </button>
-          </div>
-        </Modal>
       )}
 
       {/* Validate results modal — R12-B1: opens immediately with loading state */}
@@ -1003,12 +697,6 @@ function SectionCard({ title, children }: { title: string; children: React.React
   )
 }
 
-function _daysAgo(isoDate: string): number {
-  const then = new Date(isoDate).getTime()
-  const now = Date.now()
-  return Math.max(0, Math.floor((now - then) / (1000 * 60 * 60 * 24)))
-}
-
 // R9-validate-drilldown: Regex for memory IDs like "user/facts/name", "api/endpoint", "schemas/template"
 const MEMORY_ID_RE = /\b([a-zA-Z][a-zA-Z0-9_-]*(?:\/[a-zA-Z][a-zA-Z0-9_-]*)+\b)/g
 
@@ -1043,7 +731,6 @@ function getIssueTypeLabel(type: string): string {
     case 'circular_dependency': return 'Circular Dependency'
     case 'warning': return 'Warning'
     case 'maturity': return 'Maturity Stale'
-    case 'decay': return 'Decay Risk'
     default: return type
   }
 }
@@ -1052,7 +739,6 @@ function getIssueTypeLabel(type: string): string {
 function issueTypeColor(type: string): string {
   if (type === 'broken_link' || type === 'schema_compliance' || type === 'error') return 'var(--cm-error)'
   if (type === 'maturity') return 'var(--cm-info)'
-  if (type === 'decay') return 'var(--cm-warning)'
   return 'var(--cm-warning)'
 }
 

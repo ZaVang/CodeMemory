@@ -13,7 +13,8 @@ import ErrorBoundary from './components/ErrorBoundary'
 import GraphPage from './pages/GraphPage'
 import ListPage from './pages/ListPage'
 import DashboardPage from './pages/DashboardPage'
-import { fetchResolve, updateMemory, fetchDatasets, switchDataset, downloadExport, setCurrentDataset as setApiDataset } from './api'
+import ReviewPage from './pages/ReviewPage'
+import { fetchBuild, updateMemory, fetchDatasets, switchDataset, downloadExport, setCurrentDataset as setApiDataset } from './api'
 import type { ResolveResponse, GraphData } from './types'
 import type { DatasetInfo } from './api'
 
@@ -83,6 +84,7 @@ export default function App() {
 
   // Apply theme on mount and when settings change
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     applyTheme(themeMode)
   }, [themeMode, applyTheme])
 
@@ -120,16 +122,6 @@ export default function App() {
   const errorIdRef = useRef(0)
   const errorTimersRef = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map())
 
-  const showOperationError = useCallback((msg: string) => {
-    const id = ++errorIdRef.current
-    const entry: OperationError = { id, message: msg }
-    setOperationErrors((prev) => [...prev, entry])
-    const timer = setTimeout(() => {
-      dismissOperationError(id)
-    }, 6000)
-    errorTimersRef.current.set(id, timer)
-  }, [])
-
   const dismissOperationError = useCallback((id: number) => {
     setOperationErrors((prev) => prev.filter((e) => e.id !== id))
     const timer = errorTimersRef.current.get(id)
@@ -139,9 +131,20 @@ export default function App() {
     }
   }, [])
 
+  const showOperationError = useCallback((msg: string) => {
+    const id = ++errorIdRef.current
+    const entry: OperationError = { id, message: msg }
+    setOperationErrors((prev) => [...prev, entry])
+    const timer = setTimeout(() => {
+      dismissOperationError(id)
+    }, 6000)
+    errorTimersRef.current.set(id, timer)
+  }, [dismissOperationError])
+
   // Network error banner (R6-network-error-feedback)
   const [networkError, setNetworkError] = useState<string | null>(null)
   const networkErrorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [refreshTrigger, setRefreshTrigger] = useState(0)
 
   // R11-UX7: Retry handler for network errors — refreshes all data
   const handleRetryNetwork = useCallback(() => {
@@ -177,7 +180,6 @@ export default function App() {
           body: (prev.body as string) ?? undefined,
           summary: (prev.summary as string) ?? undefined,
           tags: (prev.tags as string[]) ?? undefined,
-          intensity: (prev.intensity as number) ?? undefined,
           status: (prev.status as string) ?? undefined,
           maturity: (prev.maturity as string) ?? undefined,
           change_note: 'Undo edit',
@@ -234,13 +236,13 @@ export default function App() {
   const [highlightedDirectory, setHighlightedDirectory] = useState<string | null>(null)
 
   // Clear directory highlight on view mode change
-  useEffect(() => { setHighlightedDirectory(null) }, [viewMode])
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setHighlightedDirectory(null)
+  }, [viewMode])
 
   // GraphCanvas ref for PNG export
   const graphCanvasRef = useRef<GraphCanvasHandle | null>(null)
-
-  // Graph refresh trigger (increment to reload)
-  const [refreshTrigger, setRefreshTrigger] = useState(0)
 
   // Load available datasets on mount
   useEffect(() => {
@@ -251,7 +253,7 @@ export default function App() {
         setCurrentDataset(res.current_name)
       })
       .catch((err) => showOperationError(err instanceof Error ? err.message : 'Failed to load datasets'))
-  }, [])
+  }, [showOperationError])
 
   // Sync the API layer with the current dataset so all requests carry the
   // X-Codememory-Dataset header (replaces the old backend global MEMORY_ROOT).
@@ -291,7 +293,7 @@ export default function App() {
         })
         .finally(() => setSwitchingDataset(false))
     },
-    [currentDataset, showOperationError],
+    [currentDataset, showOperationError, setRefreshTrigger],
   )
 
   // R7-settings: auto-load default dataset on first datasets load
@@ -302,6 +304,7 @@ export default function App() {
       const ds = datasets.find((d) => d.name === settings.defaultDataset)
       if (ds && ds.name !== currentDataset) {
         defaultDatasetApplied.current = true
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         handleSwitchDataset(ds.name)
       }
     }
@@ -309,6 +312,7 @@ export default function App() {
 
   // R7-settings: update budget when settings change
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setBudget(settings.defaultBudget)
   }, [settings.defaultBudget])
 
@@ -349,7 +353,7 @@ export default function App() {
       setIsResolving(true)
       setResolveError(null)
       setAllNodesFit(false)
-      fetchResolve({ id: nodeId, depth: 'recommended', budget: budgetValue })
+      fetchBuild({ id: nodeId, depth: 'recommended', budget: budgetValue })
         .then((data) => {
           setResolveData(data)
           setIsResolving(false)
@@ -359,8 +363,8 @@ export default function App() {
           }
         })
         .catch((err) => {
-          console.error('Resolve failed:', err)
-          setResolveError(err.message || 'Resolve failed')
+          console.error('Build failed:', err)
+          setResolveError(err.message || 'Build failed')
           setIsResolving(false)
         })
     },
@@ -398,7 +402,7 @@ export default function App() {
   // R19-C2: onboarding resolve demo — resolves user/investment/context and returns a simplified result
   const handleDemoResolve = useCallback(async (): Promise<OnboardingResolveDemo | null> => {
     try {
-      const data = await fetchResolve({ id: 'user/investment/context', depth: 'recommended', budget: 2000 })
+      const data = await fetchBuild({ id: 'user/investment/context', depth: 'recommended', budget: 2000 })
       const fullCount = data.nodes.filter((n) => n.trim === 'full').length
       const summaryCount = data.nodes.filter((n) => n.trim === 'summary').length
       const skippedCount = data.nodes.filter((n) => n.trim === 'skipped').length
@@ -460,7 +464,7 @@ export default function App() {
   // Handle graph refresh after create/edit/delete
   const handleMemoryChange = useCallback(() => {
     setRefreshTrigger((prev) => prev + 1)
-  }, [])
+  }, [setRefreshTrigger])
 
   // Open create form
   const handleOpenCreate = useCallback(() => {
@@ -524,7 +528,7 @@ export default function App() {
       setArchiving(false)
       setArchiveConfirmId(null)
     }
-  }, [archiveConfirmId, handleMemoryChange, showUndo])
+  }, [archiveConfirmId, handleMemoryChange, showOperationError, showUndo])
 
   // Close context menu on any click outside or Escape key
   useEffect(() => {
@@ -565,7 +569,7 @@ export default function App() {
       // Ctrl+K — focus search bar (always works, switches to graph view if needed)
       if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
         e.preventDefault()
-        if (viewMode === 'dashboard') {
+        if (viewMode === 'dashboard' || viewMode === 'review') {
           setViewMode('graph')
           // Wait for SearchBar to mount, then focus
           setTimeout(() => {
@@ -620,12 +624,13 @@ export default function App() {
         return
       }
 
-      // 1/2/3 — switch views (only when not in input)
-      if (!isInput && (e.key === '1' || e.key === '2' || e.key === '3')) {
+      // 1/2/3/4 — switch views (only when not in input)
+      if (!isInput && ['1', '2', '3', '4'].includes(e.key)) {
         e.preventDefault()
         if (e.key === '1') setViewMode('graph')
         else if (e.key === '2') setViewMode('list')
         else if (e.key === '3') setViewMode('dashboard')
+        else setViewMode('review')
         return
       }
     }
@@ -661,7 +666,7 @@ export default function App() {
           setSelectedNode(id)
           setViewMode('graph')
         }}
-        onSearchResolve={(id) => {
+        onSearchBuild={(id) => {
           setSelectedNode(id)
           setViewMode('graph')
           setTimeout(() => doResolve(id, budget), 100)
@@ -862,6 +867,18 @@ export default function App() {
             />
           </ErrorBoundary>
         )}
+
+        {viewMode === 'review' && (
+          <ErrorBoundary label="Review panel failed to render">
+            <ReviewPage
+              datasetReady={Boolean(currentDataset)}
+              refreshTrigger={refreshTrigger}
+              onSelectMemory={handleDashSelect}
+              onChanged={() => setRefreshTrigger((prev) => prev + 1)}
+              onError={showOperationError}
+            />
+          </ErrorBoundary>
+        )}
       </div>
 
       {/* Memory form (create/edit) — fixed overlay */}
@@ -940,7 +957,7 @@ export default function App() {
               {contextMenu.nodeId}
             </div>
             <ContextMenuItem label="View Details" onClick={handleDetailFromContext} shortcut="Ctrl+D" />
-            <ContextMenuItem label="Resolve" onClick={handleResolveFromContext} shortcut="Ctrl+R" />
+            <ContextMenuItem label="Build" onClick={handleResolveFromContext} shortcut="Ctrl+B" />
             <ContextMenuItem label="Edit" onClick={handleEditFromContext} shortcut="Ctrl+E" />
             <div
               style={{
@@ -1192,7 +1209,7 @@ export default function App() {
                 { keys: 'Ctrl + K', desc: 'Focus search bar' },
                 { keys: 'Ctrl + N', desc: 'Open new memory form' },
                 { keys: 'Ctrl + Z', desc: 'Undo last action' },
-                { keys: 'Ctrl + Shift + C', desc: 'Copy as Context (when resolve result is visible)' },
+                { keys: 'Ctrl + Shift + C', desc: 'Copy built context (when build output is visible)' },
                 { keys: 'Ctrl + Shift + D', desc: 'Toggle dark mode' },
                 { keys: '1 / 2 / 3', desc: 'Switch to Graph / List / Dashboard view' },
                 { keys: 'Escape', desc: 'Close open panel / menu' },

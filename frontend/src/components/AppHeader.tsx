@@ -1,7 +1,7 @@
 import SearchBar from './SearchBar'
 import type { DatasetInfo } from '../api'
 
-export type ViewMode = 'graph' | 'list' | 'dashboard'
+export type ViewMode = 'graph' | 'list' | 'dashboard' | 'review'
 
 interface Props {
   viewMode: ViewMode
@@ -16,7 +16,7 @@ interface Props {
   searchText: string
   onSearchChange: (value: string) => void
   onSearchNavigate: (id: string) => void
-  onSearchResolve: (id: string) => void
+  onSearchBuild: (id: string) => void
   zoomLevel: number
   onZoomChange: (value: number) => void
   budget: number
@@ -58,7 +58,7 @@ export default function AppHeader({
   searchText,
   onSearchChange,
   onSearchNavigate,
-  onSearchResolve,
+  onSearchBuild,
   zoomLevel,
   onZoomChange,
   budget,
@@ -130,7 +130,7 @@ export default function AppHeader({
           flexShrink: 0,
         }}
       >
-        {(['graph', 'list', 'dashboard'] as const).map((mode, index) => (
+        {(['graph', 'list', 'dashboard', 'review'] as const).map((mode, index) => (
           <button
             key={mode}
             onClick={() => onViewModeChange(mode)}
@@ -205,7 +205,7 @@ export default function AppHeader({
             value={searchText}
             onChange={onSearchChange}
             onNavigate={onSearchNavigate}
-            onResolve={onSearchResolve}
+            onBuild={onSearchBuild}
           />
         </div>
       )}

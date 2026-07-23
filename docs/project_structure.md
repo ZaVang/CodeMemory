@@ -204,10 +204,11 @@ Backend 的职责是把 core 能力变成 HTTP API，并处理 dataset header、
 | `backend/server.py` | FastAPI app 创建、CORS、中间件、lifespan reindex、router mounting、health endpoint。 |
 | `backend/shared.py` | 后端共享配置、dataset root 解析、Pydantic request models、序列化、stale/fuzzy helper。 |
 | `backend/routers/__init__.py` | routers package marker。 |
-| `backend/routers/memories.py` | memory CRUD、touch、rehash、import、export、backlinks。 |
-| `backend/routers/search.py` | graph、resolve、context-pack、search API。 |
+| `backend/routers/memories.py` | memory CRUD、rehash、import、export、backlinks；create/update 委托 Core。 |
+| `backend/routers/search.py` | graph、build、兼容 assembly aliases、search API；所有装配走统一 Core build pipeline。 |
+| `backend/routers/reviews.py` | proposed Atom / modification patch review 队列、kind-specific merge/reject、只读 TestBundle API。 |
 | `backend/routers/sources.py` | Source Artifact REST adapter；当前提供 explicit source expansion，并委托 core `expand_source_artifact`。 |
-| `backend/routers/stats.py` | stats、wander、validate、reindex、datasets API。 |
+| `backend/routers/stats.py` | stats、validate、reindex、datasets API。 |
 
 Backend contract：
 
@@ -219,7 +220,7 @@ Backend contract：
 
 ## 9. `frontend/` — Operator UI
 
-Frontend 是本地操作台：查看 graph、resolve context、编辑 memory、运行 validate/reindex。它不定义 core contract。
+Frontend 是本地操作台：查看 graph、Build canonical context、编辑 memory、处理 owner review、查看 golden questions、运行 validate/reindex。它不定义 core contract。
 
 | 文件 | 职责 |
 |---|---|
@@ -228,7 +229,7 @@ Frontend 是本地操作台：查看 graph、resolve context、编辑 memory、�
 | `frontend/index.html` | Vite HTML entry。 |
 | `frontend/vite.config.ts` | Vite 配置。 |
 | `frontend/eslint.config.js` | ESLint 配置。 |
-| `frontend/playwright.config.ts` | Playwright e2e 配置，默认验证 `http://localhost:5300`。 |
+| `frontend/playwright.config.ts` | Playwright e2e 配置，默认验证 `http://127.0.0.1:5300`。 |
 | `frontend/tsconfig.json` | TypeScript project references。 |
 | `frontend/tsconfig.app.json` | App TS 编译配置。 |
 | `frontend/tsconfig.node.json` | Node-side TS 编译配置。 |
@@ -243,7 +244,7 @@ Frontend 是本地操作台：查看 graph、resolve context、编辑 memory、�
 | 文件 | 职责 |
 |---|---|
 | `frontend/src/main.tsx` | React root bootstrap。 |
-| `frontend/src/App.tsx` | UI 状态中枢和页面编排：dataset、selection、resolve、panels、settings、undo 等；不要继续堆页面 JSX。 |
+| `frontend/src/App.tsx` | UI 状态中枢和页面编排：dataset、selection、Build、panels、settings、undo 等；不要继续堆页面 JSX。 |
 | `frontend/src/api.ts` | REST client；统一处理 dataset header、network error event、API response。 |
 | `frontend/src/types.ts` | 前端 API/graph/memory TypeScript 类型。 |
 | `frontend/src/colors.ts` | GraphCanvas 和 Legend 共享的目录颜色表。 |
@@ -256,9 +257,10 @@ Frontend 是本地操作台：查看 graph、resolve context、编辑 memory、�
 
 | 文件 | 职责 |
 |---|---|
-| `DashboardPage.tsx` | Dashboard 页面包装层，连接 stats/wander/validate/reindex 面板与 App 回调。 |
-| `GraphPage.tsx` | Graph 页面包装层，组合 GraphCanvas、Legend、MemoryDetail 和 resolve 状态提示。 |
+| `DashboardPage.tsx` | Dashboard 页面包装层，连接 stats/validate/reindex 面板与 App 回调。 |
+| `GraphPage.tsx` | Graph 页面包装层，组合 GraphCanvas、Legend、MemoryDetail 和 Build 状态提示。 |
 | `ListPage.tsx` | List 页面包装层，组合 MemoryList 和列表筛选入口。 |
+| `ReviewPage.tsx` | owner review 页面：分别读取 proposed Atom 与 patch proposal，确认后调用 kind-specific merge/reject。 |
 
 ### 9.3 `frontend/src/components/`
 
@@ -266,16 +268,16 @@ Frontend 是本地操作台：查看 graph、resolve context、编辑 memory、�
 |---|---|
 | `AppHeader.tsx` | 顶部导航、dataset switcher、search、graph controls、export/settings/help；负责响应式换行，避免 App 内联 header。 |
 | `Badges.tsx` | status / maturity badge 组件。 |
-| `Dashboard.tsx` | stats、wander、validate、reindex 的仪表盘。 |
+| `Dashboard.tsx` | stats、validate、reindex 的仪表盘。 |
 | `EmptyState.tsx` | Graph/List/Dashboard 共享空状态。 |
 | `ErrorBoundary.tsx` | 页面级渲染错误隔离，避免单个 panel 崩溃导致整页白屏。 |
 | `GraphCanvas.tsx` | Cytoscape + dagre graph 渲染、节点交互、高亮、缩放。 |
 | `HelpPanel.tsx` | CLI / UI 帮助面板。 |
 | `Legend.tsx` | graph 颜色和边类型图例。 |
-| `MemoryDetail.tsx` | memory 详情、markdown 渲染、resolve context prompt 构造、touch/rehash。 |
+| `MemoryDetail.tsx` | memory 详情、markdown 渲染、canonical Build 输出复制、golden questions 与 rehash。 |
 | `MemoryForm.tsx` | create/edit/archive 表单。 |
 | `MemoryList.tsx` | memory 列表、分页、排序、过滤。 |
-| `Onboarding.tsx` | 首次进入数据集选择和 resolve demo。 |
+| `Onboarding.tsx` | 首次进入数据集选择和 Build demo。 |
 | `SearchBar.tsx` | 搜索输入、结果展示、match highlighting。 |
 | `Settings.tsx` | 用户设置：默认 dataset、budget、theme。 |
 

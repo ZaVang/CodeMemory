@@ -22,6 +22,7 @@ export function useExitAnimation(show: boolean, duration = 250) {
     if (show) {
       // Opening or already open
       wasShownRef.current = true
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setClosing(false)
       setVisible(true)
     } else if (wasShownRef.current) {

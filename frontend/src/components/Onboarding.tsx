@@ -85,10 +85,10 @@ const BASE_STEPS = [
       'Each circle is a memory. Color = category, size = importance. Solid lines mean required dependencies (must-read), dashed lines are recommended, dotted lines are related. Click a node to see details. Right-click to Edit or Archive.',
   },
   {
-    title: 'Resolve',
+    title: 'Build',
     subtitle: 'Reconstruct the full context of any idea.',
     description:
-      'Click "Resolve" in the detail panel to trace all dependencies. The graph animates through the dependency chain in topological order — showing you exactly how ideas connect. Use the Budget slider to control how much context to load.',
+      'Click "Build" in the detail panel to assemble canonical context through imports. The graph animates through the dependency chain in topological order. Use the Budget slider to control how much context to load.',
   },
   {
     title: 'Create Memories',
@@ -147,6 +147,7 @@ export default function Onboarding({ onComplete, datasetName, datasetCount, onDe
     // Only trigger for the investment dataset (the canonical demo dataset with a known entry point)
     if (datasetName !== 'investment') return
 
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setDemoLoading(true)
     onDemoResolve()
       .then((result) => {
@@ -262,14 +263,14 @@ export default function Onboarding({ onComplete, datasetName, datasetCount, onDe
 
               {demoFailed && (
                 <div style={{ fontSize: 13, fontFamily: 'Raleway, sans-serif', color: 'var(--cm-text-secondary)' }}>
-                  <strong style={{ color: 'var(--cm-accent)' }}>Try it yourself:</strong> Click a memory node, then click "Resolve" in the detail panel to trace its dependency chain.
+                  <strong style={{ color: 'var(--cm-accent)' }}>Try it yourself:</strong> Click a memory node, then click "Build" in the detail panel to assemble its dependency chain.
                 </div>
               )}
 
               {demoResult && (
                 <div>
                   <div style={{ fontSize: 12, fontWeight: 600, fontFamily: 'Raleway, sans-serif', color: 'var(--cm-accent)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
-                    This is what Resolve looks like
+                    This is what Build looks like
                   </div>
                   <div style={{ fontSize: 13, fontFamily: 'Raleway, sans-serif', color: 'var(--cm-text-primary)', marginBottom: 6 }}>
                     Resolving <code style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, backgroundColor: 'var(--cm-bg-hover)', padding: '1px 4px', borderRadius: 2 }}>{demoResult.target}</code> —
@@ -298,7 +299,7 @@ export default function Onboarding({ onComplete, datasetName, datasetCount, onDe
 
               {!demoLoading && !demoFailed && !demoResult && !onDemoResolve && (
                 <div style={{ fontSize: 13, fontFamily: 'Raleway, sans-serif', color: 'var(--cm-text-secondary)' }}>
-                  <strong style={{ color: 'var(--cm-accent)' }}>Try it yourself:</strong> Click a memory node, then click "Resolve" in the detail panel to trace its dependency chain.
+                  <strong style={{ color: 'var(--cm-accent)' }}>Try it yourself:</strong> Click a memory node, then click "Build" in the detail panel to assemble its dependency chain.
                 </div>
               )}
             </div>

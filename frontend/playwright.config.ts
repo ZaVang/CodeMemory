@@ -10,7 +10,7 @@ export default defineConfig({
   timeout: 60000,
   retries: 1,
   use: {
-    baseURL: 'http://localhost:5300',
+    baseURL: 'http://127.0.0.1:5300',
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
   },
@@ -21,9 +21,9 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: 'npm run dev',
+    command: 'npm run dev -- --host 127.0.0.1',
     cwd: __dirname,
-    url: 'http://localhost:5300',
+    url: 'http://127.0.0.1:5300',
     reuseExistingServer: !process.env.CI,
     timeout: 60000,
   },

@@ -218,3 +218,21 @@ def test_update_status_archived(tmp_path: Path):
 
     meta, _body = parse_frontmatter(result)
     assert meta["status"] == "archived"
+
+
+def test_update_tags_maturity_and_imports_in_one_core_write(tmp_path: Path):
+    create(tmp_path, "atom", "user/test/operator-fields")
+    result = update(
+        tmp_path,
+        "user/test/operator-fields",
+        change_note="Operator metadata update",
+        tags=["operator", "verified"],
+        maturity="verified",
+        import_required=["user/facts/reference"],
+    )
+
+    meta, _body = parse_frontmatter(result)
+    assert meta["tags"] == ["operator", "verified"]
+    assert meta["maturity"] == "verified"
+    assert meta["imports"]["required"] == ["user/facts/reference"]
+    assert meta["version"] == 2

@@ -14,14 +14,14 @@ const CLI_COMMANDS = [
   },
   {
     cmd: 'focus',
-    args: '<id> --level full|summary [--content "..."] [--resolve]',
+    args: '<id> --level full|summary [--content "..."]',
     desc: '注视：动态切换特定记忆的分辨率。full = 加载正文，summary = 仅摘要。',
     layer: 'Layer 0 认知接口',
   },
   {
-    cmd: 'resolve',
+    cmd: 'build',
     args: '<id> [--depth required|recommended|full] [--budget N] [--focus decision]',
-    desc: '重构：从入口 atom 出发沿 imports 递归，拓扑排序输出完整因果上下文。此操作触发 maturity 自动升级。',
+    desc: '从入口 atom 出发沿 imports DAG 装配 canonical context，可输出结构化 ContextPack 或渲染文本。',
     layer: 'Layer 0 认知接口',
   },
   {
@@ -31,21 +31,15 @@ const CLI_COMMANDS = [
     layer: 'Layer 0 认知接口',
   },
   {
-    cmd: 'wander',
-    args: '[--inject]',
-    desc: '触景生情：加权激活冷记忆（低 access_count + 高 intensity）。',
-    layer: 'Layer 0 认知接口',
-  },
-  {
     cmd: 'create',
-    args: '--id <id> [--intensity N] [--tags "a,b"] [--schema <id>] [--dry-run]',
+    args: '--id <id> [--tags "a,b"] [--schema <id>] [--propose] [--dry-run]',
     desc: '创建新记忆（atom），生成 .md 文件 + frontmatter 模板。',
     layer: 'CRUD',
   },
   {
     cmd: 'update',
     args: '<id> --change-note "..." [--body "..."] [--summary "..."] [--status archived]',
-    desc: '更新记忆：修改 body/summary/tags/intensity，自动递增版本号 + 追加 change_log。',
+    desc: '更新记忆：修改 body/summary/tags/maturity/imports，自动递增版本号 + 追加 change_log。',
     layer: 'CRUD',
   },
   {
@@ -68,7 +62,7 @@ const CLI_COMMANDS = [
   },
   {
     cmd: 'orphans',
-    args: '[--type <t>] [--min-intensity <n>]',
+    args: '[--type <t>]',
     desc: '孤立发现：找到入度为 0 的记忆（不被任何其他记忆引用）。',
     layer: '分析',
   },
@@ -102,7 +96,7 @@ const UI_GUIDE = [
   {
     section: 'Graph 视图',
     items: [
-      { name: 'DAG 依赖图', desc: '展示所有记忆节点及其 imports 关系。节点颜色按目录区分，大小按 intensity，边框颜色标识所属目录。边样式：实线=required，虚线=recommended，点线=related。' },
+      { name: 'DAG 依赖图', desc: '展示所有记忆节点及其 imports 关系。节点颜色按目录区分，大小按直接 dependents 数量有界变化。边样式：实线=required，虚线=recommended，点线=related。' },
       { name: '点击节点', desc: '右侧滑出详情面板，展示 frontmatter 元数据 + markdown 正文。' },
       { name: '右键节点', desc: '弹出菜单：View Details（查看详情）/ Edit（编辑记忆）。' },
       { name: '拖拽/滚轮', desc: '拖拽平移画布，滚轮缩放。' },
@@ -112,18 +106,18 @@ const UI_GUIDE = [
     section: '工具栏',
     items: [
       { name: 'Search 搜索', desc: '按 tag、目录、maturity 或关键词过滤。匹配节点金色高亮，非匹配节点淡化。' },
-      { name: 'Budget 滑块', desc: 'Token 预算控制器（200–5000）。拖动时实时重新 resolve，被裁剪的节点会变半透明 + 缩小 + 虚线边框。' },
+      { name: 'Budget 滑块', desc: 'Token 预算控制器（200–5000）。拖动时重新 Build，被裁剪的节点会变半透明 + 缩小 + 虚线边框。' },
       { name: 'Dagre', desc: '分层布局，自上而下展示依赖关系方向。这是当前唯一的图布局方式。' },
-      { name: 'Create Memory', desc: '创建新记忆表单。填写 id、summary、tags、intensity、body 后提交。' },
-      { name: '快捷键', desc: '1=Graph / 2=List / 3=Dashboard / Ctrl+K=Search / Ctrl+N=Create / Ctrl+Z=Undo / Ctrl+Shift+C=Copy as Context / ?=Shortcuts / Esc=Close' },
+      { name: 'Create Memory', desc: '创建新记忆表单。填写 id、summary、tags、maturity、imports 和 body；也可作为 proposed atom 提交。' },
+      { name: '快捷键', desc: '1=Graph / 2=List / 3=Dashboard / 4=Review / Ctrl+K=Search / Ctrl+N=Create / Ctrl+Z=Undo / Ctrl+Shift+C=Copy Build / ?=Shortcuts / Esc=Close' },
     ],
   },
   {
     section: '详情面板（滑出窗）',
     items: [
-      { name: '元数据卡片', desc: '展示 status / maturity 徽章、type、id、tags、intensity、version、created/updated 时间、imports 依赖列表。' },
-      { name: 'Resolve 按钮', desc: '以当前记忆为入口，运行 DAG 拓扑解析。图上的节点按拓扑顺序依次金色高亮（300ms/步），展示依赖加载顺序。' },
-      { name: 'Copy as Context', desc: 'Export a resolved dependency chain as a structured LLM system prompt (wrapped in &lt;codememory_context&gt; tags). Available after Resolve in MemoryDetail — use the Copy as Context button or press Ctrl+Shift+C.' },
+      { name: '元数据卡片', desc: '展示 status / maturity 徽章、type、id、tags、version、created/updated 时间和 imports 依赖列表。' },
+      { name: 'Build 按钮', desc: '以当前记忆为入口，通过 imports DAG 装配 canonical context。图上的节点按拓扑顺序依次高亮。' },
+      { name: 'Copy Build', desc: '直接复制 Core 渲染的 canonical context，不在浏览器中重新拼接 prompt。' },
       { name: 'Markdown 正文', desc: '完整渲染的记忆 body 内容，支持标题、列表、表格、代码块等 GFM 语法。' },
       { name: '关闭方式', desc: '点击 ✕ 按钮 / 点击遮罩层 / 按 Escape 键。' },
     ],
@@ -135,7 +129,6 @@ const UI_GUIDE = [
       { name: 'Maturity 分布', desc: '横向柱状图展示 draft / verified / proven 各有多少条。' },
       { name: 'Top Tags', desc: '按频次排序的 tag 列表，了解记忆体系的知识领域分布。' },
       { name: 'Stale 列表', desc: '高亮展示所有正文与摘要不同步的 stale 记忆，点击可跳转到 Graph 视图查看。' },
-      { name: 'Wander 按钮', desc: '随机召回一条冷记忆（低访问 + 高重要度加权），弹窗展示其 summary。' },
       { name: 'Validate 按钮', desc: '运行系统诊断，展示 errors（红色）和 warnings（琥珀色）。' },
     ],
   },
@@ -385,14 +378,15 @@ export default function HelpPanel({ show, onClose }: Props) {
           </div>
 
           {[
-            { method: 'GET', path: '/api/memories', desc: '所有记忆摘要列表（id, type, summary, tags, intensity, maturity, directory）' },
+            { method: 'GET', path: '/api/memories', desc: '所有记忆摘要列表（id, type, summary, tags, maturity, directory）' },
             { method: 'GET', path: '/api/memories/{id}', desc: '单条记忆完整内容（frontmatter 所有字段 + body markdown）' },
             { method: 'GET', path: '/api/graph', desc: 'cytoscape 格式的节点 + 边数据，节点颜色/大小/边样式由此驱动' },
-            { method: 'POST', path: '/api/resolve', desc: 'DAG 拓扑解析：body 传 {id, depth, budget}，返回排序节点列表 + 裁剪级别' },
-            { method: 'POST', path: '/api/memories', desc: '创建新记忆，body 传 {id, summary, tags, intensity, body}，委托 handle_create()' },
-            { method: 'PUT', path: '/api/memories/{id}', desc: '更新记忆，body 传 {change_note, body?, summary?, tags?, intensity?, status?}，委托 handle_update()' },
+            { method: 'POST', path: '/api/build', desc: '通过统一 Core pipeline 返回结构化 ContextPack 和 rendered context' },
+            { method: 'POST', path: '/api/memories', desc: '完整创建 atom 或 proposed atom，一次委托 handle_create()' },
+            { method: 'PUT', path: '/api/memories/{id}', desc: '更新 body、summary、tags、maturity、status 或 imports，委托 handle_update()' },
             { method: 'GET', path: '/api/stats', desc: '统计：总数、maturity 分布（draft/verified/proven）、stale 数量、tag 频次' },
-            { method: 'POST', path: '/api/wander', desc: '加权随机召回一条冷记忆（低 access_count + 高 intensity），返回 summary + id' },
+            { method: 'GET', path: '/api/reviews', desc: '读取 proposed atoms 与 patch proposals 两条 owner review 队列' },
+            { method: 'GET', path: '/api/tests/{id}', desc: '只读导出 Golden Questions TestBundle；不执行、不评分' },
             { method: 'POST', path: '/api/validate', desc: '运行 validate()，返回诊断结果（循环/断链/schema/maturity 错误和警告）' },
           ].map((ep) => (
             <div

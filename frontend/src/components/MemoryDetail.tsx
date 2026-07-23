@@ -1,72 +1,15 @@
 import { useState, useEffect, useCallback } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { fetchMemory, updateMemory, touchMemory, rehashMemory } from '../api'
-import type { MemoryDetail as MemoryDetailType, ResolveResponse } from '../types'
+import { fetchMemory, fetchTestBundle, rehashMemory } from '../api'
+import type { MemoryDetail as MemoryDetailType, ResolveResponse, TestBundle } from '../types'
 import { StatusBadge, MaturityBadge } from './Badges'
 import { useExitAnimation } from '../useExitAnimation'
 
-/** Build an LLM system prompt from resolved nodes, wrapped in <codememory_context> tags.
- * Exported for use by keyboard shortcut handler (R19-C4). */
+/** Return the canonical rendered Build output for clipboard handoff. */
+// eslint-disable-next-line react-refresh/only-export-components
 export function buildPromptContent(resolveData: ResolveResponse): string {
-  const lines: string[] = []
-  const nodes = [...resolveData.nodes].sort((a, b) => a.index - b.index)
-  const fullNodes = nodes.filter((n) => n.trim === 'full')
-  const summaryNodes = nodes.filter((n) => n.trim === 'summary')
-  const skippedNodes = nodes.filter((n) => n.trim === 'skipped')
-  const totalTokens = nodes.reduce((sum, n) => sum + n.body.length, 0)
-
-  lines.push('<codememory_context>')
-  lines.push(`<meta target="${resolveData.target}" depth="${resolveData.depth}" budget="${resolveData.budget}" tokens="${totalTokens}" />`)
-  lines.push(`<summary full="${fullNodes.length}" summary="${summaryNodes.length}" skipped="${skippedNodes.length}" />\n`)
-
-  lines.push('<system>')
-  lines.push('You are an assistant with access to a structured memory system.')
-  lines.push('Below is a context assembled from linked memory nodes in topological (dependency) order.')
-  lines.push('</system>\n')
-
-  lines.push(`<context target="${resolveData.target}">`)
-
-  for (const node of nodes) {
-    const trimLabel = node.trim === 'full' ? 'FULL' : node.trim === 'summary' ? 'SUMMARY' : 'SKIPPED'
-
-    // R7-prompt-metadata: include maturity, status, and tags alongside node info
-    const metaParts: string[] = [node.type, trimLabel]
-    if (node.maturity && node.maturity !== 'draft') {
-      metaParts.push(`maturity:${node.maturity}`)
-    }
-    if (node.status && node.status !== 'active') {
-      metaParts.push(`status:${node.status}`)
-    }
-    if (node.tags && node.tags.length > 0) {
-      metaParts.push(`tags:${node.tags.join(',')}`)
-    }
-    const metaStr = metaParts.join(', ')
-
-    lines.push(`<node id="${node.id}" index="${node.index}" total="${node.total}" trim="${node.trim}" meta="${metaStr}">`)
-    if (node.body) {
-      lines.push(node.body)
-    }
-    lines.push('</node>')
-    lines.push('')
-  }
-
-  lines.push('</context>')
-
-  // Trailing instruction block — maturity/status weighting guidance
-  lines.push('<instructions>')
-  lines.push('1. Nodes with trim="full" contain the complete memory content — prioritise these.')
-  lines.push('2. Nodes with trim="summary" contain only a summary — treat as background context.')
-  lines.push('3. Nodes with trim="skipped" are listed for awareness but their content is omitted.')
-  lines.push('4. **Weight by maturity**: proven > verified > draft. A proven memory has been validated through repeated use; a draft memory may be speculative.')
-  lines.push('5. **Note status**: active memories are current; archived memories may be outdated. Prefer active over archived.')
-  lines.push('6. Use the context above to ground your responses. When citing, reference the memory ID.')
-  lines.push('7. If the context is insufficient, state what additional information you need.')
-  lines.push('</instructions>')
-
-  lines.push('</codememory_context>')
-
-  return lines.join('\n')
+  return resolveData.full_text
 }
 
 
@@ -86,23 +29,20 @@ interface Props {
 
 export default function MemoryDetail({ memoryId, onClose, onResolve, onClearResolve, onNavigateMemory, resolveData, resolveError, isResolving, backlinks, copyTrigger }: Props) {
   const [memory, setMemory] = useState<MemoryDetailType | null>(null)
+  const [testBundle, setTestBundle] = useState<TestBundle | null>(null)
+  const [testError, setTestError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const { visible: panelVisible, closing } = useExitAnimation(!!memoryId)
   // PL3-6: track which strength groups are fully expanded
   const [expandedImports, setExpandedImports] = useState<Record<string, boolean>>({})
-  // R16-C2: stability slider state
-  const [stabilityValue, setStabilityValue] = useState<number>(14.0)
-  const [stabilityUpdating, setStabilityUpdating] = useState(false)
-  // R16-S1: touch confirmation state
-  const [touchAnimating, setTouchAnimating] = useState(false)
-  const [copyLabel, setCopyLabel] = useState('Copy as Context')
+  const [copyLabel, setCopyLabel] = useState('Copy Build')
   const IMPORT_PREVIEW_LIMIT = 10
 
   // R19-C5: clipboard write with HTTP fallback via execCommand('copy')
   const doClipboardCopy = useCallback((text: string) => {
     const onSuccess = () => {
       setCopyLabel('\u2713 Copied')
-      setTimeout(() => setCopyLabel('Copy as Context'), 2000)
+      setTimeout(() => setCopyLabel('Copy Build'), 2000)
     }
     const onError = () => setCopyLabel('Copy failed')
 
@@ -150,58 +90,23 @@ export default function MemoryDetail({ memoryId, onClose, onResolve, onClearReso
 
   useEffect(() => {
     if (!memoryId) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setMemory(null)
+      setTestBundle(null)
+      setTestError(null)
       return
     }
     setLoading(true)
     fetchMemory(memoryId)
-      .then((data) => {
-        setMemory(data)
-        // R16-C2: sync stability slider with loaded data
-        if (data.stability != null) {
-          setStabilityValue(data.stability)
-        }
-      })
+      .then(setMemory)
       .catch(console.error)
       .finally(() => setLoading(false))
+    setTestBundle(null)
+    setTestError(null)
+    fetchTestBundle(memoryId)
+      .then(setTestBundle)
+      .catch((error) => setTestError(error instanceof Error ? error.message : 'Golden questions unavailable'))
   }, [memoryId])
-
-  // R16-C2: handle stability slider change
-  const handleStabilityChange = useCallback((val: number) => {
-    setStabilityValue(val)
-  }, [])
-
-  const handleStabilityCommit = useCallback((val: number) => {
-    if (!memoryId || stabilityUpdating) return
-    setStabilityUpdating(true)
-    updateMemory(memoryId, { stability: val })
-      .then(() => {
-        // Refresh memory data to get updated stability_source
-        return fetchMemory(memoryId)
-      })
-      .then((data) => {
-        setMemory(data)
-        if (data.stability != null) setStabilityValue(data.stability)
-      })
-      .catch(console.error)
-      .finally(() => setStabilityUpdating(false))
-  }, [memoryId, stabilityUpdating])
-
-  // R16-S1: handle touch button
-  const handleTouch = useCallback(() => {
-    if (!memoryId || touchAnimating) return
-    setTouchAnimating(true)
-    touchMemory(memoryId)
-      .then(() => fetchMemory(memoryId))
-      .then((data) => {
-        setMemory(data)
-        if (data.stability != null) setStabilityValue(data.stability)
-      })
-      .catch(console.error)
-      .finally(() => {
-        setTimeout(() => setTouchAnimating(false), 600)
-      })
-  }, [memoryId, touchAnimating])
 
   // R19-C4: respond to copyTrigger from App.tsx (Ctrl+Shift+C keyboard shortcut)
   useEffect(() => {
@@ -283,7 +188,7 @@ export default function MemoryDetail({ memoryId, onClose, onResolve, onClearReso
           </h2>
           <button
             onClick={() => onResolve(memoryId!)}
-            title="Resolve dependency DAG from this node"
+            title="Build canonical context from this node"
             style={{
               border: '1px solid var(--cm-accent)',
               background: 'transparent',
@@ -299,7 +204,7 @@ export default function MemoryDetail({ memoryId, onClose, onResolve, onClearReso
               whiteSpace: 'nowrap',
             }}
           >
-            Resolve
+            Build
           </button>
           <button
             onClick={onClose}
@@ -410,7 +315,6 @@ export default function MemoryDetail({ memoryId, onClose, onResolve, onClearReso
                   ))}
                 </div>
               )}
-              <div><strong>Intensity:</strong> {memory.intensity}/10</div>
               <div><strong>Version:</strong> {memory.version}</div>
               {memory.created && <div><strong>Created:</strong> {memory.created}</div>}
               {memory.updated && <div><strong>Updated:</strong> {memory.updated}</div>}
@@ -479,122 +383,6 @@ export default function MemoryDetail({ memoryId, onClose, onResolve, onClearReso
               </div>
             )}
 
-            {/* Access freshness (R15-N1) */}
-            <div style={{ marginTop: 12 }}>
-              <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--cm-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4, fontFamily: 'Raleway, sans-serif' }}>
-                Access Freshness
-              </div>
-              <div style={{ fontSize: 12, fontFamily: 'Raleway, sans-serif', color: 'var(--cm-text-secondary)', lineHeight: 1.8 }}>
-                {memory.access_count != null && memory.access_count > 0 ? (
-                  <>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <span>
-                        Last accessed{' '}
-                        {touchAnimating
-                          ? 'just now'
-                          : memory.days_since_last_access != null && memory.days_since_last_access === 0
-                          ? 'just now'
-                          : memory.days_since_last_access != null
-                          ? `${memory.days_since_last_access} days ago`
-                          : 'unknown'}
-                      </span>
-                      <button
-                        onClick={handleTouch}
-                        disabled={touchAnimating}
-                        title="Mark as reviewed (lightweight decay refresh)"
-                        style={{
-                          fontSize: 10,
-                          padding: '1px 6px',
-                          border: '1px solid var(--cm-border)',
-                          borderRadius: 2,
-                          background: touchAnimating ? 'var(--cm-bg-success-subtle)' : 'transparent',
-                          color: touchAnimating ? 'var(--cm-success)' : 'var(--cm-text-tertiary)',
-                          cursor: touchAnimating ? 'default' : 'pointer',
-                          transition: 'all 0.15s ease',
-                          fontFamily: 'Raleway, sans-serif',
-                        }}
-                      >
-                        {touchAnimating ? '\u2713 Touched' : 'Touch'}
-                      </button>
-                    </div>
-                    <div>Stability: {memory.stability != null ? `${memory.stability.toFixed(1)}d` : '14.0d'}</div>
-                    {memory.days_since_last_access != null && memory.stability != null ? (
-                      <div>
-                        R:{' '}
-                        {(() => {
-                          const exp = Math.pow(0.5, memory.days_since_last_access / memory.stability)
-                          const floor = 0.05 / (1 + memory.days_since_last_access / (10 * memory.stability))
-                          const R = Math.max(exp, floor)
-                          const R_pct = R * 100
-                          // R16-F4: signal-colour the R-probability
-                          const rColor = R_pct > 50
-                            ? 'var(--cm-success)'
-                            : R_pct >= 10
-                              ? 'var(--cm-warning)'
-                              : 'var(--cm-error)'
-                          return (
-                            <span
-                              style={{
-                                color: rColor,
-                                fontWeight: 600,
-                                fontSize: 13,
-                              }}
-                            >
-                              {`${R_pct.toFixed(1)}%`}
-                            </span>
-                          )
-                        })()}
-                      </div>
-                    ) : null}
-                    <div style={{ color: 'var(--cm-text-tertiary)' }}>Access count: {memory.access_count}</div>
-                    {/* R16-C2: stability slider */}
-                    <div style={{ marginTop: 6 }}>
-                      <div style={{ fontSize: 11, color: 'var(--cm-text-tertiary)', marginBottom: 2 }}>
-                        Half-life: {stabilityValue.toFixed(0)}d
-                        {memory.stability_source === 'manual' && (
-                          <span style={{ color: 'var(--cm-warning)', marginLeft: 4 }}>(manual)</span>
-                        )}
-                      </div>
-                      <input
-                        type="range"
-                        min="1"
-                        max="365"
-                        step="1"
-                        value={stabilityValue}
-                        disabled={stabilityUpdating}
-                        onChange={(e) => handleStabilityChange(Number(e.target.value))}
-                        onMouseUp={(e) => handleStabilityCommit(Number((e.target as HTMLInputElement).value))}
-                        onKeyUp={(e) => {
-                          if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
-                            handleStabilityCommit(Number((e.target as HTMLInputElement).value))
-                          }
-                        }}
-                        style={{
-                          width: '100%',
-                          accentColor: 'var(--cm-accent)',
-                          cursor: stabilityUpdating ? 'wait' : 'pointer',
-                          opacity: stabilityUpdating ? 0.5 : 1,
-                        }}
-                      />
-                      <div style={{
-                        fontSize: 10,
-                        color: 'var(--cm-text-tertiary)',
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                      }}>
-                        <span>1d (fast decay)</span>
-                        <span>365d (persistent)</span>
-                      </div>
-                    </div>
-                  </>
-                ) : (
-                  <div style={{ fontStyle: 'italic', color: 'var(--cm-text-tertiary)' }}>
-                    Never accessed &middot; R=N/A
-                  </div>
-                )}
-              </div>
-            </div>
-
             {/* Referenced By (backlinks) */}
             <div style={{ marginTop: 12 }}>
               <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--cm-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4, fontFamily: 'Raleway, sans-serif' }}>
@@ -631,9 +419,38 @@ export default function MemoryDetail({ memoryId, onClose, onResolve, onClearReso
                 </div>
               )}
             </div>
+
+            <div style={{ marginTop: 14 }}>
+              <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--cm-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6, fontFamily: 'Raleway, sans-serif' }}>
+                Golden Questions
+              </div>
+              {testBundle && testBundle.questions.length > 0 ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {testBundle.questions.map((question, index) => (
+                    <div key={`${question.q}-${index}`} style={{ padding: '8px 10px', backgroundColor: 'var(--cm-bg-subtle)', borderLeft: '3px solid var(--cm-info)' }}>
+                      <div style={{ fontSize: 13, color: 'var(--cm-text-primary)', lineHeight: 1.5 }}>
+                        {index + 1}. {question.q}
+                      </div>
+                      {question.expect && (
+                        <div style={{ marginTop: 4, fontSize: 12, color: 'var(--cm-text-tertiary)', lineHeight: 1.5 }}>
+                          Expected: {question.expect}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div style={{ fontSize: 12, color: 'var(--cm-text-tertiary)', lineHeight: 1.5, fontStyle: 'italic' }}>
+                  {testError || testBundle?.notices[0] || 'Loading test contract...'}
+                </div>
+              )}
+              <div style={{ marginTop: 5, fontSize: 11, color: 'var(--cm-text-tertiary)' }}>
+                Read-only contract; CodeMemory does not run or judge answers in the UI.
+              </div>
+            </div>
           </div>
 
-          {/* Resolve loading skeleton (R13-D3) */}
+          {/* Build loading skeleton */}
           {isResolving && (
             <div
               style={{
@@ -653,7 +470,7 @@ export default function MemoryDetail({ memoryId, onClose, onResolve, onClearReso
                   marginBottom: 12,
                 }}
               >
-                Resolving...
+                Building canonical context...
               </div>
               {[1, 2, 3].map((i) => (
                 <div
@@ -669,7 +486,7 @@ export default function MemoryDetail({ memoryId, onClose, onResolve, onClearReso
             </div>
           )}
 
-          {/* Resolve error feedback (R6-resolve-error-feedback) */}
+          {/* Build error feedback */}
           {resolveError && (
             <div
               style={{
@@ -695,7 +512,7 @@ export default function MemoryDetail({ memoryId, onClose, onResolve, onClearReso
             </div>
           )}
 
-          {/* Resolve results */}
+          {/* Build results */}
           {resolveData && resolveData.nodes.length > 0 && (
             <div
               style={{
@@ -780,7 +597,7 @@ export default function MemoryDetail({ memoryId, onClose, onResolve, onClearReso
                     letterSpacing: '0.08em',
                   }}
                 >
-                  Resolve — {resolveData.nodes.length} nodes
+                  Build — {resolveData.nodes.length} nodes
                   {resolveData.budget && (
                     <span style={{ color: 'var(--cm-text-tertiary)', fontWeight: 400, textTransform: 'none', letterSpacing: '0' }}>
                       {' '}· budget {resolveData.budget} · depth {resolveData.depth}

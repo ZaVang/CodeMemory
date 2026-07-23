@@ -1,30 +1,22 @@
-"""Search and Resolve router."""
+"""Graph, Build, and Search REST adapter."""
 
 from __future__ import annotations
 
-import logging
-from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, HTTPException
 
 from shared import (
     ContextPackRequest,
-    FUZZY_THRESHOLD,
     ResolveRequest,
     SearchRequest,
-    extract_snippet,
-    fuzzy_match_score,
     get_root,
     load_cm_index,
-    parse_frontmatter,
     serialize,
 )
 from codememory.build import build_context_pack, render_context_pack
-from codememory.index import load_index
-from codememory.models import IndexData, MemoryEntry
-
-_logger = logging.getLogger("codememory.router.search")
+from codememory.models import IndexData
+from codememory.search import search as core_search
 
 router = APIRouter(prefix="/api", tags=["search"])
 
@@ -106,72 +98,14 @@ def get_graph(focus: str | None = None):
 
 
 # ---------------------------------------------------------------------------
-# Resolve
+# Build (primary operator assembly endpoint)
 # ---------------------------------------------------------------------------
 
-@router.post("/resolve")
-def post_resolve(req: ResolveRequest):
-    if not req.memory_id.strip():
-        raise HTTPException(status_code=422, detail="Memory id is required")
-
-    # Check that the target ID exists in the index before resolving
-    index = load_cm_index()
-    memories = index.memories
-    if req.memory_id not in memories:
-        raise HTTPException(status_code=404, detail=f"Memory '{req.memory_id}' not found in index")
-
-    try:
-        pack = build_context_pack(
-            get_root(),
-            req.memory_id,
-            depth=req.depth,
-            budget=req.budget,
-        )
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except FileNotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-
-    # Adapter rule: consume the structured pipeline product; never parse
-    # rendered text (architecture.md section 5).
-    nodes: list[dict[str, Any]] = [
-        {
-            "id": node.id,
-            "type": node.type,
-            "trim": node.trim,
-            "index": node.index,
-            "total": node.total,
-            "body": node.content or "",
-            "summary": node.summary,
-            "maturity": node.maturity,
-            "status": node.status,
-            "tags": node.tags,
-        }
-        for node in pack.nodes
-    ]
-    notices = [f"{n.type}: {n.message}" for n in pack.notices]
-    full_text = render_context_pack(pack, "plain-markdown")
-
-    return {
-        "target": req.memory_id,
-        "depth": req.depth,
-        "budget": req.budget,
-        "nodes": nodes,
-        "full_text": full_text,
-        "notices": notices,
-    }
-
-
-# ---------------------------------------------------------------------------
-# Context Pack
-# ---------------------------------------------------------------------------
-
-@router.post("/context-pack")
-def post_context_pack(req: ContextPackRequest):
+def _build_response(req: ContextPackRequest) -> dict[str, Any]:
     if not req.memory_id.strip():
         raise HTTPException(status_code=422, detail="Memory id is required")
     if req.format not in {"xml-markdown", "markdown", "plain-markdown", "json"}:
-        raise HTTPException(status_code=422, detail="Unsupported context pack format")
+        raise HTTPException(status_code=422, detail="Unsupported build format")
 
     try:
         pack = build_context_pack(
@@ -183,8 +117,12 @@ def post_context_pack(req: ContextPackRequest):
             task_goal=req.task_goal,
         )
         rendered = render_context_pack(pack, req.format)  # type: ignore[arg-type]
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except ValueError as exc:
+        message = str(exc)
+        status = 404 if "not found" in message.lower() else 400
+        raise HTTPException(status_code=status, detail=message)
 
     return serialize({
         "target": req.memory_id,
@@ -192,6 +130,63 @@ def post_context_pack(req: ContextPackRequest):
         "pack": pack.model_dump(mode="json"),
         "rendered": rendered,
     })
+
+
+@router.post("/build")
+def post_build(req: ContextPackRequest):
+    return _build_response(req)
+
+
+# ---------------------------------------------------------------------------
+# Resolve (legacy compatibility shape; same build pipeline)
+# ---------------------------------------------------------------------------
+
+@router.post("/resolve")
+def post_resolve(req: ResolveRequest):
+    built = _build_response(ContextPackRequest(
+        id=req.memory_id,
+        depth=req.depth,
+        budget=req.budget,
+        format="plain-markdown",
+    ))
+    pack_data = built["pack"]
+
+    # Adapter rule: consume the structured pipeline product; never parse
+    # rendered text (architecture.md section 5).
+    nodes: list[dict[str, Any]] = [
+        {
+            "id": node["id"],
+            "type": node["type"],
+            "trim": node["trim"],
+            "index": node["index"],
+            "total": node["total"],
+            "body": node.get("content") or "",
+            "summary": node.get("summary"),
+            "maturity": node.get("maturity"),
+            "status": node.get("status"),
+            "tags": node.get("tags", []),
+        }
+        for node in pack_data["nodes"]
+    ]
+    notices = [f"{n['type']}: {n['message']}" for n in pack_data["notices"]]
+
+    return {
+        "target": req.memory_id,
+        "depth": req.depth,
+        "budget": req.budget,
+        "nodes": nodes,
+        "full_text": built["rendered"],
+        "notices": notices,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Context Pack
+# ---------------------------------------------------------------------------
+
+@router.post("/context-pack")
+def post_context_pack(req: ContextPackRequest):
+    return _build_response(req)
 
 
 # ---------------------------------------------------------------------------
@@ -211,111 +206,32 @@ def post_search(req: SearchRequest):
             "limit": req.limit,
         })
 
-    index = load_cm_index()
-    memories = index.memories
-
-    exact_matches: list[dict] = []
-    fuzzy_matches: list[dict] = []
-
-    for mem_id, entry in memories.items():
-        if hasattr(entry, "model_dump"):
-            d = entry.model_dump(mode="json")
-        elif isinstance(entry, dict):
-            d = entry
-        else:
-            continue
-
-        if req.type_ and d.get("type") != req.type_:
-            continue
-        if req.status and d.get("status") != req.status:
-            continue
-        if req.maturity and d.get("maturity") != req.maturity:
-            continue
-        if req.tags:
-            entry_tags = d.get("tags", [])
-            if not all(t in entry_tags for t in req.tags):
-                continue
-
-        summary = d.get("summary", "")
-        tags = d.get("tags", [])
-
-        body = ""
-        rel_path = ""
-        if hasattr(entry, "path"):
-            rel_path = entry.path
-        elif isinstance(entry, dict):
-            rel_path = entry.get("path", "")
-        if rel_path:
-            filepath = get_root() / rel_path
-            if filepath.exists():
-                _, body = parse_frontmatter(filepath)
-
-        if has_query:
-            scores: list[tuple[float, str]] = []
-            id_score = fuzzy_match_score(req.query, mem_id)
-            if id_score > 0:
-                scores.append((id_score, "id"))
-            summary_score = fuzzy_match_score(req.query, summary)
-            if summary_score > 0:
-                scores.append((summary_score, "summary"))
-            for tag in tags:
-                tag_score = fuzzy_match_score(req.query, tag)
-                if tag_score > 0:
-                    scores.append((tag_score, "tag"))
-            if body:
-                body_score = fuzzy_match_score(req.query, body)
-                if body_score > 0:
-                    scores.append((body_score, "body"))
-
-            if not scores:
-                continue
-
-            best_score = max(s[0] for s in scores)
-            match_fields = list(set(s[1] for s in scores))
-            is_exact = any(s[0] >= 1.0 for s in scores)
-            match_quality_tag = "exact" if is_exact else "fuzzy"
-
-            snippet = extract_snippet(body, req.query) if body else ""
-
-            match_entry = {
-                "id": mem_id,
-                "summary": summary,
-                "type": d.get("type", "atom"),
-                "tags": d.get("tags", []),
-                "maturity": d.get("maturity", "draft"),
-                "status": d.get("status", "active"),
-                "snippet": snippet,
-                "match_quality": match_quality_tag,
-                "match_score": round(best_score, 2),
-                "match_fields": match_fields,
-                "days_since_last_access": d.get("days_since_last_access", None),
-                "access_count": d.get("access_count", 0),
-            }
-
-            if is_exact:
-                exact_matches.append(match_entry)
-            elif best_score >= FUZZY_THRESHOLD:
-                fuzzy_matches.append(match_entry)
-        else:
-            match_entry = {
-                "id": mem_id,
-                "summary": summary,
-                "type": d.get("type", "atom"),
-                "tags": d.get("tags", []),
-                "maturity": d.get("maturity", "draft"),
-                "status": d.get("status", "active"),
-                "snippet": "",
-                "match_quality": "filter",
-                "match_score": 0,
-                "match_fields": [],
-                "days_since_last_access": d.get("days_since_last_access", None),
-                "access_count": d.get("access_count", 0),
-            }
-            exact_matches.append(match_entry)
-
-    all_matches = exact_matches + fuzzy_matches
-    total = len(all_matches)
-    limited = all_matches[:req.limit] if req.limit else all_matches
+    canonical = core_search(
+        get_root(),
+        query=req.query.strip() if has_query else None,
+        tags=req.tags,
+        type_=req.type_,
+        status=req.status,
+        maturity=req.maturity,
+    )
+    results = [
+        {
+            "id": item["id"],
+            "summary": item.get("summary", ""),
+            "type": item.get("type", "atom"),
+            "tags": item.get("tags", []),
+            "maturity": item.get("maturity", "draft"),
+            "status": item.get("status", "active"),
+            "snippet": item.get("snippet", ""),
+            "match_quality": "exact" if has_query else "filter",
+            "match_score": item.get("score", 0),
+            "match_fields": [item["match_field"]] if item.get("match_field") else [],
+            "access_count": item.get("access_count", 0),
+        }
+        for item in canonical
+    ]
+    total = len(results)
+    limited = results[:req.limit]
 
     return serialize({
         "results": limited,

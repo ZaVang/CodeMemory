@@ -11,7 +11,7 @@ interface Props {
   onCreateMemory?: () => void
 }
 
-type SortField = 'id' | 'summary' | 'type' | 'maturity' | 'status' | 'health'
+type SortField = 'id' | 'summary' | 'type' | 'maturity' | 'status'
 type SortDir = 'asc' | 'desc'
 
 const PAGE_SIZE = 20
@@ -36,12 +36,14 @@ export default function MemoryList({ onSelectMemory, refreshTrigger, initialFilt
   }, [])
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadData()
   }, [loadData, refreshTrigger])
 
   // Apply initial filter from dashboard navigation
   useEffect(() => {
     if (initialFilter) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setFilterText(initialFilter)
       setPage(0)
     }
@@ -62,29 +64,10 @@ export default function MemoryList({ onSelectMemory, refreshTrigger, initialFilt
     )
   }, [allMemories, filterText])
 
-  // R16-S3: compute R-probability for health column
-  const getRProbability = (mem: MemorySummary): number | null => {
-    const days = mem.days_since_last_access
-    const stab = mem.stability
-    if (days == null || stab == null || stab <= 0) return null
-    const exp = Math.pow(0.5, days / stab)
-    const floor = 0.05 / (1 + days / (10 * stab))
-    return Math.max(exp, floor)
-  }
-
   // Sort
   const sorted = useMemo(() => {
     const dir = sortDir === 'asc' ? 1 : -1
     return [...filtered].sort((a, b) => {
-      if (sortField === 'health') {
-        const ra = getRProbability(a)
-        const rb = getRProbability(b)
-        // Sort by R descending (most at-risk first), nulls last
-        if (ra == null && rb == null) return 0
-        if (ra == null) return 1
-        if (rb == null) return -1
-        return (ra - rb) * dir
-      }
       const va = (a[sortField] || '').toString().toLowerCase()
       const vb = (b[sortField] || '').toString().toLowerCase()
       return va.localeCompare(vb) * dir
@@ -214,10 +197,6 @@ export default function MemoryList({ onSelectMemory, refreshTrigger, initialFilt
               <th style={{ ...thStyle, width: '16%', cursor: 'default' }}>
                 Tags
               </th>
-              {/* R16-S3: Health column */}
-              <th style={{ ...thStyle, width: '12%' }} onClick={() => handleSort('health')}>
-                Health{sortIndicator('health')}
-              </th>
             </tr>
           </thead>
           <tbody>
@@ -268,56 +247,6 @@ export default function MemoryList({ onSelectMemory, refreshTrigger, initialFilt
                     )}
                   </div>
                 </td>
-                {/* R16-S3: Health column */}
-                {(() => {
-                  const R = getRProbability(mem)
-                  if (R == null) {
-                    return (
-                      <td style={tdStyle}>
-                        <span style={{ fontSize: 11, color: 'var(--cm-text-tertiary)', fontStyle: 'italic' }}>N/A</span>
-                      </td>
-                    )
-                  }
-                  const R_pct = R * 100
-                  const barColor = R_pct > 50
-                    ? 'var(--cm-success)'
-                    : R_pct >= 10
-                      ? 'var(--cm-warning)'
-                      : 'var(--cm-error)'
-                  return (
-                    <td style={{ ...tdStyle, cursor: 'pointer' }} onClick={(e) => {
-                      e.stopPropagation()
-                      onSelectMemory(mem.id)
-                    }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                        <div style={{
-                          width: 24,
-                          height: 4,
-                          backgroundColor: 'var(--cm-bg-subtle)',
-                          borderRadius: 2,
-                          overflow: 'hidden',
-                          flexShrink: 0,
-                        }}>
-                          <div style={{
-                            width: `${Math.min(R_pct, 100)}%`,
-                            height: '100%',
-                            backgroundColor: barColor,
-                            borderRadius: 2,
-                            transition: 'width 0.2s ease',
-                          }} />
-                        </div>
-                        <span style={{
-                          fontSize: 10,
-                          fontFamily: 'Raleway, sans-serif',
-                          color: barColor,
-                          fontWeight: 600,
-                        }}>
-                          {R_pct.toFixed(0)}%
-                        </span>
-                      </div>
-                    </td>
-                  )
-                })()}
               </tr>
             ))}
             {paginated.length === 0 && (

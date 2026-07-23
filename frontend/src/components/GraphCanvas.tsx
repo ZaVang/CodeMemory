@@ -53,8 +53,8 @@ function getNodeTint(node: GraphNode, isDark: boolean = false): string {
   return fallback
 }
 
-function intensityToRadius(intensity: number): number {
-  return Math.max(18, Math.min(50, 14 + intensity * 4))
+function nodeRadius(dependents: number = 0): number {
+  return Math.max(26, Math.min(44, 26 + Math.log2(dependents + 1) * 6))
 }
 
 const GraphCanvas = forwardRef<GraphCanvasHandle, Props>(function GraphCanvas({ enabled = true, searchText, onNodeClick, onNodeContextMenu, resolveData, isResolving, refreshTrigger, zoomLevel = 0.5, onGraphDataLoaded, activeTheme = 'light', onCreateMemory, highlightedDirectory }, ref) {
@@ -68,8 +68,6 @@ const GraphCanvas = forwardRef<GraphCanvasHandle, Props>(function GraphCanvas({ 
   const tooltipTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [tooltip, setTooltip] = useState<{
     summary: string
-    rProb?: string
-    rColor?: string
     dependents?: number
     x: number
     y: number
@@ -80,6 +78,7 @@ const GraphCanvas = forwardRef<GraphCanvasHandle, Props>(function GraphCanvas({ 
     if (!enabled) {
       return
     }
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true)
     fetchGraph().then((data) => {
       setGraphData(data)
@@ -97,7 +96,7 @@ const GraphCanvas = forwardRef<GraphCanvasHandle, Props>(function GraphCanvas({ 
 
     cy.nodes().forEach((node) => {
       const label = shortId(node.id()) || ''
-      const r = intensityToRadius(node.data('intensity') || 5) * 2
+      const r = nodeRadius(node.data('dependents') || 0) * 2
       const w = Math.max(r * 3, label.length * 10 + 24)
       g.setNode(node.id(), { width: w, height: r * 1.8 })
     })
@@ -168,11 +167,11 @@ const GraphCanvas = forwardRef<GraphCanvasHandle, Props>(function GraphCanvas({ 
             },
             'width': (el: NodeSingular) => {
               const n = graphData.nodes.find((no) => no.data.id === el.id())
-              return intensityToRadius(n?.data.intensity || 5) * 2
+              return nodeRadius(n?.data.dependents) * 2
             },
             'height': (el: NodeSingular) => {
               const n = graphData.nodes.find((no) => no.data.id === el.id())
-              return intensityToRadius(n?.data.intensity || 5) * 2
+              return nodeRadius(n?.data.dependents) * 2
             },
             'label': (el: NodeSingular) => shortId(el.id()),
             'text-wrap': 'ellipsis',
@@ -198,13 +197,6 @@ const GraphCanvas = forwardRef<GraphCanvasHandle, Props>(function GraphCanvas({ 
             'background-color': cssVar('--cm-bg-subtle'),
             'border-style': 'dashed',
             'border-color': cssVar('--cm-text-primary'),
-          },
-        },
-        // Intensity 10 — permanent memories get ring shadow
-        {
-          selector: 'node[?intensity]',
-          style: {
-            'border-width': (el: NodeSingular) => el.data('intensity') === 10 ? 3 : 2,
           },
         },
         // Edge styles by strength
@@ -298,8 +290,8 @@ const GraphCanvas = forwardRef<GraphCanvasHandle, Props>(function GraphCanvas({ 
             'opacity': 0.65,
             'border-style': 'dashed',
             'border-width': 1.5,
-            'width': (el: NodeSingular) => intensityToRadius(el.data('intensity') || 5) * 1.3,
-            'height': (el: NodeSingular) => intensityToRadius(el.data('intensity') || 5) * 1.3,
+            'width': (el: NodeSingular) => nodeRadius(el.data('dependents') || 0) * 1.3,
+            'height': (el: NodeSingular) => nodeRadius(el.data('dependents') || 0) * 1.3,
             'font-size': '12px',
             'font-style': 'italic',
           },
@@ -311,8 +303,8 @@ const GraphCanvas = forwardRef<GraphCanvasHandle, Props>(function GraphCanvas({ 
             'opacity': 0.4,
             'border-style': 'dashed',
             'border-width': 1,
-            'width': (el: NodeSingular) => intensityToRadius(el.data('intensity') || 5) * 1.1,
-            'height': (el: NodeSingular) => intensityToRadius(el.data('intensity') || 5) * 1.1,
+            'width': (el: NodeSingular) => nodeRadius(el.data('dependents') || 0) * 1.1,
+            'height': (el: NodeSingular) => nodeRadius(el.data('dependents') || 0) * 1.1,
             'font-size': '12px',
             'color': cssVar('--cm-text-tertiary'),
           },
@@ -344,7 +336,7 @@ const GraphCanvas = forwardRef<GraphCanvasHandle, Props>(function GraphCanvas({ 
       })
     }
 
-    // R5-graph-node-tooltips + R18-P6: enriched with R-probability and dependents
+    // Graph node tooltip: summary plus direct dependent count.
     cy.on('mouseover', 'node', (evt) => {
       const node = evt.target
       const id = node.id()
@@ -352,26 +344,10 @@ const GraphCanvas = forwardRef<GraphCanvasHandle, Props>(function GraphCanvas({ 
       const summary = nd?.data?.summary || ''
       const dependents = nd?.data?.dependents
 
-      // Compute R-probability if decay data is available
-      let rProb: string | undefined
-      let rColor: string | undefined
-      const daysSince = nd?.data?.days_since_last_access
-      const stability = nd?.data?.stability
-      if (daysSince != null && daysSince > 0 && stability != null && stability > 0) {
-        const exp = Math.pow(0.5, daysSince / stability)
-        const floor = 0.05 / (1 + daysSince / (10 * stability))
-        const R = Math.max(exp, floor)
-        const R_pct = R * 100
-        rProb = `${R_pct.toFixed(1)}%`
-        rColor = R_pct > 50 ? cssVar('--cm-success') : R_pct >= 10 ? cssVar('--cm-warning') : cssVar('--cm-error')
-      }
-
       if (tooltipTimerRef.current) clearTimeout(tooltipTimerRef.current)
       tooltipTimerRef.current = setTimeout(() => {
         setTooltip({
           summary: summary || id,
-          rProb,
-          rColor,
           dependents,
           x: evt.originalEvent.clientX,
           y: evt.originalEvent.clientY,
@@ -421,7 +397,10 @@ const GraphCanvas = forwardRef<GraphCanvasHandle, Props>(function GraphCanvas({ 
       cy.destroy()
       cyRef.current = null
     }
-  }, [graphData, activeTheme]) // Re-init when graph data or theme changes
+  // Recreating Cytoscape is intentionally scoped to dataset/theme changes;
+  // interaction callbacks read current props through the owning render.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [graphData, activeTheme])
 
   // Handle zoom level changes
   useEffect(() => {
@@ -609,7 +588,7 @@ const GraphCanvas = forwardRef<GraphCanvasHandle, Props>(function GraphCanvas({ 
     document.body.appendChild(a)
     a.click()
     document.body.removeChild(a)
-  }, [activeTheme])
+  }, [])
 
   // Expose exportPng to parent via ref
   useImperativeHandle(ref, () => ({ exportPng: handleExportPng }), [handleExportPng])
@@ -694,7 +673,7 @@ const GraphCanvas = forwardRef<GraphCanvasHandle, Props>(function GraphCanvas({ 
           }}
         >
           <div style={{ fontWeight: 600, marginBottom: 4 }}>{tooltip.summary}</div>
-          {(tooltip.rProb || tooltip.dependents != null) && (
+          {tooltip.dependents != null && (
             <div style={{
               display: 'flex',
               gap: 12,
@@ -702,14 +681,6 @@ const GraphCanvas = forwardRef<GraphCanvasHandle, Props>(function GraphCanvas({ 
               fontSize: 11,
               opacity: 0.85,
             }}>
-              {tooltip.rProb && (
-                <span>
-                  R:{' '}
-                  <span style={{ color: tooltip.rColor, fontWeight: 700 }}>
-                    {tooltip.rProb}
-                  </span>
-                </span>
-              )}
               {tooltip.dependents != null && (
                 <span>Deps: {tooltip.dependents}</span>
               )}

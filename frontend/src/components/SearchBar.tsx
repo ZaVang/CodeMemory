@@ -34,10 +34,10 @@ interface Props {
   value: string
   onChange: (value: string) => void
   onNavigate?: (id: string) => void
-  onResolve?: (id: string) => void
+  onBuild?: (id: string) => void
 }
 
-export default function SearchBar({ enabled = true, value, onChange, onNavigate, onResolve }: Props) {
+export default function SearchBar({ enabled = true, value, onChange, onNavigate, onBuild }: Props) {
   const [results, setResults] = useState<SearchResultItem[]>([])
   const [showResults, setShowResults] = useState(false)
   const [searching, setSearching] = useState(false)
@@ -375,15 +375,14 @@ export default function SearchBar({ enabled = true, value, onChange, onNavigate,
                 >
                   {item.id}
                 </div>
-                {/* Resolve shortcut (R13-D1) */}
-                {onResolve && (
+                {onBuild && (
                   <button
                     onClick={(e) => {
                       e.stopPropagation()
                       setShowResults(false)
-                      onResolve(item.id)
+                      onBuild(item.id)
                     }}
-                    title={`Resolve this memory's dependency graph into a structured context`}
+                    title="Build canonical context from this memory"
                     style={{
                       border: '1px solid var(--cm-accent)',
                       background: 'transparent',
@@ -400,7 +399,7 @@ export default function SearchBar({ enabled = true, value, onChange, onNavigate,
                       flexShrink: 0,
                     }}
                   >
-                    Resolve &rarr;
+                    Build &rarr;
                   </button>
                 )}
                 {/* Match quality indicator — always visible */}
@@ -460,33 +459,6 @@ export default function SearchBar({ enabled = true, value, onChange, onNavigate,
                   {highlightMatches(item.snippet, value)}
                 </div>
               )}
-              {/* R16-S2: access freshness in search results */}
-              <div style={{
-                fontSize: 11,
-                fontFamily: 'Raleway, sans-serif',
-                color: 'var(--cm-text-tertiary)',
-                marginTop: 2,
-              }}>
-                {item.access_count != null && item.access_count > 0 && item.days_since_last_access != null ? (
-                  <>
-                    {item.days_since_last_access === 0 ? 'just now' : `${item.days_since_last_access}d ago`}
-                    {item.stability != null && item.days_since_last_access != null && (
-                      (() => {
-                        const exp = Math.pow(0.5, item.days_since_last_access / item.stability)
-                        const floor = 0.05 / (1 + item.days_since_last_access / (10 * item.stability))
-                        const R = Math.max(exp, floor)
-                        const R_pct = R * 100
-                        const rColor = R_pct > 50 ? 'var(--cm-success)' : R_pct >= 10 ? 'var(--cm-warning)' : 'var(--cm-error)'
-                        return (
-                          <span> &middot; <span style={{ color: rColor, fontWeight: 600 }}>R: {R_pct.toFixed(1)}%</span></span>
-                        )
-                      })()
-                    )}
-                  </>
-                ) : (
-                  <span>never &middot; R=N/A</span>
-                )}
-              </div>
             </div>
           ))}
         </div>

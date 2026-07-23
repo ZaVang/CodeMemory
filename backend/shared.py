@@ -6,23 +6,20 @@ router module can import the bits it needs without circular dependencies.
 
 from __future__ import annotations
 
-import difflib
 import io
 import json
 import logging
-import math
 import os
-import random
 import re
 import sys
 import zipfile
 from datetime import date, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 from urllib.parse import unquote
 
 import yaml
-from fastapi import HTTPException, Request
+from fastapi import HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, field_validator
 
@@ -60,17 +57,28 @@ def get_root() -> Path:
 
 
 def _resolve_root(dataset_name: str) -> Path:
-    if not dataset_name or not dataset_name.strip():
-        dataset_name = _DEFAULT_DATASET
-    return (_EXAMPLES_DIR / dataset_name).resolve()
+    """Resolve an exact registered dataset alias inside ``examples/``.
 
+    Request-controlled values must never be interpreted as filesystem paths.
+    The alias lookup is the primary boundary; the containment check is the
+    final defense against a symlink or future registry regression.
+    """
+    if not dataset_name or dataset_name != dataset_name.strip():
+        raise ValueError("Invalid dataset alias")
+    if Path(dataset_name).is_absolute() or any(mark in dataset_name for mark in ("/", "\\", ":")):
+        raise ValueError("Invalid dataset alias")
 
-def get_request_root(request: Request) -> Path:
-    dataset = request.headers.get("X-Codememory-Dataset", "")
-    if not dataset or not dataset.strip():
-        dataset = _DEFAULT_DATASET
-    _current_dataset.set(dataset)
-    return _resolve_root(dataset)
+    registry = {item["name"]: Path(item["path"]) for item in get_available_datasets()}
+    if dataset_name not in registry:
+        raise ValueError(f"Unknown dataset alias: {dataset_name}")
+
+    examples_root = _EXAMPLES_DIR.resolve()
+    root = registry[dataset_name].resolve()
+    try:
+        root.relative_to(examples_root)
+    except ValueError as exc:
+        raise ValueError("Dataset root is outside the examples directory") from exc
+    return root
 
 
 def get_available_datasets() -> list[dict[str, str]]:
@@ -79,6 +87,11 @@ def get_available_datasets() -> list[dict[str, str]]:
         return datasets
     for entry in sorted(_EXAMPLES_DIR.iterdir()):
         if not entry.is_dir():
+            continue
+        try:
+            resolved_entry = entry.resolve()
+            resolved_entry.relative_to(_EXAMPLES_DIR.resolve())
+        except ValueError:
             continue
         idx = entry / ".codememory" / "index.json"
         if idx.exists():
@@ -90,7 +103,7 @@ def get_available_datasets() -> list[dict[str, str]]:
                 count = 0
             datasets.append({
                 "name": entry.name,
-                "path": str(entry.resolve()),
+                "path": str(resolved_entry),
                 "memory_count": count,
             })
     return datasets
@@ -192,61 +205,6 @@ def update_frontmatter_fields(filepath: Path, updates: dict[str, Any]) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Fuzzy search helpers
-# ---------------------------------------------------------------------------
-
-FUZZY_THRESHOLD = 0.6
-
-
-def fuzzy_match_score(query: str, text: str) -> float:
-    if not text or not query:
-        return 0.0
-    q_lower = query.lower().strip()
-    t_lower = text.lower()
-    if q_lower in t_lower:
-        if q_lower == t_lower:
-            return 1.0
-        if t_lower.startswith(q_lower):
-            return 0.95
-        return 0.9
-    seq = difflib.SequenceMatcher(None, q_lower, t_lower)
-    ratio = seq.ratio()
-    if ratio < FUZZY_THRESHOLD:
-        return 0.0
-    return round(ratio, 2)
-
-
-def extract_snippet(body: str, query: str) -> str:
-    if not body or not query:
-        return ""
-    q_lower = query.lower()
-    body_lower = body.lower()
-    idx = body_lower.find(q_lower)
-    if idx >= 0:
-        start = max(0, idx - 40)
-        end = min(len(body), idx + len(query) + 60)
-        prefix = "..." if start > 0 else ""
-        suffix = "..." if end < len(body) else ""
-        return prefix + body[start:end].replace("\n", " ") + suffix
-    best_idx = -1
-    best_ratio = 0.0
-    window_size = len(q_lower) + 2
-    for i in range(0, max(1, len(body_lower) - window_size + 1), max(1, len(q_lower) // 2)):
-        window = body_lower[i:i + window_size]
-        ratio = difflib.SequenceMatcher(None, q_lower, window).ratio()
-        if ratio > best_ratio:
-            best_ratio = ratio
-            best_idx = i
-    if best_idx >= 0 and best_ratio >= FUZZY_THRESHOLD:
-        start = max(0, best_idx - 30)
-        end = min(len(body), best_idx + window_size + 50)
-        prefix = "..." if start > 0 else ""
-        suffix = "..." if end < len(body) else ""
-        return prefix + body[start:end].replace("\n", " ") + suffix
-    return body[:120].replace("\n", " ") + ("..." if len(body) > 120 else "")
-
-
-# ---------------------------------------------------------------------------
 # Pydantic request models
 # ---------------------------------------------------------------------------
 
@@ -259,9 +217,10 @@ class CreateMemoryRequest(BaseModel):
     summary: str = Field(default="TODO: fill in summary")
     tags: list[str] = Field(default_factory=list)
     body: str = Field(default="")
-    type: str = Field(default="atom", description="atom | schema")
+    type: Literal["atom", "schema"] = Field(default="atom")
     schema: str | None = None
-    maturity: str = Field(default="draft")
+    maturity: Literal["draft", "verified", "proven", "superseded"] = Field(default="draft")
+    propose: bool = Field(default=False)
     imports: dict[str, list[str]] | None = Field(
         default=None,
         description="Dependency map by strength",
@@ -272,10 +231,14 @@ class UpdateMemoryRequest(BaseModel):
     body: str | None = None
     summary: str | None = None
     tags: list[str] | None = None
-    status: str | None = None
-    maturity: str | None = None
+    status: Literal["active", "archived", "superseded", "draft"] | None = None
+    maturity: Literal["draft", "verified", "proven", "superseded"] | None = None
     change_note: str | None = None
     imports: dict[str, list[str]] | None = None
+
+
+class ReviewActionRequest(BaseModel):
+    id: str = Field(description="Proposed Atom ID or patch proposal ID")
 
 
 class SearchRequest(BaseModel):

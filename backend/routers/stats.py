@@ -1,33 +1,23 @@
-"""Stats, Wander, Validate, Reindex, and Datasets router."""
+"""Stats, validation, reindex, and dataset routes."""
 
 from __future__ import annotations
 
-import logging
-import random
 import io
 from contextlib import redirect_stdout
-from datetime import date, datetime
-from pathlib import Path
-from typing import Any
 
-from fastapi import APIRouter, Body, HTTPException
+from fastapi import APIRouter, HTTPException
 
 from shared import (
     DEFAULT_DATASET,
     DatasetSwitchRequest,
-    compute_body_hash,
-    current_dataset,
     get_available_datasets,
     get_root,
     load_cm_index,
-    parse_frontmatter,
     reindex,
     serialize,
     stale_check,
 )
 from codememory.validate import validate
-
-_logger = logging.getLogger("codememory.router.stats")
 
 router = APIRouter(prefix="/api", tags=["stats"])
 
@@ -131,16 +121,26 @@ def _parse_validate_output(text: str) -> tuple[list[dict[str, str]], list[dict[s
                 "type": "circular_dependency",
                 "message": line.removeprefix("[WARNING]").strip(),
             })
-        elif line.startswith("[MATURITY-WARN]"):
-            warnings.append({
-                "type": "maturity",
-                "message": line.removeprefix("[MATURITY-WARN]").strip(),
-            })
-        elif line.startswith("[DECAY-WARN]"):
-            warnings.append({
-                "type": "decay",
-                "message": line.removeprefix("[DECAY-WARN]").strip(),
-            })
+        else:
+            warning_prefixes = {
+                "MATURITY-WARN": "maturity",
+                "SOURCE-REF-WARN": "source_ref",
+                "PROPOSED-WARN": "proposed",
+                "STATUS-WARN": "status",
+                "GOLDEN-WARN": "golden_questions",
+                "SOURCE-WARN": "source",
+                "PROPOSAL-WARN": "proposal",
+                "CAPTURE-WARN": "capture",
+                "TOPIC-WARN": "topic",
+            }
+            for prefix, issue_type in warning_prefixes.items():
+                marker = f"[{prefix}]"
+                if line.startswith(marker):
+                    warnings.append({
+                        "type": issue_type,
+                        "message": line.removeprefix(marker).strip(),
+                    })
+                    break
 
     return errors, warnings
 

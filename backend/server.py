@@ -80,9 +80,23 @@ class _DatasetContextMiddleware(BaseHTTPMiddleware):
         path = request.url.path
         is_exempt = path in ("/", "/api/datasets", "/api/datasets/switch", "/docs", "/openapi.json")
         dataset = request.headers.get("X-Codememory-Dataset", "")
-        if dataset and dataset.strip():
-            if not is_exempt:
-                _current_dataset.set(dataset)
+        token = None
+        if dataset and dataset.strip() and not is_exempt:
+            try:
+                _resolve_root(dataset)
+            except ValueError:
+                datasets = _get_available_datasets()
+                names = [d["name"] for d in datasets]
+                return JSONResponse(
+                    status_code=400,
+                    content={
+                        "detail": (
+                            "Invalid X-Codememory-Dataset alias. "
+                            f"Available datasets: {', '.join(names) if names else 'none found'}"
+                        ),
+                    },
+                )
+            token = _current_dataset.set(dataset)
         elif not is_exempt and path.startswith("/api/"):
             datasets = _get_available_datasets()
             names = [d["name"] for d in datasets]
@@ -95,8 +109,11 @@ class _DatasetContextMiddleware(BaseHTTPMiddleware):
                     ),
                 },
             )
-        response = await call_next(request)
-        return response
+        try:
+            return await call_next(request)
+        finally:
+            if token is not None:
+                _current_dataset.reset(token)
 
 
 app.add_middleware(_DatasetContextMiddleware)
@@ -110,11 +127,13 @@ from routers.memories import router as memories_router
 from routers.search import router as search_router
 from routers.sources import router as sources_router
 from routers.stats import router as stats_router
+from routers.reviews import router as reviews_router
 
 app.include_router(memories_router)
 app.include_router(search_router)
 app.include_router(sources_router)
 app.include_router(stats_router)
+app.include_router(reviews_router)
 
 # Ordering note: include_router places routes in registration order.
 # The generic GET /api/memories/{memory_id:path} and the backlinks route

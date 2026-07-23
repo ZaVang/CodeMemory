@@ -4,6 +4,40 @@ This file records accepted sprint outcomes. Current work belongs in `docs/plan/S
 
 ---
 
+## 2026-07-23 — Operator UI Alignment: Build, Review Queue, and Golden Questions
+
+**Status:** Accepted by owner.
+
+**Delivered:**
+
+- Added a primary structured `/api/build` REST path, kept compatibility endpoints on the same Core pipeline, and moved `/api/search` to Core delegation with REST-only field mapping.
+- Added typed proposed-Atom and patch-proposal review queues with explicit kind-specific merge/reject actions and bounded failure behavior.
+- Added read-only golden-question TestBundle display, complete one-call create/update semantics, and clear non-buildable status handling.
+- Reworked the React operator UI around Build and Review workflows while preserving graph, list, dashboard, dataset switching, themes, keyboard behavior, validation, and reindex flows.
+- Removed active intensity, stability, decay, wander, and touch behavior from frontend contracts and replaced graph sizing with bounded canonical metadata.
+- Restricted every UI request to an existing dataset alias, rejected absolute/traversal/unknown roots, added resolved containment as a final defense, and reset request-scoped ContextVar state after each request.
+- Updated PRD, architecture, README, USER_GUIDE, project structure, roadmap, UI help/onboarding copy, and API/frontend regression coverage.
+
+**Acceptance evidence:**
+
+- Owner independently rechecked dataset alias containment and Core search delegation; the former absolute-path header escape now returns 400 and creates neither external memory nor index files.
+- `tests/test_api.py` → `30 passed`
+- `tests/unit/test_create_update.py` → `14 passed`
+- `python -m pytest tests/unit tests/test_api.py -q` → `271 passed` with one existing warning
+- Personal Profile suite → `42 passed`
+- `python tests/integration_test.py` → `21/21 passed`
+- `python tests/integration_personal.py` → `15/15 passed`
+- Frontend build and lint passed; Playwright smoke → `6 passed`
+- `git diff --check` → passed; generated example test differences restored
+
+**Deferred:**
+
+- Personal Memory Web instance registry, Capture/Incubator browsing, provenance timeline, and batch Topic review.
+- Importer/compiler review-set UI and LLM proposer configuration.
+- Golden-question execution/evaluation harness, Web/PDF ingestion, semantic discovery, external embeddings, and production authentication.
+
+---
+
 ## 2026-07-22 — Adapter Alignment: Shared MCP / Toolkit Agent Surface
 
 **Status:** Accepted by owner.
