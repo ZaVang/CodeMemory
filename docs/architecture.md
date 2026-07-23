@@ -340,6 +340,21 @@ Phase 1 排序使用确定性的词法、时间、标签和 metadata，Agent 可
 
 一次 run 的权威输入是排序后的 `(capture_id, content_hash)` 集合；input digest 相同且已有 run 达到 `applied` 时，Core 必须返回既有 run，不生成新 changeset。
 
+### 4.7 Periodic Review evidence bundle
+
+`periodic_review.py` 是 provider-neutral read model。它按 Personal Profile timezone 解析显式月度/年度窗口，复用 Capture/Topic/Claim parser 与 canonical index，输出稳定排序、可重算 digest 的 evidence bundle：
+
+```text
+explicit period
+  → valid in-period Captures
+  → in-period Topic revisions + latest pre-window baseline
+  → per-revision Claim snapshots + authored status transitions
+  → explicit provenance / relations / canonical promotion references
+  → deterministic bundle digest
+```
+
+Core 不在这条路径中总结文本、推断关系、消费 Capture、运行 maintenance、加载 provider/embedding 或写报告。Personal Memory Skill 负责语义综合。默认 bundle 只输出；owner 明确要求保存时，Core 从 period 派生 `reviews/monthly/YYYY-MM.md` 或 `reviews/yearly/YYYY.md`，验证 bundle digest 后原子写入。review 是非 canonical artifact，不进入 index/imports/build。
+
 `pending/<run_id>.json` 至少包含：
 
 ```json

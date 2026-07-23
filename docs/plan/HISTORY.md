@@ -4,6 +4,39 @@ This file records accepted sprint outcomes. Current work belongs in `docs/plan/S
 
 ---
 
+## 2026-07-23 — Personal Periodic Review: Deterministic Evidence Bundle
+
+**Status:** Accepted by owner.
+
+**Delivered:**
+
+- Added explicit monthly (`YYYY-MM`) and yearly (`YYYY`) windows interpreted in the Personal Profile timezone, without guessing a period from wall-clock time.
+- Added a deterministic, read-only evidence bundle over hash-valid Captures, in-period Topic revisions, one latest pre-window baseline per logical topic, per-revision Claim snapshots/transitions, and explicitly linked active canonical provenance.
+- Added stable bundle digests, bounded diagnostics, safe relative locators, atomic no-clobber JSON output, and resolved containment checks for journal/incubator/review paths including symlink or junction escape.
+- Added owner CLI `periodic-review prepare|save`; persistence derives the only allowed review path from the Profile, validates the unchanged bundle/window/content, retries identical saves idempotently, and requires explicit overwrite for changed content.
+- Extended the Personal Memory Skill so maintenance resume/catch-up precedes evidence freezing, synthesis distinguishes facts/inference/uncertainty, temporary output remains the default, and canonical promotion stays owner-gated.
+- Kept periodic review out of REST, Web, MCP, Toolkit, the generic Agent tool catalog, semantic discovery, provider loading, Git delivery, and scheduling.
+- Updated PRD, architecture, Personal Profile, integration/user/project guidance, roadmap, and recurring sprint pitfalls.
+
+**Acceptance evidence:**
+
+- Owner independently reviewed read-only determinism, derived persistence paths, digest/window/content validation, no-clobber/idempotency/overwrite gates, and public adapter boundaries.
+- Periodic review focused suite → `10 passed`
+- Core/API → `307 passed` with one existing Pydantic warning
+- Personal Profile → `65 passed`
+- Existing integration → `21/21 passed`
+- Personal integration → `15/15 passed`
+- `git diff --check` passed with only normal Windows line-ending notices.
+- Generated example runtime side effects were restored before acceptance.
+
+**Deferred:**
+
+- Automatic scheduling, notifications, background generation, and automatic Git delivery.
+- REST/Web/MCP/Toolkit/Agent-tool exposure, model invocation inside Core, semantic clustering, dashboards, and automatic canonical promotion.
+- Cross-owner review sharing, authentication, remote storage, fixed report taxonomies, and arbitrary review filenames.
+
+---
+
 ## 2026-07-23 — Personal Memory Web: Allowlisted Owner Workspace
 
 **Status:** Accepted by owner.

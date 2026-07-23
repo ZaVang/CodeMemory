@@ -159,6 +159,15 @@ maintenance run 的状态与日志只存放在 `.codememory/`，不得写入 jou
 
 原有 canonical 维护循环继续保留：`check` 检查 stale / 断链 / schema，`orphans` 发现不可达 atom，`test` 验证黄金问题。
 
+### 5.3.1 周期回顾
+
+月度/年度回顾分为两层：
+
+1. Core 按 Profile timezone 和显式 `monthly + YYYY-MM` / `yearly + YYYY` 冻结确定性 evidence bundle；只收录有效 Capture、期内 Topic/Claim revision、必要的期前 baseline、显式关系和当前可装配 canonical provenance。
+2. Personal Memory Skill 在 bundle 上进行跨主题阅读、事实/综合/推断/不确定性区分，并可通过既有 maintenance changeset 更新 Incubator。
+
+回顾默认是临时综合回答，不产生文件。只有 owner 明确要求保存时才在 `paths.reviews` 下写入每期最多一个 Markdown；它不是 canonical Atom，不进入 imports/build。周期回顾不会隐式运行 maintenance、Git delivery、semantic discovery 或模型 provider。
+
 ### 5.4 导入路径——原文、候选与 canonical 分离
 
 ```text

@@ -69,6 +69,21 @@ MyMemory/
 | `private-local/` | 否 | 必须默认 Git ignore；Core 和 Agent 不自动搬运内容进入或离开该目录 |
 | `.codememory/` | 否 | profile、索引、维护状态、日志；不得混入 journal 正文 |
 
+### 2.1 周期回顾文件
+
+周期回顾默认是临时回答，不创建文件。只有 owner 明确要求持久化时，才允许写入：
+
+- 月度：`reviews/monthly/YYYY-MM.md`
+- 年度：`reviews/yearly/YYYY.md`
+
+`periodic-review prepare` 只冻结显式周期内的确定性证据 bundle，不修改 Profile。`periodic-review save` 才写 review，并且：
+
+- 每个周期最多一个派生文件；相同 bundle/content 重试幂等；
+- 已有不同内容默认冲突，只有 owner 显式 `--overwrite` 才可覆盖；
+- frontmatter 记录 period、闭区间、timezone、bundle digest、origin、creator 与稳定 source IDs；
+- review 是 non-canonical 派生内容，不进入 typed index、imports DAG 或 canonical build；
+- 正文应区分 Facts、Synthesis、Inferences 与 Uncertainties；回顾本身不构成 canonical promotion 确认。
+
 `archive/` 不作为 Phase 1 必需目录。Canonical Atom 使用既有 lifecycle/status 与 Git history；未来若引入 archive，必须先定义与 archived status 的唯一关系。
 
 ---

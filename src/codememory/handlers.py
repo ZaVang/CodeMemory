@@ -45,6 +45,14 @@ from .log import show_log
 from .orphans import find_orphans
 from .resolve import resolve
 from .personal_index import read_personal_object, typed_search
+from .periodic_review import (
+    ReviewPeriod,
+    load_periodic_review_bundle,
+    prepare_periodic_review,
+    save_periodic_review,
+    serialize_periodic_review,
+    write_periodic_review_bundle,
+)
 from .profile import (
     init_personal_profile,
     load_personal_profile,
@@ -523,6 +531,49 @@ def handle_maintenance_resume(root: Path) -> str:
 
 def handle_review_batch(root: Path, decisions: list[dict]) -> str:
     result = apply_review_batch(root, [ReviewAction.model_validate(item) for item in decisions])
+    return json.dumps(result.model_dump(mode="json"), indent=2, ensure_ascii=False)
+
+
+def handle_periodic_review_prepare(
+    root: Path,
+    *,
+    period: ReviewPeriod,
+    anchor: str,
+    output: Path | None = None,
+) -> str:
+    bundle = prepare_periodic_review(root, period=period, anchor=anchor)
+    if output is None:
+        return serialize_periodic_review(bundle).rstrip()
+    path = write_periodic_review_bundle(output, bundle)
+    return json.dumps(
+        {
+            "status": "prepared",
+            "output": str(path),
+            "bundle_digest": bundle.bundle_digest,
+            "source_count": len(bundle.source_ids),
+        },
+        indent=2,
+        ensure_ascii=False,
+    )
+
+
+def handle_periodic_review_save(
+    root: Path,
+    *,
+    bundle_path: Path,
+    content_path: Path,
+    created_by: str = "agent:codex",
+    overwrite: bool = False,
+) -> str:
+    bundle = load_periodic_review_bundle(bundle_path)
+    body = content_path.read_text(encoding="utf-8")
+    result = save_periodic_review(
+        root,
+        bundle,
+        body,
+        created_by=created_by,
+        overwrite=overwrite,
+    )
     return json.dumps(result.model_dump(mode="json"), indent=2, ensure_ascii=False)
 
 

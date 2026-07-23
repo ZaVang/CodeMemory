@@ -34,9 +34,20 @@ Preserve the owner's wording. Use the capture command/tool so the append, stable
 - Present concentrated review as a batch and support promote, merge, and delete decisions together.
 - Preserve Capture hashes, Topic revision hashes, and owner confirmation in canonical provenance.
 
+## Periodic review
+
+1. Run `maintenance status` first. Resume an active run, or catch up all valid unconsumed Captures, before freezing review evidence.
+2. Prepare an explicit monthly (`YYYY-MM`) or yearly (`YYYY`) bundle with `periodic-review prepare`. Never infer a period from the current date.
+3. Treat the bundle as the complete evidence boundary. Do not independently scan files, add semantic neighbors, or invent relations.
+4. Compare each in-period Topic with its supplied pre-window baseline. Treat Claim transitions only as authored status changes, not as independent truth judgments.
+5. Structure the synthesis as Facts, Synthesis, Inferences, and Uncertainties. Explain themes that formed, evolved, stalled, merged, were promoted, or changed claim status; do not reduce the review to counts.
+6. Keep the result temporary by default. Persist it only when the owner explicitly asks, using `periodic-review save`; never choose an arbitrary review filename.
+7. A periodic review does not confirm canonical promotion. Any promotion or high-risk canonical edit still follows the owner review contract.
+
 ## Safety boundaries
 
 - Capture remains available during maintenance or delivery failures.
 - A sensitive-scan block is a safety notification, not an ordinary review reminder. Report only the rule, path, and object locator; never echo the matching value.
 - Do not bypass the staged-diff scan, stage private/runtime files, or create another commit while retrying a failed push.
-- Do not use Web or semantic discovery in Phase 1B.
+- Do not use Web or semantic discovery in maintenance.
+- Do not invoke Web, semantic discovery, a model provider, Git delivery, or a scheduler from the Core periodic-review path.

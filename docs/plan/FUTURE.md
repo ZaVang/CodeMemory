@@ -16,7 +16,7 @@
 
 ## Roadmap Priority
 
-**此前路线图至 Personal Memory Web 均已于 2026-07-23 经 owner 接受。当前没有 active implementation Sprint；下一项需从剩余 backlog 单独 materialize。**
+**此前路线图至 Personal Periodic Review 均已于 2026-07-23 经 owner 接受。当前没有 active implementation Sprint；下一项需从剩余 backlog 单独 materialize。**
 
 ### 1. Personal Memory Phase 1A — Instance + Capture + Typed Discovery（已完成并验收）
 
@@ -87,6 +87,7 @@ git status --short --branch -uall
 5. **eval harness ✅**：ContextPack vs full-memory vs no-memory 的三臂对照实验，把 PRD 产品成功标准变成可测数字；provider 显式启用，Core 保持零 LLM 依赖。
 6. **Personal Memory Phase 2 semantic discovery ✅**：本地索引优先，只给 search 提供候选；外部 embedding 默认关闭且当前不受支持；永不参与 canonical build。
 7. **Personal Memory Web ✅**：服务端实例 allowlist registry、Capture 浏览、Incubator 集中审阅、provenance 与想法时间线；不做完整编辑器或 Obsidian 替代品。
+8. **Personal Periodic Review ✅**：显式月度/年度窗口、确定性 provenance evidence bundle、Skill 语义综合，以及仅在 owner 明确要求时持久化单期 review；不把 LLM、scheduler 或 Git delivery 引入 Core。
 
 排期前按 Planning Rules 第 5 条确认是否需要先更新 prd / architecture。
 

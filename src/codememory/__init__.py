@@ -24,6 +24,14 @@ from .index import load_index, reindex, save_index
 from .integrations import CodememoryToolkit
 from .models import ChangeLogEntry, ImportRef, IndexData, MemoryEntry, PersonalIndexEntry, SourceRef
 from .personal_index import read_personal_object, typed_search
+from .periodic_review import (
+    PeriodicReviewBundle,
+    PeriodicReviewSaveResult,
+    PeriodicReviewWindow,
+    prepare_periodic_review,
+    resolve_periodic_window,
+    save_periodic_review,
+)
 from .profile import PersonalProfile, init_personal_profile, validate_personal_profile
 from .orphans import find_orphans
 from .resolve import build_dag, find_cycle_participants, resolve, topological_sort
@@ -100,6 +108,12 @@ __all__ = [
     "search",
     "typed_search",
     "read_personal_object",
+    "PeriodicReviewBundle",
+    "PeriodicReviewSaveResult",
+    "PeriodicReviewWindow",
+    "prepare_periodic_review",
+    "resolve_periodic_window",
+    "save_periodic_review",
     "init_personal_profile",
     "validate_personal_profile",
     # Sources

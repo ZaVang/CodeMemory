@@ -90,6 +90,7 @@
 | `src/codememory/semantic_index.py` | Personal Profile provider-neutral 派生语义索引：typed 输入、atomic persistence、stale/idempotency 与候选排序；canonical build 不读取。 |
 | `src/codememory/semantic_local.py` | 惰性 `sentence-transformers` 本地 adapter；只从已有 private-local 模型目录加载并禁止下载/remote code。 |
 | `src/codememory/personal_web.py` | Personal owner workspace 的 provider-neutral overview/Capture/Topic/Claim/timeline typed read models；只生成安全相对 locator。 |
+| `src/codememory/periodic_review.py` | Personal 月度/年度确定性 evidence bundle、digest/no-clobber 输出与 owner-only 派生 review 保存。 |
 | `src/codememory/maintenance.py` | Personal maintenance run ledger、稳定 input digest、pending changeset、Topic/Claim 渲染、幂等 apply 与恢复。 |
 | `src/codememory/promotion.py` | owner-gated Topic promotion 与 promote/merge/delete batch review。 |
 | `src/codememory/git_delivery.py` | Profile 路径白名单、staged diff 敏感扫描、run trailer commit 与同 commit push retry。 |
@@ -341,6 +342,7 @@ Frontend 是本地操作台：查看 graph、Build canonical context、编辑 me
 | `tests/personal/test_maintenance.py` | missed-run、input digest、pending changeset、interrupted apply、Topic/Claim 与 Skill 交互合同。 |
 | `tests/personal/test_promotion.py` | proposed/active promotion provenance 与 batch promote/merge/delete。 |
 | `tests/personal/test_git_delivery.py` | staged scan、单 run block、路径白名单、commit trailer 与同 commit push retry。 |
+| `tests/personal/test_periodic_review.py` | 周期窗口、baseline/claim transition、证据 digest、path/privacy、显式保存与 no-mutation 合同。 |
 | `tests/unit/__init__.py` | unit test package marker。 |
 | `tests/unit/test_create_update.py` | create/update 行为测试。 |
 | `tests/unit/test_edge_cases.py` | 边界条件和异常路径测试。 |
@@ -398,9 +400,9 @@ cd frontend && npm run build
 
 这些内容不再作为当前判断依据；如果需要追溯，用 `docs/reference/` 或 Git history。
 
-### 13.1 Personal Profile 模块（Phase 1A / 1B / Phase 2）
+### 13.1 Personal Profile 模块（Phase 1A / 1B / Phase 2 / Periodic Review）
 
-Phase 1A / 1B / 2 已经 owner 接受；Personal Web 正在 active Sprint。当前 Personal Profile 落点如下：
+Phase 1A / 1B / 2 与 Personal Web 已经 owner 接受；Personal Periodic Review 正在 active Sprint。当前 Personal Profile 落点如下：
 
 | 目标路径 | 责任 |
 |---|---|
@@ -410,6 +412,7 @@ Phase 1A / 1B / 2 已经 owner 接受；Personal Web 正在 active Sprint。当�
 | `src/codememory/semantic_index.py` | ignored private-local typed vector index、显式 build/status/query 与 build isolation |
 | `src/codememory/semantic_local.py` | 可选本地 embedding adapter；惰性 import、local-only load |
 | `src/codememory/personal_web.py` | Web 所需 typed read model 与显式关系 timeline；不读取 private-local |
+| `src/codememory/periodic_review.py` | 显式周期、确定性 evidence bundle 与 owner-only review persistence；不执行语义综合 |
 | `src/codememory/maintenance.py` | Phase 1B changeset、run ledger 与幂等状态机 |
 | `src/codememory/promotion.py` | canonical promotion 与 batch review |
 | `src/codememory/git_delivery.py` | 敏感扫描和可选 Git delivery adapter |

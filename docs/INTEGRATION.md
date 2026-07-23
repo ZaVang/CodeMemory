@@ -344,6 +344,18 @@ python -m codememory.cli --root D:\memory\MyMemory search `
 
 The adapter loads the model local-only and never downloads it. Identical builds are reused; content/model changes make the index stale until explicit rebuild. The index remains under ignored private-local state, and results are candidate IDs only: callers still use `read_memory` for Capture/Topic/Claim and `build_memory` for canonical Atoms. No REST endpoint exposes this operation, and semantic neighbors never alter imports or ContextPack assembly.
 
+Periodic review is an explicit owner CLI workflow. Resolve or catch up maintenance first, then freeze one deterministic evidence bundle:
+
+```powershell
+python -m codememory.cli --root D:\memory\MyMemory periodic-review prepare `
+  --period monthly --anchor 2026-07 --output review-bundle.json
+
+python -m codememory.cli --root D:\memory\MyMemory periodic-review save `
+  --bundle review-bundle.json --content review.md
+```
+
+`prepare` is read-only and never invokes maintenance, Git, semantic discovery, Web, a scheduler, or an LLM. It emits JSON to stdout unless `--output` is supplied, and refuses to clobber that file. `save` derives the only permitted destination from the Profile (`reviews/monthly/YYYY-MM.md` or `reviews/yearly/YYYY.md`); it is intended only after explicit owner instruction. Neither operation is exported through MCP, Toolkit, REST, or the generic Agent tool catalog.
+
 See `docs/personal-memory-profile.md` for the complete file, provenance, Claim, maintenance, and Git safety contracts.
 
 ---

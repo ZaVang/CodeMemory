@@ -121,3 +121,13 @@ Capture 出现不完整 block 或 payload hash mismatch 时，validate 必须报
 - `GET /api/datasets` 只公开 name/count/profile/source；不得泄露绝对 root、registry 路径、Git remote、private-local 或 semantic/maintenance 状态。
 - Server startup 只能自动 reindex contained demo roots；外部 registry root 的字节必须保持不变。
 - Personal router 不扫描 Markdown、不推断关系、不自行实现批量审阅。typed filtering/timeline 属于 Core read model，review batch 只调用一次共享 handler。
+
+---
+
+## 周期回顾必须冻结证据，不能伪装成第二个 maintenance
+
+- period 必须是 Profile timezone 中明确的 `monthly + YYYY-MM` 或 `yearly + YYYY`；Core 不从当前时间猜“上月/去年”。
+- 周期回顾需要每个 Topic revision 的 Claim 快照。稳定 `claim_id` 在不同 revision 重复是历史，不应被当前 typed index 的全局去重规则抹平。
+- 每个有周期内 revision 的 logical topic 最多补一个最新 pre-window baseline；不要把全部历史或语义近邻塞进 bundle。
+- `prepare` 必须只读，不消费 Capture、不更新 Topic、不碰 maintenance/Git/semantic/provider。Skill 先单独完成 resume/catch-up，再冻结证据。
+- 默认只生成临时综合；持久化必须由 owner 明确要求，且只能写 Profile 派生的 `reviews/monthly|yearly` 路径。Review 不是 canonical，也不构成 promotion 确认。

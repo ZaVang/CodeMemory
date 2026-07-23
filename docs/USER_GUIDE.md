@@ -256,6 +256,27 @@ CodeMemory 不下载模型，也不会切换到外部 embedding。索引在 igno
 
 语义结果中的 Capture / Topic / Claim 仍走 `read`，Atom 仍走 `build`。命中相似对象不会自动读取正文、生成 imports、影响 maintenance，或向 ContextPack 注入节点。当前不提供 REST/Web semantic surface。
 
+### 7.4 月度 / 年度周期回顾
+
+周期回顾先处理已有 maintenance run 和所有未消费 Capture，再为明确周期冻结证据：
+
+```powershell
+codememory --root D:\work\MyMemory maintenance status
+codememory --root D:\work\MyMemory periodic-review prepare `
+  --period monthly --anchor 2026-07 --output review-bundle.json
+```
+
+`prepare` 本身只读，不会替你运行 maintenance、调用模型、做 semantic search、提交 Git 或创建 review 文件。Personal Memory Skill 只使用 bundle 中的事实、Topic baseline、Claim status transition 和显式 provenance，生成区分 Facts / Synthesis / Inferences / Uncertainties 的临时回顾。
+
+只有 owner 明确要求保存时，才执行：
+
+```powershell
+codememory --root D:\work\MyMemory periodic-review save `
+  --bundle review-bundle.json --content review.md
+```
+
+保存位置固定由 Profile 推导为 `reviews/monthly/YYYY-MM.md` 或 `reviews/yearly/YYYY.md`。回顾不是 canonical Atom，不进入 imports/build，也不代表 owner 已确认任何 promotion。已有不同内容默认拒绝覆盖；owner 需要明确添加 `--overwrite`。
+
 ---
 
 ## 8. 常用 CLI

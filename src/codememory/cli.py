@@ -23,6 +23,8 @@ from .handlers import (
     handle_maintenance_status,
     handle_merge,
     handle_orphans,
+    handle_periodic_review_prepare,
+    handle_periodic_review_save,
     handle_propose,
     handle_proposals,
     handle_reindex,
@@ -95,6 +97,22 @@ def main(argv: list[str] | None = None):
     p = subparsers.add_parser("review-batch", help="Apply promote/merge/delete Topic decisions")
     _add_logging_flags(p)
     p.add_argument("--file", required=True, help="JSON list of review decisions")
+
+    p = subparsers.add_parser(
+        "periodic-review",
+        help="Prepare or explicitly persist a Personal monthly/yearly review",
+    )
+    _add_logging_flags(p)
+    periodic_subparsers = p.add_subparsers(dest="periodic_review_command", required=True)
+    pp = periodic_subparsers.add_parser("prepare", help="Build a deterministic review evidence bundle")
+    pp.add_argument("--period", choices=["monthly", "yearly"], required=True)
+    pp.add_argument("--anchor", required=True, help="YYYY-MM for monthly or YYYY for yearly")
+    pp.add_argument("--output", help="Optional no-clobber JSON output path")
+    ps = periodic_subparsers.add_parser("save", help="Persist one owner-requested review Markdown")
+    ps.add_argument("--bundle", required=True, help="Prepared periodic review bundle JSON")
+    ps.add_argument("--content", required=True, help="Authored Markdown body")
+    ps.add_argument("--created-by", default="agent:codex")
+    ps.add_argument("--overwrite", action="store_true", help="Owner-confirmed replacement for this period")
 
     # create
     p = subparsers.add_parser("create", help="Create a new memory")
@@ -407,6 +425,22 @@ def main(argv: list[str] | None = None):
         if not isinstance(decisions, list):
             parser.error("review-batch file must contain a JSON list")
         print(handle_review_batch(root, decisions))
+    elif cmd == "periodic-review":
+        if args.periodic_review_command == "prepare":
+            print(handle_periodic_review_prepare(
+                root,
+                period=args.period,
+                anchor=args.anchor,
+                output=Path(args.output) if args.output else None,
+            ))
+        else:
+            print(handle_periodic_review_save(
+                root,
+                bundle_path=Path(args.bundle),
+                content_path=Path(args.content),
+                created_by=args.created_by,
+                overwrite=args.overwrite,
+            ))
     elif cmd == "create":
         tags_list = None
         if args.tags:
