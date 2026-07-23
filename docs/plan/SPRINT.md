@@ -1,119 +1,117 @@
 # CodeMemory Current Sprint
 
 > **Status:** SPRINT COMPLETE — accepted by owner.
-> **Sprint:** Operator UI Alignment — Build, Review Queue, and Golden Questions.
-> **Branch:** `codex/operator-ui-alignment`.
-> **Depends on:** accepted MCP / Toolkit alignment commit `e6577e4`.
-> **Upstream contracts:** `docs/prd.md`, `docs/architecture.md`, `docs/plan/FUTURE.md`.
+> **Sprint:** Documentation and Examples Alignment.
+> **Branch:** `codex/docs-examples-alignment`.
+> **Depends on:** accepted Operator UI alignment commit `a0f89b5`.
+> **Upstream contracts:** `docs/prd.md`, `docs/architecture.md`, `docs/personal-memory-profile.md`.
 
 ---
 
 ## Start Gate — Open
 
-The owner accepted MCP / Toolkit alignment, authorized its completion commit/push, and instructed CodeMemory to start the next roadmap item. Roadmap priority 3 is Operator UI alignment.
+The owner accepted and merged Operator UI alignment, cleaned all previous branches, and instructed CodeMemory to continue with the next roadmap item. Roadmap priority 4 is documentation and examples alignment.
 
-This sprint aligns the existing FastAPI adapter and React operator UI with already-accepted Core contracts. It does not add Personal Memory Web, arbitrary instance browsing, importer review UI, semantic discovery, Web/PDF ingestion, or a new design system.
+This sprint reconciles user-facing documentation, integration guidance, repository maps, and checked-in example roots with already-accepted behavior. It does not change canonical Core semantics or begin the eval harness, Personal Memory Web, semantic discovery, Web/PDF ingestion, or provider work.
 
 ---
 
 ## Objective
 
-Make the local operator UI accurately expose the current memory-as-code workflow: canonical `build` output, an owner review queue for proposed Atoms and modification patches, and read-only golden questions. Remove UI behavior tied to deleted intensity / stability / decay / wander semantics while preserving graph, list, dashboard, edit, validate, reindex, dataset switching, and source-safe Core boundaries.
+Make every primary onboarding and integration path runnable from a clean checkout with current memory-as-code terminology: `build` as the primary read path, the exact root-bound agent tool catalog, proposal/review gates, source-aware importer flow, current REST operator surface, and examples free of removed heat metadata.
 
 ---
 
 ## Contracts
 
-1. `backend/` remains a REST adapter. Build, merge/reject, test export, create/update, search, validate, and reindex must delegate to existing Core/handler behavior rather than reimplement canonical semantics in React or routers.
-2. `POST /api/build` is the primary UI assembly endpoint and returns both the structured ContextPack and the requested rendered output. The UI must stop calling `/api/resolve`; compatibility REST aliases may remain but cannot have separate assembly logic.
-3. `GET /api/reviews` returns two explicit queues: proposed Atoms and modification patch proposals. Queue items must expose kind, stable ID/target, summary/reason, created metadata, and patch fields without modifying targets.
-4. Owner review actions are explicit, kind-specific merge/reject calls. Atom merge activates proposed → active; Atom reject archives it; patch merge applies through Core update/version/change log; patch reject deletes only the patch record.
-5. `GET /api/tests/{memory_id}` exports the existing golden-question TestBundle. The UI displays questions, optional expectations, notices, and context availability read-only; it does not run an LLM, judge answers, or fabricate pass/fail results.
-6. Operator create writes complete summary/body/imports through one Core create call and may explicitly choose active or proposed. Owner edit uses canonical update semantics and cannot revive removed intensity/stability fields.
-7. Frontend/API types, forms, graph sizing, search/list/detail/dashboard/help copy contain no active intensity, stability, decay, wander, or touch behavior. Maturity remains because it is still canonical metadata.
-8. Proposed/archived/superseded status remains visible in operator inventory and graph, but only assemblable targets can build. Errors from non-buildable targets and invalid review actions are bounded and leave bytes unchanged.
-9. Every request stays scoped by the existing dataset alias header. This sprint does not accept absolute roots or add a production instance registry; examples discovery remains the development/demo boundary.
-10. No new frontend or Python runtime dependency is introduced. Existing responsive layout, themes, keyboard behavior, dataset switching, graph/list/dashboard flows, and API compatibility tests remain green.
+1. Product and architecture truth remain in PRD/architecture/profile contracts; this sprint documents accepted behavior and does not invent new semantics.
+2. `docs/INTEGRATION.md` must be a current integration guide, not a legacy guide with a stale-warning banner. Removed focus/overview/wander, intensity/stability/decay, and removed agent aliases cannot appear as active instructions.
+3. `build` is the primary canonical assembly verb. `resolve` and `context-pack` may be documented only as compatibility CLI/API aliases that share the build pipeline.
+4. Agent examples expose the exact standard five-tool root-bound surface. Tool payloads contain no `root`; creation is complete in one write; modification uses `propose_memory`; no removed aliases are invoked.
+5. Example execution must not mutate checked-in datasets. Writable demonstrations use an isolated temporary copy or disposable root and clean up automatically.
+6. Example Atom/Schema frontmatter uses only current model fields. Removed `intensity`, `stability`, `stability_source`, and `days_since_last_access` keys are forbidden; prose must not teach heat/decay semantics.
+7. Checked-in example indexes are regenerated from source Markdown after metadata cleanup, and each registered example dataset must validate without errors.
+8. `docs/project_structure.md`, README, USER_GUIDE, agent-facing quick references, and example descriptions must identify current module/file ownership and current command/tool names.
+9. Historical `docs/reference/`, accepted HISTORY, superseded roadmap notes, and architecture migration records may retain legacy vocabulary when clearly historical; regression checks target active guidance and examples.
+10. No runtime dependency, public API, Core behavior, frontend behavior, or example dataset alias is added or renamed in this sprint.
 
 ---
 
 ## Deliverables
 
-### 1. REST operator contract
+### 1. Primary documentation
 
-- [x] Add primary structured `/api/build` backed by the unified build pipeline.
-- [x] Add typed review-queue list and kind-specific merge/reject endpoints.
-- [x] Add golden-question TestBundle export endpoint.
-- [x] Route complete create/update through Core and remove stale touch/decay adapter behavior.
+- [x] Rewrite `docs/INTEGRATION.md` around current CLI, Python, MCP/Toolkit, REST, importer, and Personal Profile contracts.
+- [x] Align README and USER_GUIDE quick paths on `build`, exact proposal gates, and current feature status.
+- [x] Correct `docs/project_structure.md` and agent quick references where removed modules/commands are still presented as current.
 
-### 2. Operator review and build UI
+### 2. Runnable examples
 
-- [x] Add a Review view showing proposed Atoms and modification patch proposals with explicit merge/reject confirmation and refresh behavior.
-- [x] Rename the UI assembly workflow from Resolve to Build and consume structured ContextPack plus rendered output.
-- [x] Display status/provenance-relevant proposal details without exposing hidden filesystem paths.
-- [x] Show golden questions and optional expectations in Memory Detail without executing or judging them.
+- [x] Rewrite `examples/example_agent.py` to use the root-bound five-tool surface with complete create and canonical build in a disposable root.
+- [x] Remove obsolete heat/decay frontmatter and prose from every example dataset without changing stable IDs/import graphs.
+- [x] Regenerate checked-in indexes and validate investment, companion, and software-architecture datasets.
 
-### 3. Legacy UI cleanup
+### 3. Drift prevention
 
-- [x] Remove intensity/stability/decay/wander/touch fields, controls, calculations, API calls, and help text.
-- [x] Replace intensity-based graph sizing with canonical graph metadata such as dependent count and fixed bounded sizes.
-- [x] Keep maturity/status/tags/imports/source metadata and existing owner edit/archive behavior intact.
-
-### 4. Documentation and verification
-
-- [x] Add API regression tests for build parity, review queue/actions, golden questions, complete create, and bounded failure paths.
-- [x] Add frontend build/Playwright coverage for Build, Review, and legacy-control absence.
-- [x] Update PRD/architecture only where adapter status needs clarification; update USER_GUIDE, project structure, roadmap, and UI help text.
-- [x] Run all Core/API/Personal/integration/frontend acceptance commands and restore checked-in example side effects.
+- [x] Add focused tests for current example metadata, current agent example tool names/payloads, and primary-guide legacy-instruction absence.
+- [x] Add or reuse a local Markdown link check for primary documentation.
+- [x] Run the complete docs/examples acceptance set and restore any generated example side effects not intentionally part of this sprint.
 
 ---
 
 ## Executable Acceptance Criteria
 
-1. `POST /api/build` returns a structured pack and rendered output from the same pipeline; for the same request its rendered content matches Core `render_context_pack` and contains no proposed target.
-2. `GET /api/reviews` distinguishes proposed Atoms from patch proposals and reports stable IDs, targets, patch fields, and a correct total without changing files or index state.
-3. Merging/rejecting each review kind produces the accepted Core state transition; invalid kind/ID/status returns a bounded 4xx and leaves target/proposal bytes unchanged.
-4. `GET /api/tests/{id}` returns the declared golden questions, optional expectations, assembled context, and empty-question notice exactly from the Core TestBundle.
-5. Operator create sends complete summary/body/imports once, supports explicit proposed status, and does not perform a post-create direct file rewrite.
-6. The UI has a visible Review view with separate proposed-Atom and patch sections, empty/loading/error states, confirmation before action, and refresh after successful merge/reject.
-7. Memory Detail uses Build terminology/output and exposes golden questions; Graph/List navigation still opens the same memory and non-buildable status errors are understandable.
-8. Frontend production code has no `fetchWander`, `WanderResponse`, `touchMemory`, intensity/stability/decay UI calculations, or `/api/resolve` call. Graph size remains bounded and deterministic.
-9. Dashboard validate/reindex/stats, dataset switching, create/edit/archive, search, graph, list, themes, and keyboard shortcuts remain functional.
-10. `npm run build`, `npm run lint`, Playwright smoke, all Python unit/API/Personal/integration suites, and `git diff --check` pass; example fixtures have no residue.
+1. A new user can follow README and INTEGRATION quick starts using `reindex → validate → search → build` against `examples/investment` without an obsolete command or field.
+2. Primary integration docs accurately list the five standard agent tools and six Personal extensions, state explicit root binding, and contain no agent payload `root` parameter.
+3. `PYTHONPATH=src python examples/example_agent.py` exits 0, registers exactly the standard five tools, calls only current names, performs complete create/build in a temporary root, and leaves `examples/` byte-clean.
+4. No Markdown under active example datasets has frontmatter keys `intensity`, `stability`, `stability_source`, or `days_since_last_access`; the no-leverage prose uses canonical protected/constraint language instead of a numeric heat score.
+5. `reindex` followed by `validate` succeeds for investment, companion, and software-architecture; regenerated indexes contain no removed heat fields.
+6. `docs/project_structure.md` does not claim deleted `context_pack.py` exists and maps build, REST review, importer, agent tools, and Personal modules to their actual files.
+7. Primary guides contain no active instructions for focus/overview/wander, `create --intensity`, decay warnings, or removed agent aliases. Clearly labeled compatibility/history tables are allowed.
+8. Focused drift tests, all Python unit/API/Personal/integration suites, Markdown link checks, and `git diff --check` pass; generated logs or unrelated example state are absent.
 
 ---
 
 ## Acceptance Commands
 
 ```powershell
+python -m pytest tests/unit/test_docs_examples.py -q
 python -m pytest tests/unit tests/test_api.py -q
 python -m pytest tests/personal -q
 python tests/integration_test.py
 python tests/integration_personal.py
-Set-Location frontend
-npm run build
-npm run lint
-npm run test:e2e:ci
-Set-Location ..
-rg -n "fetchWander|WanderResponse|touchMemory|intensity|stability|decay|/api/resolve" frontend/src
+$env:PYTHONPATH = "src"
+python examples/example_agent.py
+Remove-Item Env:PYTHONPATH
+python -m codememory.cli --root examples/investment reindex
+python -m codememory.cli --root examples/investment validate
+python -m codememory.cli --root examples/companion reindex
+python -m codememory.cli --root examples/companion validate
+python -m codememory.cli --root examples/software-architecture reindex
+python -m codememory.cli --root examples/software-architecture validate
+rg -n "^(intensity|stability|stability_source|days_since_last_access):" examples
 git diff --check
 git status --short --branch -uall
 ```
 
-The legacy-term grep must return no production frontend matches (exit code 1).
+The removed-field grep must return no matches (exit code 1). Reindex changes are intentional only where they reflect the cleaned example Markdown; log/test side effects must be restored.
 
 ---
 
 ## Explicit Deferrals
 
-- Personal Memory Web instance registry, Capture/Incubator browsing, provenance timeline, and batch Topic review.
-- Importer/compiler review-set UI and LLM proposer configuration.
-- Golden-question execution, answer judging, report submission, eval harness, or provider calls.
-- Web/PDF/non-Markdown ingestion, semantic discovery, external embeddings, and arbitrary filesystem roots.
-- Visual redesign, framework migration, dependency upgrades, and production authentication/authorization.
+- Eval harness and provider-backed golden-question execution/judging.
+- Personal Memory Phase 2 semantic discovery or external embeddings.
+- Personal Memory Web, production instance registry, authentication, or provenance timeline UI.
+- Importer review UI, Web/PDF/non-Markdown ingestion, dependency upgrades, or visual redesign.
+- Renaming compatibility CLI/API aliases or example dataset directory aliases.
 
 ---
 
 ## Completion Gate
 
-Owner review completed on 2026-07-23 with no remaining blocking findings. The owner independently rechecked dataset-root containment and Core search delegation, reproduced the former absolute-path header escape as a bounded 400 with no outside writes, ran the complete Python/frontend/integration acceptance set, restored generated example side effects, and authorized `SPRINT COMPLETE`, accepted HISTORY, commit, push, merge, and branch cleanup.
+Implementation completed on 2026-07-23 with focused drift checks `7 passed`, Core/API `278 passed` (one existing Pydantic warning), Personal `42 passed`, existing integration `21/21`, and Personal integration `15/15`. Owner-review follow-up removed the remaining active Agent-guide bypass: new Agent Atoms now use complete one-write `create_memory`, every existing-Atom change (including source binding) uses a modification proposal, Scenario D uses `codememory propose`, and status-only lifecycle is explicitly owner-only because it is outside the patch schema. The runnable Agent example registered exactly five tools and completed in a disposable root. Investment and companion validate with zero warnings; software-architecture has zero errors and four existing maturity-review warnings. Generated test log/index side effects were restored, the three intentional indexes were regenerated from the pre-test runtime baseline, removed-field grep has no matches, and `git diff --check` passes.
+
+Owner accepted the Documentation and Examples Alignment sprint on 2026-07-23 after independently re-running the focused documentation/example checks, Core/API and Personal suites, Personal integration, the five-tool Agent example, removed-field grep, and `git diff --check`. The accepted outcome is recorded in `docs/plan/HISTORY.md`.
+
+Commit, push, merge, and branch cleanup remain separate explicit Git operations.

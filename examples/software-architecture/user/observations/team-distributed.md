@@ -7,7 +7,6 @@ tags:
 - team
 - communication
 - process
-intensity: 7
 status: active
 version: 1
 maturity: verified

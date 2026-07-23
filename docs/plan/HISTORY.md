@@ -4,6 +4,40 @@ This file records accepted sprint outcomes. Current work belongs in `docs/plan/S
 
 ---
 
+## 2026-07-23 — Documentation and Examples Alignment
+
+**Status:** Accepted by owner.
+
+**Delivered:**
+
+- Replaced the stale integration guide and aligned README, USER_GUIDE, project structure, frontend guidance, and agent-facing references with the accepted build, proposal/review, importer, REST, and Personal Profile contracts.
+- Rebuilt `examples/example_agent.py` around the exact five-tool root-bound Agent surface, complete one-write creation, proposal-only modification discipline, canonical build, and an automatically cleaned disposable root.
+- Removed deprecated heat/decay metadata from active example Markdown without changing stable IDs or import graphs, then regenerated all three checked-in example indexes.
+- Added drift tests for primary documentation links and commands, removed fields, exact Agent tool names/payloads, disposable example execution, index shape, and Agent write discipline.
+- Closed the owner-review blocker by requiring Agent additions to use complete `create_memory`, routing every existing-Atom change through proposals, using a proposal in Scenario D, and documenting status-only lifecycle changes as trusted owner operations outside the current patch schema.
+- Added the repeatable example-index restoration rule to sprint pitfalls so test runtime state does not overwrite intentional generated-index changes.
+
+**Acceptance evidence:**
+
+- Owner independently rechecked the Agent guide write boundaries and confirmed the trusted owner CLI `update` references remain correctly scoped outside the Agent contribution path.
+- `python -m pytest tests/unit/test_docs_examples.py -q` → `7 passed`
+- `python -m pytest tests/unit tests/test_api.py -q` → `278 passed` with one existing Pydantic warning
+- Personal Profile suite → `42 passed`
+- `python tests/integration_test.py` → `21/21 passed`
+- `python tests/integration_personal.py` → `15/15 passed`
+- `examples/example_agent.py` registered exactly five tools and completed successfully in its disposable root.
+- Removed-field grep returned no matches; `git diff --check` passed.
+- Generated example log/test side effects were restored; only the three intentionally regenerated indexes remain changed.
+
+**Deferred:**
+
+- Golden-question execution/evaluation harness.
+- Personal Memory Phase 2 semantic discovery and external embeddings.
+- Personal Memory Web, production instance registry, authentication, and provenance timeline UI.
+- Importer review UI, Web/PDF/non-Markdown ingestion, and provider expansion.
+
+---
+
 ## 2026-07-23 — Operator UI Alignment: Build, Review Queue, and Golden Questions
 
 **Status:** Accepted by owner.

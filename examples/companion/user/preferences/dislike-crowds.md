@@ -9,7 +9,6 @@ tags:
 - companion
 - preference
 - lifestyle
-intensity: 5
 maturity: draft
 summary_hash: 55dc503
 ---

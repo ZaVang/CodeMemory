@@ -6,7 +6,6 @@ summary: Prefer the simplest solution that meets requirements, deferring complex
 tags:
 - engineering-culture
 - decision-making
-intensity: 9
 status: active
 version: 1
 maturity: proven

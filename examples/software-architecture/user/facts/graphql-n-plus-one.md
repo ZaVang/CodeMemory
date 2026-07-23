@@ -7,7 +7,6 @@ tags:
 - graphql
 - performance
 - backend
-intensity: 8
 status: active
 version: 1
 maturity: proven

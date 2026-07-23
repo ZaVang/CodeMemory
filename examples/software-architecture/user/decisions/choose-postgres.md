@@ -5,7 +5,6 @@ summary: PostgreSQL selected as the primary relational database
 tags:
 - database
 - infrastructure
-intensity: 7
 status: active
 version: 1
 maturity: proven

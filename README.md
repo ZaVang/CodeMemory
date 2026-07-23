@@ -35,7 +35,7 @@ codememory reindex && codememory validate
 
 ## 启动完整应用
 
-CodeMemory 提供 Web 管理面板（Graph 视图 + Dashboard + CRUD 表单）。
+CodeMemory 提供本地 Operator UI（Graph / List / Dashboard / Review / Build / Golden Questions）。
 
 ```bash
 cd frontend && npm install && cd ..
@@ -190,9 +190,9 @@ Toolkit 与 MCP 共用同一 root-bound catalog：普通实例提供 `build_memo
 - [产品需求](docs/prd.md) -- memory-as-code 公理、11 概念模型、写入纪律、非目标
 - [架构设计](docs/architecture.md) -- 契约级参考：三层结构、数据契约、管线契约、收敛路径（已完成）
 - [Agent 记忆指南](docs/agent-memory-guide.md) -- 记忆库贡献规范（agent 的 CONTRIBUTING.md）
-- [项目结构](docs/project_structure.md) -- 文件职责映射（待随新术语统一更新，见文内提示）
-- [集成指南](docs/INTEGRATION.md) -- 接入方式（部分命令示例待更新，见文内提示）
-- [用户指南](docs/USER_GUIDE.md) -- 日常使用、维护和迁移（同上）
+- [项目结构](docs/project_structure.md) -- 当前文件职责与新代码落点
+- [集成指南](docs/INTEGRATION.md) -- CLI / Python / MCP / Toolkit / REST 接入
+- [用户指南](docs/USER_GUIDE.md) -- 日常使用、Personal Profile、维护和迁移
 - [Roadmap / Sprint](docs/plan/FUTURE.md) -- 长期 backlog；当前任务见 [SPRINT](docs/plan/SPRINT.md)
 - [Reference: Companion Mode](docs/reference/companion-mode.md) -- 历史探索，不代表 v1 方向
 

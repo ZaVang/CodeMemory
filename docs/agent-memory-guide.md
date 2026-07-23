@@ -7,7 +7,7 @@
 
 ## 0. 概念 ↔ 当前命令对照
 
-概念名是 PRD 语言；命令名是当前 CLI 现实（动词收敛前以本表为准）：
+概念名是 PRD 语言；Agent 使用 root-bound tool，owner 的可信本地操作使用 CLI：
 
 | 概念 | 当前命令 |
 |---|---|
@@ -15,12 +15,12 @@
 | check（校验） | `codememory validate` |
 | search（检索） | `codememory search --query <q> [--tags t1 t2]` |
 | asset（登记/查看/展开） | `codememory source add <uri> [--id ID] [--summary "..."]` / `source list` / `source get <id>` / `source check` / `source expand <id> [--max-chars N]` |
-| 新增 atom | `codememory create --id <id> [--schema s] [--tags "a,b"]`，然后立即 `update` 填入真实内容（见第 7 节） |
-| 修改 atom | `codememory update <id> --change-note "..."`（高风险，见第 6 节） |
-| proposal（新增类） | `codememory create --propose ...` 落为 proposed；owner 用 `merge <id>` / `reject <id>` 处理 |
-| proposal（修改类） | `codememory propose <id> --reason "..." [--summary ...] [--body ...]` 入队；`proposals` 看队列；owner `merge <proposal_id>` / `reject <proposal_id>` |
+| Agent 新增 atom | `create_memory` 一次提交完整 `id + summary + body + tags + imports`；普通 root 可选 active/proposed，Personal Profile 强制 proposed |
+| Agent 修改 atom | `propose_memory` 只写 patch queue，不修改 target bytes（高风险，见第 6 节） |
+| proposal（新增类） | `create_memory` 传 `propose: true`；owner 用 `codememory merge <id>` / `reject <id>` 处理 |
+| proposal（修改类） | `propose_memory` 或可信 CLI `codememory propose <id> --reason "..." [--summary ...] [--body ...]` 入队；owner `merge <proposal_id>` / `reject <proposal_id>` |
 | test（验证） | `codememory test <entry>` 导出题集+上下文 JSON；答完 `codememory test report <entry> --results <file>` |
-| 绑定 asset | `codememory update <id> --change-note "..." --source-ref <artifact_id> [--source-ref-summary "..."]` |
+| Agent 给已有 atom 绑定 asset | `propose_memory` 传 `source_ref`；owner merge 后经 canonical update 生效 |
 | 批量导入存量材料 | agent 提炼范式见第 9 节；机械切分用 `compile-md` / `skeletonize` / `import` |
 
 ---
@@ -95,7 +95,7 @@ build 超预算时你的 atom 会被裁剪到只剩 summary——所以 summary 
 
 ## 5. asset：长材料的正确姿势
 
-长文档、会议记录、设计稿、PDF、代码文件——**登记为 asset，不要塞进 atom body**。
+长文档、会议记录、设计稿、PDF、代码文件——**登记为 asset，不要塞进 atom body**。登记是可信 owner/operator 操作，不在标准 Agent tool surface：
 
 ```bash
 codememory source add docs/rfc-001.md --id src/rfc-001-cache --summary "RFC-001: 缓存层设计"
@@ -103,15 +103,20 @@ codememory source add docs/rfc-001.md --id src/rfc-001-cache --summary "RFC-001:
 
 然后写一个轻量 atom 做语义索引：summary 说清"它是什么、什么时候该读"。
 
-绑定方式：
+artifact 已登记后，Agent 给已有 atom 增加结构化绑定也属于修改，必须提案：
 
-```bash
-codememory update user/contexts/cache-layer \
-  --change-note "绑定 RFC-001 asset" \
-  --source-ref src/rfc-001-cache --source-ref-summary "RFC-001 缓存层设计"
+```json
+{
+  "tool": "propose_memory",
+  "input": {
+    "id": "user/contexts/cache-layer",
+    "reason": "绑定已登记的 RFC-001 source artifact",
+    "source_ref": "src/rfc-001-cache"
+  }
+}
 ```
 
-同一 artifact 重复绑定会被自动跳过。在 body 中顺带写明 asset id 与展开命令仍是好实践（agent 阅读时可直接行动）。
+owner merge patch 后，同一 artifact 的重复绑定会被自动跳过。在 body 中顺带写明 asset id 与展开命令仍是好实践（agent 阅读时可直接行动）。
 
 需要原文时按需 `source expand`，不要默认展开全文。
 
@@ -121,13 +126,15 @@ codememory update user/contexts/cache-layer \
 
 | 你要做的事 | 等级 | 动作 |
 |---|---|---|
-| 新增 atom，不改任何已有文件（可声明自己的 imports） | 低风险 | 直接 create + update 填内容，写后 validate |
+| 新增 atom，不改任何已有文件（可声明自己的 imports） | 低风险 | `create_memory` 一次提交完整内容，写后 validate |
 | 修改**已有** atom 的 body 或 imports | 高风险 | 走 proposal |
 | 涉及 protected atom 的任何变更 | 高风险 | 走 proposal |
 
-**新增类 proposal（已实装）**：对要新增的内容没把握、或内容涉及 protected 邻域时，用 `codememory create --propose ...`。产出的 atom 是 `status: proposed`——默认 search 不可见、build 不装配，owner 审阅后 `codememory merge <id>`（进入 canonical）或 `codememory reject <id>`（归档）。
+**新增类 proposal（已实装）**：对要新增的内容没把握、或内容涉及 protected 邻域时，调用 `create_memory` 并传 `propose: true`。产出的 atom 是 `status: proposed`——默认 search 不可见、build 不装配，owner 审阅后 `codememory merge <id>`（进入 canonical）或 `codememory reject <id>`（归档）。
 
 **修改类 proposal（已实装）**：修改**已有** atom 的高风险变更**不要直接 update**。用 `codememory propose <id> --reason "..."` 把字段级 patch 入队（支持 --summary / --body / --import-* / --source-ref），目标 atom 不被触碰；owner 审阅后 `merge <proposal_id>`（经 update 应用，version++、change_log 留痕）或 `reject <proposal_id>`。
+
+可信 owner CLI 的 `create` 仍是模板命令，owner 可以随后直接 `update`；这不是 Agent 写入路径。Agent 不模拟这个两步流程，必须调用 `create_memory` 完整创建。所有 Agent tool payload 都不包含 `root`，实例由 adapter 预先绑定。
 
 **protected 的设置**：由 owner 拍板，agent 不自行创建 protected atom。当你认为某条记忆需要保护（核心原则、硬约束），向 owner 建议。
 
@@ -141,20 +148,27 @@ codememory update user/contexts/cache-layer \
 
 判断：长期决策（三个月后仍约束行为）→ 记；新增 atom、依赖已有原则 → 直写。
 
+```json
+{
+  "tool": "create_memory",
+  "input": {
+    "id": "user/decisions/2026-06-docs-canonical-only",
+    "summary": "2026-06 起 docs/ 主干只留 canonical 文档，历史探索移入 docs/reference/",
+    "body": "决策：docs/ 根目录只保留长期指导文档。理由：两代世界观共存导致漂移。",
+    "tags": ["decision", "docs"],
+    "import_required": ["user/principles/docs-first"],
+    "propose": false
+  }
+}
+```
+
+owner/Automation 随后运行：
+
 ```bash
-codememory create --id user/decisions/2026-06-docs-canonical-only \
-  --schema schemas/decision --tags "decision,docs"
-
-codememory update user/decisions/2026-06-docs-canonical-only \
-  --change-note "初始内容：记录文档主干决策" \
-  --summary "2026-06 起 docs/ 主干只留 canonical 文档，历史探索移入 docs/reference/" \
-  --body "决策：docs/ 根目录只保留长期指导文档。理由：两代世界观共存导致漂移。" \
-  --import-required user/principles/docs-first
-
 codememory validate
 ```
 
-注意：create 只生成模板（summary 是 TODO 占位符），**必须立即用 update 填入真实内容**。
+注意：Agent 的 `create_memory` 必须一次提供真实 summary/body；不能先创建 TODO 模板再直接改写。
 
 ### 场景 B：沉淀一个排障流程（低风险，直写）
 
@@ -162,14 +176,20 @@ codememory validate
 
 判断：可复用流程 → `user/processes/`；无前置依赖 → 直写，无 imports。
 
+```json
+{
+  "tool": "create_memory",
+  "input": {
+    "id": "user/processes/windows-encoding-triage",
+    "summary": "Windows 编码问题排查：先查 PowerShell 默认 UTF-16，再查 Python locale，最后查 git autocrlf",
+    "body": "1. PowerShell Out-File 默认 UTF-16，写文件加 -Encoding utf8；2. 检查 PYTHONIOENCODING；3. 检查 .gitattributes 的 eol 设置。",
+    "tags": ["process", "windows", "debugging"],
+    "propose": false
+  }
+}
+```
+
 ```bash
-codememory create --id user/processes/windows-encoding-triage --tags "process,windows,debugging"
-
-codememory update user/processes/windows-encoding-triage \
-  --change-note "初始内容：Windows 编码排查流程" \
-  --summary "Windows 编码问题排查：先查 PowerShell 默认 UTF-16，再查 Python locale，最后查 git autocrlf" \
-  --body "1. PowerShell Out-File 默认 UTF-16，写文件加 -Encoding utf8；2. 检查 PYTHONIOENCODING；3. 检查 .gitattributes 的 eol 设置。"
-
 codememory validate
 ```
 
@@ -179,32 +199,45 @@ codememory validate
 
 判断：长文档 → asset，绝不塞进 atom body；另建轻量索引 atom。
 
+owner 先登记 asset：
+
 ```bash
 codememory source add docs/rfc-001.md --id src/rfc-001-cache --summary "RFC-001: 缓存层设计"
-
-codememory create --id user/contexts/cache-layer --tags "architecture,cache"
-
-codememory update user/contexts/cache-layer \
-  --change-note "初始内容：缓存层上下文入口" \
-  --summary "缓存层上下文入口；动缓存实现前必读 RFC-001" \
-  --body "原文见 asset \`src/rfc-001-cache\`（codememory source expand src/rfc-001-cache）。核心结论：写穿透 + 5 分钟 TTL。"
-
-codememory validate
 ```
+
+Agent 一次创建完整索引 atom；因为还需绑定 source_ref，先保持 proposed：
+
+```json
+{
+  "tool": "create_memory",
+  "input": {
+    "id": "user/contexts/cache-layer",
+    "summary": "缓存层上下文入口；动缓存实现前必读 RFC-001",
+    "body": "原文见 asset src/rfc-001-cache（按需 expand）。核心结论：写穿透 + 5 分钟 TTL。",
+    "tags": ["architecture", "cache"],
+    "propose": true
+  }
+}
+```
+
+再用 `propose_memory` 提交 `source_ref: src/rfc-001-cache` patch。owner 先 merge patch、再 merge proposed Atom，最后运行 `codememory validate`。不要用 direct update 补绑定。
 
 ### 场景 D：修正一条已有记忆（高风险，走修改类 proposal）
 
-> 对话：「上次记的'Python 固定 3.13'，现在 3.14 轮子齐了，可以解除。」
+> 对话：「上次记的'Python 固定 3.13'理由过时了；把结论改成升级前先核对 Windows wheel。」
 
-判断：修改已有 decision atom → 高风险。先向 owner 说明变更与理由，**获得明确同意后**：
+判断：修改已有 decision atom → 高风险。Agent 只提交 patch，不等待确认后绕过队列：
 
 ```bash
-codememory update user/decisions/2026-06-pin-python-313 \
-  --change-note "3.14 Windows 轮子已齐，解除版本钉死" \
-  --status archived
+codememory propose user/decisions/2026-06-pin-python-313 \
+  --reason "3.14 Windows wheels 已可用，原固定版本理由过时" \
+  --summary "Python 升级前先核对 tree-sitter 等关键依赖的 Windows wheels" \
+  --body "版本不再永久固定为 3.13。每次升级前必须先验证关键原生依赖在 Windows 上有可用 wheel。"
 
-codememory validate
+codememory proposals
 ```
+
+owner 审阅后执行 `codememory merge <proposal_id>` 或 `reject <proposal_id>`。`status` 不属于当前 modification patch 支持字段；归档等 status-only lifecycle 操作由 owner 直接处理，Agent 不执行，也不能用 direct update 绕过该限制。
 
 ---
 
@@ -216,9 +249,9 @@ codememory validate
 | 长文档塞进 atom body | 登记 asset，atom 只做语义索引 |
 | 全部依赖标 required | 按"不读会不会误解"分级 |
 | 用 imports 表达出处 | 出处写 asset 引用（body 中注明 asset id） |
-| create 后不 update，留着 TODO summary | create 只是模板，必须立即 update 填真实 summary/body |
+| Agent 先 create TODO 再 update | 使用 `create_memory` 一次提交完整 summary/body/imports |
 | 直接 update 已有 atom | 高风险变更走 `propose` 入队，owner `merge` 后生效 |
-| update 不写 change-note | `--change-note` 必填，它是 log 的原料 |
+| Agent 用 owner CLI update 补字段 | 新增内容一次完整 create；已有内容走 proposal |
 | 给记忆打重要性分 | intensity 已整体移除（参数不存在）；重要性由被依赖数表达，保护语义找 owner 标 protected |
 | 写完不跑 validate | 任何写入后 `codememory validate` 守门 |
 
@@ -236,7 +269,7 @@ codememory validate
 - 只有结论有价值（聊天记录、会议速记、草稿）→ 只提炼，不登记 asset；
 - 过不了第 1 节的写入门槛两问 → 跳过，在审阅清单里注明跳过原因。
 
-**第 1 步 · 登记 asset**（如适用）：
+**第 1 步 · 登记 asset**（如适用，由 owner/operator 执行）：
 
 ```bash
 codememory source add <path> --id src/<slug> --summary "一句话说明它是什么"
@@ -249,13 +282,12 @@ codememory source add <path> --id src/<slug> --summary "一句话说明它是什
 - 每条过第 1 节的两问（三个月后还重要吗？丢了会导致错误决策吗？）——**宁缺毋滥**；
 - 一个 atom 一个语义单元（第 8 节反模式）；
 - 目录按第 2 节的种类表选，**直接进正确目录**（`user/facts/`、`user/decisions/`……），不要堆进 `user/imports/`；
-- **一律 `create --propose`**：批量导入是典型的"没把握"场景，全部落为 proposed 走审；
-- create 后立即 update 填真实 summary（第 3 节规范）与简短 body。
+- **一律用 `create_memory` 且 `propose: true`**：批量导入是典型的“没把握”场景；每条一次提交完整 summary、简短 body、tags 与 imports，全部落为 proposed 走审。
 
 **第 3 步 · 声明关联**：
 
 - imports：按第 4 节判据指向库里已有 atom 或**同批** atom；
-- 出处：`update <id> --change-note "..." --source-ref src/<slug>` 绑回 asset；body 不抄原文，只写结论。
+- 出处：body 不抄原文，只写结论。若必须绑定结构化 `source_ref`，用 `propose_memory` 提交 patch，由 owner merge；需要批量原子化 provenance 时优先走 `compile-md`。
 
 **第 4 步 · 批次校验**：`codememory validate`。
 
@@ -264,7 +296,7 @@ codememory source add <path> --id src/<slug> --summary "一句话说明它是什
 
 **第 5 步 · 交付审阅清单**。给 owner 一张表：每条 proposed 的 id、一句话 summary、出处 asset；并给出**建议的 merge 顺序——被依赖者先 merge**（build 会跳过 proposed 节点，依赖链需要自底向上激活）。owner 用 `codememory merge <id>` / `reject <id>` 逐条或批量处理。
 
-**第 6 步 · 收尾**（owner merge 后）。为这批记忆建一个上下文入口 atom（`user/contexts/<主题>`，imports.required 指向核心条目），配 2-3 个 `golden_questions`，然后：
+**第 6 步 · 收尾**（owner merge 后）。用 `create_memory` 一次创建完整上下文入口 atom（`user/contexts/<主题>`，imports.required 指向核心条目）；没把握时仍设 `propose: true`。owner 可为它补充 2-3 个 `golden_questions`，然后：
 
 ```bash
 codememory test user/contexts/<主题>     # 自答题集，验证导入质量
@@ -276,7 +308,7 @@ codememory test report user/contexts/<主题> --results results.json
 | 错误 | 正确做法 |
 |------|----------|
 | 每段原文一条 atom | 那是 compile-md 的机械行为；agent 的价值是提炼与取舍 |
-| 批量导入直写 active | 一律 `--propose`，owner 审后 merge |
+| 批量导入直写 active | `create_memory` 一律传 `propose: true`，owner 审后 merge |
 | atom body 抄原文 | 原文在 asset；atom 只写结论 + source_ref |
 | 全部塞进 user/imports/ | 按种类直接进正确目录，imports 目录是机械导入器的着陆区 |
 | 乱序 merge | 被依赖者先 merge，否则入口 build 暂时缺节点 |

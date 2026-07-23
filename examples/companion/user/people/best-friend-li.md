@@ -9,7 +9,6 @@ tags:
 - companion
 - people
 - friendship
-intensity: 6
 maturity: draft
 imports:
   recommended:

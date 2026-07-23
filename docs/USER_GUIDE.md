@@ -1,12 +1,7 @@
 # CodeMemory User Guide
 
-> **最后更新**：2026-05-19
+> **最后更新**：2026-07-23
 > 本文是日常使用入口。产品定义见 `docs/prd.md`，架构契约见 `docs/architecture.md`。
-
-> **术语提示（2026-06-10）**：本文成文于 memory-as-code 重建之前，概念叙述
-> （Source Artifact / ContextPack / disclosure 等）以新版 `docs/prd.md` 与
-> `docs/architecture.md` 为准（对照表见 prd 附录 A）。文中的 CLI 命令与当前实现
-> 一致、仍可照用；全文随收敛阶段完成后统一更新。
 
 ---
 
@@ -18,10 +13,10 @@ CodeMemory 是一个给单 owner 和多个 agent 共享的工作记忆底座。
 
 - 用 atom 保存长期可复用的事实、决策、约束、流程和上下文入口；
 - 用 imports DAG 表达记忆之间的依赖；
-- 用 ContextPack 把上下文稳定交给 agent；
+- 用 canonical build 生成 ContextPack，把上下文稳定交给 agent；
 - 用 Source Artifact / source_refs 追溯长文档和原始资料。
 
-当前已实现的主线是 atom graph、resolve、ContextPack、compiler review flow，以及 Source Artifact Registry / source_refs / explicit source expansion 基础能力。
+当前主线包括 atom graph、canonical build、proposal review、golden questions、source-aware compiler、Source Artifact 显式展开、Personal Profile，以及本地 Operator UI。
 
 ---
 
@@ -40,7 +35,7 @@ python bin/codememory.py dev
 
 默认启动：
 
-- backend: `http://127.0.0.1:8765`
+- backend: `http://127.0.0.1:8000`
 - frontend: `http://127.0.0.1:5300`
 
 ---
@@ -157,16 +152,16 @@ codememory source expand src/design-md --max-chars 1200
 
 ---
 
-## 6. ContextPack
+## 6. Build 与 ContextPack
 
-ContextPack 是给 agent 的主要上下文交接格式。
+`build` 是 canonical 装配入口，ContextPack 是其结构化产物。
 
 ```powershell
-codememory context-pack user/investment/context --format xml-markdown --budget 2000
-codememory context-pack user/investment/context --format json
+codememory build user/investment/context --format xml-markdown --budget 2000
+codememory build user/investment/context --format json
 ```
 
-它比普通 resolve 更适合 agent，因为它保留结构：
+它保留以下结构：
 
 - target；
 - nodes；
@@ -247,12 +242,12 @@ Phase 1B 仍不包含 Web 或 semantic discovery，external embeddings 保持关
 
 ```powershell
 # 创建 / 更新
-codememory create --id user/project/new-fact --summary "..."
-codememory update user/project/new-fact --body "..."
+codememory create --id user/project/new-fact --tags "project,fact" --propose
+codememory update user/project/new-fact --change-note "Fill reviewed fact" --summary "..." --body "..."
 
-# 解析上下文
-codememory resolve user/project/context --budget 2000
-codememory context-pack user/project/context --format xml-markdown
+# 装配 canonical context
+codememory build user/project/context --budget 2000
+codememory build user/project/context --format xml-markdown
 
 # Source Artifact Registry
 codememory source add docs/design.md --id src/design-md --kind markdown --summary "Design source"
@@ -304,7 +299,7 @@ Web UI 是 operator console，不定义 canonical memory contract。
 
 ---
 
-## 9. Markdown 迁移
+## 10. Markdown 迁移
 
 当前已有 compiler review flow：
 
@@ -343,7 +338,7 @@ canonical graph
 
 重复使用同一 `review-id` 编译相同输入会保留已有 decisions，且不会重写未变化的 registry / review 文件。若输入、tags 或 namespace 已变化，应使用新的 review ID；旧 ID 会安全拒绝覆盖。
 
-### 9.1 显式 LLM semantic proposer
+### 10.1 显式 LLM semantic proposer
 
 需要语义提炼时，可以安装可选 provider 依赖并显式选择 LLM proposer：
 
@@ -369,7 +364,7 @@ codememory --root path\to\memory compile-md path\to\docs `
 
 ---
 
-## 10. 判断一条信息怎么存
+## 11. 判断一条信息怎么存
 
 | 信息类型 | 存法 |
 |---|---|
@@ -386,11 +381,11 @@ codememory --root path\to\memory compile-md path\to\docs `
 
 ---
 
-## 11. 相关文档
+## 12. 相关文档
 
 - `docs/prd.md` — 产品定义和优先级；
 - `docs/architecture.md` — 架构契约；
 - `docs/INTEGRATION.md` — CLI / API / MCP / harness 接入；
 - `docs/project_structure.md` — 仓库文件职责；
-- `docs/agent-memory-guide.md` — Work Layer agent 写入规则草案；
+- `docs/agent-memory-guide.md` — canonical Atom 的 Agent 贡献规范；
 - `docs/reference/` — 历史探索和审计记录。

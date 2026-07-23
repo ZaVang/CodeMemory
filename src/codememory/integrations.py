@@ -85,7 +85,7 @@ class CodememoryToolkit:
             {
                 "type": "function",
                 "function": {
-                    "name": "resolve_context",
+                    "name": "build_memory",
                     "description": "...",
                     "parameters": {...}
                 }
@@ -122,7 +122,7 @@ class CodememoryToolkit:
         Each tool is represented as::
 
             {
-                "name": "resolve_context",
+                "name": "build_memory",
                 "description": "...",
                 "input_schema": {...}
             }
@@ -155,7 +155,7 @@ class CodememoryToolkit:
         Each tool is represented as::
 
             {
-                "name": "resolve_context",
+                "name": "build_memory",
                 "description": "...",
                 "parameters": {...}
             }

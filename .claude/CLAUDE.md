@@ -16,6 +16,12 @@ CodeMemory/
 │       ├── core.py              # frontmatter 解析, body hash, logging 配置
 │       ├── models.py            # Pydantic v2 数据模型
 │       ├── handlers.py          # 统一命令处理（cli + tools + REST 共享）
+│       ├── profile.py           # Personal Profile manifest / capability 校验
+│       ├── capture.py           # append-only Capture + hash / lock / parser
+│       ├── personal_index.py    # Capture / Topic / Claim typed discovery
+│       ├── maintenance.py       # maintenance run / changeset / recovery
+│       ├── promotion.py         # Topic promotion 与 owner batch review
+│       ├── git_delivery.py      # staged scan + commit / push recovery
 │       ├── proposals.py         # 修改类提案 patch 队列（propose / merge / reject）
 │       ├── test_contract.py     # 黄金问题导出与 report（agent 是 runner）
 │       ├── index.py             # Index 加载/保存/reindex
@@ -36,8 +42,9 @@ CodeMemory/
 │       ├── import_cmd.py        # 冷启动文本导入
 │       ├── skeletonize/         # Markdown/代码骨架化导入
 │       ├── compiler/            # importer：corpus → 提案 → review → materialize
-│       ├── integrations.py      # OpenAI/Anthropic/Gemini toolkit 适配
-│       ├── mcp_server.py        # MCP adapter
+│       ├── agent_tools.py       # Toolkit/MCP 共用 root-bound catalog/dispatcher
+│       ├── integrations.py      # OpenAI/Anthropic/Gemini schema 机械适配
+│       ├── mcp_server.py        # 显式 CODEMEMORY_ROOT 的 MCP adapter
 │       ├── cli.py               # 薄 argparse 壳
 │       └── tools.py             # harnesslib Sandbox 工具注册
 ├── backend/                     # REST adapter（FastAPI）
@@ -76,18 +83,18 @@ Personal Profile 不增加第二套 canonical 核心：Capture 是 append-only �
 
 ## 硬约束（不可违反）
 
-### 1. Agent 视角：只用 Bash
+### 1. Agent 视角：只用受控 Adapter
 
-**所有 Agent 可用的记忆操作必须通过 bash 命令完成。** Agent 不调用 Python API，不 import codememory，不直接读写记忆库的 .md 文件。
+**模型只能使用已导出的 CLI 或 root-bound Agent tools。** 模型不调用 Core Python API、不直接读写记忆库 `.md` 文件，也不能在 payload 中重定向 root。宿主应用可以实例化 `CodememoryToolkit`，但模型只看到共享 catalog 的 schema。
 
 ```bash
 codememory search --query "缓存"          # 找入口
-codememory resolve user/contexts/cache-layer --budget 2000   # 装配
+codememory build user/contexts/cache-layer --budget 2000     # 装配
 codememory source expand src/rfc-001-cache --max-chars 2000  # 展开 asset
 codememory validate                        # 校验
 ```
 
-底层实现可用 Python（DAG、拓扑排序等），但 Agent 视角下只有 bash 子命令。
+底层实现和可信宿主可用 Python；模型视角只有 CLI 或共享的 Toolkit/MCP tool names。
 
 ### 2. Python 数据模型：Pydantic v2
 
@@ -115,7 +122,7 @@ data = entry.model_dump(mode="json")
 ### 技术栈
 
 - Python 3.13+，核心依赖：`pyyaml`、`pydantic>=2.0`；可选依赖 `tree-sitter`（`pip install codememory[code]`）
-- codememory 自身不依赖 harnesslib 或 llm_gateway（只在 tools.py / integrations.py 适配）
+- CodeMemory Core 不依赖 harnesslib；`llm_gateway` 只在显式 Importer LLM proposer 中 lazy import
 - token 估算用 `len(text)` 近似
 
 ### 编码约定
@@ -131,7 +138,7 @@ data = entry.model_dump(mode="json")
 - 最小变更：只改与任务直接相关的代码
 - 不引入新依赖：除非有充分理由并在 plan 中说明
 - 不碰 `src/harnesslib/` 和 `src/llm_gateway/` 内部实现（上游维护）
-- 先验证再提交：改代码后运行 `validate` + `resolve` 确认
+- 先验证再提交：改代码后运行 `validate` + `build` 确认
 
 ## CLI 命令速查
 
@@ -176,19 +183,19 @@ codememory snapshot <id> [--target t] [--from-dag f]
 
 - 单元测试：`PYTHONPATH=src python -m pytest tests/unit/ -v`
 - 集成测试：`PYTHONPATH=src python tests/integration_test.py`
-- 手工验证：`validate` → `resolve` → check output
+- 手工验证：`validate` → `build` → check output
 - 边界：循环依赖、断链、空记忆、超大/零预算
 - 验证命令：
   ```bash
   codememory reindex && codememory validate
-  codememory resolve user/investment/context --budget 500
+  codememory build user/investment/context --budget 500
   codememory skeletonize examples/ --dry-run
   ```
 
 ## 禁止事项
 
-- 禁止 Agent 绕过 bash CLI 直接调用 Python API 或 import codememory
-- 禁止在 Agent 工具定义中使用 Python 函数签名
+- 禁止模型绕过 CLI / root-bound Agent tools 直接调用 Core Python API 或修改 memory 文件
+- 禁止在 Agent schema 中暴露 filesystem root 或 owner-only administration 能力
 - 禁止 new 第三方依赖而不在 plan 中说明理由
 - 禁止修改 `src/harnesslib/` 或 `src/llm_gateway/` 内部逻辑
 - 禁止引入在代码世界找不到对应物的新概念（先过 `docs/prd.md` 第 1 章的筛选标准）
@@ -201,7 +208,7 @@ codememory snapshot <id> [--target t] [--from-dag f]
 
 | 服务 | 默认端口 | 启动命令 | 备注 |
 |------|---------|---------|------|
-| Backend (FastAPI) | 8000 | `python backend/server.py` | `--root` 参数或 `CODEMEMORY_ROOT` 指定记忆库 |
+| Backend (FastAPI) | 8000 | `python backend/server.py` | `X-Codememory-Dataset` 只接受 `examples/` 下已发现 alias |
 | Frontend (Vite) | 5300 | `cd frontend && npm run dev` | 端口被占用自动递增；proxy 固定指向 8000 |
 | 一键启动 | — | `./bin/dev` | Backend + Frontend，Ctrl+C 停止 |
 

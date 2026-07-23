@@ -10,7 +10,6 @@ tags:
 - moment
 - weekend
 - movie
-intensity: 4
 maturity: draft
 imports:
   recommended:

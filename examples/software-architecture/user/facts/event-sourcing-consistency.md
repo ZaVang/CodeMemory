@@ -7,7 +7,6 @@ tags:
 - event-sourcing
 - consistency
 - data
-intensity: 7
 status: active
 version: 1
 maturity: proven

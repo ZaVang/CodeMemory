@@ -10,7 +10,6 @@ tags:
 - feeling
 - work
 - mental-health
-intensity: 7
 maturity: verified
 imports:
   required:

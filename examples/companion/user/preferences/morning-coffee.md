@@ -9,7 +9,6 @@ tags:
 - companion
 - habit
 - daily-life
-intensity: 5
 maturity: verified
 summary_hash: 0c733ba
 ---

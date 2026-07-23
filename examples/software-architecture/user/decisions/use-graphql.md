@@ -6,7 +6,6 @@ tags:
 - api
 - graphql
 - frontend
-intensity: 8
 status: active
 version: 1
 maturity: verified

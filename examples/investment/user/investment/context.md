@@ -9,7 +9,6 @@ tags:
 - investment
 - context
 - entry-point
-intensity: 8
 protected: true
 purpose: 讨论投资话题时加载的完整因果上下文
 imports:

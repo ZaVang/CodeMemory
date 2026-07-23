@@ -3,11 +3,7 @@
 > 本文是仓库地图：记录每个主要文件负责什么、应该改哪里、不要把逻辑塞到哪里。
 > 产品判断读 `docs/prd.md`；架构边界读 `docs/architecture.md`；接入方法读 `docs/INTEGRATION.md`。
 
-> **术语提示（2026-06-10）**：本文成文于 memory-as-code 重建之前，叙述中的旧概念
-> （Source Artifact / ContextPack / Layer Profile 等）已被新概念模型取代——术语以
-> `docs/prd.md` 与 `docs/architecture.md` 为准（对照表见 prd 附录 A）。文件职责映射大体可参考，但收敛阶段后已有偏差
-> （context_pack.py 已删除、focus/overview/wander 路由已删除、skeletonize 评分改名 weight）；
-> 以 `.claude/CLAUDE.md` 文件架构为准，全文更新见 `docs/plan/FUTURE.md` post-convergence backlog。
+> **最后校准**：2026-07-23。本文映射当前 memory-as-code、Personal Profile、Importer v2、共享 Agent tools 与 Operator UI 文件职责。
 
 不记录生成物和本地缓存：`__pycache__/`、`.pytest_cache/`、`frontend/node_modules/`、`frontend/dist/`、Playwright 报告、临时 review 目录等。
 
@@ -31,13 +27,13 @@
 
 | 原则 | 含义 |
 |---|---|
-| Core 不知道产品人格 | `src/codememory/` 负责 atom、schema、imports、index、resolve、validate；不直接决定“陪伴感”。 |
-| Layer Profile 才定义场景策略 | Work / Companion / Team 这类策略应表现为目录、schema、tags、召回规则和写入规则。 |
+| Core 不知道产品人格 | `src/codememory/` 负责 atom、schema、imports、index、build、validate；不直接决定“陪伴感”。 |
+| Profile 只扩展实例能力 | Personal Profile 在 canonical Core 外增加 Capture / Incubator / maintenance；普通 root 不继承这些能力。 |
 | Source Artifact 不是 Atom | 长文档、代码、PDF、URL 等原始材料应进入 source registry；atom 只表达可复用语义或 anchor。 |
-| ContextPack 是 agent handoff 单元 | `resolve` 保留兼容价值，但新的主输出应围绕结构化 ContextPack 和 progressive disclosure。 |
+| Build 产出 ContextPack | `build.py` 是唯一装配管线；source body 仍通过显式 expand 获取。 |
 | Memory Compiler 不直接污染 canonical memory | Markdown 迁移先登记 asset、生成 review set；`materialize-review` 只写 proposed atom，owner merge 后才 canonical。 |
 | Backend 是 adapter | `backend/` 可以做 API 编排和序列化，但不应重新实现 core 语义。 |
-| Frontend 是 operator UI | `frontend/src/` 展示、编辑、resolve、graph，不应定义 canonical memory contract。 |
+| Frontend 是 operator UI | `frontend/src/` 展示、编辑、Build、Review、golden questions 与 graph，不应定义 canonical memory contract。 |
 | Harness / LLM Gateway 是可选接入层 | `src/harnesslib/` 和 `src/llm_gateway/` 支撑 agent 编排，但 CodeMemory core 不能依赖某个 provider。 |
 | Docs 只保留 canonical、使用文档与主动计划 | 审阅报告、设计草稿、agent 执行日志不留在 `docs/` 主干；当前路线图和 sprint 只放 `docs/plan/`。 |
 
@@ -48,12 +44,12 @@
 | 我要做什么 | 主要入口 | 配套测试 |
 |---|---|---|
 | 改 memory 数据模型 / schema 规则 | `src/codememory/models.py`, `src/codememory/validate.py` | `tests/unit/test_validate.py`, `tests/unit/test_edge_cases.py` |
-| 改 create / update / resolve / context-pack 行为 | `src/codememory/create.py`, `src/codememory/update.py`, `src/codememory/resolve.py`, `src/codememory/context_pack.py`, `src/codememory/handlers.py` | `tests/unit/test_create_update.py`, `tests/unit/test_resolve.py`, `tests/unit/test_context_pack.py` |
-| 新增 Source Artifact / source_refs | `src/codememory/sources.py` 或 `src/codememory/sources/`, `src/codememory/models.py`, `src/codememory/context_pack.py` | 新增 source registry / context pack tests |
+| 改 create / update / build 行为 | `src/codememory/create.py`, `src/codememory/update.py`, `src/codememory/build.py`, `src/codememory/resolve.py`, `src/codememory/handlers.py` | `tests/unit/test_create_update.py`, `tests/unit/test_build_pipeline.py`, `tests/unit/test_context_pack.py` |
+| 新增 Source Artifact / source_refs | `src/codememory/sources.py`, `src/codememory/models.py`, `src/codememory/build.py` | `tests/unit/test_sources.py`, `tests/unit/test_source_refs.py`, `tests/unit/test_source_expand.py` |
 | 改 Markdown 迁移流程 | `src/codememory/compiler/` | `tests/unit/test_memory_compiler.py` |
 | 改 REST API | `backend/server.py`, `backend/routers/*.py`, `backend/shared.py` | `tests/test_api.py` |
 | 改可视化 UI | `frontend/src/pages/`, `frontend/src/components/`, `frontend/src/App.tsx` | `frontend/tests/smoke.spec.ts`, `npm run build` |
-| 改 agent harness 接入 | `src/harnesslib/`, `src/llm_gateway/`, `src/codememory/integrations.py` | 新增对应 unit/integration tests |
+| 改 Agent tool 接入 | `src/codememory/agent_tools.py`, `src/codememory/tools.py`, `src/codememory/integrations.py`, `src/codememory/mcp_server.py` | `tests/unit/test_agent_tool_alignment.py` |
 | 改文档定位 | `docs/prd.md`, `docs/architecture.md`, `docs/project_structure.md` | `rg` 检查断链 |
 | 改长期 backlog / 当前 sprint | `docs/plan/FUTURE.md`, `docs/plan/SPRINT.md` | `rg` 检查断链 |
 
@@ -86,7 +82,7 @@
 | 文件 | 职责 |
 |---|---|
 | `src/codememory/__init__.py` | Python public API 聚合入口。新增公共函数时在这里显式导出。 |
-| `src/codememory/core.py` | frontmatter 解析、body hash、root 发现、检索概率/衰减基础函数。 |
+| `src/codememory/core.py` | frontmatter 解析、body hash、root 发现与严格 memory ID/path containment。 |
 | `src/codememory/profile.py` | Personal Profile manifest、非覆盖初始化、独立 profile/Git capability validation。 |
 | `src/codememory/capture.py` | append-only Capture、ULID、独立 SHA-256、实例锁、fsync 与完整 block 解析。 |
 | `src/codememory/personal_index.py` | Capture / Incubator Topic / inline Claim typed index、词法筛选和稳定 ID read；Claim 保持在 Topic 文件内。 |
@@ -97,10 +93,10 @@
 | `src/codememory/index.py` | `.codememory/index.json` 的加载、保存、重建。 |
 | `src/codememory/create.py` | 新 memory 文件模板生成和初始 metadata 写入。 |
 | `src/codememory/update.py` | 已有 memory 的正文、summary、tags、imports、maturity 等更新。 |
-| `src/codememory/resolve.py` | 依赖 DAG 解析、拓扑排序、budget 裁剪、上下文拼装。 |
-| `src/codememory/context_pack.py` | 结构化 agent handoff 上下文包；Core JSON/Pydantic contract + markdown / xml-markdown / json renderers；渲染 source_refs 但不展开 source body。 |
+| `src/codememory/build.py` | 唯一 canonical build 管线：imports DAG、拓扑顺序、两遍式 budget trim、ContextPack 模型与全部 renderer。 |
+| `src/codememory/resolve.py` | `build.py` 的 plain-Markdown 兼容薄别名与 DAG helper 导出。 |
 | `src/codememory/sources.py` | Source Artifact Registry：`.codememory/sources/index.json` 的模型、load/save、add/list/get、stale/missing 检查、explicit source expansion。 |
-| `src/codememory/validate.py` | 完整性检查：断链、循环、schema 合规、hash stale、source stale/missing、source_refs、decay warning。 |
+| `src/codememory/validate.py` | 完整性检查：断链、循环、schema 合规、hash stale、source stale/missing、source_refs 与 proposal/status 边界。 |
 | `src/codememory/search.py` | CLI / library 搜索逻辑。 |
 | `src/codememory/orphans.py` | 孤立 memory 检测。 |
 | `src/codememory/suggest_deps.py` | 依赖建议：基于时间、目录、tags、文本信号推断 imports。 |
@@ -140,7 +136,7 @@
 | 文件 | 职责 |
 |---|---|
 | `src/codememory/skeletonize/__init__.py` | skeletonize public exports。 |
-| `src/codememory/skeletonize/common.py` | intensity 解析、文本清理、通用小工具。 |
+| `src/codememory/skeletonize/common.py` | weight annotation 解析、文本清理、通用小工具；仅为一版兼容接受旧 annotation alias。 |
 | `src/codememory/skeletonize/config.py` | skeletonize 配置模型和默认值。 |
 | `src/codememory/skeletonize/markdown.py` | Markdown 标题/段落拆分与 memory skeleton 生成。 |
 | `src/codememory/skeletonize/code.py` | Python / JS / TS 等代码文件的结构提取；可选依赖 Tree-sitter。 |
@@ -202,7 +198,7 @@ Backend 的职责是把 core 能力变成 HTTP API，并处理 dataset header、
 |---|---|
 | `backend/requirements.txt` | 后端运行依赖。 |
 | `backend/server.py` | FastAPI app 创建、CORS、中间件、lifespan reindex、router mounting、health endpoint。 |
-| `backend/shared.py` | 后端共享配置、dataset root 解析、Pydantic request models、序列化、stale/fuzzy helper。 |
+| `backend/shared.py` | 后端共享配置、dataset alias/root containment、Pydantic request models、序列化与 stale helper。 |
 | `backend/routers/__init__.py` | routers package marker。 |
 | `backend/routers/memories.py` | memory CRUD、rehash、import、export、backlinks；create/update 委托 Core。 |
 | `backend/routers/search.py` | graph、build、兼容 assembly aliases、search API；所有装配走统一 Core build pipeline。 |
@@ -234,7 +230,7 @@ Frontend 是本地操作台：查看 graph、Build canonical context、编辑 me
 | `frontend/tsconfig.app.json` | App TS 编译配置。 |
 | `frontend/tsconfig.node.json` | Node-side TS 编译配置。 |
 | `frontend/.gitignore` | frontend 局部忽略规则。 |
-| `frontend/README.md` | Vite/React 默认说明和本地开发备注。 |
+| `frontend/README.md` | Operator UI 本地启动、视图边界与验证命令。 |
 | `frontend/public/favicon.svg` | 浏览器 favicon。 |
 | `frontend/public/icons.svg` | UI 使用的 SVG icon sprite。 |
 | `frontend/tests/smoke.spec.ts` | Playwright smoke test。 |
@@ -291,13 +287,13 @@ Frontend 是本地操作台：查看 graph、Build canonical context、编辑 me
 |---|---|
 | `examples/example_agent.py` | 使用 CodeMemory tool 的最小 mock agent 示例。 |
 | `examples/.codememory/index.json` | examples 根级 index；主要用于兼容旧示例。 |
-| `examples/investment/` | 投资决策 Work Layer 示例。 |
+| `examples/investment/` | 投资决策 canonical Atom/Schema 示例 root。 |
 | `examples/investment/schemas/decision.md` | 投资决策 schema 示例。 |
 | `examples/investment/user/**.md` | 投资事实、偏好、观察、当前持仓、风险承受等 memory atoms。 |
-| `examples/companion/` | Companion Layer 示例数据。 |
-| `examples/companion/user/context.md` | companion dataset 的上下文入口。 |
-| `examples/companion/user/**.md` | 情绪、人物、偏好、belief、moment 等 future layer 示例 atoms。 |
-| `examples/software-architecture/` | 软件架构决策 Work Layer 示例。 |
+| `examples/companion/` | 个人生活语境演示 root；目录名为兼容 dataset alias，不代表独立 canonical Layer。 |
+| `examples/companion/user/context.md` | 个人生活语境数据集的 build 入口。 |
+| `examples/companion/user/**.md` | 情绪、人物、偏好、belief、moment 等 canonical 示例 atoms。 |
+| `examples/software-architecture/` | 软件架构决策 canonical Atom/Schema 示例 root。 |
 | `examples/software-architecture/schemas/architectural-decision.md` | 架构决策 schema 示例。 |
 | `examples/software-architecture/user/**.md` | 架构事实、偏好、观察、决策等 atoms。 |
 | `examples/*/.codememory/index.json` | 每个 dataset 的索引；由 `codememory reindex` 重建。 |
@@ -337,7 +333,8 @@ Frontend 是本地操作台：查看 graph、Build canonical context、编辑 me
 | `tests/unit/test_source_refs.py` | source_refs metadata、reindex、validate、ContextPack 关联测试。 |
 | `tests/unit/test_source_expand.py` | explicit source expansion 的模型、全文/范围、missing/stale/unsupported、handler JSON 测试。 |
 | `tests/unit/test_skeletonize.py` | skeletonize markdown/code 导入测试。 |
-| `tests/unit/test_validate.py` | validate 断链、循环、schema、decay warning、source registry warning 测试。 |
+| `tests/unit/test_validate.py` | validate 断链、循环、schema、status/proposal 与 source registry warning 测试。 |
+| `tests/unit/test_docs_examples.py` | primary guide、runnable Agent 示例与 example metadata 漂移防护。 |
 
 建议命令：
 
@@ -384,7 +381,7 @@ cd frontend && npm run build
 
 ### 13.1 Personal Profile 模块（Phase 1A / 1B）
 
-Phase 0 只定义合同。下列落点在 `docs/plan/SPRINT.md` 获 owner 接受后才允许创建：
+Phase 1A / 1B 已经 owner 接受。当前 Personal Profile 落点如下：
 
 | 目标路径 | 责任 |
 |---|---|
@@ -405,7 +402,7 @@ Phase 0 只定义合同。下列落点在 `docs/plan/SPRINT.md` 获 owner 接受
 | 新需求 | 应放位置 | 不应放位置 |
 |---|---|---|
 | 新 memory 字段或 contract | `src/codememory/models.py`, `validate.py`, `architecture.md` | `frontend/src/types.ts` 单独新增 |
-| 新 Source Artifact 能力 | `src/codememory/sources.py` / `src/codememory/sources/` + `context_pack.py` + `validate.py` | backend router 或 frontend 内部私有实现 |
+| 新 Source Artifact 能力 | `src/codememory/sources.py` + `build.py` + `validate.py` | backend router 或 frontend 内部私有实现 |
 | 新 CLI 子命令 | `src/codememory/cli.py` + `handlers.py` 或专门 core module | backend router 内部私有实现 |
 | 新迁移算法 | `src/codememory/compiler/` | `import_cmd.py` 继续堆逻辑 |
 | 新 REST endpoint | `backend/routers/<domain>.py` | `backend/server.py` |

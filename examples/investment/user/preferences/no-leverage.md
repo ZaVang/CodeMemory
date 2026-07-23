@@ -10,7 +10,6 @@ tags:
 - preference
 - constraint
 - guideline
-intensity: 10
 protected: true
 maturity: proven
 summary_hash: 7bf1b78
@@ -32,6 +31,6 @@ summary_hash: 7bf1b78
 - 禁止任何杠杆 >1x 的 ETF（包括 2x、3x 等）
 - 这条约束 > 任何投资机会的吸引力
 
-## 强度
+## 保护语义
 
-intensity=10，终身不变。这不是可以"根据情况灵活调整"的偏好——这是硬约束。
+该 Atom 由 owner 标记为 `protected: true`。这不是可以“根据情况灵活调整”的偏好，而是任何投资方案都必须满足的硬约束；修改必须先进入 proposal review。

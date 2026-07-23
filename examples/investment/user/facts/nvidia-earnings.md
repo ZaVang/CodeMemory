@@ -10,7 +10,6 @@ tags:
 - fact
 - semiconductor
 - market-event
-intensity: 7
 maturity: verified
 summary_hash: b2fe296
 ---

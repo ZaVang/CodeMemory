@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-06-10T17:39:13.135975",
+  "updated": "2026-07-23T11:05:30.055828",
   "memories": {
     "user/context": {
       "type": "atom",
@@ -14,8 +14,8 @@
       ],
       "version": 3,
       "path": "user/context.md",
-      "access_count": 4,
-      "last_access": "2026-06-10T17:39:13.135465",
+      "access_count": 8,
+      "last_access": "2026-07-23T11:05:30.055366",
       "created": "2026-04-27",
       "updated": "2026-05-07",
       "imports": {
@@ -44,11 +44,12 @@
       "source_refs": [],
       "maturity": "verified",
       "evidence": null,
-      "golden_questions": [],
-      "intensity": 8,
-      "days_since_last_access": 10,
-      "stability": 14.0,
-      "stability_source": null
+      "origin": null,
+      "claim_status": null,
+      "topic": null,
+      "project": null,
+      "people": [],
+      "golden_questions": []
     },
     "user/beliefs/friendship-view": {
       "type": "atom",
@@ -63,8 +64,8 @@
       ],
       "version": 1,
       "path": "user/beliefs/friendship-view.md",
-      "access_count": 47,
-      "last_access": "2026-06-10T17:39:13.135465",
+      "access_count": 51,
+      "last_access": "2026-07-23T11:05:30.055366",
       "created": "2026-04-22",
       "updated": "",
       "imports": {
@@ -81,20 +82,14 @@
       "change_log": [],
       "source": null,
       "source_refs": [],
-      "maturity": "verified",
-      "evidence": {
-        "verified_in": [
-          {
-            "version": 1,
-            "date": "2026-05-18"
-          }
-        ]
-      },
-      "golden_questions": [],
-      "intensity": 6,
-      "days_since_last_access": 0,
-      "stability": 14.0,
-      "stability_source": null
+      "maturity": "draft",
+      "evidence": null,
+      "origin": null,
+      "claim_status": null,
+      "topic": null,
+      "project": null,
+      "people": [],
+      "golden_questions": []
     },
     "user/beliefs/life-pace": {
       "type": "atom",
@@ -130,11 +125,12 @@
       "source_refs": [],
       "maturity": "draft",
       "evidence": null,
-      "golden_questions": [],
-      "intensity": 6,
-      "days_since_last_access": 10,
-      "stability": 14.0,
-      "stability_source": null
+      "origin": null,
+      "claim_status": null,
+      "topic": null,
+      "project": null,
+      "people": [],
+      "golden_questions": []
     },
     "user/feelings/burnout-april": {
       "type": "atom",
@@ -149,8 +145,8 @@
       ],
       "version": 1,
       "path": "user/feelings/burnout-april.md",
-      "access_count": 45,
-      "last_access": "2026-06-10T17:39:13.135465",
+      "access_count": 49,
+      "last_access": "2026-07-23T11:05:30.055366",
       "created": "2026-04-14",
       "updated": "",
       "imports": {
@@ -170,20 +166,14 @@
       "change_log": [],
       "source": null,
       "source_refs": [],
-      "maturity": "proven",
-      "evidence": {
-        "verified_in": [
-          {
-            "version": 1,
-            "date": "2026-05-18"
-          }
-        ]
-      },
-      "golden_questions": [],
-      "intensity": 7,
-      "days_since_last_access": 0,
-      "stability": 14.0,
-      "stability_source": null
+      "maturity": "verified",
+      "evidence": null,
+      "origin": null,
+      "claim_status": null,
+      "topic": null,
+      "project": null,
+      "people": [],
+      "golden_questions": []
     },
     "user/feelings/proud-moment": {
       "type": "atom",
@@ -198,8 +188,8 @@
       ],
       "version": 1,
       "path": "user/feelings/proud-moment.md",
-      "access_count": 44,
-      "last_access": "2026-06-10T17:39:13.135465",
+      "access_count": 48,
+      "last_access": "2026-07-23T11:05:30.055366",
       "created": "2026-04-26",
       "updated": "",
       "imports": {
@@ -218,20 +208,14 @@
       "change_log": [],
       "source": null,
       "source_refs": [],
-      "maturity": "verified",
-      "evidence": {
-        "verified_in": [
-          {
-            "version": 1,
-            "date": "2026-05-18"
-          }
-        ]
-      },
-      "golden_questions": [],
-      "intensity": 6,
-      "days_since_last_access": 0,
-      "stability": 14.0,
-      "stability_source": null
+      "maturity": "draft",
+      "evidence": null,
+      "origin": null,
+      "claim_status": null,
+      "topic": null,
+      "project": null,
+      "people": [],
+      "golden_questions": []
     },
     "user/moments/rainy-sunday": {
       "type": "atom",
@@ -267,20 +251,14 @@
       "change_log": [],
       "source": null,
       "source_refs": [],
-      "maturity": "verified",
-      "evidence": {
-        "verified_in": [
-          {
-            "version": 1,
-            "date": "2026-05-18"
-          }
-        ]
-      },
-      "golden_questions": [],
-      "intensity": 4,
-      "days_since_last_access": 0,
-      "stability": 14.0,
-      "stability_source": null
+      "maturity": "draft",
+      "evidence": null,
+      "origin": null,
+      "claim_status": null,
+      "topic": null,
+      "project": null,
+      "people": [],
+      "golden_questions": []
     },
     "user/people/best-friend-li": {
       "type": "atom",
@@ -314,11 +292,12 @@
       "source_refs": [],
       "maturity": "draft",
       "evidence": null,
-      "golden_questions": [],
-      "intensity": 6,
-      "days_since_last_access": 10,
-      "stability": 14.0,
-      "stability_source": null
+      "origin": null,
+      "claim_status": null,
+      "topic": null,
+      "project": null,
+      "people": [],
+      "golden_questions": []
     },
     "user/people/mom-weekly-call": {
       "type": "atom",
@@ -353,11 +332,12 @@
       "source_refs": [],
       "maturity": "verified",
       "evidence": null,
-      "golden_questions": [],
-      "intensity": 7,
-      "days_since_last_access": 10,
-      "stability": 14.0,
-      "stability_source": null
+      "origin": null,
+      "claim_status": null,
+      "topic": null,
+      "project": null,
+      "people": [],
+      "golden_questions": []
     },
     "user/preferences/dislike-crowds": {
       "type": "atom",
@@ -371,8 +351,8 @@
       ],
       "version": 1,
       "path": "user/preferences/dislike-crowds.md",
-      "access_count": 44,
-      "last_access": "2026-06-10T17:39:13.135465",
+      "access_count": 48,
+      "last_access": "2026-07-23T11:05:30.055366",
       "created": "2026-04-10",
       "updated": "",
       "imports": {},
@@ -385,20 +365,14 @@
       "change_log": [],
       "source": null,
       "source_refs": [],
-      "maturity": "verified",
-      "evidence": {
-        "verified_in": [
-          {
-            "version": 1,
-            "date": "2026-05-18"
-          }
-        ]
-      },
-      "golden_questions": [],
-      "intensity": 5,
-      "days_since_last_access": 0,
-      "stability": 14.0,
-      "stability_source": null
+      "maturity": "draft",
+      "evidence": null,
+      "origin": null,
+      "claim_status": null,
+      "topic": null,
+      "project": null,
+      "people": [],
+      "golden_questions": []
     },
     "user/preferences/morning-coffee": {
       "type": "atom",
@@ -412,8 +386,8 @@
       ],
       "version": 1,
       "path": "user/preferences/morning-coffee.md",
-      "access_count": 46,
-      "last_access": "2026-06-10T17:39:13.135465",
+      "access_count": 50,
+      "last_access": "2026-07-23T11:05:30.055366",
       "created": "2026-04-10",
       "updated": "",
       "imports": {},
@@ -426,20 +400,14 @@
       "change_log": [],
       "source": null,
       "source_refs": [],
-      "maturity": "proven",
-      "evidence": {
-        "verified_in": [
-          {
-            "version": 1,
-            "date": "2026-05-18"
-          }
-        ]
-      },
-      "golden_questions": [],
-      "intensity": 5,
-      "days_since_last_access": 0,
-      "stability": 14.0,
-      "stability_source": null
+      "maturity": "verified",
+      "evidence": null,
+      "origin": null,
+      "claim_status": null,
+      "topic": null,
+      "project": null,
+      "people": [],
+      "golden_questions": []
     },
     "user/test/f1-test2": {
       "type": "atom",
@@ -473,11 +441,13 @@
         ],
         "sessions": []
       },
-      "golden_questions": [],
-      "intensity": 5,
-      "days_since_last_access": null,
-      "stability": 14.0,
-      "stability_source": null
+      "origin": null,
+      "claim_status": null,
+      "topic": null,
+      "project": null,
+      "people": [],
+      "golden_questions": []
     }
-  }
+  },
+  "personal_objects": {}
 }

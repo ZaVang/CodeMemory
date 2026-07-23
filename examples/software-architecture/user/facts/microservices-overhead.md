@@ -7,7 +7,6 @@ tags:
 - architecture
 - microservices
 - operations
-intensity: 8
 status: active
 version: 1
 maturity: proven

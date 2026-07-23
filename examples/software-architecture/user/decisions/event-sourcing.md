@@ -6,7 +6,6 @@ tags:
 - architecture
 - event-sourcing
 - data
-intensity: 8
 status: active
 version: 1
 maturity: verified

@@ -5,7 +5,6 @@ summary: Decided to adopt a microservices architecture for the core platform
 tags:
 - architecture
 - microservices
-intensity: 9
 status: active
 version: 1
 maturity: proven

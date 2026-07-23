@@ -7,9 +7,7 @@ created: '2026-05-07'
 updated: '2026-05-07'
 version: 1
 tags: []
-intensity: 5
 maturity: draft
-stability: 14.0
 evidence:
   contributors:
   - user

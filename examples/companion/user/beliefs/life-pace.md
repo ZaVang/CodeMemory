@@ -10,7 +10,6 @@ tags:
 - belief
 - value
 - reflection
-intensity: 6
 maturity: draft
 imports:
   recommended:

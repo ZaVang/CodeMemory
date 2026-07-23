@@ -9,7 +9,6 @@ tags:
 - companion
 - context
 - entry-point
-intensity: 8
 protected: true
 maturity: verified
 imports:

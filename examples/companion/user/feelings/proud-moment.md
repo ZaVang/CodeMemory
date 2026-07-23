@@ -10,7 +10,6 @@ tags:
 - feeling
 - work
 - achievement
-intensity: 6
 maturity: draft
 imports:
   related:

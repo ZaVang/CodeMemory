@@ -1,10 +1,15 @@
 #!/usr/bin/env python3
-"""example_agent.py — Minimal Agent demonstrating codememory integration.
+"""Runnable root-bound Agent example with no provider or API key.
 
-Shows the complete loop: memory search → create new memory → resolve context
-→ produce an answer.  Uses a mock LLM handler — no API key required.
+The demo copies ``examples/investment`` to a temporary directory, registers
+the exact standard five-tool surface, and performs:
 
-Usage::
+    search_memories -> create_memory -> build_memory
+
+Tool payloads never contain a filesystem root. The Toolkit binds the root once
+when it is constructed, and the temporary directory is removed automatically.
+
+Run from the repository root:
 
     PYTHONPATH=src python examples/example_agent.py
 """
@@ -12,242 +17,119 @@ Usage::
 from __future__ import annotations
 
 import asyncio
+import shutil
 import sys
 from pathlib import Path
-
-# ---------------------------------------------------------------------------
-# Bootstrap: ensure src/ is on the path so local packages are importable.
-# ---------------------------------------------------------------------------
-_SRC = Path(__file__).resolve().parent.parent / "src"
-if str(_SRC) not in sys.path:
-    sys.path.insert(0, str(_SRC))
+from tempfile import TemporaryDirectory
+from typing import Any
 
 
-# ===================================================================
-# Mock LLM — simulates agent reasoning without real API calls
-# ===================================================================
+REPO_ROOT = Path(__file__).resolve().parent.parent
+SRC = REPO_ROOT / "src"
+if str(SRC) not in sys.path:
+    sys.path.insert(0, str(SRC))
 
-class MockLLM:
-    """Simulates LLM responses for demonstration purposes.
 
-    Instead of calling a real model, this mock returns pre-scripted
-    tool-use responses that drive the agent through the full workflow.
-    """
+EXPECTED_TOOLS = [
+    "build_memory",
+    "search_memories",
+    "expand_source",
+    "create_memory",
+    "propose_memory",
+]
+
+
+class MockAgent:
+    """Return a fixed sequence of current CodeMemory tool calls."""
 
     def __init__(self) -> None:
-        self._turn = 0
-        _root = "examples/investment"
-        # Pre-scripted agent "thoughts" — each turn the mock returns
-        # a tool_call intent (search -> create -> resolve -> answer).
-        self._script = [
-            # Turn 0: Search existing memories
+        self._steps: list[dict[str, Any]] = [
             {
-                "tool_calls": [
-                    {
-                        "name": "search_memories",
-                        "input": {
-                            "query": "risk tolerance",
-                            "tags": ["investment"],
-                            "root": _root,
-                        },
-                    },
-                ],
-                "content": "Let me check if we have any risk-related memories.",
+                "name": "search_memories",
+                "input": {
+                    "query": "risk tolerance",
+                    "tags": ["investment"],
+                },
             },
-            # Turn 1: Create a new memory (found nothing relevant)
             {
-                "tool_calls": [
-                    {
-                        "name": "create_memory",
-                        "input": {
-                            "type": "atom",
-                            "id": "user/demo/demo-risk-note",
-                            "tags": ["investment", "risk", "demo"],
-                            "intensity": 6,
-                            "root": _root,
-                        },
-                    },
-                ],
-                "content": "No existing risk note found. Let me create one.",
+                "name": "create_memory",
+                "input": {
+                    "id": "user/demo/moderate-risk-note",
+                    "summary": "Demo risk preference with a 20% position limit",
+                    "body": (
+                        "# Demo risk preference\n\n"
+                        "The user prefers a moderate-aggressive strategy, limits "
+                        "a single position to 20%, and avoids crypto.\n"
+                    ),
+                    "tags": ["investment", "risk", "demo"],
+                    "import_required": ["user/investment/context"],
+                    "propose": False,
+                },
             },
-            # Turn 2: Update the new memory with actual content
             {
-                "tool_calls": [
-                    {
-                        "name": "update_memory",
-                        "input": {
-                            "id": "user/demo/demo-risk-note",
-                            "change_note": "Fill in risk preference content from user input",
-                            "body": (
-                                "## Risk Preference\n\n"
-                                "The user prefers a **moderate-aggressive** strategy:\n"
-                                "- Max single position: 20%\n"
-                                "- Preferred sectors: tech, healthcare\n"
-                                "- No crypto or penny stocks\n"
-                                "- Rebalance quarterly\n"
-                            ),
-                            "summary": (
-                                "Risk preference: moderate-aggressive, max position 20%, "
-                                "tech/healthcare focus, quarterly rebalance"
-                            ),
-                            "root": _root,
-                        },
-                    },
-                ],
-                "content": "Now let me fill in the actual risk preference content.",
-            },
-            # Turn 3: Resolve the context to verify the new memory is linked
-            {
-                "tool_calls": [
-                    {
-                        "name": "resolve_context",
-                        "input": {
-                            "id": "user/investment/context",
-                            "depth": "recommended",
-                            "root": _root,
-                        },
-                    },
-                ],
-                "content": "Let me verify the investment context resolves correctly.",
-            },
-            # Turn 4: Overview to see the final state
-            {
-                "tool_calls": [
-                    {
-                        "name": "overview",
-                        "input": {"limit": 5, "format": "inject", "root": _root},
-                    },
-                ],
-                "content": "Let me see the current memory overview.",
-            },
-            # Turn 5: Final answer (no tool calls)
-            {
-                "content": (
-                    "Based on your memory graph:\n\n"
-                    "Your risk profile is moderate-aggressive with a 20% max position "
-                    "limit, focused on tech and healthcare. The investment context "
-                    "shows you prefer quarterly rebalancing and avoid crypto. "
-                    "Your recent decisions align with these constraints.\n\n"
-                    "I have created a new risk note (user/demo/demo-risk-note) "
-                    "that will be available for future sessions."
-                ),
+                "name": "build_memory",
+                "input": {
+                    "id": "user/demo/moderate-risk-note",
+                    "depth": "required",
+                    "budget": 1200,
+                    "format": "plain-markdown",
+                },
             },
         ]
 
-    def next_response(self) -> dict:
-        """Return the next pre-scripted response."""
-        if self._turn >= len(self._script):
-            return {"content": "I've completed the memory workflow."}
-        resp = self._script[self._turn]
-        self._turn += 1
-        return resp
+    def next_tool_call(self) -> dict[str, Any] | None:
+        if not self._steps:
+            return None
+        return self._steps.pop(0)
 
 
-# ===================================================================
-# Agent loop
-# ===================================================================
+async def run_agent() -> None:
+    """Execute the mock Agent against a disposable copy of the example root."""
 
-async def run_agent():
-    """Run the full agent workflow with mock LLM."""
-    from harnesslib.sandbox import Sandbox
     from codememory.integrations import CodememoryToolkit
+    from harnesslib.sandbox import Sandbox
 
-    # ── 1. Initialize components ──────────────────────────────────────
-    print("=" * 62)
-    print("  CodeMemory Agent Demo (mock LLM)")
-    print("=" * 62)
+    source_root = REPO_ROOT / "examples" / "investment"
 
-    toolkit = CodememoryToolkit(root="examples/investment")
-    sandbox = Sandbox()
-    await toolkit.register_to_sandbox(sandbox)
+    with TemporaryDirectory(prefix="codememory-agent-demo-") as temp_dir:
+        demo_root = Path(temp_dir) / "investment"
+        shutil.copytree(source_root, demo_root)
 
-    registered = [t.name for t in sandbox.list_tools()]
-    print(f"\n[init] Registered {len(registered)} tools:")
-    for name in registered:
-        print(f"       - {name}")
+        toolkit = CodememoryToolkit(root=str(demo_root))
+        sandbox = Sandbox()
+        await toolkit.register_to_sandbox(sandbox)
 
-    mock_llm = MockLLM()
+        registered = [tool.name for tool in sandbox.list_tools()]
+        if registered != EXPECTED_TOOLS:
+            raise RuntimeError(f"unexpected standard tool surface: {registered}")
 
-    # ── 2. Conversation loop ──────────────────────────────────────────
-    user_message = (
-        "I prefer moderate-aggressive risk with max 20% single position. "
-        "Please record this and check if it's consistent with my existing "
-        "investment context."
-    )
-    print(f"\n[user] {user_message}")
+        print("CodeMemory Agent demo")
+        print(f"registered tools ({len(registered)}): {', '.join(registered)}")
 
-    messages = [{"role": "user", "content": user_message}]
-    turn = 0
+        agent = MockAgent()
+        while call := agent.next_tool_call():
+            name = call["name"]
+            payload = call["input"]
+            print(f"\n-> {name}: {_compact_payload(payload)}")
+            response = await sandbox.execute(name, payload)
+            result = str(response.get("result", response))
+            preview = result if len(result) <= 360 else result[:360] + "..."
+            print(f"<- {preview}")
 
-    while True:
-        response = mock_llm.next_response()
-        if response is None:
-            break
-
-        # Check if the model wants to call tools
-        tool_calls = response.get("tool_calls", [])
-        assistant_text = response.get("content", "")
-
-        print(f"\n[agent-turn {turn}] {assistant_text}")
-
-        if not tool_calls:
-            # Final answer — no more tool calls
-            print(f"\n[final-answer]\n{assistant_text}")
-            break
-
-        # Execute all tool calls in parallel (simulated)
-        for tc in tool_calls:
-            name = tc["name"]
-            payload = tc["input"]
-            print(f"  -> calling {name}({_format_payload(payload)})")
-
-            try:
-                result = await sandbox.execute(name, payload)
-                result_text = result.get("result", str(result))
-                # Truncate long results for display
-                if len(result_text) > 200:
-                    result_text = result_text[:200] + "..."
-                print(f"  <- {name}: {result_text}")
-            except Exception as exc:
-                print(f"  <- {name} ERROR: {exc}")
-
-        turn += 1
-        if turn > 10:
-            print("\n[warning] Max turns reached — stopping.")
-            break
-
-    # ── 3. Cleanup — remove demo memory ───────────────────────────────
-    print("\n" + "-" * 62)
-    print("[cleanup] Removing demo memory...")
-    demo_file = (
-        Path("examples/investment/user/demo/demo-risk-note.md")
-    )
-    if demo_file.exists():
-        demo_file.unlink()
-        # Remove empty demo directory
-        demo_dir = demo_file.parent
-        try:
-            next(demo_dir.iterdir())
-        except StopIteration:
-            demo_dir.rmdir()
-    print("[cleanup] Done.")
-    print("=" * 62)
+        print("\nDemo complete; temporary memory root removed.")
 
 
-def _format_payload(payload: dict) -> str:
-    """Format a tool payload for display, truncating long values."""
-    parts = []
-    for k, v in payload.items():
-        s = str(v)
-        if len(s) > 60:
-            s = s[:57] + "..."
-        parts.append(f"{k}={s}")
-    return ", ".join(parts)
+def _compact_payload(payload: dict[str, Any]) -> str:
+    """Render payload keys without dumping long body text."""
 
+    rendered: list[str] = []
+    for key, value in payload.items():
+        text = repr(value)
+        if len(text) > 80:
+            text = text[:77] + "..."
+        rendered.append(f"{key}={text}")
+    return ", ".join(rendered)
 
-# ===================================================================
-# Entry point
-# ===================================================================
 
 if __name__ == "__main__":
     asyncio.run(run_agent())

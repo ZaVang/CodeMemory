@@ -10,7 +10,6 @@ tags:
 - belief
 - friendship
 - value
-intensity: 6
 maturity: draft
 imports:
   related:

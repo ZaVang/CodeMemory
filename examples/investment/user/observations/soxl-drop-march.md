@@ -10,7 +10,6 @@ tags:
 - investment
 - observation
 - market-event
-intensity: 6
 imports:
   required:
     - user/facts/nvidia-earnings

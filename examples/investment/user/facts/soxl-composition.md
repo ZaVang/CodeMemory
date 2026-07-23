@@ -9,7 +9,6 @@ tags:
 - investment
 - fact
 - etf
-intensity: 6
 summary_hash: 9a18eb3
 ---
 # SOXL 构成与特性

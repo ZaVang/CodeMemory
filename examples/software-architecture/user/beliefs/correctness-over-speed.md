@@ -7,7 +7,6 @@ tags:
 - engineering-culture
 - quality
 - values
-intensity: 9
 status: active
 version: 1
 maturity: proven

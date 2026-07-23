@@ -10,7 +10,6 @@ tags:
 - family
 - routine
 - mom
-intensity: 7
 maturity: verified
 imports:
   recommended:

@@ -16,7 +16,7 @@
 
 ## Roadmap Priority
 
-**Personal Memory Phase 0 / 1A / 1B、Importer v2A / v2B、MCP / toolkit 对齐与 Operator UI 对齐均已于 2026-07-23 前经 owner 接受。当前完成合同见 `docs/plan/SPRINT.md`，已接受历史见 `docs/plan/HISTORY.md`。下一项候选为文档与示例收口。**
+**Personal Memory Phase 0 / 1A / 1B、Importer v2A / v2B、MCP / toolkit 对齐、Operator UI 对齐与文档及示例收口均已于 2026-07-23 前经 owner 接受。当前下一项候选为 eval harness；合同见 `docs/plan/SPRINT.md`，已接受历史见 `docs/plan/HISTORY.md`。**
 
 ### 1. Personal Memory Phase 1A — Instance + Capture + Typed Discovery（已完成并验收）
 
@@ -83,7 +83,7 @@ git status --short --branch -uall
    - 完整版（可选 LLM proposer）✅：显式配置的 compiler LLM 路径提炼 Derived Atoms 与 imports 建议；LLM 只 propose，产出仍走 review（架构 §1.3 铁律不变；LLM 依赖只进 Importer 层的惰性可选路径，Core 不碰）。
 2. **MCP / toolkit 对齐 ✅**：普通实例暴露 build / search / expand_source / create / propose 精确最小集，Personal Profile 追加已接受的 capture/read/maintenance/review 扩展；两种 adapter 共用 catalog、root-bound dispatcher 和 shared handlers。
 3. **Operator UI 对齐 ✅**：UI 跟随新契约（proposed / patch 队列展示、golden_questions、build 产物；wander 面板已随后端删除）。
-4. **文档与示例**：USER_GUIDE / INTEGRATION / project_structure / `examples/` 随新术语更新。
+4. **文档与示例 ✅**：USER_GUIDE / INTEGRATION / project_structure / `examples/` 已随新术语更新，并经 owner 验收。
 5. **eval harness**：ContextPack vs 原文全文 vs 无记忆的对照实验，把 PRD 产品成功标准变成可测数字。
 6. **Personal Memory Phase 2 semantic discovery**：本地索引优先，只给 search 提供候选；外部 embedding 默认关闭、显式启用；永不参与 canonical build。
 7. **Personal Memory Web**：服务端实例 allowlist registry、Capture 浏览、Incubator 集中审阅、provenance 与想法时间线；不做完整编辑器或 Obsidian 替代品。

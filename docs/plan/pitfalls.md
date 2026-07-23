@@ -28,6 +28,8 @@ Some API tests can rewrite example dataset generated files, especially:
 
 If those files change only because tests reindexed or logged operations, restore them before finalizing unless the sprint intentionally changes example data.
 
+If a sprint intentionally changes example Markdown metadata, the checked-in index is part of that contract. After regression tests touch runtime counters/logs, restore the affected index/log from `HEAD`, then reindex once from the cleaned Markdown. This preserves the pre-test runtime baseline while retaining the intentional schema/metadata update; simply restoring the index would reintroduce stale published fields.
+
 ---
 
 ## build 不自动展开 asset 原文

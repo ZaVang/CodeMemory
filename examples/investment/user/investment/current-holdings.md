@@ -9,7 +9,6 @@ tags:
 - investment
 - portfolio
 - current-state
-intensity: 6
 summary_hash: a28750d
 ---
 # 当前持仓
