@@ -100,7 +100,7 @@ Git credential、GitHub 访问控制和通知通道属于运行环境，不写�
 | proposal | `models.py`（status）+ `proposals.py`（patch 队列）+ `update.py`（merge/reject 分发） | 已完成（修改类落为独立小模块 `proposals.py`，复用 update 应用 patch） | A ✅ / C ✅ |
 | log | `log.py` / `changelog.py` | 不变 | — |
 | importer | `compiler/` + `sources.py` | v2A：确定性 asset + anchor + paragraph-derived；v2B：显式可选 semantic proposer + imports 建议，仍只产 proposed | Importer v2A / v2B ✅ |
-| Personal Profile | `profile.py` / `capture.py` / `personal_index.py` / `semantic_index.py` / `maintenance.py` / `promotion.py` / `git_delivery.py` / `personal_web.py` | Phase 1A / 1B / 2 已完成并经 owner 接受；Personal Web active | 1A / 1B / 2 ✅ / Web active |
+| Personal Profile | `profile.py` / `capture.py` / `personal_index.py` / `semantic_index.py` / `maintenance.py` / `promotion.py` / `git_delivery.py` / `personal_web.py` / `periodic_review.py` | Phase 1A / 1B / 2、Personal Web 与 Periodic Review 均已完成并经 owner 接受 | 1A / 1B / 2 / Web / Review ✅ |
 
 ### 2.1 保留与定位说明
 
