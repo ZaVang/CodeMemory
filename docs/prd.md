@@ -69,7 +69,7 @@ Core 仍由三组共 11 个概念构成。Personal Profile 在这些概念之上
 |---|---|---|---|
 | **build**（装配） | 构建/链接 + tree-shaking | 入口 atom → imports 闭包 → 拓扑排序 → 预算内裁剪（超预算按 target > required > recommended > related 降级为 summary）→ 结构化上下文 | 已实现（CLI 主命令 `build`；`resolve` / `context-pack` 为兼容别名） |
 | **check**（校验） | 类型检查 + linter | 断链、循环、schema 违约、stale asset、孤儿 | 已实现（CLI 名 `validate`） |
-| **search**（检索） | 符号搜索 / LSP | **只负责发现候选入口**；Canonical Atom 进入 build，Capture / Incubator Topic 走直接读取。词法、时间和标签是默认能力；语义检索只可用于 discovery | atom 词法排序已实现；Personal Profile 多类型检索未实现 |
+| **search**（检索） | 符号搜索 / LSP | **只负责发现候选入口**；Canonical Atom 进入 build，Capture / Incubator Topic 走直接读取。词法、时间和标签是默认能力；语义检索只可用于 discovery | atom 词法排序、Personal typed discovery 与可选本地 semantic discovery 已实现 |
 | **test**（验证） | 测试 / CI | 入口 atom 可附黄金问题：装配出的上下文应能让 agent 回答 X；eval harness 以同一模型对比 ContextPack、full-memory 与 no-memory，再由盲判 judge 评分 | 已实现（题集导出/report + 显式三臂 eval harness） |
 
 ### 4.3 变更管理（仓库怎么演化）
@@ -113,6 +113,17 @@ Path B：personal discovery
 ```
 
 Personal Memory Phase 2 提供显式启用的本地语义候选索引：模型必须已存在于 ignored `private_local`，加载时禁止下载和网络 fallback，派生索引也只存于 `private_local`。外部 embedding 保持关闭且当前不受支持。任何语义命中都只能返回 typed 候选入口，不得直接成为 canonical build 的装配节点。
+
+### 5.1.1 Personal owner workspace
+
+本地 Operator UI 可以通过服务端持有的 allowlist registry 打开外部 Personal Profile。请求只携带精确 dataset alias，绝对 root 永不进入 request 或公开 dataset metadata。该工作区只提供：
+
+- 完整且 hash 有效的 Capture 浏览；
+- Topic revision、内嵌 Claim、origin / claim_status / provenance 浏览；
+- 仅由 authored timestamp 与显式关系组成的 idea timeline；
+- 一次 owner 明确确认的 promote / merge / delete 批量审阅。
+
+它不是任意文件浏览器或完整 Markdown 编辑器，也不提供 maintenance、Git delivery、semantic vector、registry 编辑、认证或远程托管。外部实例在 Web server 启动时不自动 reindex 或写入。
 
 ### 5.2 写路径——agent 沉淀
 
@@ -203,6 +214,7 @@ Personal Profile 对此作更严格覆盖：
 - MCP 与 Toolkit 共享同一 agent-tool catalog / dispatcher：普通实例只暴露 build、search、expand_source、create、propose；Personal Profile 只追加已定义的 capture/read/maintenance/review 扩展；
 - agent 的 modification proposal 只能写 patch queue，不得用伪 proposal 直接修改 canonical Atom；Personal Profile 的 agent create 永远先落为 proposed；
 - Operator UI 以 Build 为唯一装配主路径，分开显示 proposed Atom 与 modification patch 两条 owner review 队列，并只读呈现 golden questions；
+- Personal Operator workspace 只对 allowlisted Personal dataset 出现；公开 payload 不含 root/private-local/Git/semantic/maintenance 私有状态，批量审阅复用同一 Core handler；
 - prd / architecture / CLAUDE.md 三处术语一致；
 - check 全绿是任何 merge 的前置条件。
 

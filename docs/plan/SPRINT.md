@@ -1,84 +1,76 @@
 # CodeMemory Current Sprint
 
 > **Status:** SPRINT COMPLETE — accepted by owner.
-> **Sprint:** Personal Memory Phase 2 — Local Semantic Discovery.
-> **Branch:** `codex/personal-semantic-discovery`.
-> **Depends on:** owner-accepted Eval Harness commit `f002856`.
+> **Sprint:** Personal Memory Web — Allowlisted Owner Workspace.
+> **Branch:** `codex/personal-memory-web`.
+> **Depends on:** owner-accepted Personal Memory Phase 2 commit `501e74a`.
 
 ## Objective
 
-Add an optional local semantic candidate index for Personal Profiles while preserving the hard boundary: semantic search discovers typed entry candidates; canonical imports DAG remains the only build mechanism.
+Extend the existing local Operator UI with a safe Personal workspace for allowlisted external Personal Profiles: browse Capture and Incubator content, prepare one explicit owner batch review, and inspect provenance-rich idea evolution without turning the product into a general filesystem browser or full Markdown editor.
 
 ## Contracts
 
-1. Default search remains deterministic lexical/time/tag search and loads no embedding dependency.
-2. Semantic discovery requires `profile.discovery.semantic.enabled=true`, a relative local model path under `private_local`, and an explicitly built derived index.
-3. The local adapter uses `sentence-transformers` with `local_files_only=True`; no model download or network fallback is allowed.
-4. External embeddings remain default false and unsupported in this sprint; setting `external_embeddings=true` is rejected, never silently routed externally.
-5. The derived index lives under the ignored `private_local` path, contains typed IDs, hashes, normalized vectors and safe discovery metadata, and never enters Git delivery.
-6. Index input includes only valid indexed Capture/Topic/Claim objects and assemblable canonical Atom/Schema content. Corrupt captures and non-assemblable Atoms are excluded.
-7. Rebuilding identical input/model is idempotent and performs no embedding call/write. Changed content/model makes the index stale until an explicit rebuild.
-8. Semantic results preserve `kind`, stable `id`, `display_locator`, `read_action` (`read` or `build`), score and snippet.
-9. `search --semantic` and `search_memories {semantic:true}` only rank candidates. They cannot create imports, inject body into ContextPack, auto-read results, or mutate maintenance/canonical state.
-10. Query fails safely when disabled, unconfigured, missing/stale, dimension-mismatched, or unavailable; lexical search remains usable.
-11. Embedding vectors/query text are not logged. Index paths are resolved and contained under bound root/private-local.
-12. No Web semantic UI, external provider, hybrid reranker, automatic background indexing, or semantic canonical build.
+1. External instances enter Web only through a server-owned YAML registry path configured by `CODEMEMORY_INSTANCE_REGISTRY`; request payloads and headers never contain roots.
+2. Registry aliases are exact safe identifiers. Invalid/duplicate aliases, relative roots, missing roots, non-Personal roots, and profile-invalid roots fail closed. Existing contained `examples/` discovery remains developer/demo compatibility only.
+3. The resolver maps an exact known alias to its prevalidated resolved root. Absolute paths, traversal, separators, whitespace variants, unknown aliases, and alias collisions are rejected before request ContextVar mutation.
+4. Dataset responses expose only safe metadata (`name`, `memory_count`, `profile`, `source`), never absolute root, registry path, profile contents, Git remote, model path, or private-local data.
+5. External registry roots are not automatically reindexed or mutated during server startup. Reindex remains an explicit owner action.
+6. Personal REST operations exist only for valid Personal roots and delegate to provider-neutral Core models/handlers. Routers perform validation/status mapping only; they do not parse Markdown, reconstruct provenance, or implement review semantics.
+7. Capture browsing returns only complete hash-valid Capture records in stable reverse chronological order with bounded pagination. It cannot edit/delete Capture.
+8. Incubator browsing returns Topic revisions and inline Claims with stable IDs, origin, claim status, provenance and safe locators. It does not expose absolute paths or private-local/runtime files.
+9. Timeline uses authored timestamps plus explicit `derived_from`, `relations`, `merged_from`, and promotion provenance. It does not invent semantic links or treat line numbers as identity.
+10. Concentrated review submits one owner-confirmed batch of existing `promote | merge | delete` actions through `handle_review_batch`. The UI previews the complete batch and requires explicit confirmation; no action runs on selection alone.
+11. The Personal page is advertised only for Personal datasets. Standard demo roots retain existing Graph/List/Dashboard/Review behavior and exact Agent/MCP surfaces.
+12. The UI is a browsing/review workspace, not a full editor, Obsidian replacement, raw file browser, semantic-vector viewer, maintenance runner, Git control panel, or authentication system.
+13. No endpoint exposes semantic index vectors/query logs, Git credentials/remotes, maintenance pending changesets, raw registry configuration, or arbitrary file content.
+14. REST/API and UI remain local-owner surfaces. Production authentication, multi-user authorization, remote hosting and arbitrary cross-machine access are deferred.
 
 ## Deliverables
 
-- [x] Extend the Personal Profile semantic config and validation boundary.
-- [x] Add provider-neutral typed semantic index/build/query models with atomic local persistence.
-- [x] Add lazy local sentence-transformer adapter and explicit owner CLI index/status operations.
-- [x] Add opt-in semantic mode to shared search handler/catalog without changing default results.
-- [x] Add stale/idempotency/containment/filter/build-isolation/provider-boundary regression coverage.
-- [x] Update PRD, architecture, profile contract, guides, project structure, roadmap and pitfalls.
-- [x] Run focused, Core/API, Personal and integration acceptance; restore test side effects.
+- [x] Add typed server-owned instance registry loading, exact alias resolution and safe dataset metadata.
+- [x] Add provider-neutral Personal Web overview/capture/topic/timeline models and handlers.
+- [x] Add a thin Personal REST router with bounded reads and owner batch review.
+- [x] Add a Personal Operator UI view for Capture browsing, Topic/Claim inspection, batch decisions and timeline.
+- [x] Add registry/root/privacy, valid-object filtering, timeline and review-delegation regression coverage.
+- [x] Add frontend mocked E2E coverage for Personal-only navigation, browsing and confirmed batch review.
+- [x] Update PRD, architecture, guides, project structure, frontend help and roadmap/pitfalls.
+- [x] Run backend/Core/Personal/integration/frontend acceptance and restore test side effects.
 
 ## Executable Acceptance Criteria
 
-1. Default init/profile has semantic disabled and no model path; lexical search does not import sentence-transformers or create semantic files.
-2. Enabled config accepts only a relative model directory inside configured `private_local`; absolute/traversal/outside paths fail validation.
-3. Fake local embedder builds typed vectors for valid Capture/Topic/Claim and assemblable Atoms; proposed/archived/corrupt objects are absent.
-4. Identical rebuild returns reused with zero embed/write; changed content or model fingerprint is detected stale before query.
-5. Semantic query returns stable typed candidates and cosine ordering; kind filters work and missing/dimension-invalid indexes fail boundedly.
-6. `search_memories semantic=true` is available only for configured Personal roots; default/standard behavior remains lexical.
-7. Tampering semantic index cannot affect `build_context_pack`; no imports or context nodes derive from semantic neighbors.
-8. Local adapter is lazy, uses `local_files_only=True`, and makes no network call; external embedding flag is rejected.
-9. Index/report contents contain no absolute root/model path or raw query log and stay under ignored private-local.
-10. All focused/Core/API/Personal/integration tests and `git diff --check` pass.
+1. A temporary registry maps `mymemory` to an external valid Personal Profile; `/api/datasets` lists it without an absolute path and exact header requests resolve to that root.
+2. Absolute/traversal/separator/whitespace/unknown aliases and duplicate registry/demo aliases return bounded errors and never create or modify files outside an allowlisted root.
+3. Relative/missing/non-Personal/profile-invalid registry roots are excluded or fail startup/config loading with no fallback to path interpretation.
+4. Server startup does not reindex or change bytes in external registry roots.
+5. Personal overview/capture/topic/timeline endpoints reject standard roots and return typed, stable, path-safe objects for Personal roots.
+6. Malformed/hash-invalid Capture and invalid Topic/Claim blocks are absent from Web results while diagnostics remain bounded.
+7. Timeline order and edges derive only from explicit timestamps/provenance/relations; stable IDs survive path/line changes.
+8. One REST review batch calls the shared Core handler once; promote/merge/delete outcomes match CLI behavior. Invalid/self-referential actions fail without router-side writes.
+9. Frontend shows Personal navigation only for Personal datasets, supports empty/loading/error states, and does not regress Graph/List/Dashboard/Review for standard roots.
+10. Owner can select multiple Topic decisions, review the full batch, cancel with zero calls, then explicitly confirm one batch call and refresh results.
+11. UI/API payloads contain no absolute root, registry path, private-local path, semantic vectors, credentials, Git remote or maintenance pending state.
+12. Core/API/Personal/integration/frontend build/lint/E2E and `git diff --check` pass with no example/runtime residue.
 
 ## Acceptance Commands
 
 ```powershell
-python -m pytest tests/personal/test_semantic_discovery.py -q
+python -m pytest tests/unit/test_personal_web.py tests/test_api.py -q
 python -m pytest tests/unit tests/test_api.py -q
 python -m pytest tests/personal -q
 python tests/integration_test.py
 python tests/integration_personal.py
-python -c "import sys, codememory; assert 'sentence_transformers' not in sys.modules; print('semantic import boundary ok')"
+Push-Location frontend; npm run build; npm run lint; npm run test:e2e:ci; Pop-Location
 git diff --check
 git status --short --branch -uall
 ```
 
 ## Explicit Deferrals
 
-- External embedding services, model downloads, Web UI, background scheduling and hybrid lexical-semantic fusion.
-- Semantic generation of imports, automatic reads, ContextPack injection or maintenance clustering.
-
-## Implementation Evidence
-
-- `python -m pytest tests/personal/test_semantic_discovery.py -q` → 13 passed, including Windows junction escape rejection before embed/write.
-- `python -m pytest tests/unit tests/test_api.py -q` → 290 passed, 1 existing Pydantic warning.
-- `python -m pytest tests/personal -q` → 55 passed.
-- `python tests/integration_test.py` → 21/21 passed.
-- `python tests/integration_personal.py` → 15/15 passed.
-- Core import probe → `semantic import boundary ok`; `sentence_transformers` remains unloaded.
-- `git diff --check` → passed.
-- Generated example index/log differences restored; worktree contains only intended Phase 2 changes.
-- Owner-review root containment finding fixed: resolved `paths.private_local` must remain inside the bound root before validation, model loading, status, index build, or search.
+- Authentication, multiple owners/roles, remote hosting, registry editing through Web and arbitrary root entry.
+- Capture editing/deletion, full Markdown editing, maintenance execution, Git delivery controls and semantic index management.
+- Automatic relationship inference, semantic timeline clustering and background Web refresh.
 
 ## Completion Gate
 
-Owner accepted Personal Memory Phase 2 on 2026-07-23 after independently reproducing the junction escape regression, all semantic boundaries, full test suites, import isolation, and diff hygiene. The accepted outcome is recorded in `docs/plan/HISTORY.md`.
-
-Push, merge, and branch cleanup remain separate explicit Git operations.
+Owner acceptance was recorded on 2026-07-23 after independent boundary review and the complete acceptance matrix passed. This sprint is closed; no follow-up implementation is implied by this status.

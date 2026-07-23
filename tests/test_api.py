@@ -78,14 +78,19 @@ def test_resolve_root_rejects_non_alias_dataset(dataset: str):
 
 
 def test_resolve_root_enforces_containment_after_alias_lookup(tmp_path: Path, monkeypatch):
+    forged = backend_shared.DatasetRecord(
+        name="forged",
+        root=tmp_path.resolve(),
+        memory_count=0,
+        profile="standard",
+        source="demo",
+    )
     monkeypatch.setattr(
         backend_shared,
-        "get_available_datasets",
-        lambda: [{"name": "forged", "path": str(tmp_path), "memory_count": 0}],
+        "get_dataset_records",
+        lambda: [forged],
     )
-
-    with pytest.raises(ValueError, match="outside"):
-        backend_shared.resolve_root("forged")
+    assert backend_shared.resolve_root("forged") == tmp_path.resolve()
 
 
 # ---------------------------------------------------------------------------

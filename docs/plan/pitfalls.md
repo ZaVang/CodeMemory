@@ -111,3 +111,13 @@ Capture 出现不完整 block 或 payload hash mismatch 时，validate 必须报
 - 相同 input digest + model fingerprint 重建不得调用 embedder或重写索引；内容/模型变化时 query 先报 stale，不能用旧向量“尽量返回”。
 - 查询不能把 raw query 写进索引或日志。索引只保留 typed ID/hash/vector 与安全 locator，不保留绝对 root/model path。
 - canonical build 永远不能 import 或读取 semantic index；候选 Atom 仍走 imports DAG，Capture/Topic/Claim 仍走稳定 ID read。
+
+---
+
+## Personal Web registry 是 server trust boundary
+
+- Request/header 只能携带精确 dataset alias；不能接受 root、相对路径、未知 alias、首尾空白或路径分隔符，再由 backend “清洗”。
+- 外部 Personal root 只来自 `CODEMEMORY_INSTANCE_REGISTRY` 指向的服务端 YAML。registry 本身不通过 Web 编辑，alias 不得与 demo dataset 冲突，root 必须存在并通过 Personal Profile validation。
+- `GET /api/datasets` 只公开 name/count/profile/source；不得泄露绝对 root、registry 路径、Git remote、private-local 或 semantic/maintenance 状态。
+- Server startup 只能自动 reindex contained demo roots；外部 registry root 的字节必须保持不变。
+- Personal router 不扫描 Markdown、不推断关系、不自行实现批量审阅。typed filtering/timeline 属于 Core read model，review batch 只调用一次共享 handler。

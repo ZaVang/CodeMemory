@@ -36,6 +36,7 @@ from codememory.handlers import (  # noqa: E402
 )
 from codememory.index import load_index, reindex, save_index  # noqa: E402
 from codememory.models import IndexData, MemoryEntry  # noqa: E402
+from codememory.profile import PROFILE_RELATIVE_PATH, validate_personal_profile  # noqa: E402
 from codememory.validate import validate  # noqa: E402
 
 # ---------------------------------------------------------------------------
@@ -45,6 +46,24 @@ from codememory.validate import validate  # noqa: E402
 _EXAMPLES_DIR = Path(__file__).resolve().parent.parent / "examples"
 
 _DEFAULT_DATASET = os.environ.get("CODEMEMORY_DEFAULT_DATASET", "investment")
+_INSTANCE_REGISTRY_ENV = "CODEMEMORY_INSTANCE_REGISTRY"
+_SAFE_ALIAS_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$")
+
+
+class DatasetRecord(BaseModel):
+    name: str
+    root: Path
+    memory_count: int
+    profile: Literal["standard", "personal"]
+    source: Literal["demo", "registry"]
+
+    def public_dict(self) -> dict[str, str | int]:
+        return {
+            "name": self.name,
+            "memory_count": self.memory_count,
+            "profile": self.profile,
+            "source": self.source,
+        }
 
 # Per-request dataset root via context variable
 from contextvars import ContextVar  # noqa: E402
@@ -56,57 +75,142 @@ def get_root() -> Path:
     return _resolve_root(_current_dataset.get())
 
 
-def _resolve_root(dataset_name: str) -> Path:
-    """Resolve an exact registered dataset alias inside ``examples/``.
-
-    Request-controlled values must never be interpreted as filesystem paths.
-    The alias lookup is the primary boundary; the containment check is the
-    final defense against a symlink or future registry regression.
-    """
-    if not dataset_name or dataset_name != dataset_name.strip():
-        raise ValueError("Invalid dataset alias")
-    if Path(dataset_name).is_absolute() or any(mark in dataset_name for mark in ("/", "\\", ":")):
+def _validate_dataset_alias(alias: str) -> None:
+    if (
+        not alias
+        or alias != alias.strip()
+        or not _SAFE_ALIAS_RE.fullmatch(alias)
+        or Path(alias).is_absolute()
+        or any(mark in alias for mark in ("/", "\\", ":", ".."))
+    ):
         raise ValueError("Invalid dataset alias")
 
-    registry = {item["name"]: Path(item["path"]) for item in get_available_datasets()}
-    if dataset_name not in registry:
-        raise ValueError(f"Unknown dataset alias: {dataset_name}")
 
-    examples_root = _EXAMPLES_DIR.resolve()
-    root = registry[dataset_name].resolve()
+def _index_count(root: Path) -> int:
+    path = root / ".codememory" / "index.json"
+    if not path.is_file():
+        return 0
     try:
-        root.relative_to(examples_root)
-    except ValueError as exc:
-        raise ValueError("Dataset root is outside the examples directory") from exc
-    return root
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError, TypeError):
+        return 0
+    memories = payload.get("memories", {})
+    personal = payload.get("personal_objects", {})
+    return (len(memories) if isinstance(memories, dict) else 0) + (
+        len(personal) if isinstance(personal, dict) else 0
+    )
 
 
-def get_available_datasets() -> list[dict[str, str]]:
-    datasets: list[dict[str, str]] = []
+def _demo_dataset_records() -> list[DatasetRecord]:
+    records: list[DatasetRecord] = []
     if not _EXAMPLES_DIR.exists():
-        return datasets
+        return records
+    examples_root = _EXAMPLES_DIR.resolve()
     for entry in sorted(_EXAMPLES_DIR.iterdir()):
         if not entry.is_dir():
             continue
         try:
+            _validate_dataset_alias(entry.name)
             resolved_entry = entry.resolve()
-            resolved_entry.relative_to(_EXAMPLES_DIR.resolve())
+            resolved_entry.relative_to(examples_root)
         except ValueError:
             continue
-        idx = entry / ".codememory" / "index.json"
-        if idx.exists():
-            try:
-                with open(idx, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                count = len(data.get("memories", {}))
-            except Exception:
-                count = 0
-            datasets.append({
-                "name": entry.name,
-                "path": str(resolved_entry),
-                "memory_count": count,
-            })
-    return datasets
+        if not (resolved_entry / ".codememory" / "index.json").is_file():
+            continue
+        records.append(DatasetRecord(
+            name=entry.name,
+            root=resolved_entry,
+            memory_count=_index_count(resolved_entry),
+            profile=(
+                "personal"
+                if (resolved_entry / PROFILE_RELATIVE_PATH).is_file()
+                else "standard"
+            ),
+            source="demo",
+        ))
+    return records
+
+
+def _external_dataset_records() -> list[DatasetRecord]:
+    configured = os.environ.get(_INSTANCE_REGISTRY_ENV)
+    if not configured:
+        return []
+    config_path = Path(configured)
+    if not config_path.is_absolute() or not config_path.is_file():
+        raise ValueError(f"{_INSTANCE_REGISTRY_ENV} must name an existing absolute file")
+    try:
+        raw = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
+    except (OSError, yaml.YAMLError) as exc:
+        raise ValueError("Invalid Personal instance registry") from exc
+    if not isinstance(raw, dict) or set(raw) != {"instances"}:
+        raise ValueError("Personal instance registry must contain only 'instances'")
+    instances = raw["instances"]
+    if not isinstance(instances, dict):
+        raise ValueError("Personal instance registry 'instances' must be a mapping")
+
+    records: list[DatasetRecord] = []
+    roots: set[Path] = set()
+    for raw_alias, raw_root in instances.items():
+        if not isinstance(raw_alias, str) or not isinstance(raw_root, str):
+            raise ValueError("Personal instance registry aliases and roots must be strings")
+        _validate_dataset_alias(raw_alias)
+        root = Path(raw_root)
+        if not root.is_absolute() or not root.is_dir():
+            raise ValueError(f"Registered Personal root is invalid: {raw_alias}")
+        resolved_root = root.resolve()
+        if resolved_root in roots:
+            raise ValueError("Personal instance registry contains duplicate resolved roots")
+        roots.add(resolved_root)
+        if not (resolved_root / PROFILE_RELATIVE_PATH).is_file():
+            raise ValueError(f"Registered root is not a Personal Profile: {raw_alias}")
+        validation = validate_personal_profile(resolved_root)
+        if not validation.profile_valid:
+            raise ValueError(f"Registered Personal Profile is invalid: {raw_alias}")
+        records.append(DatasetRecord(
+            name=raw_alias,
+            root=resolved_root,
+            memory_count=_index_count(resolved_root),
+            profile="personal",
+            source="registry",
+        ))
+    return records
+
+
+def get_dataset_records() -> list[DatasetRecord]:
+    records = [*_demo_dataset_records(), *_external_dataset_records()]
+    seen: set[str] = set()
+    for record in records:
+        if record.name in seen:
+            raise ValueError(f"Duplicate dataset alias: {record.name}")
+        seen.add(record.name)
+    return sorted(records, key=lambda item: item.name)
+
+
+def _resolve_root(dataset_name: str) -> Path:
+    """Resolve an exact server-owned dataset alias.
+
+    Request-controlled values must never be interpreted as filesystem paths.
+    Demo roots are contained under examples; external Personal roots are exact
+    prevalidated targets from the server-owned registry.
+    """
+    _validate_dataset_alias(dataset_name)
+    registry = {item.name: item for item in get_dataset_records()}
+    if dataset_name not in registry:
+        raise ValueError(f"Unknown dataset alias: {dataset_name}")
+    return registry[dataset_name].root
+
+
+def get_available_datasets() -> list[dict[str, str | int]]:
+    return [record.public_dict() for record in get_dataset_records()]
+
+
+def get_default_dataset_name() -> str:
+    names = [record.name for record in get_dataset_records()]
+    if _DEFAULT_DATASET in names:
+        return _DEFAULT_DATASET
+    if not names:
+        raise ValueError("No CodeMemory datasets are available")
+    return names[0]
 
 
 # Expose the context var and default dataset for middleware / main

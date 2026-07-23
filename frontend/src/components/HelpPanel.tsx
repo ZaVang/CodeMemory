@@ -387,6 +387,9 @@ export default function HelpPanel({ show, onClose }: Props) {
             { method: 'GET', path: '/api/stats', desc: '统计：总数、maturity 分布（draft/verified/proven）、stale 数量、tag 频次' },
             { method: 'GET', path: '/api/reviews', desc: '读取 proposed atoms 与 patch proposals 两条 owner review 队列' },
             { method: 'GET', path: '/api/tests/{id}', desc: '只读导出 Golden Questions TestBundle；不执行、不评分' },
+            { method: 'GET', path: '/api/personal/topics', desc: 'Personal dataset 的 Topic、内嵌 Claim 与显式 provenance' },
+            { method: 'GET', path: '/api/personal/timeline', desc: '只由 authored timestamp 与显式关系组成的想法时间线' },
+            { method: 'POST', path: '/api/personal/review-batch', desc: '一次 owner 确认的 promote / merge / delete 批次' },
             { method: 'POST', path: '/api/validate', desc: '运行 validate()，返回诊断结果（循环/断链/schema/maturity 错误和警告）' },
           ].map((ep) => (
             <div

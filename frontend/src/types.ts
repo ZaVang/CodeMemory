@@ -200,3 +200,90 @@ export interface ReviewQueueResponse {
   patch_proposals: PatchProposalReview[]
   total: number
 }
+
+export interface PersonalOverview {
+  capture_count: number
+  topic_count: number
+  claim_count: number
+  canonical_count: number
+  diagnostics_count: number
+}
+
+export interface PersonalCapture {
+  id: string
+  captured_at: string
+  actor: string
+  content_hash: string
+  content: string
+  locator: string
+}
+
+export interface PersonalCapturePage {
+  items: PersonalCapture[]
+  total: number
+  offset: number
+  limit: number
+}
+
+export interface PersonalClaim {
+  claim_id: string
+  topic_id: string
+  revision_id: string
+  title: string
+  content: string
+  origin: string
+  claim_status: string
+  confidence?: number | null
+  derived_from: Record<string, unknown>[]
+  locator: string
+}
+
+export interface PersonalTopic {
+  topic_id: string
+  revision_id: string
+  title: string
+  content: string
+  origin: string
+  created_at?: string | null
+  updated_at?: string | null
+  content_hash?: string | null
+  tags: string[]
+  derived_from: Record<string, unknown>[]
+  relations: Record<string, unknown>[]
+  merged_from: Record<string, unknown>[]
+  claims: PersonalClaim[]
+  locator: string
+}
+
+export interface PersonalTimelineEvent {
+  id: string
+  kind: 'capture' | 'topic_revision' | 'canonical_promotion'
+  timestamp: string
+  title: string
+  origin?: string | null
+  locator?: string | null
+}
+
+export interface PersonalTimelineEdge {
+  relation: string
+  source_id: string
+  target_id: string
+}
+
+export interface PersonalTimeline {
+  events: PersonalTimelineEvent[]
+  edges: PersonalTimelineEdge[]
+}
+
+export interface PersonalReviewDecision {
+  action: 'promote' | 'merge' | 'delete'
+  revision_id: string
+  atom_id?: string
+  target_revision_id?: string
+}
+
+export interface PersonalReviewBatchResult {
+  promoted: string[]
+  merged: string[]
+  deleted: string[]
+}

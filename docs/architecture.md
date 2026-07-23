@@ -100,7 +100,7 @@ Git credential、GitHub 访问控制和通知通道属于运行环境，不写�
 | proposal | `models.py`（status）+ `proposals.py`（patch 队列）+ `update.py`（merge/reject 分发） | 已完成（修改类落为独立小模块 `proposals.py`，复用 update 应用 patch） | A ✅ / C ✅ |
 | log | `log.py` / `changelog.py` | 不变 | — |
 | importer | `compiler/` + `sources.py` | v2A：确定性 asset + anchor + paragraph-derived；v2B：显式可选 semantic proposer + imports 建议，仍只产 proposed | Importer v2A / v2B ✅ |
-| Personal Profile | `profile.py` / `capture.py` / `personal_index.py` / `maintenance.py` / `promotion.py` / `git_delivery.py` | 1A / 1B 已完成并经 owner 接受 | 1A / 1B ✅ |
+| Personal Profile | `profile.py` / `capture.py` / `personal_index.py` / `semantic_index.py` / `maintenance.py` / `promotion.py` / `git_delivery.py` / `personal_web.py` | Phase 1A / 1B / 2 已完成并经 owner 接受；Personal Web active | 1A / 1B / 2 ✅ / Web active |
 
 ### 2.1 保留与定位说明
 
@@ -439,6 +439,8 @@ Personal Profile 补充：
 7. Web 通过服务端 allowlist registry 将实例别名映射为绝对 root。请求只传精确命中的已知别名；middleware 在写入 request ContextVar 前校验，root resolver 再做 registry 命中与 containment 防线。禁止把任意绝对路径、未知 alias、首尾空白、路径分隔符或 `..` 交给 backend 解析；现有 `examples/` 自动发现只保留为开发/demo 兼容路径。
 
 Operator UI 的 REST 对齐：`POST /api/build` 是主装配入口并同时返回结构化 ContextPack 与同次 build 的 rendered output；`GET /api/reviews` 分开返回 proposed Atom 与 modification patch，kind-specific merge/reject 继续委托 Core；`GET /api/tests/{memory_id}` 只读导出 TestBundle，不在 Web 内执行模型或判分。兼容路由可以保留，但不得形成第二套装配实现。
+
+Personal Web 补充：`backend/shared.py` 从 `CODEMEMORY_INSTANCE_REGISTRY` 指向的服务端 YAML 读取外部 Personal 实例，只公开 alias/profile/source/count；resolver 精确映射 alias，不解析 request root。`personal_web.py` 负责 Capture/Topic/Claim/timeline typed read model，`backend/routers/personal.py` 只做状态映射并将 review batch 一次委托 `handle_review_batch`。外部 registry root 不参加 server startup reindex；Web 不读取 private-local semantic index 或 maintenance pending state。
 
 Agent 写入补充：`create_memory` 一次写入完整 summary/body/imports；普通实例可显式选择 active 或 proposed，Personal Profile 强制 proposed。`propose_memory` 只表示针对已有 Atom 的 modification patch，委托 `handle_propose` 且 owner merge 前目标字节不变。历史 `update_memory / propose_update / resolve_context / resolve_memory` 等 adapter alias 不再导出，但 CLI/Core 能力不删除。
 

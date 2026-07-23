@@ -22,7 +22,7 @@ test.describe('CodeMemory Smoke Tests', () => {
       const json = (body: unknown) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) })
       const memory = { id: 'memory/alpha', type: 'atom', summary: 'Alpha memory', tags: ['test'], maturity: 'verified', directory: 'memory', status: 'active', version: 1 }
 
-      if (url.pathname === '/api/datasets') return json({ datasets: [{ name: 'test', path: '', memory_count: 1 }, { name: 'alternate', path: '', memory_count: 1 }], current: 'test', current_name: 'test' })
+      if (url.pathname === '/api/datasets') return json({ datasets: [{ name: 'test', memory_count: 1, profile: 'standard', source: 'demo' }, { name: 'alternate', memory_count: 1, profile: 'standard', source: 'demo' }], current: 'test', current_name: 'test' })
       if (url.pathname === '/api/datasets/switch') return json({ current: request.postDataJSON()?.name ?? 'test' })
       if (url.pathname === '/api/memories' && request.method() === 'GET') return json({ memories: [memory], total: 1, offset: 0, limit: 10000 })
       if (url.pathname === '/api/memories/memory/alpha') return json({ ...memory, body: '# Alpha', created: '2026-07-22', imports: {} })
@@ -190,7 +190,7 @@ test.describe('CodeMemory Smoke Tests', () => {
       const url = new URL(request.url())
       const json = (body: unknown) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) })
 
-      if (url.pathname === '/api/datasets') return json({ datasets: [{ name: 'test', path: '', memory_count: 1 }], current: 'test', current_name: 'test' })
+      if (url.pathname === '/api/datasets') return json({ datasets: [{ name: 'test', memory_count: 1, profile: 'standard', source: 'demo' }], current: 'test', current_name: 'test' })
       if (url.pathname === '/api/memories' && request.method() === 'GET') return json({ memories: [{ id: 'memory/alpha', type: 'atom', summary: 'Alpha', tags: ['test'], maturity: 'verified', directory: 'memory', status: 'active', version: 1 }], total: 1, offset: 0, limit: 10000 })
       if (url.pathname === '/api/memories/memory/alpha') return json({ id: 'memory/alpha', type: 'atom', summary: 'Alpha', body: '# Alpha', tags: ['test'], maturity: 'verified', status: 'active', version: 1, created: '2026-07-22', imports: {}, golden_questions: [{ q: 'What is canonical?', expect: 'The built context.' }] })
       if (url.pathname === '/api/tests/memory/alpha') return json({ format_version: 'memory-test/v1', entry: 'memory/alpha', context: '<context>Alpha</context>', questions: [{ q: 'What is canonical?', expect: 'The built context.' }], notices: [] })
@@ -225,5 +225,94 @@ test.describe('CodeMemory Smoke Tests', () => {
 
     await expect(page.getByText('Wander', { exact: true })).toHaveCount(0)
     await expect(page.locator('input[name="intensity"]')).toHaveCount(0)
+  })
+
+  test('7. Personal workspace previews and confirms one multi-decision batch', async ({ page }) => {
+    await page.addInitScript(() => localStorage.setItem('codememory-onboarded', '1'))
+    let batchCalls = 0
+
+    const topics = [
+      {
+        topic_id: 'topic/alpha',
+        revision_id: 'rev/alpha',
+        title: 'Alpha direction',
+        content: 'Alpha synthesis',
+        origin: 'mixed',
+        updated_at: '2026-07-22T10:00:00+08:00',
+        tags: ['alpha'],
+        derived_from: [{ kind: 'capture', id: 'cap_alpha', content_hash: 'sha256:a' }],
+        relations: [],
+        merged_from: [],
+        locator: 'incubator/2026-07.md:3',
+        claims: [{ claim_id: 'claim/alpha', topic_id: 'topic/alpha', revision_id: 'rev/alpha', title: 'Alpha claim', content: 'Inference', origin: 'agent_inference', claim_status: 'unassessed', derived_from: [], locator: 'incubator/2026-07.md:15' }],
+      },
+      {
+        topic_id: 'topic/beta',
+        revision_id: 'rev/beta',
+        title: 'Beta direction',
+        content: 'Beta synthesis',
+        origin: 'agent_synthesis',
+        updated_at: '2026-07-21T10:00:00+08:00',
+        tags: [],
+        derived_from: [],
+        relations: [],
+        merged_from: [],
+        locator: 'incubator/2026-07.md:25',
+        claims: [],
+      },
+    ]
+
+    await page.route('**/api/**', async (route) => {
+      const request = route.request()
+      const url = new URL(request.url())
+      const json = (body: unknown) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) })
+
+      if (url.pathname === '/api/datasets') return json({
+        datasets: [
+          { name: 'mymemory', memory_count: 3, profile: 'personal', source: 'registry' },
+          { name: 'standard', memory_count: 1, profile: 'standard', source: 'demo' },
+        ],
+        current: 'mymemory',
+        current_name: 'mymemory',
+      })
+      if (url.pathname === '/api/datasets/switch') return json({ current: request.postDataJSON()?.name })
+      if (url.pathname === '/api/personal/overview') return json({ capture_count: 1, topic_count: 2, claim_count: 1, canonical_count: 0, diagnostics_count: 0 })
+      if (url.pathname === '/api/personal/captures') return json({ items: [{ id: 'cap_alpha', captured_at: '2026-07-20T08:00:00+08:00', actor: 'owner', content_hash: 'sha256:a', content: 'Raw owner note', locator: 'journal/2026/07/2026-07-20.md:3' }], total: 1, offset: 0, limit: 50 })
+      if (url.pathname === '/api/personal/topics') return json(topics)
+      if (url.pathname === '/api/personal/timeline') return json({ events: [{ id: 'cap_alpha', kind: 'capture', timestamp: '2026-07-20T08:00:00+08:00', title: 'Raw owner note', origin: 'human_explicit' }, { id: 'rev/alpha', kind: 'topic_revision', timestamp: '2026-07-22T10:00:00+08:00', title: 'Alpha direction', origin: 'mixed' }], edges: [{ relation: 'derived_from', source_id: 'cap_alpha', target_id: 'rev/alpha' }] })
+      if (url.pathname === '/api/personal/review-batch') {
+        batchCalls += 1
+        expect(request.postDataJSON()?.decisions).toHaveLength(2)
+        return json({ promoted: ['memory/ideas/alpha'], merged: [], deleted: ['rev/beta'] })
+      }
+      if (url.pathname === '/api/memories') return json({ memories: [], total: 0, offset: 0, limit: 10000 })
+      if (url.pathname === '/api/graph') return json({ nodes: [], edges: [] })
+      return json({})
+    })
+
+    await page.goto('/')
+    await page.getByRole('button', { name: /personal/i }).click()
+    await expect(page.getByRole('heading', { name: 'Personal Memory' })).toBeVisible()
+    await expect(page.getByText('Raw owner note')).toBeVisible()
+    await expect(page.getByText('Alpha claim')).toBeVisible()
+
+    await page.getByLabel('Canonical Atom ID').fill('memory/ideas/alpha')
+    await page.getByRole('button', { name: 'Queue decision' }).click()
+    await page.getByRole('button', { name: /Beta direction/ }).click()
+    await page.getByRole('combobox').last().selectOption('delete')
+    await page.getByRole('button', { name: 'Queue decision' }).click()
+
+    await page.getByRole('button', { name: 'Review batch (2)' }).click()
+    await expect(page.getByRole('dialog')).toContainText('promote')
+    await expect(page.getByRole('dialog')).toContainText('delete')
+    await page.getByRole('button', { name: 'Cancel' }).click()
+    expect(batchCalls).toBe(0)
+
+    await page.getByRole('button', { name: 'Review batch (2)' }).click()
+    await page.getByRole('button', { name: 'Confirm batch' }).click()
+    await expect.poll(() => batchCalls).toBe(1)
+
+    await page.locator('select').first().selectOption('standard')
+    await expect(page.getByRole('button', { name: /personal/i })).toHaveCount(0)
   })
 })

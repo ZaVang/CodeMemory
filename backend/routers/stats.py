@@ -8,9 +8,9 @@ from contextlib import redirect_stdout
 from fastapi import APIRouter, HTTPException
 
 from shared import (
-    DEFAULT_DATASET,
     DatasetSwitchRequest,
     get_available_datasets,
+    get_default_dataset_name,
     get_root,
     load_cm_index,
     reindex,
@@ -169,7 +169,7 @@ def get_datasets():
     # not whatever the client may have sent in the X-Codememory-Dataset header.
     # The middleware no longer writes ContextVar on exempt paths, but using
     # the constant here is a belt-and-suspenders defence against self-reinforcement.
-    current = DEFAULT_DATASET
+    current = get_default_dataset_name()
     current_name = current
     return {
         "datasets": serialize(datasets),

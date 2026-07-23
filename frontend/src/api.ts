@@ -193,8 +193,9 @@ export async function rehashMemory(id: string): Promise<{ id: string; summary_ha
 
 export interface DatasetInfo {
   name: string
-  path: string
   memory_count: number
+  profile: 'standard' | 'personal'
+  source: 'demo' | 'registry'
 }
 
 export interface DatasetsResponse {
@@ -267,6 +268,33 @@ export async function applyReview(
 
 export async function fetchTestBundle(id: string): Promise<TestBundle> {
   return fetcher<TestBundle>(`${BASE}/tests/${encodePathId(id)}`)
+}
+
+export async function fetchPersonalOverview(): Promise<import('./types').PersonalOverview> {
+  return fetcher(`${BASE}/personal/overview`)
+}
+
+export async function fetchPersonalCaptures(offset = 0, limit = 50): Promise<import('./types').PersonalCapturePage> {
+  return fetcher(`${BASE}/personal/captures?offset=${offset}&limit=${limit}`)
+}
+
+export async function fetchPersonalTopics(): Promise<import('./types').PersonalTopic[]> {
+  return fetcher(`${BASE}/personal/topics`)
+}
+
+export async function fetchPersonalTimeline(topicId?: string): Promise<import('./types').PersonalTimeline> {
+  const query = topicId ? `?topic_id=${encodeURIComponent(topicId)}` : ''
+  return fetcher(`${BASE}/personal/timeline${query}`)
+}
+
+export async function applyPersonalReviewBatch(
+  decisions: import('./types').PersonalReviewDecision[],
+): Promise<import('./types').PersonalReviewBatchResult> {
+  return fetcher(`${BASE}/personal/review-batch`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ owner_confirmed: true, decisions }),
+  })
 }
 
 /** Trigger a download of the memory .zip export. */

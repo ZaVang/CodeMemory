@@ -14,6 +14,7 @@ import GraphPage from './pages/GraphPage'
 import ListPage from './pages/ListPage'
 import DashboardPage from './pages/DashboardPage'
 import ReviewPage from './pages/ReviewPage'
+import PersonalPage from './pages/PersonalPage'
 import { fetchBuild, updateMemory, fetchDatasets, switchDataset, downloadExport, setCurrentDataset as setApiDataset } from './api'
 import type { ResolveResponse, GraphData } from './types'
 import type { DatasetInfo } from './api'
@@ -228,6 +229,8 @@ export default function App() {
   const [datasets, setDatasets] = useState<DatasetInfo[]>([])
   const [currentDataset, setCurrentDataset] = useState('')
   const [switchingDataset, setSwitchingDataset] = useState(false)
+  const currentDatasetInfo = datasets.find((dataset) => dataset.name === currentDataset)
+  const isPersonalDataset = currentDatasetInfo?.profile === 'personal'
 
   // Graph data (loaded once, shared with Legend)
   const [graphData, setGraphData] = useState<GraphData | null>(null)
@@ -284,6 +287,10 @@ export default function App() {
           setResolveError(null)
           setAllNodesFit(false)
           setGraphData(null)
+          const nextDataset = datasets.find((dataset) => dataset.name === name)
+          if (viewMode === 'personal' && nextDataset?.profile !== 'personal') {
+            setViewMode('graph')
+          }
         })
         .catch((err) => {
           // Revert the API-layer dataset on failure so the UI doesn't
@@ -293,7 +300,7 @@ export default function App() {
         })
         .finally(() => setSwitchingDataset(false))
     },
-    [currentDataset, showOperationError, setRefreshTrigger],
+    [currentDataset, datasets, showOperationError, setRefreshTrigger, viewMode],
   )
 
   // R7-settings: auto-load default dataset on first datasets load
@@ -569,7 +576,7 @@ export default function App() {
       // Ctrl+K — focus search bar (always works, switches to graph view if needed)
       if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
         e.preventDefault()
-        if (viewMode === 'dashboard' || viewMode === 'review') {
+        if (viewMode === 'dashboard' || viewMode === 'review' || viewMode === 'personal') {
           setViewMode('graph')
           // Wait for SearchBar to mount, then focus
           setTimeout(() => {
@@ -624,19 +631,20 @@ export default function App() {
         return
       }
 
-      // 1/2/3/4 — switch views (only when not in input)
-      if (!isInput && ['1', '2', '3', '4'].includes(e.key)) {
+      // 1/2/3/4/5 — switch views (Personal is available only for Personal datasets)
+      if (!isInput && ['1', '2', '3', '4', '5'].includes(e.key)) {
         e.preventDefault()
         if (e.key === '1') setViewMode('graph')
         else if (e.key === '2') setViewMode('list')
         else if (e.key === '3') setViewMode('dashboard')
-        else setViewMode('review')
+        else if (e.key === '4') setViewMode('review')
+        else if (isPersonalDataset) setViewMode('personal')
         return
       }
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [showShortcuts, showHelp, archiveConfirmId, undoEntry, handleUndo, handleOpenCreate, viewMode, activeTheme, selectedNode, resolveData])
+  }, [showShortcuts, showHelp, archiveConfirmId, undoEntry, handleUndo, handleOpenCreate, viewMode, activeTheme, selectedNode, resolveData, isPersonalDataset])
 
   return (
     <div
@@ -658,6 +666,7 @@ export default function App() {
         currentDataset={currentDataset}
         datasetReady={Boolean(currentDataset)}
         switchingDataset={switchingDataset}
+        isPersonalDataset={isPersonalDataset}
         onSwitchDataset={handleSwitchDataset}
         showQuantInfo={currentDataset === 'quant_operators' && !switchingDataset}
         searchText={searchText}
@@ -874,6 +883,17 @@ export default function App() {
               datasetReady={Boolean(currentDataset)}
               refreshTrigger={refreshTrigger}
               onSelectMemory={handleDashSelect}
+              onChanged={() => setRefreshTrigger((prev) => prev + 1)}
+              onError={showOperationError}
+            />
+          </ErrorBoundary>
+        )}
+
+        {viewMode === 'personal' && isPersonalDataset && (
+          <ErrorBoundary label="Personal workspace failed to render">
+            <PersonalPage
+              datasetReady={Boolean(currentDataset)}
+              refreshTrigger={refreshTrigger}
               onChanged={() => setRefreshTrigger((prev) => prev + 1)}
               onError={showOperationError}
             />

@@ -4,6 +4,39 @@ This file records accepted sprint outcomes. Current work belongs in `docs/plan/S
 
 ---
 
+## 2026-07-23 — Personal Memory Web: Allowlisted Owner Workspace
+
+**Status:** Accepted by owner.
+
+**Delivered:**
+
+- Added a server-owned `CODEMEMORY_INSTANCE_REGISTRY` that maps exact safe aliases to validated external Personal Profiles without accepting request-controlled roots.
+- Kept startup mutation bounded to contained demo datasets; external registry roots are never automatically reindexed.
+- Reduced public dataset metadata to `name`, `memory_count`, `profile`, and `source`, excluding roots, registry paths, Git/model/private-local data, and maintenance state.
+- Added provider-neutral Personal overview, hash-valid Capture feed, Topic/inline Claim views, and an idea timeline built only from authored timestamps and explicit provenance/relations.
+- Added thin Personal REST endpoints and one owner-confirmed `promote | merge | delete` batch delegated exactly once to the shared review handler.
+- Added a Personal-only Operator UI workspace with loading/empty/error states, concentrated batch preview/cancel/confirm, and no Capture editor, maintenance/Git controls, registry editor, or semantic-vector surface.
+- Added registry/root/privacy, invalid-object filtering, timeline, handler delegation, and browser E2E regression coverage, plus aligned PRD/architecture/integration/user/frontend/project guidance.
+
+**Acceptance evidence:**
+
+- Owner independently reviewed registry trust boundaries, startup non-mutation, middleware ContextVar lifecycle, public dataset privacy, thin REST delegation, Personal-only navigation, and batch confirmation behavior.
+- Personal Web/API focused suite → `47 passed`
+- Core/API → `307 passed` with one existing Pydantic warning
+- Personal Profile → `55 passed`
+- Existing integration → `21/21 passed`
+- Personal integration → `15/15 passed`
+- Frontend build and lint passed; Playwright E2E → `7 passed`
+- `git diff --check` passed with only normal Windows line-ending notices.
+- Generated example runtime side effects were restored before commit.
+
+**Deferred:**
+
+- Authentication, multiple owners/roles, remote hosting, registry editing through Web, and arbitrary root entry.
+- Capture/Topic full editing, maintenance execution, Git delivery controls, semantic index management, and semantic timeline inference.
+
+---
+
 ## 2026-07-23 — Personal Memory Phase 2: Local Semantic Discovery
 
 **Status:** Accepted by owner.

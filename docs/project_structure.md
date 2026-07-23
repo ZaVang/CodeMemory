@@ -89,6 +89,7 @@
 | `src/codememory/personal_index.py` | Capture / Incubator Topic / inline Claim typed index、词法筛选和稳定 ID read；Claim 保持在 Topic 文件内。 |
 | `src/codememory/semantic_index.py` | Personal Profile provider-neutral 派生语义索引：typed 输入、atomic persistence、stale/idempotency 与候选排序；canonical build 不读取。 |
 | `src/codememory/semantic_local.py` | 惰性 `sentence-transformers` 本地 adapter；只从已有 private-local 模型目录加载并禁止下载/remote code。 |
+| `src/codememory/personal_web.py` | Personal owner workspace 的 provider-neutral overview/Capture/Topic/Claim/timeline typed read models；只生成安全相对 locator。 |
 | `src/codememory/maintenance.py` | Personal maintenance run ledger、稳定 input digest、pending changeset、Topic/Claim 渲染、幂等 apply 与恢复。 |
 | `src/codememory/promotion.py` | owner-gated Topic promotion 与 promote/merge/delete batch review。 |
 | `src/codememory/git_delivery.py` | Profile 路径白名单、staged diff 敏感扫描、run trailer commit 与同 commit push retry。 |
@@ -221,10 +222,11 @@ Backend 的职责是把 core 能力变成 HTTP API，并处理 dataset header、
 | `backend/routers/reviews.py` | proposed Atom / modification patch review 队列、kind-specific merge/reject、只读 TestBundle API。 |
 | `backend/routers/sources.py` | Source Artifact REST adapter；当前提供 explicit source expansion，并委托 core `expand_source_artifact`。 |
 | `backend/routers/stats.py` | stats、validate、reindex、datasets API。 |
+| `backend/routers/personal.py` | Personal-only overview/capture/topic/timeline REST 与一次 batch review 的薄 adapter。 |
 
 Backend contract：
 
-- 请求必须通过 `X-Codememory-Dataset` 选择 dataset，除 `/`, `/docs`, `/openapi.json`, `/api/datasets`, `/api/datasets/switch`。
+- 请求必须通过 `X-Codememory-Dataset` 选择 dataset，除 `/`, `/docs`, `/openapi.json`, `/api/datasets`, `/api/datasets/switch`。外部 Personal root 只来自 `CODEMEMORY_INSTANCE_REGISTRY`，公开 metadata 不含 path。
 - 读写 memory 时优先委托 `src/codememory/handlers.py` 或 core module。
 - `backend/shared.py` 可以放 API request models 和序列化 helper，但不应继续膨胀成业务核心。
 
@@ -232,7 +234,7 @@ Backend contract：
 
 ## 9. `frontend/` — Operator UI
 
-Frontend 是本地操作台：查看 graph、Build canonical context、编辑 memory、处理 owner review、查看 golden questions、运行 validate/reindex。它不定义 core contract。
+Frontend 是本地操作台：查看 graph、Build canonical context、编辑 memory、处理 owner review、查看 golden questions、运行 validate/reindex，以及在 Personal dataset 中浏览 Capture/Topic 并确认集中审阅。它不定义 core contract。
 
 | 文件 | 职责 |
 |---|---|
@@ -272,6 +274,7 @@ Frontend 是本地操作台：查看 graph、Build canonical context、编辑 me
 | `DashboardPage.tsx` | Dashboard 页面包装层，连接 stats/validate/reindex 面板与 App 回调。 |
 | `GraphPage.tsx` | Graph 页面包装层，组合 GraphCanvas、Legend、MemoryDetail 和 Build 状态提示。 |
 | `ListPage.tsx` | List 页面包装层，组合 MemoryList 和列表筛选入口。 |
+| `PersonalPage.tsx` | Personal-only overview、Capture feed、Topic/Claim inspection、显式 timeline 与 batch preview/confirm。 |
 | `ReviewPage.tsx` | owner review 页面：分别读取 proposed Atom 与 patch proposal，确认后调用 kind-specific merge/reject。 |
 
 ### 9.3 `frontend/src/components/`
@@ -397,7 +400,7 @@ cd frontend && npm run build
 
 ### 13.1 Personal Profile 模块（Phase 1A / 1B / Phase 2）
 
-Phase 1A / 1B 已经 owner 接受；Phase 2 local semantic discovery 实现已完成、等待 owner acceptance。当前 Personal Profile 落点如下：
+Phase 1A / 1B / 2 已经 owner 接受；Personal Web 正在 active Sprint。当前 Personal Profile 落点如下：
 
 | 目标路径 | 责任 |
 |---|---|
@@ -406,9 +409,12 @@ Phase 1A / 1B 已经 owner 接受；Phase 2 local semantic discovery 实现已�
 | `src/codememory/personal_index.py` | Capture / Topic / Atom typed discovery 与 read locator |
 | `src/codememory/semantic_index.py` | ignored private-local typed vector index、显式 build/status/query 与 build isolation |
 | `src/codememory/semantic_local.py` | 可选本地 embedding adapter；惰性 import、local-only load |
+| `src/codememory/personal_web.py` | Web 所需 typed read model 与显式关系 timeline；不读取 private-local |
 | `src/codememory/maintenance.py` | Phase 1B changeset、run ledger 与幂等状态机 |
 | `src/codememory/promotion.py` | canonical promotion 与 batch review |
 | `src/codememory/git_delivery.py` | 敏感扫描和可选 Git delivery adapter |
+| `backend/shared.py` / `backend/routers/personal.py` | 服务端 allowlist registry 与 Personal REST 薄 adapter |
+| `frontend/src/pages/PersonalPage.tsx` | Personal owner browsing/review workspace |
 | `.agents/skills/personal-memory/` | Phase 1B Codex 语义维护工作流；不属于 Core |
 
 外部 `MyMemory` 实例的目录结构不属于本程序仓库；权威定义只在 `docs/personal-memory-profile.md`。

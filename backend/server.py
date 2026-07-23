@@ -33,7 +33,13 @@ if str(_BACKEND) not in sys.path:
     sys.path.insert(0, str(_BACKEND))
 
 # Import shared state from shared.py (single source of truth for ContextVar etc.)
-from shared import current_dataset as _current_dataset, DEFAULT_DATASET as _DEFAULT_DATASET, resolve_root as _resolve_root, get_available_datasets as _get_available_datasets
+from shared import (
+    current_dataset as _current_dataset,
+    get_available_datasets as _get_available_datasets,
+    get_dataset_records as _get_dataset_records,
+    get_default_dataset_name as _get_default_dataset_name,
+    resolve_root as _resolve_root,
+)
 
 # ---------------------------------------------------------------------------
 # Lifespan (R17-T1: replaces deprecated @app.on_event("startup"))
@@ -44,16 +50,16 @@ from codememory.index import reindex as _cm_reindex
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Reindex all known datasets on startup."""
+    """Reindex contained demo datasets without mutating external instances."""
     logger = logging.getLogger("codememory.startup")
-    datasets = _get_available_datasets()
-    for ds in datasets:
+    for dataset in _get_dataset_records():
+        if dataset.source != "demo":
+            continue
         try:
-            root_path = Path(ds["path"])
-            _cm_reindex(root_path)
-            logger.info("Reindexed %s (%d memories)", ds["name"], ds["memory_count"])
+            _cm_reindex(dataset.root)
+            logger.info("Reindexed %s (%d memories)", dataset.name, dataset.memory_count)
         except Exception as exc:
-            logger.error("Failed to reindex %s: %s", ds["name"], exc)
+            logger.error("Failed to reindex %s: %s", dataset.name, exc)
     yield
 
 
@@ -128,12 +134,14 @@ from routers.search import router as search_router
 from routers.sources import router as sources_router
 from routers.stats import router as stats_router
 from routers.reviews import router as reviews_router
+from routers.personal import router as personal_router
 
 app.include_router(memories_router)
 app.include_router(search_router)
 app.include_router(sources_router)
 app.include_router(stats_router)
 app.include_router(reviews_router)
+app.include_router(personal_router)
 
 # Ordering note: include_router places routes in registration order.
 # The generic GET /api/memories/{memory_id:path} and the backlinks route
@@ -152,7 +160,7 @@ def root():
     return {
         "service": "CodeMemory API",
         "version": "0.1.0",
-        "default_dataset": _DEFAULT_DATASET,
+        "default_dataset": _get_default_dataset_name(),
         "available_datasets": [d["name"] for d in datasets],
     }
 
@@ -166,5 +174,6 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     port = int(os.environ.get("BACKEND_PORT", "8000"))
     print(f"CodeMemory API starting on http://localhost:{port}")
-    print(f"Default dataset: {_DEFAULT_DATASET} ({_resolve_root(_DEFAULT_DATASET)})")
+    default_dataset = _get_default_dataset_name()
+    print(f"Default dataset: {default_dataset} ({_resolve_root(default_dataset)})")
     uvicorn.run(app, host="0.0.0.0", port=port, reload=False)

@@ -1,7 +1,7 @@
 import SearchBar from './SearchBar'
 import type { DatasetInfo } from '../api'
 
-export type ViewMode = 'graph' | 'list' | 'dashboard' | 'review'
+export type ViewMode = 'graph' | 'list' | 'dashboard' | 'review' | 'personal'
 
 interface Props {
   viewMode: ViewMode
@@ -11,6 +11,7 @@ interface Props {
   currentDataset: string
   datasetReady: boolean
   switchingDataset: boolean
+  isPersonalDataset: boolean
   onSwitchDataset: (name: string) => void
   showQuantInfo: boolean
   searchText: string
@@ -53,6 +54,7 @@ export default function AppHeader({
   currentDataset,
   datasetReady,
   switchingDataset,
+  isPersonalDataset,
   onSwitchDataset,
   showQuantInfo,
   searchText,
@@ -130,7 +132,13 @@ export default function AppHeader({
           flexShrink: 0,
         }}
       >
-        {(['graph', 'list', 'dashboard', 'review'] as const).map((mode, index) => (
+        {([
+          'graph',
+          'list',
+          'dashboard',
+          'review',
+          ...(isPersonalDataset ? ['personal' as const] : []),
+        ] as const).map((mode, index) => (
           <button
             key={mode}
             onClick={() => onViewModeChange(mode)}

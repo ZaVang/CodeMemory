@@ -336,12 +336,28 @@ Web UI 是 operator console，不定义 canonical memory contract。
 - Create / Edit：一次提交完整 summary、body、tags、maturity 与 imports；新建时可明确选择 proposed；
 - Build / Copy Build：通过 Core 的 imports DAG 装配 canonical context，并直接复制同次 build 的 rendered output；
 - Golden Questions：在详情面板只读查看题目、可选期望和 notices；Web 不运行模型或判分。
+- Personal：只在 Personal dataset 中出现；浏览有效 Capture、Topic/Claim、显式 provenance timeline，并准备一次确认后的 promote / merge / delete 批次。
+
+要把外部 Personal Profile 加入本地 Web，创建服务端 registry 并在启动前设置环境变量：
+
+```yaml
+instances:
+  mymemory: D:\work\MyMemory
+```
+
+```powershell
+$env:CODEMEMORY_INSTANCE_REGISTRY = "D:\config\codememory-instances.yaml"
+python bin/codememory.py dev
+```
+
+浏览器请求只使用 `mymemory` 这个 alias；公开 dataset 响应不会返回 root。registry root 必须是已存在且 validation 通过的 Personal Profile，server 启动不会自动 reindex 它。Personal 页面也不提供 Capture 编辑、maintenance、Git、semantic index 或 registry 控制。
 
 当前仍未进入 Operator UI 的能力：
 
 - source_refs 展示；
 - expand source；
 - migration review。
+- Personal Capture/Topic 正文编辑、maintenance/Git delivery、semantic discovery 管理。
 
 ---
 

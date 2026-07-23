@@ -1,6 +1,6 @@
 # CodeMemory Integration Guide
 
-This guide describes the current integration surface after Personal Memory Phase 1B, Importer v2, MCP/Toolkit alignment, and Operator UI alignment.
+This guide describes the current integration surface after Personal Memory Phase 2, Importer v2, MCP/Toolkit alignment, Operator UI alignment, and the allowlisted Personal owner workspace.
 
 CodeMemory has one semantic core and several adapters:
 
@@ -358,6 +358,21 @@ python bin/codememory.py dev
 
 The REST adapter scopes data requests with `X-Codememory-Dataset`. The value must exactly match a dataset alias returned by `GET /api/datasets`; absolute paths, traversal syntax, separators, surrounding whitespace, and unknown aliases are rejected.
 
+External Personal instances are configured by the server operator, never by a request:
+
+```yaml
+# D:\config\codememory-instances.yaml
+instances:
+  mymemory: D:\work\MyMemory
+```
+
+```powershell
+$env:CODEMEMORY_INSTANCE_REGISTRY = "D:\config\codememory-instances.yaml"
+python bin/codememory.py dev
+```
+
+The registry path must be absolute. Every root must exist and pass Personal Profile validation; aliases must be safe exact identifiers and cannot collide with demo aliases. `GET /api/datasets` returns only `name`, `memory_count`, `profile`, and `source`. Server startup reindexes contained demo datasets only, never registry instances.
+
 Primary endpoints:
 
 | Endpoint | Contract |
@@ -373,8 +388,13 @@ Primary endpoints:
 | `GET /api/sources/expand` | Explicit source expansion through Core |
 | `POST /api/validate` | Core validation diagnostics |
 | `POST /api/reindex` | Rebuild the selected dataset index |
+| `GET /api/personal/overview` | Valid Personal object counts and bounded diagnostic count |
+| `GET /api/personal/captures` | Paginated complete/hash-valid Capture records |
+| `GET /api/personal/topics` | Topic revisions with inline Claims and explicit provenance |
+| `GET /api/personal/timeline` | Authored events and explicit provenance/relations only |
+| `POST /api/personal/review-batch` | One owner-confirmed promote/merge/delete batch through the shared handler |
 
-The Operator UI consumes these endpoints for Graph, List, Dashboard, Review, Build, and golden-question views. It does not define canonical memory semantics or execute an LLM evaluator.
+The Operator UI consumes these endpoints for Graph, List, Dashboard, Review, Build, golden-question, and Personal views. Personal navigation appears only when the selected dataset metadata says `profile: personal`. It does not define canonical memory semantics, execute an LLM evaluator, edit Capture, run maintenance/Git delivery, or expose semantic vectors/private-local state.
 
 ---
 
