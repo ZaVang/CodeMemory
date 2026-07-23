@@ -87,6 +87,8 @@
 | `src/codememory/profile.py` | Personal Profile manifest、非覆盖初始化、独立 profile/Git capability validation。 |
 | `src/codememory/capture.py` | append-only Capture、ULID、独立 SHA-256、实例锁、fsync 与完整 block 解析。 |
 | `src/codememory/personal_index.py` | Capture / Incubator Topic / inline Claim typed index、词法筛选和稳定 ID read；Claim 保持在 Topic 文件内。 |
+| `src/codememory/semantic_index.py` | Personal Profile provider-neutral 派生语义索引：typed 输入、atomic persistence、stale/idempotency 与候选排序；canonical build 不读取。 |
+| `src/codememory/semantic_local.py` | 惰性 `sentence-transformers` 本地 adapter；只从已有 private-local 模型目录加载并禁止下载/remote code。 |
 | `src/codememory/maintenance.py` | Personal maintenance run ledger、稳定 input digest、pending changeset、Topic/Claim 渲染、幂等 apply 与恢复。 |
 | `src/codememory/promotion.py` | owner-gated Topic promotion 与 promote/merge/delete batch review。 |
 | `src/codememory/git_delivery.py` | Profile 路径白名单、staged diff 敏感扫描、run trailer commit 与同 commit push retry。 |
@@ -393,15 +395,17 @@ cd frontend && npm run build
 
 这些内容不再作为当前判断依据；如果需要追溯，用 `docs/reference/` 或 Git history。
 
-### 13.1 Personal Profile 模块（Phase 1A / 1B）
+### 13.1 Personal Profile 模块（Phase 1A / 1B / Phase 2）
 
-Phase 1A / 1B 已经 owner 接受。当前 Personal Profile 落点如下：
+Phase 1A / 1B 已经 owner 接受；Phase 2 local semantic discovery 实现已完成、等待 owner acceptance。当前 Personal Profile 落点如下：
 
 | 目标路径 | 责任 |
 |---|---|
 | `src/codememory/profile.py` | Personal manifest 与目录/ignore 校验 |
 | `src/codememory/capture.py` | Capture ID/hash、锁、append + fsync、block parser |
 | `src/codememory/personal_index.py` | Capture / Topic / Atom typed discovery 与 read locator |
+| `src/codememory/semantic_index.py` | ignored private-local typed vector index、显式 build/status/query 与 build isolation |
+| `src/codememory/semantic_local.py` | 可选本地 embedding adapter；惰性 import、local-only load |
 | `src/codememory/maintenance.py` | Phase 1B changeset、run ledger 与幂等状态机 |
 | `src/codememory/promotion.py` | canonical promotion 与 batch review |
 | `src/codememory/git_delivery.py` | 敏感扫描和可选 Git delivery adapter |

@@ -19,6 +19,8 @@ CodeMemory/
 │       ├── profile.py           # Personal Profile manifest / capability 校验
 │       ├── capture.py           # append-only Capture + hash / lock / parser
 │       ├── personal_index.py    # Capture / Topic / Claim typed discovery
+│       ├── semantic_index.py    # Personal typed candidate vector index（private-local derived state）
+│       ├── semantic_local.py    # lazy local-only sentence-transformer adapter
 │       ├── maintenance.py       # maintenance run / changeset / recovery
 │       ├── promotion.py         # Topic promotion 与 owner batch review
 │       ├── git_delivery.py      # staged scan + commit / push recovery
@@ -77,7 +79,7 @@ Personal Profile 不增加第二套 canonical 核心：Capture 是 append-only �
 - 遗忘是路径不可达问题，不是删除问题。系统只建议，不自动删除。
 - 框架（`src/codememory/`）与数据（`CODEMEMORY_ROOT` 指向的记忆库）物理分离。
 - Personal Profile 下，Agent 可自动维护 Incubator，但从 Topic 提升新 Canonical Atom 默认需要 owner 确认；owner 明确要求“新建正式 idea”时，该指令视为确认。
-- semantic search 只允许发现候选入口；imports DAG 是 canonical context 的唯一装配机制。外部 embedding 默认关闭。
+- semantic search 只允许发现候选入口；imports DAG 是 canonical context 的唯一装配机制。Personal Profile 必须显式启用 `private_local` 内本地模型，加载禁止下载；外部 embedding 关闭且不受支持。
 - Personal Profile 的语义维护属于 Codex Skill，定时/commit/push/通知属于 Automation；Core 保持确定性和零 LLM。
 - reindex 自动行为（实现细节，不属于概念模型）：`summary_hash` 未变且 `access_count >= 2` → `cache_stable=true`；`ephemeral` 且 `access_count==0` → 自动归档。frontmatter 手动声明优先于自动推断。
 - **功能筛选标准**：它在代码世界里的对应物是什么？映射得出来的可以做；映射不出来的拒绝或放 `docs/reference/`。
@@ -122,7 +124,7 @@ data = entry.model_dump(mode="json")
 
 ### 技术栈
 
-- Python 3.13+，核心依赖：`pyyaml`、`pydantic>=2.0`；可选依赖 `tree-sitter`（`pip install codememory[code]`）
+- Python 3.13+，核心依赖：`pyyaml`、`pydantic>=2.0`；可选依赖 `tree-sitter`（`pip install codememory[code]`）与本地 semantic discovery（`pip install codememory[semantic]`）
 - CodeMemory Core 不依赖 harnesslib；`llm_gateway` 只在显式 Importer LLM proposer 或 owner/CI eval 路径中 lazy import
 - token 估算用 `len(text)` 近似
 

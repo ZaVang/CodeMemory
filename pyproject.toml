@@ -22,6 +22,9 @@ llm = [
     "anthropic>=0.49",
     "google-genai>=1.0",
 ]
+semantic = [
+    "sentence-transformers>=3.0",
+]
 code = [
     "tree-sitter>=0.22",
     "tree-sitter-python>=0.22",

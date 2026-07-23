@@ -13,6 +13,10 @@ import logging
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .semantic_index import SemanticEmbedder
 
 from .compiler.materialize import materialize_review_set
 from .compiler.ingest import scan_markdown_corpus
@@ -41,7 +45,12 @@ from .log import show_log
 from .orphans import find_orphans
 from .resolve import resolve
 from .personal_index import read_personal_object, typed_search
-from .profile import init_personal_profile, load_personal_profile, validate_personal_profile
+from .profile import (
+    init_personal_profile,
+    load_personal_profile,
+    resolve_private_local_root,
+    validate_personal_profile,
+)
 from .maintenance import (
     TopicDraft,
     load_maintenance_state,
@@ -618,9 +627,24 @@ def handle_search(
     person: str | None = None,
     origin: str | None = None,
     claim_status: str | None = None,
+    semantic: bool = False,
+    semantic_limit: int = 10,
+    semantic_embedder: SemanticEmbedder | None = None,
 ) -> str:
     """Search memories. Returns formatted result lines."""
-    if (root / ".codememory" / "profile.yaml").exists() or kinds:
+    if semantic:
+        if not query:
+            raise ValueError("semantic search requires a query")
+        from .semantic_index import semantic_search
+
+        embedder = semantic_embedder or _load_local_semantic_embedder(root)
+        results = [
+            item.model_dump(mode="json")
+            for item in semantic_search(
+                root, query, embedder, limit=semantic_limit, kinds=kinds,
+            )
+        ]
+    elif (root / ".codememory" / "profile.yaml").exists() or kinds:
         results = typed_search(
             root,
             query=query,
@@ -649,6 +673,15 @@ def handle_search(
     lines: list[str] = []
     for r in results:
         tags_str = _fmt_tags(r)
+        if semantic:
+            lines.append(
+                f"{r['id']:40s}  {r['kind']:17s}  "
+                f"score:{r['score']:.4f}  -> {r['read_action']}"
+            )
+            lines.append(f"    {r['display_locator']}")
+            if r.get("summary"):
+                lines.append(f"    {r['summary']}")
+            continue
         if r.get("kind") in ("capture", "incubator_topic", "incubator_claim"):
             lines.append(
                 f"{r['id']:40s}  {r['kind']:17s}  "
@@ -663,6 +696,41 @@ def handle_search(
         if r.get("summary"):
             lines.append(f"    {r['summary']}")
     return "\n".join(lines)
+
+
+def _load_local_semantic_embedder(root: Path):
+    profile = load_personal_profile(root)
+    semantic = profile.discovery.semantic
+    if not semantic.enabled or not semantic.model_path or not semantic.model_id:
+        raise ValueError("local semantic discovery is not configured")
+    private_root = resolve_private_local_root(root, profile)
+    model_path = (root.resolve() / semantic.model_path).resolve()
+    try:
+        model_path.relative_to(private_root)
+    except ValueError as exc:
+        raise ValueError("semantic model_path escapes private-local") from exc
+    try:
+        from .semantic_local import LocalSentenceTransformerEmbedder
+
+        return LocalSentenceTransformerEmbedder(model_path, semantic.model_id)
+    except ModuleNotFoundError as exc:
+        raise RuntimeError(
+            "Local semantic dependencies are unavailable; install codememory[semantic]"
+        ) from exc
+
+
+def handle_semantic_index(root: Path, *, embedder: SemanticEmbedder | None = None) -> str:
+    from .semantic_index import build_semantic_index
+
+    result = build_semantic_index(root, embedder or _load_local_semantic_embedder(root))
+    return json.dumps(result.model_dump(mode="json"), indent=2, ensure_ascii=False)
+
+
+def handle_semantic_status(root: Path) -> str:
+    from .semantic_index import semantic_status
+
+    result = semantic_status(root)
+    return json.dumps(result.model_dump(mode="json"), indent=2, ensure_ascii=False)
 
 
 def handle_orphans(

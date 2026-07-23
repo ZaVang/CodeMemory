@@ -4,6 +4,39 @@ This file records accepted sprint outcomes. Current work belongs in `docs/plan/S
 
 ---
 
+## 2026-07-23 — Personal Memory Phase 2: Local Semantic Discovery
+
+**Status:** Accepted by owner.
+
+**Delivered:**
+
+- Added explicitly enabled local semantic discovery for Personal Profiles while preserving deterministic lexical search as the default and imports DAG as the only canonical build mechanism.
+- Added provider-neutral typed semantic index/build/status/query contracts with atomic persistence under ignored `private_local`, normalized vectors, stable typed locators, stale detection, and idempotent reuse.
+- Added a lazy `sentence-transformers` adapter that only loads an existing local model with `local_files_only=True` and `trust_remote_code=False`; external embeddings remain rejected.
+- Indexed only hash-valid Capture/Topic/inline Claim objects and assemblable Atom/Schema content; proposed/archived/superseded/corrupt inputs remain excluded.
+- Exposed explicit owner CLI `semantic status/index` and opt-in `search --semantic`; Agent search advertises semantic parameters only for configured Personal roots.
+- Preserved privacy and build isolation: no query logging, no absolute root/model paths in the index, no automatic reads/imports/maintenance mutation, and no semantic input to ContextPack assembly.
+- Closed the owner-review junction escape finding by requiring resolved `paths.private_local` to remain inside the bound root before validation, model loading, status, indexing, or search.
+
+**Acceptance evidence:**
+
+- Owner independently reproduced the original junction probe and confirmed validation plus status/index/build/search all reject before embedding or external write.
+- Semantic discovery → `13 passed`
+- Core/API → `290 passed` with one existing Pydantic warning
+- Personal Profile → `55 passed`
+- Existing integration → `21/21 passed`
+- Personal integration → `15/15 passed`
+- `sentence_transformers` remained unloaded during ordinary Core import.
+- `git diff --check` passed; generated example index/log differences were restored.
+
+**Deferred:**
+
+- External embedding services, model downloads, hybrid reranking, and background semantic indexing.
+- Semantic generation of imports, automatic reads, ContextPack injection, and maintenance clustering.
+- Personal Memory Web and arbitrary external-instance browsing.
+
+---
+
 ## 2026-07-23 — Eval Harness: ContextPack vs Full Memory vs No Memory
 
 **Status:** Accepted by owner.

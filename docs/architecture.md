@@ -329,7 +329,12 @@ parse query → filter kinds/time/tags/metadata → lexical rank → return type
                                                     └─ atom → build
 ```
 
-Phase 1 排序只能使用确定性的词法、时间、标签和 metadata。Agent 可在候选结果上主动继续读取。Phase 2 的 semantic provider 是可选 discovery adapter：本地默认、外部默认关闭；其输出只参与候选排序，不可生成 imports 或向 build 注入正文。
+Phase 1 排序使用确定性的词法、时间、标签和 metadata，Agent 可在候选结果上主动继续读取。Phase 2 增加可选本地 semantic discovery adapter：
+
+- Profile 必须显式启用并指向 `private_local` 内已存在的模型；adapter 惰性 import `sentence-transformers`，以 `local_files_only=True` 加载，不下载模型。
+- provider-neutral indexer 只读取有效 typed Personal objects 与可装配 Atom/Schema，保存归一化向量到 ignored `private_local/semantic/index.json`；相同输入/model fingerprint 构建幂等。
+- 内容或模型改变后 query 以 stale 失败，必须显式重建；查询文本和绝对路径不持久化。
+- 外部 embeddings 当前拒绝；semantic 输出只参与候选排序，不可生成 imports、自动读取命中正文或向 build 注入节点。
 
 ### 4.6 Maintenance changeset 与状态机
 

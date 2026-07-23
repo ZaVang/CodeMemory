@@ -108,11 +108,16 @@ discovery:
   semantic:
     enabled: false
     external_embeddings: false
+    provider: local
+    model_path: null
+    model_id: null
 ```
 
 规则：
 
-- `external_embeddings` 默认且初始化时必须为 `false`；显式启用前不得向外部服务发送正文。
+- `external_embeddings` 默认且初始化时必须为 `false`；Phase 2 只实现 `provider: local`，设置为 true 必须拒绝，不得向外部服务发送正文。
+- `enabled: true` 时必须同时设置稳定的 `model_id`，以及位于实际 `paths.private_local` 目录内的相对 `model_path`。绝对路径、遍历、解析后越界、缺失目录都使 validation 失败。
+- 本地 adapter 只允许从现有模型目录加载，并固定使用 `local_files_only=True` 与 `trust_remote_code=False`；CodeMemory 不下载模型，也不提供网络 fallback。
 - `remote` 和 `branch` 是目标，不是凭据；认证留给 Git credential manager / SSH agent。
 - `auto_commit` / `auto_push` 安全默认值均为 `false`。现有 Git 实例只能通过 init 参数或显式配置启用；`auto_push: true` 隐含要求 `auto_commit: true`。
 - init 不隐式执行 `git init`、不创建 remote。普通目录、没有 remote 的 Git repo 与完整 Git repo 都是有效 Personal Profile。
@@ -326,9 +331,35 @@ query + filters
 
 Phase 1 filters：时间范围、全文词法、标签、对象类型、topic/project/person、origin，以及 Atom/inline Claim 级 claim_status。Topic 自身永远不使用 claim_status。
 
-Phase 2 可增加本地 semantic discovery。外部 embeddings 必须显式启用；语义结果只改变候选排序，不产生 imports 边，也不直接进入 build。
+Phase 2 已增加显式启用的本地 semantic discovery。外部 embeddings 仍不受支持；语义结果只改变候选排序，不产生 imports 边，也不直接进入 build。
 
-### 8.2 Canonical Build Path
+### 8.2 Local semantic discovery
+
+启用示例：
+
+```yaml
+discovery:
+  lexical: true
+  temporal: true
+  tags: true
+  semantic:
+    enabled: true
+    external_embeddings: false
+    provider: local
+    model_path: private-local/models/multilingual-e5
+    model_id: multilingual-e5-local-v1
+```
+
+本地索引合同：
+
+- owner 显式执行 `semantic index` 才构建；Capture、maintenance 或普通 `reindex` 不在后台调用 embedding。
+- 索引固定写入实际 private-local 目录下的 `semantic/index.json`，属于可删除重建的派生状态，必须被 Git ignore，不能进入 delivery。
+- 输入只来自当前 typed index 中 hash-valid 的 Capture / Topic / inline Claim，以及可装配的 active Atom / Schema；proposed、archived、superseded 和损坏 Capture 不进入索引。
+- 索引保存稳定 ID、kind、内容 hash、归一化向量和安全 locator，不保存绝对 root/model path；查询不写日志或索引，raw query 不持久化。
+- 相同输入与模型 fingerprint 重建直接复用，不调用 embedder、不重写文件。正文或模型变化后，查询以 stale 失败，owner 必须显式重建。
+- `search --semantic` 只返回候选及 `read_action`。Capture / Topic / Claim 仍需 `read`；Atom 仍需 `build`。semantic index 永远不被 canonical build 读取。
+
+### 8.3 Canonical Build Path
 
 ```text
 search 找到 Canonical Atom

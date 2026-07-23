@@ -112,7 +112,7 @@ Path B：personal discovery
      → 若需正式上下文，另选 Canonical Atom 走 Path A
 ```
 
-Phase 2 可增加本地语义索引，但只能给两条路径提供候选入口。外部 embedding 默认关闭，只能由 owner 显式启用。任何语义命中都不得直接成为 canonical build 的装配节点。
+Personal Memory Phase 2 提供显式启用的本地语义候选索引：模型必须已存在于 ignored `private_local`，加载时禁止下载和网络 fallback，派生索引也只存于 `private_local`。外部 embedding 保持关闭且当前不受支持。任何语义命中都只能返回 typed 候选入口，不得直接成为 canonical build 的装配节点。
 
 ### 5.2 写路径——agent 沉淀
 

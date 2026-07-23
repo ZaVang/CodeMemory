@@ -330,6 +330,20 @@ python -m codememory.cli --root D:\memory\MyMemory review-batch --file decisions
 
 Maintenance consumes every valid unconsumed Capture exactly once, catches up missed runs, and resumes the same pending run after interruption. Git commit/push is disabled by default and enabled only in the Profile. A sensitive-scan block still allows Capture append but blocks new maintenance and delivery until the owner repairs and resumes the same run.
 
+Optional local semantic discovery is a separate, derived read path. Install its optional dependency, configure an existing model directory under the Profile's ignored `private_local`, then build explicitly:
+
+```powershell
+pip install -e ".[semantic]"
+python -m codememory.cli --root D:\memory\MyMemory semantic status
+python -m codememory.cli --root D:\memory\MyMemory semantic index
+python -m codememory.cli --root D:\memory\MyMemory search `
+  --query "career direction" `
+  --semantic `
+  --kind capture incubator_topic incubator_claim atom
+```
+
+The adapter loads the model local-only and never downloads it. Identical builds are reused; content/model changes make the index stale until explicit rebuild. The index remains under ignored private-local state, and results are candidate IDs only: callers still use `read_memory` for Capture/Topic/Claim and `build_memory` for canonical Atoms. No REST endpoint exposes this operation, and semantic neighbors never alter imports or ContextPack assembly.
+
 See `docs/personal-memory-profile.md` for the complete file, provenance, Claim, maintenance, and Git safety contracts.
 
 ---

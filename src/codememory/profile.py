@@ -65,6 +65,21 @@ class MaintenanceConfig(BaseModel):
 class SemanticConfig(BaseModel):
     enabled: bool = False
     external_embeddings: bool = False
+    provider: Literal["local"] = "local"
+    model_path: str | None = None
+    model_id: str | None = None
+
+    @model_validator(mode="after")
+    def enabled_local_model_is_explicit(self) -> "SemanticConfig":
+        if self.external_embeddings:
+            raise ValueError("external embeddings are not supported; use provider=local")
+        if self.enabled and (not self.model_path or not self.model_id):
+            raise ValueError("enabled semantic discovery requires model_path and model_id")
+        if self.model_path:
+            path = Path(self.model_path)
+            if path.is_absolute() or ".." in path.parts or "." in path.parts:
+                raise ValueError("semantic model_path must be a safe relative path")
+        return self
 
 
 class DiscoveryConfig(BaseModel):
@@ -83,6 +98,16 @@ class PersonalProfile(BaseModel):
     capture: CaptureConfig = Field(default_factory=CaptureConfig)
     maintenance: MaintenanceConfig = Field(default_factory=MaintenanceConfig)
     discovery: DiscoveryConfig = Field(default_factory=DiscoveryConfig)
+
+    @model_validator(mode="after")
+    def semantic_model_stays_private_local(self) -> "PersonalProfile":
+        model_path = self.discovery.semantic.model_path
+        if model_path:
+            private_parts = Path(self.paths.private_local).parts
+            model_parts = Path(model_path).parts
+            if model_parts[:len(private_parts)] != private_parts:
+                raise ValueError("semantic model_path must stay under paths.private_local")
+        return self
 
 
 class GitDeliveryStatus(BaseModel):
@@ -137,6 +162,18 @@ def load_personal_profile(root: Path) -> PersonalProfile:
     return PersonalProfile.model_validate(raw)
 
 
+def resolve_private_local_root(root: Path, profile: PersonalProfile) -> Path:
+    """Resolve private-local while preserving the bound instance root."""
+
+    resolved_root = root.resolve()
+    private_root = (resolved_root / profile.paths.private_local).resolve()
+    try:
+        private_root.relative_to(resolved_root)
+    except ValueError as exc:
+        raise ValueError("paths.private_local resolves outside bound root") from exc
+    return private_root
+
+
 def validate_personal_profile(root: Path) -> ProfileValidationResult:
     errors: list[str] = []
     warnings: list[str] = []
@@ -186,6 +223,23 @@ def validate_personal_profile(root: Path) -> ProfileValidationResult:
             )
     if git_status.enabled and git_status.status == "unavailable":
         warnings.append(f"Git delivery enabled but unavailable: {git_status.reason}")
+
+    private_root: Path | None = None
+    try:
+        private_root = resolve_private_local_root(root, profile)
+    except ValueError as exc:
+        errors.append(str(exc))
+
+    semantic = profile.discovery.semantic
+    if private_root is not None and semantic.enabled and semantic.model_path:
+        model_path = (root.resolve() / semantic.model_path).resolve()
+        try:
+            model_path.relative_to(private_root)
+        except ValueError:
+            errors.append("semantic model_path resolves outside paths.private_local")
+        else:
+            if not model_path.is_dir():
+                errors.append(f"semantic model directory missing: {semantic.model_path}")
 
     return ProfileValidationResult(
         profile_valid=not errors,

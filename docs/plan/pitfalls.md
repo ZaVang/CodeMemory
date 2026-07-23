@@ -100,3 +100,14 @@ Capture 出现不完整 block 或 payload hash mismatch 时，validate 必须报
 - ContextPack render 含动态 `generated_at`。评测冻结时必须替换为固定值，否则相同 dataset/options 的 context hash 和实际 prompt 每次都变化。
 - answer model 只看 question + arm context；judge 只看 question + expect + answer。arm/context 不能进入 judge，expect 不能进入 answer。
 - 报告可保留 answer / expect / verdict 供审计，但不得复制 context、prompt、config path、credential、raw provider response 或 thinking。
+
+---
+
+## Semantic discovery 是 private derived index，不是第二条 build 图
+
+- 语义索引输入必须复用 typed index 的有效对象边界；损坏 Capture、不可装配 Atom 不能因为 embedding 扫文件而重新进入候选。
+- containment 必须逐级验证：先证明 resolved `paths.private_local` 仍在 bound root 内，再证明 resolved model/index path 位于该 private root 内。只做第二级检查会让 junction/symlink 把信任锚整体搬到实例外。
+- 本地 adapter 固定 `local_files_only=True`，不能隐式下载或 network fallback。
+- 相同 input digest + model fingerprint 重建不得调用 embedder或重写索引；内容/模型变化时 query 先报 stale，不能用旧向量“尽量返回”。
+- 查询不能把 raw query 写进索引或日志。索引只保留 typed ID/hash/vector 与安全 locator，不保留绝对 root/model path。
+- canonical build 永远不能 import 或读取 semantic index；候选 Atom 仍走 imports DAG，Capture/Topic/Claim 仍走稳定 ID read。

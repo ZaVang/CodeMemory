@@ -13,6 +13,9 @@ pip install -e .
 # 安装代码骨架化支持（Python/JS/TS 文件导入需要）
 pip install -e ".[code]"
 
+# 可选：Personal Profile 本地语义发现（模型需已在本机）
+pip install -e ".[semantic]"
+
 # 重建索引
 codememory --root examples/investment reindex
 
@@ -138,6 +141,11 @@ codememory build <id> [--depth required|recommended|full] [--budget N] [--format
 codememory resolve <id> [...]        # build 的 plain-markdown 别名
 codememory context-pack <id> [...]   # build 的别名
 codememory source add <uri> [--id ID] [--summary "..."] | source list | source expand <id>
+
+# Personal Profile 本地 semantic discovery（只找候选，不参与 build）
+codememory --root D:\memory\MyMemory semantic status
+codememory --root D:\memory\MyMemory semantic index
+codememory --root D:\memory\MyMemory search --query "职业方向" --semantic --kind capture incubator_topic atom
 
 # 验证与维护
 codememory reindex

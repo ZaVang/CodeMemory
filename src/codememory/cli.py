@@ -31,6 +31,8 @@ from .handlers import (
     handle_reject,
     handle_resolve,
     handle_search,
+    handle_semantic_index,
+    handle_semantic_status,
     handle_source_add,
     handle_source_check,
     handle_source_expand,
@@ -239,6 +241,17 @@ def main(argv: list[str] | None = None):
     p.add_argument("--person")
     p.add_argument("--origin")
     p.add_argument("--claim-status", dest="claim_status")
+    p.add_argument("--semantic", action="store_true",
+                   help="Use the explicitly enabled local Personal semantic index")
+    p.add_argument("--limit", dest="semantic_limit", type=int, default=10,
+                   help="Maximum semantic candidates (default: 10)")
+
+    # Personal semantic derived-index operations
+    p = subparsers.add_parser("semantic", help="Manage local Personal semantic discovery")
+    _add_logging_flags(p)
+    semantic_subparsers = p.add_subparsers(dest="semantic_command", required=True)
+    semantic_subparsers.add_parser("index", help="Build or reuse the local derived index")
+    semantic_subparsers.add_parser("status", help="Show disabled/missing/stale/ready state")
 
     # source
     p = subparsers.add_parser("source", help="Manage Source Artifact registry")
@@ -482,7 +495,13 @@ def main(argv: list[str] | None = None):
                             has_imports=args.has_imports, has_schema=args.has_schema,
                             kinds=args.kinds, date_from=args.date_from, date_to=args.date_to,
                             topic=args.topic, project=args.project, person=args.person,
-                            origin=args.origin, claim_status=args.claim_status))
+                            origin=args.origin, claim_status=args.claim_status,
+                            semantic=args.semantic, semantic_limit=args.semantic_limit))
+    elif cmd == "semantic":
+        if args.semantic_command == "index":
+            print(handle_semantic_index(root))
+        else:
+            print(handle_semantic_status(root))
     elif cmd == "source":
         if args.source_command == "add":
             print(handle_source_add(

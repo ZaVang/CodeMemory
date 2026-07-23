@@ -16,7 +16,7 @@
 
 ## Roadmap Priority
 
-**Personal Memory Phase 0 / 1A / 1B、Importer v2A / v2B、MCP / toolkit 对齐、Operator UI 对齐、文档及示例收口与 eval harness 均已于 2026-07-23 前经 owner 接受。当前下一项候选为 Personal Memory Phase 2 semantic discovery；合同见 `docs/plan/SPRINT.md`，已接受历史见 `docs/plan/HISTORY.md`。**
+**此前路线图至 Personal Memory Phase 2 semantic discovery 均已于 2026-07-23 经 owner 接受。下一项为 Personal Memory Web。**
 
 ### 1. Personal Memory Phase 1A — Instance + Capture + Typed Discovery（已完成并验收）
 
@@ -85,7 +85,7 @@ git status --short --branch -uall
 3. **Operator UI 对齐 ✅**：UI 跟随新契约（proposed / patch 队列展示、golden_questions、build 产物；wander 面板已随后端删除）。
 4. **文档与示例 ✅**：USER_GUIDE / INTEGRATION / project_structure / `examples/` 已随新术语更新，并经 owner 验收。
 5. **eval harness ✅**：ContextPack vs full-memory vs no-memory 的三臂对照实验，把 PRD 产品成功标准变成可测数字；provider 显式启用，Core 保持零 LLM 依赖。
-6. **Personal Memory Phase 2 semantic discovery**：本地索引优先，只给 search 提供候选；外部 embedding 默认关闭、显式启用；永不参与 canonical build。
+6. **Personal Memory Phase 2 semantic discovery ✅**：本地索引优先，只给 search 提供候选；外部 embedding 默认关闭且当前不受支持；永不参与 canonical build。
 7. **Personal Memory Web**：服务端实例 allowlist registry、Capture 浏览、Incubator 集中审阅、provenance 与想法时间线；不做完整编辑器或 Obsidian 替代品。
 
 排期前按 Planning Rules 第 5 条确认是否需要先更新 prd / architecture。

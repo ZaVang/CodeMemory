@@ -234,7 +234,27 @@ codememory --root D:\work\MyMemory review-batch --file decisions.json
 
 Automation 每次只调用以下流程：`maintenance status` → 用 Skill 读取候选并生成 changeset → `maintenance run`；若存在 active run 则改为 `maintenance resume`。成功通知只包含 run ID、消费数量、Topic 变更数量和 commit/push 状态；失败通知包含 stage 与可执行修复；`scan_blocked` 使用安全通知，不计入普通审核积压。
 
-Phase 1B 仍不包含 Web 或 semantic discovery，external embeddings 保持关闭。
+### 7.3 本地 semantic discovery（Personal Phase 2）
+
+这是一条显式、可选的候选发现路径，不替代默认词法搜索，也不改变 canonical build。
+
+先安装可选依赖，并把已下载好的 sentence-transformer 模型放在 Profile 实际 `private_local` 目录内：
+
+```powershell
+pip install -e ".[semantic]"
+
+# profile.yaml 中显式设置 enabled/model_path/model_id 后
+codememory --root D:\work\MyMemory semantic status
+codememory --root D:\work\MyMemory semantic index
+codememory --root D:\work\MyMemory search `
+  --query "职业发展方向" `
+  --semantic `
+  --kind capture incubator_topic incubator_claim atom
+```
+
+CodeMemory 不下载模型，也不会切换到外部 embedding。索引在 ignored `private_local/semantic/index.json`，只保存 typed 候选所需的 ID/hash/vector/locator；raw query 不持久化。相同内容和模型的重复构建直接复用；正文或模型改变后查询会提示 stale，需重新执行 `semantic index`。
+
+语义结果中的 Capture / Topic / Claim 仍走 `read`，Atom 仍走 `build`。命中相似对象不会自动读取正文、生成 imports、影响 maintenance，或向 ContextPack 注入节点。当前不提供 REST/Web semantic surface。
 
 ---
 

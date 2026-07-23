@@ -24,7 +24,7 @@ from .handlers import (
     handle_search,
     handle_source_expand,
 )
-from .profile import PROFILE_RELATIVE_PATH
+from .profile import PROFILE_RELATIVE_PATH, load_personal_profile
 
 
 @dataclass(frozen=True)
@@ -104,82 +104,105 @@ def _create_spec(*, personal: bool) -> AgentToolSpec:
     )
 
 
-_CORE_PREFIX: tuple[AgentToolSpec, ...] = (
-    AgentToolSpec(
-        name="build_memory",
-        description="Build canonical context from an Atom through the explicit imports DAG.",
-        input_schema=_object_schema(
-            {
-                "id": {"type": "string"},
-                "depth": {
-                    "type": "string",
-                    "enum": ["required", "recommended", "full"],
-                    "default": "recommended",
-                },
-                "budget": {"type": "integer", "minimum": 1},
-                "focus": {"type": "string"},
-                "task_goal": {"type": "string"},
-                "format": {
-                    "type": "string",
-                    "enum": ["xml-markdown", "markdown", "plain-markdown", "json"],
-                    "default": "xml-markdown",
-                },
+_BUILD_SPEC = AgentToolSpec(
+    name="build_memory",
+    description="Build canonical context from an Atom through the explicit imports DAG.",
+    input_schema=_object_schema(
+        {
+            "id": {"type": "string"},
+            "depth": {
+                "type": "string",
+                "enum": ["required", "recommended", "full"],
+                "default": "recommended",
             },
-            required=["id"],
-        ),
-        read_only=True,
+            "budget": {"type": "integer", "minimum": 1},
+            "focus": {"type": "string"},
+            "task_goal": {"type": "string"},
+            "format": {
+                "type": "string",
+                "enum": ["xml-markdown", "markdown", "plain-markdown", "json"],
+                "default": "xml-markdown",
+            },
+        },
+        required=["id"],
     ),
-    AgentToolSpec(
+    read_only=True,
+)
+
+
+def _search_spec(*, semantic: bool) -> AgentToolSpec:
+    properties: dict[str, Any] = {
+        "query": {"type": "string"},
+        "tags": {"type": "array", "items": {"type": "string"}},
+        "type": {"type": "string", "enum": ["atom", "schema"]},
+        "status": {
+            "type": "string",
+            "enum": ["active", "proposed", "archived", "superseded", "draft"],
+        },
+        "maturity": {
+            "type": "string",
+            "enum": ["draft", "verified", "proven", "superseded"],
+        },
+        "semantic_type": {"type": "string"},
+        "has_imports": {"type": "boolean"},
+        "has_schema": {"type": "boolean"},
+        "kinds": {
+            "type": "array",
+            "items": {
+                "type": "string",
+                "enum": ["capture", "incubator_topic", "incubator_claim", "atom"],
+            },
+        },
+        "date_from": {"type": "string"},
+        "date_to": {"type": "string"},
+        "topic": {"type": "string"},
+        "project": {"type": "string"},
+        "person": {"type": "string"},
+        "origin": {"type": "string"},
+        "claim_status": {"type": "string"},
+    }
+    if semantic:
+        properties.update({
+            "semantic": {
+                "type": "boolean",
+                "default": False,
+                "description": "Use the configured local Personal semantic index.",
+            },
+            "semantic_limit": {"type": "integer", "minimum": 1, "default": 10},
+        })
+    return AgentToolSpec(
         name="search_memories",
-        description="Lexically discover canonical Atoms and, for Personal Profiles, Capture/Topic objects.",
-        input_schema=_object_schema(
-            {
-                "query": {"type": "string"},
-                "tags": {"type": "array", "items": {"type": "string"}},
-                "type": {"type": "string", "enum": ["atom", "schema"]},
-                "status": {
-                    "type": "string",
-                    "enum": ["active", "proposed", "archived", "superseded", "draft"],
-                },
-                "maturity": {
-                    "type": "string",
-                    "enum": ["draft", "verified", "proven", "superseded"],
-                },
-                "semantic_type": {"type": "string"},
-                "has_imports": {"type": "boolean"},
-                "has_schema": {"type": "boolean"},
-                "kinds": {
-                    "type": "array",
-                    "items": {
-                        "type": "string",
-                        "enum": ["capture", "incubator_topic", "incubator_claim", "atom"],
-                    },
-                },
-                "date_from": {"type": "string"},
-                "date_to": {"type": "string"},
-                "topic": {"type": "string"},
-                "project": {"type": "string"},
-                "person": {"type": "string"},
-                "origin": {"type": "string"},
-                "claim_status": {"type": "string"},
-            }
+        description=(
+            "Discover typed Personal memory candidates lexically or through the "
+            "explicitly enabled local semantic index."
+            if semantic
+            else "Lexically discover canonical Atoms and, for Personal Profiles, Capture/Topic objects."
         ),
+        input_schema=_object_schema(properties),
         read_only=True,
+    )
+
+
+_EXPAND_SPEC = AgentToolSpec(
+    name="expand_source",
+    description="Explicitly read a registered Source Artifact with freshness and truncation metadata.",
+    input_schema=_object_schema(
+        {
+            "artifact_id": {"type": "string"},
+            "start": {"type": "integer", "minimum": 0},
+            "end": {"type": "integer", "minimum": 0},
+            "max_chars": {"type": "integer", "minimum": 1},
+        },
+        required=["artifact_id"],
     ),
-    AgentToolSpec(
-        name="expand_source",
-        description="Explicitly read a registered Source Artifact with freshness and truncation metadata.",
-        input_schema=_object_schema(
-            {
-                "artifact_id": {"type": "string"},
-                "start": {"type": "integer", "minimum": 0},
-                "end": {"type": "integer", "minimum": 0},
-                "max_chars": {"type": "integer", "minimum": 1},
-            },
-            required=["artifact_id"],
-        ),
-        read_only=True,
-    ),
+    read_only=True,
+)
+
+
+_CORE_PREFIX: tuple[AgentToolSpec, ...] = (
+    _BUILD_SPEC,
+    _search_spec(semantic=False),
+    _EXPAND_SPEC,
 )
 
 
@@ -262,11 +285,27 @@ def standard_tool_specs() -> list[AgentToolSpec]:
     return [*_CORE_PREFIX, _create_spec(personal=False), _PROPOSE_SPEC]
 
 
+def _semantic_search_is_configured(root: Path) -> bool:
+    if not is_personal_root(root):
+        return False
+    try:
+        semantic = load_personal_profile(root).discovery.semantic
+    except Exception:
+        return False
+    return bool(semantic.enabled and semantic.model_path and semantic.model_id)
+
+
 def tool_specs_for_root(root: Path) -> list[AgentToolSpec]:
     """Return the exact shared agent surface for a bound root."""
 
     personal = is_personal_root(root)
-    specs = [*_CORE_PREFIX, _create_spec(personal=personal), _PROPOSE_SPEC]
+    specs = [
+        _BUILD_SPEC,
+        _search_spec(semantic=_semantic_search_is_configured(root)),
+        _EXPAND_SPEC,
+        _create_spec(personal=personal),
+        _PROPOSE_SPEC,
+    ]
     if personal:
         specs.extend(_PERSONAL_EXTENSION)
     return specs
@@ -309,6 +348,8 @@ def _dispatch(root: Path, name: str, arguments: dict[str, Any]) -> str:
             person=arguments.get("person"),
             origin=arguments.get("origin"),
             claim_status=arguments.get("claim_status"),
+            semantic=bool(arguments.get("semantic", False)),
+            semantic_limit=int(arguments.get("semantic_limit", 10)),
         )
     if name == "expand_source":
         return handle_source_expand(
